@@ -43,6 +43,96 @@ impl IrBuilder {
     }
 }
 
+/// Implement basics operation as function for ease binding with frontend
+impl IrBuilder {
+    // Arith operations =======================================================
+    pub fn add(&mut self, src_a: Register, src_b: Register) -> Register {
+        let dst = self.ssa_register();
+        let op = IrOperation::Add {
+            dst: dst.clone(),
+            src_a,
+            src_b,
+        };
+        self.push(op);
+        dst
+    }
+    pub fn sub(&mut self, src_a: Register, src_b: Register) -> Register {
+        let dst = self.ssa_register();
+        let op = IrOperation::Sub {
+            dst: dst.clone(),
+            src_a,
+            src_b,
+        };
+        self.push(op);
+        dst
+    }
+    pub fn mac(&mut self, src_a: Register, src_b: Register, imm_b: ImmCell) -> Register {
+        let dst = self.ssa_register();
+        let op = IrOperation::Mac {
+            dst: dst.clone(),
+            src_a,
+            src_b,
+            imm_b,
+        };
+        self.push(op);
+        dst
+    }
+
+    // ArithMsg operations ===================================================
+    pub fn adds(&mut self, src_a: Register, imm_b: ImmCell) -> Register {
+        let dst = self.ssa_register();
+        let op = IrOperation::Adds {
+            dst: dst.clone(),
+            src_a,
+            imm_b,
+        };
+        self.push(op);
+        dst
+    }
+    pub fn subs(&mut self, src_a: Register, imm_b: ImmCell) -> Register {
+        let dst = self.ssa_register();
+        let op = IrOperation::Subs {
+            dst: dst.clone(),
+            src_a,
+            imm_b,
+        };
+        self.push(op);
+        dst
+    }
+    pub fn ssub(&mut self, imm_a: ImmCell, src_b: Register) -> Register {
+        let dst = self.ssa_register();
+        let op = IrOperation::Ssub {
+            dst: dst.clone(),
+            imm_a,
+            src_b,
+        };
+        self.push(op);
+        dst
+    }
+    pub fn muls(&mut self, src_a: Register, imm_b: ImmCell) -> Register {
+        let dst = self.ssa_register();
+        let op = IrOperation::Muls {
+            dst: dst.clone(),
+            src_a,
+            imm_b,
+        };
+        self.push(op);
+        dst
+    }
+
+    pub fn pbs_ml(&mut self, src: Vec<Register>, lut: PbsLut) -> Vec<Register> {
+        let dst = src.iter().map(|_| self.ssa_register()).collect::<Vec<_>>();
+        let op = IrOperation::Pbs {
+            dst: dst.clone(),
+            src,
+            lut,
+            flush: false, // Flushing handled by compiler only
+        };
+        self.push(op);
+        dst
+    }
+}
+
 #[derive(Clone)]
 pub struct IrBuilderWrapped {
     inner: Arc<Mutex<IrBuilder>>,

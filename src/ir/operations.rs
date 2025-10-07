@@ -25,11 +25,11 @@ pub enum IrOperation {
         src_b: Register,
     },
     Mac {
-        // src_a + (src_b*imm)
+        // src_a + (src_b*imm_b)
         dst: Register,
         src_a: Register,
         src_b: Register,
-        imm: ImmCell,
+        imm_b: ImmCell,
     },
 
     // Arith with scalar
@@ -76,8 +76,8 @@ impl std::fmt::Display for IrOperation {
                 dst,
                 src_a,
                 src_b,
-                imm,
-            } => write!(f, "MAC {dst} {src_a} {src_b} {imm}"),
+                imm_b,
+            } => write!(f, "MAC {dst} {src_a} {src_b} {imm_b}"),
             IrOperation::Adds { dst, src_a, imm_b } => write!(f, "ADDS {dst} {src_a} {imm_b}"),
             IrOperation::Subs { dst, src_a, imm_b } => write!(f, "SUBS {dst} {src_a} {imm_b}"),
             IrOperation::Ssub { dst, imm_a, src_b } => write!(f, "SSUB {dst} {imm_a} {src_b}"),

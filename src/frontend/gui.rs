@@ -13,10 +13,7 @@ use petgraph::{
     visit::EdgeRef,
 };
 
-use crate::ir::{IrOperation, OpKind};
-
-use super::IrDag;
-
+use crate::ir::{IrDag, IrOperation, OpKind};
 pub struct DagViewer {
     graph: Graph<NodePayload, (), Directed, DefaultIx, NodeShapeFlex>,
 }
