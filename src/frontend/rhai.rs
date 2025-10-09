@@ -1,11 +1,12 @@
 //! Binding between Ir and rhai scripting engine
 
 use crate::ir;
-use rhai::{Dynamic, Engine, EvalAltResult, ImmutableString, Scope};
+use rhai::{Array, Dynamic, Engine, EvalAltResult, ImmutableString, Scope};
 
 /// Create an instance of the rhai scripting engine bind with an IrBuilder
 pub fn create_rhai_engine() -> (Engine, ir::IrBuilderWrapped) {
     let mut engine = Engine::new();
+    engine.set_max_expr_depths(128, 64);
     let builder = ir::IrBuilderWrapped::new();
 
     // Register type
@@ -18,7 +19,7 @@ pub fn create_rhai_engine() -> (Engine, ir::IrBuilderWrapped) {
     engine.on_debug(|x, src, pos| println!("rhai debug @{src:?}:{pos:?}: {x}"));
 
     // Helper function to create IR type ======================================
-    engine.register_fn("input_vars", |slot: i64, width: i64| -> Vec<ir::MemCell> {
+    engine.register_fn("input_vars", |slot: i64, width: i64| -> Array {
         let digit = width / 2; // TODO let this configurable
         (0..digit)
             .map(|i| ir::MemCell::User {
@@ -26,17 +27,22 @@ pub fn create_rhai_engine() -> (Engine, ir::IrBuilderWrapped) {
                 slot: slot as usize,
                 digit: i as usize,
             })
-            .collect::<Vec<_>>()
+            .map(|x| Dynamic::from(x))
+            .collect()
     });
-    engine.register_fn("output_vars", |slot: i64, width: i64| -> Vec<ir::MemCell> {
-        let digit = width / 2; // TODO let this configurable
+    engine.register_fn("output_vars", |slot: i64, width: i64| -> Array {
+        let digit = {
+            // Ceiling div
+            (width + (2 - 1)) / 2
+        };
         (0..digit)
             .map(|i| ir::MemCell::User {
                 kind: ir::UserKind::Dst,
                 slot: slot as usize,
                 digit: i as usize,
             })
-            .collect::<Vec<_>>()
+            .map(|x| Dynamic::from(x))
+            .collect()
     });
 
     engine.register_fn("imm_cst", |val: i64| -> ir::ImmCell {
@@ -47,41 +53,58 @@ pub fn create_rhai_engine() -> (Engine, ir::IrBuilderWrapped) {
         ir::PbsLut::new(val.as_str())
     });
 
-    // Helper function to iterate over input/output vectors
-    engine.register_indexer_get(
-        |vec: &mut Vec<ir::MemCell>, index: i64| -> Result<ir::MemCell, Box<EvalAltResult>> {
-            let idx = index as usize;
-            vec.get(idx).cloned().ok_or_else(|| {
-                format!(
-                    "Index {} out of bounds for vec of length {}",
-                    index,
-                    vec.len()
-                )
-                .into()
-            })
-        },
-    );
+    // Use dynamic array type instead
+    // // Helper function to iterate over input/output vectors
+    // engine.register_indexer_get(
+    //     |vec: &mut Vec<ir::MemCell>, index: i64| -> Result<ir::MemCell, Box<EvalAltResult>> {
+    //         let idx = index as usize;
+    //         vec.get(idx).cloned().ok_or_else(|| {
+    //             format!(
+    //                 "Index {} out of bounds for vec of length {}",
+    //                 index,
+    //                 vec.len()
+    //             )
+    //             .into()
+    //         })
+    //     },
+    // );
 
-    // Register indexing set operation
-    engine.register_indexer_set(
-        |vec: &mut Vec<ir::MemCell>,
-         index: i64,
-         value: ir::MemCell|
-         -> Result<(), Box<EvalAltResult>> {
-            let idx = index as usize;
-            if idx < vec.len() {
-                vec[idx] = value;
-                Ok(())
-            } else {
-                Err(format!(
-                    "Index {} out of bounds for vec of length {}",
-                    index,
-                    vec.len()
-                )
-                .into())
-            }
-        },
-    );
+    // // Register indexing set operation
+    // engine.register_indexer_set(
+    //     |vec: &mut Vec<ir::MemCell>,
+    //      index: i64,
+    //      value: ir::MemCell|
+    //      -> Result<(), Box<EvalAltResult>> {
+    //         let idx = index as usize;
+    //         if idx < vec.len() {
+    //             vec[idx] = value;
+    //             Ok(())
+    //         } else {
+    //             Err(format!(
+    //                 "Index {} out of bounds for vec of length {}",
+    //                 index,
+    //                 vec.len()
+    //             )
+    //             .into())
+    //         }
+    //     },
+    // );
+
+    // Helper function for common iteration pattern
+    engine.register_fn("chunks_by", |arr: Array, chunk_size: i64| -> Array {
+        arr.chunks(chunk_size as usize)
+            .map(|chunk| Dynamic::from(chunk.to_vec()))
+            .collect()
+    });
+    engine.register_fn("zip", |a: Array, b: Array| -> Array {
+        a.into_iter()
+            .zip(b.into_iter())
+            .map(|(x, y)| {
+                let pair: Array = vec![x, y];
+                Dynamic::from(pair)
+            })
+            .collect()
+    });
 
     // Memory related operations ==============================================
     // Register load operation
