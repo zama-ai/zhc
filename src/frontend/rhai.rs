@@ -49,9 +49,13 @@ pub fn create_rhai_engine() -> (Engine, ir::IrBuilderWrapped) {
         ir::ImmCell::Cst(val as usize)
     });
 
-    engine.register_fn("pbs_lut", |val: ImmutableString| -> ir::PbsLut {
-        ir::PbsLut::new(val.as_str())
-    });
+    engine.register_fn(
+        "pbs_lut",
+        ir::PbsLut::from_rhai,
+        // // |xfer: ImmutableString, deg: ImmutableString| -> ir::PbsLut {
+        // //     ir::PbsLut::from_rhai(xfer.as_str(), deg.as_str())
+        // },
+    );
 
     // Use dynamic array type instead
     // // Helper function to iterate over input/output vectors

@@ -12,11 +12,17 @@ let src_a = input_vars(0, integer_w);
 let src_b = input_vars(1,integer_w);
 let dst = output_vars(0, 1); // Boolean output
 
-let pbs_none = pbs_lut("None");
-let cmp_sign = pbs_lut("CmpSign");
-let cmp_reduce = pbs_lut("CmpSign");
-let user_mrg = pbs_lut("UserMrg");
-let user_cmp = pbs_lut("UserCmp");
+let pbs_none = pbs_lut("|x| x", "|x| x");
+// let cmp_sign = pbs_lut("CmpSign");
+// let cmp_reduce = pbs_lut("CmpSign");
+// let user_mrg = pbs_lut("UserMrg");
+// let user_cmp = pbs_lut("UserCmp");
+let cmp_sign = pbs_lut("|x| if x != 0 {1} else {0}",
+                       "|x| 1");
+let cmp_reduce = pbs_lut("|x| todo",
+                       "|x| 2");
+let user_mrg = pbs_lut("|x| x", "|x| x");
+let user_cmp = pbs_lut("|x| x", "|x| x");
 
 // Pack A by pairs
 let packed_a = tb::pack(src_a);
