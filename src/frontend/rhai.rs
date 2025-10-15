@@ -1,7 +1,7 @@
 //! Binding between Ir and rhai scripting engine
 
 use crate::ir;
-use rhai::{Array, Dynamic, Engine, EvalAltResult, ImmutableString, Scope};
+use rhai::{Array, Dynamic, Engine, EvalAltResult, FnPtr, INT, ImmutableString, Scope};
 
 /// Create an instance of the rhai scripting engine bind with an IrBuilder
 pub fn create_rhai_engine(context: ir::BuilderContext) -> (Engine, ir::IrBuilderWrapped) {
@@ -20,6 +20,9 @@ pub fn create_rhai_engine(context: ir::BuilderContext) -> (Engine, ir::IrBuilder
     engine.register_get("carry_w", |val: &mut ir::BuilderContext| val.carry_w);
     engine.register_get("nu_msg", |val: &mut ir::BuilderContext| val.nu_msg);
     engine.register_get("nu_bool", |val: &mut ir::BuilderContext| val.nu_bool);
+    engine.register_get("blk_w", |val: &mut ir::BuilderContext| {
+        (val.integer_w + val.msg_w - 1) / val.msg_w
+    });
 
     // Helper function for print/debug support ================================
     engine.on_print(|x| println!("rhai info: {x}"));
@@ -111,7 +114,7 @@ pub fn create_rhai_engine(context: ir::BuilderContext) -> (Engine, ir::IrBuilder
     //     },
     // );
 
-    // Helper function for common iteration pattern
+    // Helper function for common iteration pattern ==========================
     engine.register_fn("chunks_by", |arr: Array, chunk_size: i64| -> Array {
         arr.chunks(chunk_size as usize)
             .map(|chunk| Dynamic::from(chunk.to_vec()))
@@ -138,6 +141,13 @@ pub fn create_rhai_engine(context: ir::BuilderContext) -> (Engine, ir::IrBuilder
             })
             .collect()
     });
+
+    // Range doesn't support map
+    // Provide a function to cast Range into Array
+    engine.register_fn("collect", |range: std::ops::Range<INT>| -> Array {
+        range.map(|i| Dynamic::from(i)).collect()
+    });
+
     // Memory related operations ==============================================
     // Register load operation
     let builder_clone = builder.clone();

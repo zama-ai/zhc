@@ -56,5 +56,34 @@ fn zip_pack(in_a, in_b) {
     })
 }
 
+/// Clean noise on a vector of digit
+/// Some lib-operation could output noisy ciphertext
+/// This function enforce that all digit are clean and composed only of msg field
+fn clean_ct(src) {
+    let pbs_msg_only = pbs_lut(
+        ```|x| {
+            let ctx = get_context;
+            x & ((1<< ctx.msg_w) -1)
+        }```,
+        ```|x| {
+            let ctx = get_context;
+            ((1<< ctx.msg_w) -1)
+        }```);
+    src.map(|x| pbs(x, pbs_msg_only))
+}
 
+/// Bitwise inversion
+/// Usefull to convert a value in its opposite
+ fn bw_inv(src) {
+     let ctx = get_context();
+     let inv = (0..ctx.blk_w).collect().map(|_x| imm_cst((1 << ctx.msg_w) -1));
 
+     zip(inv, src).map(|pair| {
+        let inv_src = lazy_mv(pair[0]);
+        if pair.len() == 2 {
+            let val = lazy_mv(pair[1]);
+            inv_src = ssub(inv_src, val);
+        } 
+        inv_src
+    })
+ }
