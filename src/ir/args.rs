@@ -135,12 +135,9 @@ impl PbsLut {
     /// Function used to nomalize display
     /// Want to get ride of Rust subtilities and have something similar to Rhai syntax
     /// i.e. mainly Vec syntax to Rhai Array
-    fn norm_closure_fmt(s: &str) -> &str {
+    fn norm_closure_fmt(s: &str) -> String {
         // Replace vec![...] with [...]
-        if s.contains("vec!") {
-            s.replace("vec!", "");
-        }
-        s
+        s.replace("vec!", "")
     }
 }
 

@@ -6,6 +6,30 @@ pub use clap_num::maybe_hex;
 #[derive(clap::Parser, Debug, Clone)]
 #[command(long_about = "HPU IOp compiler, construct IOp Dag based on user description")]
 pub struct Args {
+    // Builder context ========================================================
+    /// integer width
+    #[arg(long, default_value_t = 64)]
+    pub integer_w: usize,
+
+    /// message width
+    #[arg(long, default_value_t = 2)]
+    pub msg_w: usize,
+
+    /// carry width
+    #[arg(long, default_value_t = 2)]
+    pub carry_w: usize,
+
+    /// nu message
+    /// Maximum computation alowed on full message ciphertext
+    #[arg(long, default_value_t = 2)]
+    pub nu_msg: usize,
+
+    /// nu bool
+    /// Maximum computation alowed on boolean ciphertext
+    #[arg(long, default_value_t = 2)]
+    pub nu_bool: usize,
+
+    // Execution info ========================================================
     /// IOp algorithm described with Rhai
     #[arg(long, default_value = "iop/demo.rhai")]
     pub input: String,
@@ -29,7 +53,14 @@ pub fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     println!("User Options: {args:?}");
 
-    let (engine, builder) = hpuic::create_rhai_engine();
+    let context = hpuic::BuilderContext {
+        integer_w: args.integer_w as i64,
+        msg_w: args.msg_w as i64,
+        carry_w: args.carry_w as i64,
+        nu_msg: args.nu_msg as i64,
+        nu_bool: args.nu_bool as i64,
+    };
+    let (engine, builder) = hpuic::create_rhai_engine(context);
 
     //Execute user script to populate the builder
     engine.run_file(PathBuf::from(&args.input))?;

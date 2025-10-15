@@ -8,18 +8,34 @@ use std::{
 use super::args::*;
 use super::operations::IrOperation;
 
+/// Context structure use to spread constant in the builder environnement
+#[derive(Debug, Clone)]
+pub struct BuilderContext {
+    pub integer_w: i64,
+    pub msg_w: i64,
+    pub carry_w: i64,
+    pub nu_msg: i64,  // Maximum computation that could be applied on a full message
+    pub nu_bool: i64, // Maximum computation that could be applied on boolean
+}
+
 #[derive(Debug, Clone)]
 pub struct IrBuilder {
+    context: BuilderContext,
     operations: Vec<IrOperation>,
     register_counter: usize,
 }
 
 impl IrBuilder {
-    pub fn new() -> Self {
+    pub fn new(context: BuilderContext) -> Self {
         IrBuilder {
+            context,
             operations: Vec::new(),
             register_counter: 0,
         }
+    }
+
+    pub fn get_context(&self) -> &BuilderContext {
+        &self.context
     }
     pub fn ssa_register(&mut self) -> Register {
         let reg = Register::Virt(self.register_counter);
@@ -147,9 +163,9 @@ impl Deref for IrBuilderWrapped {
 }
 
 impl IrBuilderWrapped {
-    pub fn new() -> Self {
+    pub fn new(context: BuilderContext) -> Self {
         Self {
-            inner: Arc::new(Mutex::new(IrBuilder::new())),
+            inner: Arc::new(Mutex::new(IrBuilder::new(context))),
         }
     }
 }

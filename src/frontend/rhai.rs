@@ -4,19 +4,33 @@ use crate::ir;
 use rhai::{Array, Dynamic, Engine, EvalAltResult, ImmutableString, Scope};
 
 /// Create an instance of the rhai scripting engine bind with an IrBuilder
-pub fn create_rhai_engine() -> (Engine, ir::IrBuilderWrapped) {
+pub fn create_rhai_engine(context: ir::BuilderContext) -> (Engine, ir::IrBuilderWrapped) {
     let mut engine = Engine::new();
     engine.set_max_expr_depths(128, 64);
-    let builder = ir::IrBuilderWrapped::new();
+    let builder = ir::IrBuilderWrapped::new(context);
 
     // Register type
     engine.register_type::<ir::Register>();
     engine.register_type::<ir::MemCell>();
     engine.register_type::<ir::ImmCell>();
 
+    engine.register_type::<ir::BuilderContext>();
+    engine.register_get("integer_w", |val: &mut ir::BuilderContext| val.integer_w);
+    engine.register_get("msg_w", |val: &mut ir::BuilderContext| val.msg_w);
+    engine.register_get("carry_w", |val: &mut ir::BuilderContext| val.carry_w);
+    engine.register_get("nu_msg", |val: &mut ir::BuilderContext| val.nu_msg);
+    engine.register_get("nu_bool", |val: &mut ir::BuilderContext| val.nu_bool);
+
     // Helper function for print/debug support ================================
     engine.on_print(|x| println!("rhai info: {x}"));
     engine.on_debug(|x, src, pos| println!("rhai debug @{src:?}:{pos:?}: {x}"));
+
+    // Helper function for context retrieval =================================
+    let builder_clone = builder.clone();
+    engine.register_fn("get_context", move || -> ir::BuilderContext {
+        let builder = builder_clone.lock().unwrap();
+        builder.get_context().clone()
+    });
 
     // Helper function for boundaries computation =============================
     engine.register_fn("clog2", |x: i64| -> i64 { (x as f64).log2().ceil() as i64 });
