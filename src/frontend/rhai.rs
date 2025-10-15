@@ -18,6 +18,9 @@ pub fn create_rhai_engine() -> (Engine, ir::IrBuilderWrapped) {
     engine.on_print(|x| println!("rhai info: {x}"));
     engine.on_debug(|x, src, pos| println!("rhai debug @{src:?}:{pos:?}: {x}"));
 
+    // Helper function for boundaries computation =============================
+    engine.register_fn("clog2", |x: i64| -> i64 { (x as f64).log2().ceil() as i64 });
+
     // Helper function to create IR type ======================================
     engine.register_fn("input_vars", |slot: i64, width: i64| -> Array {
         let digit = width / 2; // TODO let this configurable
@@ -110,6 +113,17 @@ pub fn create_rhai_engine() -> (Engine, ir::IrBuilderWrapped) {
             .collect()
     });
 
+    engine.register_fn("enumerate", |arr: rhai::Array| -> rhai::Array {
+        arr.into_iter()
+            .enumerate()
+            .map(|(i, v)| {
+                let mut map = rhai::Map::new();
+                map.insert("index".into(), (i as i64).into());
+                map.insert("value".into(), v);
+                Dynamic::from(map)
+            })
+            .collect()
+    });
     // Memory related operations ==============================================
     // Register load operation
     let builder_clone = builder.clone();
@@ -268,9 +282,13 @@ pub fn create_rhai_engine() -> (Engine, ir::IrBuilderWrapped) {
     let builder_clone = builder.clone();
     engine.register_fn(
         "pbs_ml",
-        move |src: Vec<ir::Register>, lut: ir::PbsLut| -> Vec<ir::Register> {
+        move |ml_len: i64, src: ir::Register, lut: ir::PbsLut| -> Array {
             let mut inner_lock = builder_clone.lock().unwrap();
-            inner_lock.pbs_ml(src, lut)
+            inner_lock
+                .pbs_ml(ml_len as usize, src, lut)
+                .into_iter()
+                .map(|x| Dynamic::from(x))
+                .collect()
         },
     );
     // Register Variante for single PBS to reduce boilerplate code
@@ -279,7 +297,7 @@ pub fn create_rhai_engine() -> (Engine, ir::IrBuilderWrapped) {
         "pbs",
         move |src: ir::Register, lut: ir::PbsLut| -> ir::Register {
             let mut inner_lock = builder_clone.lock().unwrap();
-            let mut dst = inner_lock.pbs_ml(vec![src], lut);
+            let mut dst = inner_lock.pbs_ml(1, src, lut);
             dst.pop().unwrap()
         },
     );
