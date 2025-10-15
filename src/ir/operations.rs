@@ -58,7 +58,7 @@ pub enum IrOperation {
     // TODO: Define many lut implicitly or explicitly ?
     Pbs {
         dst: Vec<Register>,
-        src: Vec<Register>,
+        src: Register,
         lut: PbsLut,
         flush: bool,
     },
@@ -93,14 +93,9 @@ impl std::fmt::Display for IrOperation {
                     .map(|x| x.to_string())
                     .reduce(|acc, e| acc + e.as_str())
                     .expect("Error while expanding Pbs dst field");
-                let vec_src = src
-                    .into_iter()
-                    .map(|x| x.to_string())
-                    .reduce(|acc, e| acc + e.as_str())
-                    .expect("Error while expanding Pbs src field");
                 write!(
                     f,
-                    "PBS{} [{vec_dst}] [{vec_src}] {lut}",
+                    "PBS{} [{vec_dst}] {src} {lut}",
                     if *flush { "_F" } else { "" }
                 )
             }
@@ -165,10 +160,7 @@ impl IrOperation {
             IrOperation::Subs { src_a, .. } => vec![IrCell::Register(src_a.clone())],
             IrOperation::Ssub { src_b, .. } => vec![IrCell::Register(src_b.clone())],
             IrOperation::Muls { src_a, .. } => vec![IrCell::Register(src_a.clone())],
-            IrOperation::Pbs { src, .. } => src
-                .iter()
-                .map(|x| IrCell::Register(x.clone()))
-                .collect::<Vec<_>>(),
+            IrOperation::Pbs { src, .. } => vec![IrCell::Register(src.clone())],
         }
     }
     pub fn get_outputs(&self) -> Vec<IrCell> {

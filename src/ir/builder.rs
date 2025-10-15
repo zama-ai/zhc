@@ -120,8 +120,8 @@ impl IrBuilder {
         dst
     }
 
-    pub fn pbs_ml(&mut self, src: Vec<Register>, lut: PbsLut) -> Vec<Register> {
-        let dst = src.iter().map(|_| self.ssa_register()).collect::<Vec<_>>();
+    pub fn pbs_ml(&mut self, ml_len: usize, src: Register, lut: PbsLut) -> Vec<Register> {
+        let dst = (0..ml_len).map(|_| self.ssa_register()).collect::<Vec<_>>();
         let op = IrOperation::Pbs {
             dst: dst.clone(),
             src,
