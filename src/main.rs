@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Define CLI arguments
 pub use clap::Parser;
@@ -53,14 +53,14 @@ pub fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     println!("User Options: {args:?}");
 
-    let context = hpuic::BuilderContext {
+    let context = hpu_compiler::BuilderContext {
         integer_w: args.integer_w as i64,
         msg_w: args.msg_w as i64,
         carry_w: args.carry_w as i64,
         nu_msg: args.nu_msg as i64,
         nu_bool: args.nu_bool as i64,
     };
-    let (engine, builder) = hpuic::create_rhai_engine(context);
+    let (engine, builder) = hpu_compiler::create_rhai_engine(context);
 
     //Execute user script to populate the builder
     engine.run_file(PathBuf::from(&args.input))?;
@@ -71,7 +71,7 @@ pub fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     }
 
     //Convert IR into Dag
-    let dag = hpuic::IrDag::from_operations(builder.lock().unwrap().operations());
+    let dag = hpu_compiler::IrDag::from_operations(builder.lock().unwrap().operations());
     println!("DAG stats:");
     println!("Nodes: {}", dag.get_graph().node_count());
     println!("Edge: {}", dag.get_graph().edge_count());
@@ -83,7 +83,11 @@ pub fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
     // Create Graph gui if required
     if args.view {
-        hpuic::dag_display(&dag);
+        let name = Path::new(&args.input)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("HpuCompiler");
+        hpu_compiler::dag_display(&dag, name);
     }
     Ok(())
 }

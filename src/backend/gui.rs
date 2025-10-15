@@ -100,10 +100,10 @@ impl App for ViewerApp {
     }
 }
 
-pub fn dag_display(ir_dag: &IrDag) {
+pub fn dag_display(ir_dag: &IrDag, app_name: &str) {
     let dag_viewer = DagViewer::from(ir_dag);
     run_native(
-        "HpuIc",
+        app_name,
         NativeOptions::default(),
         Box::new(|cc| Ok(Box::new(ViewerApp::new(dag_viewer, cc)))),
     )

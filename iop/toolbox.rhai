@@ -5,7 +5,7 @@
 /// Do nothing if already in register
 fn lazy_mv(maybe_in_reg) {
       switch type_of(maybe_in_reg) {
-          "hpuic::ir::args::MemCell" => load(maybe_in_reg),
+          "hpu_compiler::ir::args::MemCell" => load(maybe_in_reg),
           _ => maybe_in_reg
       };
 }
