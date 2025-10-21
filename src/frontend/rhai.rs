@@ -1,7 +1,7 @@
 //! Binding between Ir and rhai scripting engine
 
 use crate::ir;
-use rhai::{Array, Dynamic, Engine, EvalAltResult, FnPtr, INT, ImmutableString, Scope};
+use rhai::{Array, Dynamic, Engine, INT};
 
 /// Create an instance of the rhai scripting engine bind with an IrBuilder
 pub fn create_rhai_engine(context: ir::BuilderContext) -> (Engine, ir::IrBuilderWrapped) {
@@ -47,7 +47,7 @@ pub fn create_rhai_engine(context: ir::BuilderContext) -> (Engine, ir::IrBuilder
                 slot: slot as usize,
                 digit: i as usize,
             })
-            .map(|x| Dynamic::from(x))
+            .map(Dynamic::from)
             .collect()
     });
     engine.register_fn("output_vars", |slot: i64, width: i64| -> Array {
@@ -61,7 +61,7 @@ pub fn create_rhai_engine(context: ir::BuilderContext) -> (Engine, ir::IrBuilder
                 slot: slot as usize,
                 digit: i as usize,
             })
-            .map(|x| Dynamic::from(x))
+            .map(Dynamic::from)
             .collect()
     });
 
@@ -122,7 +122,7 @@ pub fn create_rhai_engine(context: ir::BuilderContext) -> (Engine, ir::IrBuilder
     });
     engine.register_fn("zip", |a: Array, b: Array| -> Array {
         a.into_iter()
-            .zip(b.into_iter())
+            .zip(b)
             .map(|(x, y)| {
                 let pair: Array = vec![x, y];
                 Dynamic::from(pair)
@@ -145,7 +145,7 @@ pub fn create_rhai_engine(context: ir::BuilderContext) -> (Engine, ir::IrBuilder
     // Range doesn't support map
     // Provide a function to cast Range into Array
     engine.register_fn("collect", |range: std::ops::Range<INT>| -> Array {
-        range.map(|i| Dynamic::from(i)).collect()
+        range.map(Dynamic::from).collect()
     });
 
     // Memory related operations ==============================================
@@ -311,7 +311,7 @@ pub fn create_rhai_engine(context: ir::BuilderContext) -> (Engine, ir::IrBuilder
             inner_lock
                 .pbs_ml(ml_len as usize, src, lut)
                 .into_iter()
-                .map(|x| Dynamic::from(x))
+                .map(Dynamic::from)
                 .collect()
         },
     );

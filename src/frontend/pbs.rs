@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use rhai::{AST, Engine};
+use rhai::Engine;
 
 use crate::ir::PbsLut;
 

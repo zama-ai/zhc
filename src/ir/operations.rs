@@ -89,7 +89,7 @@ impl std::fmt::Display for IrOperation {
                 flush,
             } => {
                 let vec_dst = dst
-                    .into_iter()
+                    .iter()
                     .map(|x| x.to_string())
                     .reduce(|acc, e| acc + e.as_str())
                     .expect("Error while expanding Pbs dst field");

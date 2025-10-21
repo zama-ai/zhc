@@ -50,7 +50,7 @@ impl IrBuilder {
     pub fn write_to_file(&self, filename: &str) -> std::io::Result<()> {
         let mut file = File::create(filename)?;
         for op in self.operations.iter() {
-            writeln!(file, "{}", op.to_string())?;
+            writeln!(file, "{}", op)?;
         }
         Ok(())
     }
