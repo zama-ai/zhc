@@ -805,3 +805,27 @@ fn test_unreachable_after_replacement() {
     store.delete_op(inc1_id);
     assert!(!store.has_opid(inc1_id));
 }
+
+#[test]
+fn test_is_effect() {
+    let mut ir = IR::<TestDialect>::empty();
+    let (_, inp1) = ir.add_op(Operations::IntInput { pos: 0 }, svec![]);
+    let (_, inp2) = ir.add_op(Operations::IntInput { pos: 1 }, svec![]);
+    let (add_op, add) = ir.add_op(Operations::Add, svec![inp1[0], inp2[0]]);
+    let (ret_op, _) = ir.add_op(Operations::Return, svec![add[0]]);
+
+    assert!(ir.get_op(ret_op).is_effect());
+    assert!(!ir.get_op(add_op).is_effect());
+}
+
+#[test]
+fn test_signature_consistency() {
+    let mut ir = IR::<TestDialect>::empty();
+    let (_, inp1) = ir.add_op(Operations::IntInput { pos: 0 }, svec![]);
+    let (_, inp2) = ir.add_op(Operations::IntInput { pos: 1 }, svec![]);
+    let (add_op, _) = ir.add_op(Operations::Add, svec![inp1[0], inp2[0]]);
+    let op_ref = ir.get_op(add_op);
+
+    // Verify cached signature matches operation signature
+    assert_eq!(op_ref.signature, &op_ref.operation.get_signature());
+}

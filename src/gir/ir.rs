@@ -4,12 +4,14 @@ use crate::{
     utils::{SmallVec, Store, StoreIndex},
 };
 use std::{
-    cmp::max, fmt::{Debug, Display}, mem::MaybeUninit
+    cmp::max,
+    fmt::{Debug, Display},
+    mem::MaybeUninit,
 };
 
 use super::{
-    Dialect, DialectOperations, Op, OpId, OpIdRaw, OpMut, OpRef, Printer, Val, ValId, ValIdRaw,
-    ValMut,
+    Dialect, DialectOperations, Op, OpId, OpIdRaw, OpMut, OpRef, Printer, Signature, Val, ValId,
+    ValIdRaw, ValMut,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -40,6 +42,7 @@ pub(super) type Depth = u8;
 
 pub struct IR<D: Dialect> {
     pub(super) op_operations: Store<OpId, D::Operations>,
+    pub(super) op_signatures: Store<OpId, Signature<D::Types>>,
     pub(super) op_arguments: Store<OpId, SmallVec<ValId>>,
     pub(super) op_returns: Store<OpId, SmallVec<ValId>>,
     pub(super) op_states: Store<OpId, State>,
@@ -80,6 +83,7 @@ impl<D: Dialect> IR<D> {
         OpRef {
             ir: self,
             operation: &self.op_operations[opid],
+            signature: &self.op_signatures[opid],
             args: self.op_arguments[opid].as_slice(),
             returns: self.op_returns[opid].as_slice(),
             id: opid,
@@ -92,6 +96,7 @@ impl<D: Dialect> IR<D> {
         assert!(self.raw_has_opid(opid), "Unknown opid");
         OpMut {
             operation: &mut self.op_operations[opid],
+            signature: &mut self.op_signatures[opid],
             args: &mut self.op_arguments[opid],
             returns: &mut self.op_returns[opid],
             id: opid,
@@ -143,12 +148,14 @@ impl<D: Dialect> IR<D> {
         let opid = OpId(self.raw_n_ops());
         let Op {
             operation,
+            signature,
             args,
             returns,
             state,
             depth,
         } = op;
         self.op_operations.push(operation);
+        self.op_signatures.push(signature);
         self.op_arguments.push(args);
         self.op_returns.push(returns);
         self.op_states.push(state);
@@ -223,6 +230,7 @@ impl<D: Dialect> IR<D> {
     pub fn empty() -> Self {
         IR {
             op_operations: Store::empty(),
+            op_signatures: Store::empty(),
             op_arguments: Store::empty(),
             op_returns: Store::empty(),
             op_states: Store::empty(),
@@ -302,6 +310,7 @@ impl<D: Dialect> IR<D> {
         // added once created.
         let op = Op {
             operation: op,
+            signature: sig.clone(),
             args: args.clone(),
             returns: svec![],
             state: State::Active,

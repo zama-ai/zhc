@@ -1,10 +1,11 @@
-use super::{Depth, Dialect, IR, OpId, State, ValId, val_ref::ValRef};
+use super::{Depth, Dialect, IR, OpId, Signature, State, ValId, val_ref::ValRef};
 
 #[derive(Debug, Clone)]
 pub struct OpRef<'s, D: Dialect> {
     pub(super) id: OpId,
     pub(super) ir: &'s IR<D>,
     pub(super) operation: &'s D::Operations,
+    pub(super) signature: &'s Signature<D::Types>,
     pub(super) args: &'s [ValId],
     pub(super) returns: &'s [ValId],
     pub(super) state: &'s State,
@@ -34,6 +35,10 @@ impl<'s, D: Dialect> OpRef<'s, D> {
 
     pub fn is_inactive(&self) -> bool {
         self.state.is_inactive()
+    }
+
+    pub fn is_effect(&self) -> bool {
+        self.signature.get_returns_arity() == 0
     }
 
     pub fn get_id(&self) -> OpId {
