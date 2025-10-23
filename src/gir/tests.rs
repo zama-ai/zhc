@@ -950,10 +950,10 @@ fn test_batch_delete_independent_operations() {
 #[should_panic(expected = "Tried to delete an operation whose return values are still in use")]
 fn test_batch_delete_with_external_users() {
     let mut ir = IR::<TestDialect>::empty();
-    let (op1, vals1) = ir.add_op(Operations::IntInput { pos: 0 }, svec![]);
+    let (_op1, vals1) = ir.add_op(Operations::IntInput { pos: 0 }, svec![]);
     let (op2, vals2) = ir.add_op(Operations::Inc, vals1);
     let (op3, _) = ir.add_op(Operations::Return, vals2.clone());
-    let (op4, _) = ir.add_op(Operations::Return, vals2); // op4 also uses vals2
+    let (_op4, _) = ir.add_op(Operations::Return, vals2); // op4 also uses vals2
 
     // Try to delete op2 and op3, but op4 still uses vals2 from op2
     ir.batch_delete_op([op2, op3].into_iter());
@@ -983,7 +983,7 @@ fn test_batch_delete_partial_dependency_closure() {
 #[should_panic(expected = "Tried to get a dead op")]
 fn test_batch_delete_already_deleted() {
     let mut ir = IR::<TestDialect>::empty();
-    let (op1, vals1) = ir.add_op(Operations::IntInput { pos: 0 }, svec![]);
+    let (_, vals1) = ir.add_op(Operations::IntInput { pos: 0 }, svec![]);
     let (op2, _) = ir.add_op(Operations::Return, vals1);
 
     ir.delete_op(op2); // Delete normally first

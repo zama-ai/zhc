@@ -279,13 +279,6 @@ mod test {
         }
     }
 
-    // Different sized types for capacity testing
-    #[repr(C)]
-    struct Small(u8);
-
-    #[repr(C)]
-    struct Medium([u32; 4]); // 16 bytes
-
     #[repr(C)]
     struct Large([u64; 10]); // 80 bytes - exceeds STACK_BYTES
 
