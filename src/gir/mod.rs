@@ -1,3 +1,4 @@
+pub mod dce;
 mod dialect;
 mod id;
 mod ir;

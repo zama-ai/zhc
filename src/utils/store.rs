@@ -1,13 +1,27 @@
 use std::{
+    iter::FromIterator,
     marker::PhantomData,
     ops::{Index, IndexMut},
 };
+
+use crate::gir::OpIdRaw;
 
 pub struct Store<I: StoreIndex, V>(Vec<V>, PhantomData<I>);
 
 impl<I: StoreIndex, V> Store<I, V> {
     pub fn empty() -> Self {
         Store(Vec::new(), PhantomData)
+    }
+
+    pub fn with_capacity(cap: OpIdRaw) -> Self {
+        Store(Vec::with_capacity(cap as usize), PhantomData)
+    }
+
+    pub fn with_value(value: V, len: OpIdRaw) -> Self
+    where
+        V: Clone,
+    {
+        Store(vec![value; len as usize], PhantomData)
     }
 
     pub fn len(&self) -> I::Raw {
@@ -23,6 +37,13 @@ impl<I: StoreIndex, V> Store<I, V> {
     pub fn get_disjoint_mut<const N: usize>(&mut self, indices: [I; N]) -> [&mut V; N] {
         let usize_indices = indices.map(|a| a.as_usize());
         self.0.get_disjoint_mut(usize_indices).unwrap()
+    }
+
+    pub fn enumerate_iter(&self) -> impl Iterator<Item = (I, &V)> {
+        self.0
+            .iter()
+            .enumerate()
+            .map(|(i, v)| (I::from_usize(i), v))
     }
 
     pub fn iter(&self) -> std::slice::Iter<'_, V> {
@@ -60,7 +81,13 @@ impl<I: StoreIndex, V> IndexMut<&I> for Store<I, V> {
     }
 }
 
-pub trait StoreIndex {
+impl<I: StoreIndex, V> FromIterator<V> for Store<I, V> {
+    fn from_iter<T: IntoIterator<Item = V>>(iter: T) -> Self {
+        Store(Vec::from_iter(iter), PhantomData)
+    }
+}
+
+pub trait StoreIndex: Copy {
     type Raw;
     fn as_raw(&self) -> Self::Raw;
     fn as_usize(&self) -> usize;

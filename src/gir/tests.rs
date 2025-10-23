@@ -1,5 +1,5 @@
 #[allow(unused)]
-mod test_dialect {
+pub mod test_dialect {
     use std::fmt::Display;
 
     use crate::{
