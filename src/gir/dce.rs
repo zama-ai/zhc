@@ -59,10 +59,7 @@ impl DeadCodeAnalysis {
 
     /// Returns an iterator over all active operations and their liveness status.
     pub fn get_statuses_iter(&self) -> impl Iterator<Item = (OpId, &Liveness)> {
-        self.raw_get_statuses_iter().filter_map(|(i, s)| match s {
-            Some(v) => Some((i, v)),
-            None => None,
-        })
+        self.raw_get_statuses_iter().filter_map(|(i, s)| s.map(|v| (i, v)))
     }
 }
 

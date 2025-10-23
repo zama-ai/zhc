@@ -19,7 +19,7 @@ impl<'s, D: Dialect> PartialEq for ValRef<'s, D> {
 #[allow(unused)]
 impl<'s, D: Dialect> ValRef<'s, D> {
     pub(super) fn raw_get_users_iter(&self) -> impl Iterator<Item = OpRef<'s, D>> + use<'s, D> {
-        self.users.into_iter().map(|opid| self.ir.raw_get_op(*opid))
+        self.users.iter().map(|opid| self.ir.raw_get_op(*opid))
     }
 
     pub(super) fn raw_get_origin(&self) -> OpRef<'s, D> {

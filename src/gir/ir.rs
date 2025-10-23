@@ -187,7 +187,7 @@ impl<D: Dialect> IR<D> {
         for op in self.raw_ops_iter() {
             depth_buckets[op.get_depth() as usize].push(op.get_id());
         }
-        depth_buckets.into_iter().map(|b| b.into_iter()).flatten()
+        depth_buckets.into_iter().flat_map(|b| b.into_iter())
     }
 
     pub(super) fn raw_topological_ops_iter(&self) -> impl Iterator<Item = OpRef<'_, D>> {
@@ -490,7 +490,7 @@ impl<D: Dialect> IR<D> {
                 let to_nix = unsafe { idmap[to.get_id().as_usize()].assume_init() };
                 output.add_edge(from_nix, to_nix, (valid, self.clone()));
             });
-        return output;
+        output
     }
 }
 

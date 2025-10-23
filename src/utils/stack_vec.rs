@@ -59,6 +59,12 @@ impl<A> Drop for StackVecIntoIter<A> {
     }
 }
 
+impl<A> Default for StackVec<A> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<A> StackVec<A> {
     pub fn new() -> Self {
         let size = std::mem::size_of::<A>();
@@ -161,11 +167,11 @@ impl<A> StackVec<A> {
         vec
     }
 
-    pub fn iter(&self) -> std::slice::Iter<A> {
+    pub fn iter(&self) -> std::slice::Iter<'_, A> {
         self.as_slice().iter()
     }
 
-    pub fn iter_mut(&mut self) -> std::slice::IterMut<A> {
+    pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, A> {
         self.as_mut_slice().iter_mut()
     }
 
@@ -249,14 +255,14 @@ impl<A> std::iter::FromIterator<A> for StackVec<A> {
     fn from_iter<I: IntoIterator<Item = A>>(iter: I) -> Self {
         let mut output = StackVec::new();
         output.extend(iter);
-        return output;
+        output
     }
 }
 
 impl<A> std::iter::Extend<A> for StackVec<A> {
     fn extend<I: IntoIterator<Item = A>>(&mut self, iter: I) {
-        let mut iter = iter.into_iter();
-        while let Some(v) = iter.next() {
+        let iter = iter.into_iter();
+        for v in iter {
             self.push(v);
         }
     }

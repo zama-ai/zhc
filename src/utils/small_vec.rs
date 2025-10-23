@@ -40,12 +40,12 @@ impl<A> SmallVec<A> {
     }
 
     pub fn push(&mut self, value: A) {
-        if let SmallVec::Stack(stack_vec) = self {
-            if !stack_vec.may_push() {
-                let mut output = Vec::with_capacity(stack_vec.len() + 1);
-                stack_vec.drain_to_vec(&mut output);
-                *self = SmallVec::Heap(output);
-            }
+        if let SmallVec::Stack(stack_vec) = self
+            && !stack_vec.may_push()
+        {
+            let mut output = Vec::with_capacity(stack_vec.len() + 1);
+            stack_vec.drain_to_vec(&mut output);
+            *self = SmallVec::Heap(output);
         }
         match self {
             SmallVec::Heap(h) => h.push(value),
@@ -77,7 +77,6 @@ impl<A> SmallVec<A> {
         match other {
             SmallVec::Heap(r) => {
                 l.append(r);
-                return;
             }
             SmallVec::Stack(r) => {
                 r.drain_to_vec(l);
@@ -85,14 +84,14 @@ impl<A> SmallVec<A> {
         }
     }
 
-    pub fn iter(&self) -> std::slice::Iter<A> {
+    pub fn iter(&self) -> std::slice::Iter<'_, A> {
         match self {
             SmallVec::Heap(h) => h.iter(),
             SmallVec::Stack(s) => s.iter(),
         }
     }
 
-    pub fn iter_mut(&mut self) -> std::slice::IterMut<A> {
+    pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, A> {
         match self {
             SmallVec::Heap(h) => h.iter_mut(),
             SmallVec::Stack(s) => s.iter_mut(),
@@ -173,7 +172,7 @@ impl<A> std::iter::Extend<A> for SmallVec<A> {
 impl<A: PartialEq> PartialEq for SmallVec<A> {
     fn eq(&self, other: &Self) -> bool {
         if self.len() != other.len() {
-            return false;
+            false
         } else {
             self.as_slice().eq(other.as_slice())
         }
