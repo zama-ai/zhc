@@ -850,3 +850,144 @@ fn test_signature_consistency() {
     // Verify cached signature matches operation signature
     assert_eq!(op_ref.signature, &op_ref.operation.get_signature());
 }
+
+#[test]
+fn test_batch_delete_empty() {
+    let mut ir = IR::<TestDialect>::empty();
+    let (op1, _) = ir.add_op(Operations::IntInput { pos: 0 }, svec![]);
+
+    // Empty batch should be no-op
+    ir.batch_delete_op(std::iter::empty());
+
+    assert!(ir.has_opid(op1));
+    assert_eq!(ir.n_ops(), 1);
+}
+
+#[test]
+fn test_batch_delete_single() {
+    let mut ir = IR::<TestDialect>::empty();
+    let (op1, vals1) = ir.add_op(Operations::IntInput { pos: 0 }, svec![]);
+    let (op2, _) = ir.add_op(Operations::Return, vals1);
+
+    ir.batch_delete_op(std::iter::once(op2));
+
+    assert!(ir.has_opid(op1));
+    assert!(!ir.has_opid(op2));
+    assert_eq!(ir.n_ops(), 1);
+}
+
+#[test]
+fn test_batch_delete_dependency_chain() {
+    let mut ir = IR::<TestDialect>::empty();
+    let (op1, vals1) = ir.add_op(Operations::IntInput { pos: 0 }, svec![]);
+    let (op2, vals2) = ir.add_op(Operations::Inc, vals1);
+    let (op3, vals3) = ir.add_op(Operations::Inc, vals2);
+    let (op4, _) = ir.add_op(Operations::Return, vals3);
+
+    // Delete the entire chain
+    ir.batch_delete_op([op2, op3, op4].into_iter());
+
+    assert!(ir.has_opid(op1));
+    assert!(!ir.has_opid(op2));
+    assert!(!ir.has_opid(op3));
+    assert!(!ir.has_opid(op4));
+    assert_eq!(ir.n_ops(), 1);
+}
+
+#[test]
+fn test_batch_delete_order_independence() {
+    let mut ir = IR::<TestDialect>::empty();
+    let (op1, vals1) = ir.add_op(Operations::IntInput { pos: 0 }, svec![]);
+    let (op2, vals2) = ir.add_op(Operations::Inc, vals1);
+    let (op3, _) = ir.add_op(Operations::Return, vals2);
+
+    // Delete in reverse dependency order - should still work
+    ir.batch_delete_op([op2, op3].into_iter());
+
+    assert!(ir.has_opid(op1));
+    assert!(!ir.has_opid(op2));
+    assert!(!ir.has_opid(op3));
+    assert_eq!(ir.n_ops(), 1);
+}
+
+#[test]
+fn test_batch_delete_diamond_pattern() {
+    let mut ir = IR::<TestDialect>::empty();
+    let (op1, vals1) = ir.add_op(Operations::IntInput { pos: 0 }, svec![]);
+    let (op2, vals2) = ir.add_op(Operations::Inc, vals1.clone());
+    let (op3, vals3) = ir.add_op(Operations::Inc, vals1);
+    let (op4, _) = ir.add_op(Operations::Add, svec![vals2[0], vals3[0]]);
+
+    // Delete the diamond (op2, op3, op4) but leave op1
+    ir.batch_delete_op([op2, op3, op4].into_iter());
+
+    assert!(ir.has_opid(op1));
+    assert!(!ir.has_opid(op2));
+    assert!(!ir.has_opid(op3));
+    assert!(!ir.has_opid(op4));
+    assert_eq!(ir.n_ops(), 1);
+}
+
+#[test]
+fn test_batch_delete_independent_operations() {
+    let mut ir = IR::<TestDialect>::empty();
+    let (op1, vals1) = ir.add_op(Operations::IntInput { pos: 0 }, svec![]);
+    let (op2, vals2) = ir.add_op(Operations::IntInput { pos: 1 }, svec![]);
+    let (op3, _) = ir.add_op(Operations::Return, vals1);
+    let (op4, _) = ir.add_op(Operations::Return, vals2);
+
+    // Delete two independent subgraphs
+    ir.batch_delete_op([op3, op4].into_iter());
+
+    assert!(ir.has_opid(op1));
+    assert!(ir.has_opid(op2));
+    assert!(!ir.has_opid(op3));
+    assert!(!ir.has_opid(op4));
+    assert_eq!(ir.n_ops(), 2);
+}
+
+#[test]
+#[should_panic(expected = "Tried to delete an operation whose return values are still in use")]
+fn test_batch_delete_with_external_users() {
+    let mut ir = IR::<TestDialect>::empty();
+    let (op1, vals1) = ir.add_op(Operations::IntInput { pos: 0 }, svec![]);
+    let (op2, vals2) = ir.add_op(Operations::Inc, vals1);
+    let (op3, _) = ir.add_op(Operations::Return, vals2.clone());
+    let (op4, _) = ir.add_op(Operations::Return, vals2); // op4 also uses vals2
+
+    // Try to delete op2 and op3, but op4 still uses vals2 from op2
+    ir.batch_delete_op([op2, op3].into_iter());
+}
+
+#[test]
+fn test_batch_delete_partial_dependency_closure() {
+    let mut ir = IR::<TestDialect>::empty();
+    let (op1, vals1) = ir.add_op(Operations::IntInput { pos: 0 }, svec![]);
+    let (op2, vals2) = ir.add_op(Operations::Inc, vals1);
+    let (op3, vals3) = ir.add_op(Operations::Inc, vals2.clone());
+    let (op4, _) = ir.add_op(Operations::Return, vals3);
+    let (op5, _) = ir.add_op(Operations::Return, vals2); // Also uses vals2
+
+    // Can delete op3 and op4 (leaves op2 and op5 intact)
+    ir.batch_delete_op([op3, op4].into_iter());
+
+    assert!(ir.has_opid(op1));
+    assert!(ir.has_opid(op2));
+    assert!(!ir.has_opid(op3));
+    assert!(!ir.has_opid(op4));
+    assert!(ir.has_opid(op5));
+    assert_eq!(ir.n_ops(), 3);
+}
+
+#[test]
+#[should_panic(expected = "Tried to get a dead op")]
+fn test_batch_delete_already_deleted() {
+    let mut ir = IR::<TestDialect>::empty();
+    let (op1, vals1) = ir.add_op(Operations::IntInput { pos: 0 }, svec![]);
+    let (op2, _) = ir.add_op(Operations::Return, vals1);
+
+    ir.delete_op(op2); // Delete normally first
+
+    // Try to batch delete already deleted operation
+    ir.batch_delete_op(std::iter::once(op2));
+}

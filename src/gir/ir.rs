@@ -409,6 +409,17 @@ impl<D: Dialect> IR<D> {
         new_mut.append(old_mut);
     }
 
+    pub fn batch_delete_op(&mut self, opids: impl Iterator<Item = OpId>) {
+        let mut batch: Vec<_> = opids
+            .map(|opid| (opid, self.get_op(opid).get_depth()))
+            .collect();
+        batch.sort_unstable_by_key(|(_, depth)| *depth);
+        batch
+            .into_iter()
+            .rev()
+            .for_each(|(opid, _)| self.delete_op(opid));
+    }
+
     /// Deletes an operation from the IR.
     ///
     /// Panics:
