@@ -25,12 +25,16 @@ impl Display for Litteral {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operations {
     Input { pos: usize, typ: Types },
+    Output { pos: usize, typ: Types },
+    Variable { typ: Types },
     Constant { value: Litteral },
+    GenerateLut { name: String, deg: usize },
     AddCt,
     SubCt,
     Mac,
     AddPt,
     SubPt,
+    PtSub,
     MulPt,
     ExtractCtBlock,
     ExtractPtBlock,
@@ -45,12 +49,16 @@ impl Display for Operations {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Operations::Input { pos, typ } => write!(f, "input<{}, {}>", pos, typ),
+            Operations::Output { pos, typ } => write!(f, "output<{}, {}>", pos, typ),
+            Operations::Variable { typ } => write!(f, "variable<{}>", typ),
             Operations::Constant { value } => write!(f, "constant<{}>", value),
+            Operations::GenerateLut { deg, name } => write!(f, "gen_lut{deg}<{name}>"),
             Operations::Mac => write!(f, "mac"),
             Operations::AddCt => write!(f, "add_ct"),
             Operations::SubCt => write!(f, "sub_ct"),
             Operations::AddPt => write!(f, "add_pt"),
             Operations::SubPt => write!(f, "sub_pt"),
+            Operations::PtSub => write!(f, "pt_sub"),
             Operations::MulPt => write!(f, "mul_pt"),
             Operations::ExtractCtBlock => write!(f, "extract_ct_block"),
             Operations::ExtractPtBlock => write!(f, "extract_pt_block"),
@@ -70,23 +78,31 @@ impl DialectOperations for Operations {
         use Types::*;
         match self {
             Operations::Input { typ, .. } => sig![() -> (typ.clone())],
+            Operations::Output { typ, .. } => sig![(typ.clone()) -> ()],
+            Operations::Variable { typ, .. } => sig![() -> (typ.clone())],
             Operations::Constant {
                 value: Litteral::PlaintextBlock(_),
             } => sig![() -> (PlaintextBlock)],
             Operations::Constant {
                 value: Litteral::Index(_),
             } => sig![() -> (Index)],
+            Operations::GenerateLut { deg: 1, .. } => sig![()-> (Lut1)],
+            Operations::GenerateLut { deg: 2, .. } => sig![()-> (Lut2)],
+            Operations::GenerateLut { deg: 4, .. } => sig![()-> (Lut4)],
+            Operations::GenerateLut { deg: 8, .. } => sig![()-> (Lut8)],
+            Operations::GenerateLut { deg, .. } => panic!("Invalid GenerateLut degree {deg}"),
             Operations::AddCt => sig![(CiphertextBlock, CiphertextBlock) -> (CiphertextBlock)],
             Operations::SubCt => sig![(CiphertextBlock, CiphertextBlock) -> (CiphertextBlock)],
             Operations::Mac => {
-                sig![(CiphertextBlock, PlaintextBlock, CiphertextBlock) -> (CiphertextBlock)]
+                sig![( PlaintextBlock, CiphertextBlock, CiphertextBlock) -> (CiphertextBlock)]
             }
             Operations::AddPt => sig![(CiphertextBlock, PlaintextBlock) -> (CiphertextBlock)],
             Operations::SubPt => sig![(CiphertextBlock, PlaintextBlock) -> (CiphertextBlock)],
+            Operations::PtSub => sig![(PlaintextBlock, CiphertextBlock) -> (CiphertextBlock)],
             Operations::MulPt => sig![(CiphertextBlock, PlaintextBlock) -> (CiphertextBlock)],
             Operations::ExtractCtBlock => sig![(Ciphertext, Index) -> (CiphertextBlock)],
             Operations::ExtractPtBlock => sig![(Plaintext, Index) -> (PlaintextBlock)],
-            Operations::StoreCtBlock => sig![(Ciphertext, Index, CiphertextBlock) -> (Ciphertext)],
+            Operations::StoreCtBlock => sig![(CiphertextBlock, Ciphertext, Index) -> (Ciphertext)],
             Operations::Pbs => sig![(CiphertextBlock, Lut1) -> (CiphertextBlock)],
             Operations::Pbs2 => sig![(CiphertextBlock, Lut2) -> (CiphertextBlock, CiphertextBlock)],
             Operations::Pbs4 => {
