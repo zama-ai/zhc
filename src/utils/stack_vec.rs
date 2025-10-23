@@ -1,12 +1,13 @@
-use std::mem::{ManuallyDrop, MaybeUninit};
 use std::fmt::Debug;
+use std::mem::{ManuallyDrop, MaybeUninit};
 
 const STACK_BYTES: usize = 64;
 
 #[repr(C)]
 union AlignedStorage<A> {
     data: [MaybeUninit<u8>; STACK_BYTES],
-    // The following form is never used, but it forces the alignment of the whole type to be correct.
+    // The following form is never used, but it forces the alignment of the whole type to be
+    // correct.
     _align: ManuallyDrop<[A; 0]>,
 }
 
@@ -214,7 +215,9 @@ impl<A> std::ops::IndexMut<usize> for StackVec<A> {
 
 impl<A: Debug> Debug for StackVec<A> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.iter().fold(&mut f.debug_list(), |acc, v| acc.entry(v)).finish()
+        self.iter()
+            .fold(&mut f.debug_list(), |acc, v| acc.entry(v))
+            .finish()
     }
 }
 
@@ -231,7 +234,7 @@ impl<A> std::iter::FromIterator<A> for StackVec<A> {
     fn from_iter<I: IntoIterator<Item = A>>(iter: I) -> Self {
         let mut output = StackVec::new();
         output.extend(iter);
-        return output
+        return output;
     }
 }
 
@@ -253,8 +256,8 @@ impl<A: Clone> Clone for StackVec<A> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     // Drop-tracking type for ownership and memory safety tests
     #[derive(Debug, Clone)]
@@ -404,7 +407,7 @@ mod test {
 
     #[test]
     fn test_drain_to_vec() {
-        let counter : Arc<AtomicUsize> = Arc::new(AtomicUsize::new(0));
+        let counter: Arc<AtomicUsize> = Arc::new(AtomicUsize::new(0));
 
         let mut stack_vec = StackVec::new();
         stack_vec.push(DropTracker::new(1, counter.clone()));
@@ -539,6 +542,6 @@ mod test {
     #[test]
     #[should_panic(expected = "Type is too big to fit in a stack vec.")]
     fn test_large_type_capacity() {
-        let vec: StackVec<Large> = StackVec::new();
+        let _vec: StackVec<Large> = StackVec::new();
     }
 }

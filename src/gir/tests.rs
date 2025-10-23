@@ -73,7 +73,11 @@ mod test_dialect {
     }
 }
 
-use crate::{gir::IR, svec, utils::CollectInVec};
+use crate::{
+    gir::{DialectOperations, IR},
+    svec,
+    utils::CollectInVec,
+};
 use test_dialect::{Operations, TestDialect};
 
 /// Tests basic IR construction with complex operation graph and validates
@@ -526,10 +530,12 @@ fn test_replace_val_use_self() {
     let inc_after = format!("{:?}", store.get_op(inc_id));
 
     assert_eq!(inc_before, inc_after);
-    store.check_ir("
+    store.check_ir(
+        "
         %0 : Int = int_input<pos: 0>();
         %1 : Int = inc(%0);
-    ");
+    ",
+    );
 }
 
 /// Tests using same value multiple times in single operation
@@ -544,16 +550,22 @@ fn test_same_value_multiple_args() {
 
     // Value should appear in users list only once, but op uses it twice
     assert_eq!(val.get_users_iter().count(), 1);
-    assert_eq!(add_op.get_args_iter().filter(|v| v.get_id() == vals[0]).count(), 2);
+    assert_eq!(
+        add_op
+            .get_args_iter()
+            .filter(|v| v.get_id() == vals[0])
+            .count(),
+        2
+    );
 }
 
 /// Tests diamond dependency pattern (A→B, A→C, B→D, C→D)
 #[test]
 fn test_diamond_dependencies() {
     let mut store: IR<TestDialect> = IR::empty();
-    let (_, a_vals) = store.add_op(Operations::IntInput { pos: 0 }, svec![]);  // A
-    let (_b_id, b_vals) = store.add_op(Operations::Inc, svec![a_vals[0]]);     // B depends on A
-    let (_c_id, c_vals) = store.add_op(Operations::Inc, svec![a_vals[0]]);     // C depends on A
+    let (_, a_vals) = store.add_op(Operations::IntInput { pos: 0 }, svec![]); // A
+    let (_b_id, b_vals) = store.add_op(Operations::Inc, svec![a_vals[0]]); // B depends on A
+    let (_c_id, c_vals) = store.add_op(Operations::Inc, svec![a_vals[0]]); // C depends on A
     let (d_id, _) = store.add_op(Operations::Add, svec![b_vals[0], c_vals[0]]); // D depends on B,C
 
     let a_val = store.get_val(a_vals[0]);
@@ -595,16 +607,18 @@ fn test_multi_return_different_users() {
     let (_, div_vals) = store.add_op(Operations::DivRem, svec![inp1[0], inp2[0]]);
 
     // Use first return in one op, second return in another
-    let (_, _) = store.add_op(Operations::Inc, svec![div_vals[0]]);  // Use quotient
-    let (_, _) = store.add_op(Operations::Inc, svec![div_vals[1]]);  // Use remainder
+    let (_, _) = store.add_op(Operations::Inc, svec![div_vals[0]]); // Use quotient
+    let (_, _) = store.add_op(Operations::Inc, svec![div_vals[1]]); // Use remainder
 
     let quot = store.get_val(div_vals[0]);
     let rem = store.get_val(div_vals[1]);
 
     assert_eq!(quot.get_users_iter().count(), 1);
     assert_eq!(rem.get_users_iter().count(), 1);
-    assert_ne!(quot.get_users_iter().next().unwrap().get_id(),
-              rem.get_users_iter().next().unwrap().get_id());
+    assert_ne!(
+        quot.get_users_iter().next().unwrap().get_id(),
+        rem.get_users_iter().next().unwrap().get_id()
+    );
 }
 
 /// Tests iteration behavior over IR with deleted elements
@@ -644,13 +658,19 @@ fn test_user_consistency_after_deletion() {
     store.delete_op(inc1_id);
 
     // Value should still have 1 user, but the deleted op shouldn't appear in iteration
-    let remaining_users: Vec<_> = store.get_val(vals[0]).raw_get_users_iter()
-        .map(|op| op.get_id()).collect();
+    let remaining_users: Vec<_> = store
+        .get_val(vals[0])
+        .raw_get_users_iter()
+        .map(|op| op.get_id())
+        .collect();
     assert_eq!(remaining_users.len(), 2); // Raw users list still contains deleted op
 
     // But active users should only show the remaining one
-    let active_users: Vec<_> = store.get_val(vals[0]).get_users_iter()
-        .filter(|op| op.is_active()).collect();
+    let active_users: Vec<_> = store
+        .get_val(vals[0])
+        .get_users_iter()
+        .filter(|op| op.is_active())
+        .collect();
     assert_eq!(active_users.len(), 1);
 }
 
@@ -670,7 +690,7 @@ fn test_replacement_cascade_multiple_levels() {
     let depths_before = [
         store.get_op(inc1_id).get_depth(),
         store.get_op(inc2_id).get_depth(),
-        store.get_op(inc3_id).get_depth()
+        store.get_op(inc3_id).get_depth(),
     ];
 
     // Replace inc1's input with inp2, should cascade depth updates
@@ -679,7 +699,7 @@ fn test_replacement_cascade_multiple_levels() {
     let depths_after = [
         store.get_op(inc1_id).get_depth(),
         store.get_op(inc2_id).get_depth(),
-        store.get_op(inc3_id).get_depth()
+        store.get_op(inc3_id).get_depth(),
     ];
 
     // Depths should remain the same since both inputs are at depth 1
@@ -695,14 +715,14 @@ fn test_replacement_deeper_chain() {
     let (_, inp1) = store.add_op(Operations::IntInput { pos: 0 }, svec![]);
     let (_, inp2) = store.add_op(Operations::IntInput { pos: 1 }, svec![]);
     let (_, inc1_vals) = store.add_op(Operations::Inc, svec![inp2[0]]);
-    let (inc2_id, _) = store.add_op(Operations::Inc, svec![inp1[0]]);  // Initially uses inp1
+    let (inc2_id, _) = store.add_op(Operations::Inc, svec![inp1[0]]); // Initially uses inp1
 
     assert_eq!(store.get_op(inc2_id).get_depth(), 2);
 
     // Replace inp1 with inc1's output, making inc2 deeper
     store.replace_val_use(inp1[0], inc1_vals[0]);
 
-    assert_eq!(store.get_op(inc2_id).get_depth(), 3);  // Now inp2→inc1→inc2
+    assert_eq!(store.get_op(inc2_id).get_depth(), 3); // Now inp2→inc1→inc2
 }
 
 /// Tests has_opid/has_valid behavior with deleted elements
@@ -739,7 +759,6 @@ fn test_empty_ir_operations() {
     assert_eq!(topo_ops.len(), 0);
 }
 
-
 /// Tests topological ordering with deleted operations
 #[test]
 fn test_topological_order_with_deletions() {
@@ -750,11 +769,14 @@ fn test_topological_order_with_deletions() {
     let (op4_id, _) = store.add_op(Operations::Inc, svec![vals1[0]]); // Independent branch
 
     // Delete operations in reverse dependency order (leaf first)
-    store.delete_op(op3_id);  // Delete op3 first since it depends on op2
-    store.delete_op(op2_id);  // Now safe to delete op2
+    store.delete_op(op3_id); // Delete op3 first since it depends on op2
+    store.delete_op(op2_id); // Now safe to delete op2
 
     // Topological order should include deleted operations in raw iterator
-    let all_topo: Vec<_> = store.raw_topological_ops_iter().map(|op| op.get_id()).collect();
+    let all_topo: Vec<_> = store
+        .raw_topological_ops_iter()
+        .map(|op| op.get_id())
+        .collect();
     assert_eq!(all_topo.len(), 4);
     assert!(all_topo.contains(&op1_id));
     assert!(all_topo.contains(&op2_id));
@@ -771,7 +793,6 @@ fn test_topological_order_with_deletions() {
     assert!(op1_pos < op4_pos);
     assert!(op2_pos < op3_pos);
 }
-
 
 /// Tests replacement with type validation
 #[test]

@@ -6,8 +6,8 @@ mod stack_vec;
 mod store;
 
 pub use all_eq::*;
+pub use collect_in_vec::*;
 pub use erasable::*;
 pub use small_vec::*;
-pub use store::*;
-pub use collect_in_vec::*;
 pub use stack_vec::*;
+pub use store::*;

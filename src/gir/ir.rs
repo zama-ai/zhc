@@ -458,16 +458,23 @@ impl<D: Dialect> IR<D> {
     pub fn to_petgraph(&self) -> petgraph::stable_graph::StableGraph<OpId, ValId> {
         use petgraph::stable_graph::*;
         let mut output = StableGraph::new();
-        let mut idmap: Vec<MaybeUninit<NodeIndex>> = vec![MaybeUninit::uninit(); self.raw_n_ops() as usize];
-        self.raw_ops_iter().for_each(|op|{
+        let mut idmap: Vec<MaybeUninit<NodeIndex>> =
+            vec![MaybeUninit::uninit(); self.raw_n_ops() as usize];
+        self.raw_ops_iter().for_each(|op| {
             idmap[op.get_id().as_usize()] = MaybeUninit::new(output.add_node(op.get_id()));
         });
         use std::iter::repeat;
-        self.raw_vals_iter().flat_map(|val| repeat(val.get_id()).zip(repeat(val.get_origin())).zip(val.get_users_iter())).for_each(|((valid, from), to)|{
-            let from_nix = unsafe{idmap[from.get_id().as_usize()].assume_init()};
-            let to_nix = unsafe{idmap[to.get_id().as_usize()].assume_init()};
-            output.add_edge(from_nix, to_nix, valid);
-        });
+        self.raw_vals_iter()
+            .flat_map(|val| {
+                repeat(val.get_id())
+                    .zip(repeat(val.get_origin()))
+                    .zip(val.get_users_iter())
+            })
+            .for_each(|((valid, from), to)| {
+                let from_nix = unsafe { idmap[from.get_id().as_usize()].assume_init() };
+                let to_nix = unsafe { idmap[to.get_id().as_usize()].assume_init() };
+                output.add_edge(from_nix, to_nix, valid);
+            });
         return output;
     }
 }
