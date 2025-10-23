@@ -182,7 +182,7 @@ impl<D: Dialect> IR<D> {
 
     pub(super) fn raw_get_topological_order(&self) -> impl Iterator<Item = OpId> {
         let max_depth = *self.op_depth.iter().max().unwrap_or(&0);
-        let mut depth_buckets = svec![svec![]; (max_depth + 1) as usize];
+        let mut depth_buckets = vec![svec![]; (max_depth + 1) as usize];
         for op in self.raw_ops_iter() {
             depth_buckets[op.get_depth() as usize].push(op.get_id());
         }

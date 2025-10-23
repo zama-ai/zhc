@@ -101,6 +101,21 @@ impl<A> StackVec<A> {
         }
     }
 
+    pub const fn static_capacity() -> usize {
+        let size = std::mem::size_of::<A>();
+        let align = std::mem::align_of::<A>();
+        if size > STACK_BYTES {
+            panic!("Type is too big to fit in a stack vec.");
+        }
+        if size == 0 {
+            panic!("ZSTs are not supported.");
+        }
+        if align > size {
+            panic!("Types with alignment larger than their size are not supported.");
+        }
+        STACK_BYTES / size
+    }
+
     pub fn capacity(&self) -> usize {
         STACK_BYTES / std::mem::size_of::<A>()
     }
@@ -110,7 +125,7 @@ impl<A> StackVec<A> {
     }
 
     pub fn may_append(&self, other_len: usize) -> bool {
-        self.len + other_len <= self.capacity()
+        self.len.saturating_add(other_len) <= self.capacity()
     }
 
     pub fn append(&mut self, other: &mut StackVec<A>) {
@@ -146,15 +161,15 @@ impl<A> StackVec<A> {
         vec
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &A> {
+    pub fn iter(&self) -> std::slice::Iter<A> {
         self.as_slice().iter()
     }
 
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut A> {
+    pub fn iter_mut(&mut self) -> std::slice::IterMut<A> {
         self.as_mut_slice().iter_mut()
     }
 
-    pub fn into_iter(self) -> impl Iterator<Item = A> {
+    pub fn into_iter(self) -> StackVecIntoIter<A> {
         let len = self.len;
         let data = unsafe { std::ptr::read(&self.data) };
         std::mem::forget(self);
