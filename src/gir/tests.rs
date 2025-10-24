@@ -7,7 +7,7 @@ pub mod test_dialect {
         svec,
     };
 
-    #[derive(Debug, Clone, PartialEq, Eq)]
+    #[derive(Debug, Clone, PartialEq, Eq, Hash)]
     pub enum Types {
         Int,
         Bool,
@@ -22,7 +22,7 @@ pub mod test_dialect {
     }
     impl DialectTypes for Types {}
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Hash, PartialEq, Eq)]
     pub enum Operations {
         IntInput { pos: usize },
         BoolConstant { val: bool },
@@ -64,7 +64,7 @@ pub mod test_dialect {
         }
     }
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, PartialEq, Eq, Hash)]
     pub struct TestDialect;
 
     impl Dialect for TestDialect {

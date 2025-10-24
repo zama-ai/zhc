@@ -3,8 +3,8 @@ use std::ops::{Add, Sub};
 use crate::utils::StoreIndex;
 
 macro_rules! impl_index {
-    ($name: ident, $raw: ident) => {
-        pub type $raw = u16;
+    ($name: ident, $raw: ident, $raw_type: ident) => {
+        pub type $raw = $raw_type;
 
         #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
         pub struct $name(pub(super) $raw);
@@ -49,5 +49,6 @@ macro_rules! impl_index {
     };
 }
 
-impl_index!(OpId, OpIdRaw);
-impl_index!(ValId, ValIdRaw);
+impl_index!(OpId, OpIdRaw, u16);
+impl_index!(ValId, ValIdRaw, u16);
+impl_index!(ValueNumber, ValueNumberRaw, u16);

@@ -1,6 +1,6 @@
 use super::StackVec;
 use crate::utils::StackVecIntoIter;
-use std::usize;
+use std::{hash::Hash, usize};
 
 pub enum SmallVecIntoIter<A> {
     Heap(std::vec::IntoIter<A>),
@@ -25,6 +25,18 @@ pub enum SmallVec<A> {
 }
 
 impl<A> SmallVec<A> {
+    pub fn new() -> Self {
+        SmallVec::Stack(StackVec::new())
+    }
+
+    pub fn with_capacity(cap: usize) -> Self {
+        if cap <= StackVec::<A>::static_capacity() {
+            SmallVec::Stack(StackVec::new())
+        } else {
+            SmallVec::Heap(Vec::new())
+        }
+    }
+
     pub fn as_slice(&self) -> &[A] {
         match self {
             SmallVec::Heap(h) => h.as_slice(),
@@ -82,6 +94,13 @@ impl<A> SmallVec<A> {
                 r.drain_to_vec(l);
             }
         }
+    }
+
+    pub fn sort_unstable(&mut self)
+    where
+        A: Ord,
+    {
+        self.as_mut_slice().sort_unstable();
     }
 
     pub fn iter(&self) -> std::slice::Iter<'_, A> {
@@ -176,6 +195,12 @@ impl<A: PartialEq> PartialEq for SmallVec<A> {
         } else {
             self.as_slice().eq(other.as_slice())
         }
+    }
+}
+
+impl<A: Hash> Hash for SmallVec<A> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.as_slice().hash(state);
     }
 }
 

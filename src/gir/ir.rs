@@ -277,6 +277,10 @@ impl<D: Dialect> IR<D> {
         self.raw_ops_iter().filter(|o| o.is_active())
     }
 
+    pub fn topological_ops_iter(&self) -> impl Iterator<Item = OpRef<'_, D>> {
+        self.raw_topological_ops_iter().filter(|o| o.is_active())
+    }
+
     pub fn add_op(
         &mut self,
         op: D::Operations,

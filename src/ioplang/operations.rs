@@ -7,7 +7,7 @@ use crate::{
 
 use super::types::Types;
 
-#[derive(Debug, Clone, PartialEq, Eq, Copy)]
+#[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
 pub enum Litteral {
     PlaintextBlock(usize),
     Index(usize),
@@ -22,7 +22,7 @@ impl Display for Litteral {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Operations {
     Input { pos: usize, typ: Types },
     Output { pos: usize, typ: Types },

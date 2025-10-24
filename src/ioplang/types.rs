@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use crate::gir::DialectTypes;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Types {
     Ciphertext,
     Plaintext,

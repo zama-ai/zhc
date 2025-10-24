@@ -1,6 +1,6 @@
 use crate::gir::Dialect;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Ioplang;
 
 impl Dialect for Ioplang {
