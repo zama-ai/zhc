@@ -22,5 +22,18 @@ pub use signature::*;
 use val::*;
 use val_mut::*;
 
+/// Error use to report IR issue
+#[derive(thiserror::Error, Clone, Debug)]
+pub enum IRError<D: Dialect> {
+    #[error("Signature Error: {op} received {recv:?} instead of {exp:?}")]
+    OpSig {
+        op: D::Operations,
+        recv: Vec<D::Types>,
+        exp: Vec<D::Types>,
+    },
+    #[error("Range Error:  value could not be represented with {typ}")]
+    Range { typ: D::Types },
+}
+
 #[cfg(test)]
 mod tests;

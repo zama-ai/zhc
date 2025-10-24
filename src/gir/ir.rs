@@ -11,8 +11,8 @@ use std::{
 };
 
 use super::{
-    Dialect, DialectOperations, Op, OpId, OpIdRaw, OpMut, OpRef, Printer, Signature, Val, ValId,
-    ValIdRaw, ValMut,
+    Dialect, DialectOperations, IRError, Op, OpId, OpIdRaw, OpMut, OpRef, Printer, Signature, Val,
+    ValId, ValIdRaw, ValMut,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -277,7 +277,11 @@ impl<D: Dialect> IR<D> {
         self.raw_ops_iter().filter(|o| o.is_active())
     }
 
-    pub fn add_op(&mut self, op: D::Operations, args: SmallVec<ValId>) -> (OpId, SmallVec<ValId>) {
+    pub fn add_op(
+        &mut self,
+        op: D::Operations,
+        args: SmallVec<ValId>,
+    ) -> Result<(OpId, SmallVec<ValId>), IRError<D>> {
         // Check that the args are live.
         args.iter().for_each(|valid| {
             assert!(self.has_valid(*valid), "Unknown valid");
@@ -288,11 +292,13 @@ impl<D: Dialect> IR<D> {
             .iter()
             .map(|a| self.get_val(*a).get_type())
             .collect::<Vec<_>>();
-        assert_eq!(
-            sig.get_args(),
-            actual,
-            "[{op}]: Arguments types do not match the op signature."
-        );
+        if sig.get_args() != actual {
+            return Err(IRError::OpSig {
+                op,
+                recv: actual,
+                exp: sig.get_args().into(),
+            });
+        }
 
         // We compute the depth from the inputs.
         let arg_depth = args
@@ -346,7 +352,7 @@ impl<D: Dialect> IR<D> {
             .extend(valids.as_slice().iter().cloned());
 
         // All good
-        (opid, valids)
+        Ok((opid, valids))
     }
 
     /// Replace all the uses of a value by another one.

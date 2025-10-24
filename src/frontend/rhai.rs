@@ -1,9 +1,17 @@
 use super::builder::{BuilderContext, IopBuilder};
-use crate::gir::ValId;
-use crate::ioplang::{Litteral, Operations, Types};
+use crate::gir::{IRError, ValId};
+use crate::ioplang::{Ioplang, Litteral, Operations, Types};
 use crate::svec;
 
-use rhai::{Array, Dynamic, Engine, INT, ImmutableString};
+use rhai::{Array, Dynamic, Engine, EvalAltResult, INT, ImmutableString};
+
+/// Error conversion
+/// From ir type to rhai one
+impl From<IRError<Ioplang>> for Box<EvalAltResult> {
+    fn from(value: IRError<Ioplang>) -> Self {
+        format!("IRError {value}").into()
+    }
+}
 
 /// Create an instance of the rhai scripting engine bind with an IrBuilder
 pub fn create_rhai_engine(context: BuilderContext) -> (Engine, IopBuilder) {
@@ -75,49 +83,65 @@ pub fn create_rhai_engine(context: BuilderContext) -> (Engine, IopBuilder) {
 
     // Helper function to create IR constants ======================================
     let builder_clone = builder.clone();
-    engine.register_fn("pt_cst", move |val: i64| -> ValId {
-        let context = builder_clone.context();
-        let mut ir = builder_clone.ir();
-        // TODO check that value is inside valid range
+    engine.register_fn(
+        "pt_cst",
+        move |val: i64| -> Result<ValId, Box<EvalAltResult>> {
+            let context = builder_clone.context();
+            if val >= (1 << (context.msg_w + context.carry_w + 1)) {
+                return Err(IRError::Range {
+                    typ: Types::PlaintextBlock,
+                }
+                .into());
+            }
+            let mut ir = builder_clone.ir();
 
-        let (_, pt) = ir.add_op(
-            Operations::Constant {
-                value: Litteral::PlaintextBlock(val as usize),
-            },
-            svec![],
-        );
-        pt[0]
-    });
+            let (_, pt) = ir.add_op(
+                Operations::Constant {
+                    value: Litteral::PlaintextBlock(val as usize),
+                },
+                svec![],
+            )?;
+            Ok(pt[0])
+        },
+    );
     let builder_clone = builder.clone();
-    engine.register_fn("idx_cst", move |val: i64| -> ValId {
-        let context = builder_clone.context();
-        let mut ir = builder_clone.ir();
-        // TODO check that value is inside valid range
+    engine.register_fn(
+        "idx_cst",
+        move |val: i64| -> Result<ValId, Box<EvalAltResult>> {
+            let context = builder_clone.context();
+            if val >= context.blk_nb() {
+                return Err(IRError::Range { typ: Types::Index }.into());
+            }
+            let mut ir = builder_clone.ir();
 
-        let (_, pt) = ir.add_op(
-            Operations::Constant {
-                value: Litteral::Index(val as usize),
-            },
-            svec![],
-        );
-        pt[0]
-    });
-
-    let builder_clone = builder.clone();
-    engine.register_fn("pbs_lut", move |name: ImmutableString, deg: i64| -> ValId {
-        let mut ir = builder_clone.ir();
-        let (_, lut) = ir.add_op(
-            Operations::GenerateLut {
-                name: name.to_string(),
-                deg: deg as usize,
-            },
-            svec![],
-        );
-        lut[0]
-    });
+            let (_, pt) = ir.add_op(
+                Operations::Constant {
+                    value: Litteral::Index(val as usize),
+                },
+                svec![],
+            )?;
+            Ok(pt[0])
+        },
+    );
 
     let builder_clone = builder.clone();
-    engine.register_fn("ct_var", move || -> ValId {
+    engine.register_fn(
+        "pbs_lut",
+        move |name: ImmutableString, deg: i64| -> Result<ValId, Box<EvalAltResult>> {
+            let mut ir = builder_clone.ir();
+            let (_, lut) = ir.add_op(
+                Operations::GenerateLut {
+                    name: name.to_string(),
+                    deg: deg as usize,
+                },
+                svec![],
+            )?;
+            Ok(lut[0])
+        },
+    );
+
+    let builder_clone = builder.clone();
+    engine.register_fn("ct_var", move || -> Result<ValId, Box<EvalAltResult>> {
         let mut ir = builder_clone.ir();
 
         let (_, ct) = ir.add_op(
@@ -125,46 +149,52 @@ pub fn create_rhai_engine(context: BuilderContext) -> (Engine, IopBuilder) {
                 typ: Types::Ciphertext,
             },
             svec![],
-        );
-        ct[0]
+        )?;
+        Ok(ct[0])
     });
 
     // Input/Output related operations ==============================================
     let builder_clone = builder.clone();
-    engine.register_fn("input", move |slot: i64| -> ValId {
-        let mut ir = builder_clone.ir();
-        let (_, input) = ir.add_op(
-            Operations::Input {
-                pos: slot as usize,
-                typ: Types::Ciphertext,
-            },
-            svec![],
-        );
-        input[0]
-    });
+    engine.register_fn(
+        "input",
+        move |slot: i64| -> Result<ValId, Box<EvalAltResult>> {
+            let mut ir = builder_clone.ir();
+            let (_, input) = ir.add_op(
+                Operations::Input {
+                    pos: slot as usize,
+                    typ: Types::Ciphertext,
+                },
+                svec![],
+            )?;
+            Ok(input[0])
+        },
+    );
 
     let builder_clone = builder.clone();
-    engine.register_fn("load", move |input: ValId, pos: i64| -> ValId {
-        let context = builder_clone.context();
-        if pos >= context.blk_nb() {
-            panic!("Required to load out-of-bound block");
-        }
+    engine.register_fn(
+        "load",
+        move |input: ValId, pos: i64| -> Result<ValId, Box<EvalAltResult>> {
+            let context = builder_clone.context();
+            if pos >= context.blk_nb() {
+                panic!("Required to load out-of-bound block");
+            }
 
-        let mut ir = builder_clone.ir();
-        let (_, index) = ir.add_op(
-            Operations::Constant {
-                value: Litteral::Index(pos as usize),
-            },
-            svec![],
-        );
-        let (_, block) = ir.add_op(Operations::ExtractCtBlock, svec![input, index[0]]);
-        block[0]
-    });
+            let mut ir = builder_clone.ir();
+            let (_, index) = ir.add_op(
+                Operations::Constant {
+                    value: Litteral::Index(pos as usize),
+                },
+                svec![],
+            )?;
+            let (_, block) = ir.add_op(Operations::ExtractCtBlock, svec![input, index[0]])?;
+            Ok(block[0])
+        },
+    );
 
     let builder_clone = builder.clone();
     engine.register_fn(
         "store",
-        move |ct_blk: ValId, output: ValId, pos: i64| -> ValId {
+        move |ct_blk: ValId, output: ValId, pos: i64| -> Result<ValId, Box<EvalAltResult>> {
             let context = builder_clone.context();
             if pos >= context.blk_nb() {
                 panic!("Required to store out-of-bound block");
@@ -176,86 +206,137 @@ pub fn create_rhai_engine(context: BuilderContext) -> (Engine, IopBuilder) {
                     value: Litteral::Index(pos as usize),
                 },
                 svec![],
-            );
-            let (_, res) = ir.add_op(Operations::StoreCtBlock, svec![ct_blk, output, index[0]]);
-            res[0]
+            )?;
+            let (_, res) = ir.add_op(Operations::StoreCtBlock, svec![ct_blk, output, index[0]])?;
+            Ok(res[0])
         },
     );
 
     let builder_clone = builder.clone();
-    engine.register_fn("output", move |output: ValId, slot: i64| {
-        let mut ir = builder_clone.ir();
-        let _ = ir.add_op(
-            Operations::Output {
-                pos: slot as usize,
-                typ: Types::Ciphertext,
-            },
-            svec![output],
-        );
-    });
+    engine.register_fn(
+        "output",
+        move |output: ValId, slot: i64| -> Result<(), Box<EvalAltResult>> {
+            let mut ir = builder_clone.ir();
+            let _ = ir.add_op(
+                Operations::Output {
+                    pos: slot as usize,
+                    typ: Types::Ciphertext,
+                },
+                svec![output],
+            )?;
+            Ok(())
+        },
+    );
 
     // Arith operations =======================================================
     let builder_clone = builder.clone();
-    engine.register_fn("add", move |src_a: ValId, src_b: ValId| -> ValId {
-        builder_clone.add(src_a, src_b)
-    });
+    engine.register_fn(
+        "add",
+        move |src_a: ValId, src_b: ValId| -> Result<ValId, Box<EvalAltResult>> {
+            builder_clone
+                .add(src_a, src_b)
+                .map_err(|err| Box::<EvalAltResult>::from(err))
+        },
+    );
     let builder_clone = builder.clone();
-    engine.register_fn("adds", move |src_a: ValId, src_b: ValId| -> ValId {
-        builder_clone.adds(src_a, src_b)
-    });
+    engine.register_fn(
+        "adds",
+        move |src_a: ValId, src_b: ValId| -> Result<ValId, Box<EvalAltResult>> {
+            builder_clone
+                .adds(src_a, src_b)
+                .map_err(|err| Box::<EvalAltResult>::from(err))
+        },
+    );
     let builder_clone = builder.clone();
-    engine.register_fn("+", move |src_a: ValId, src_b: ValId| -> ValId {
-        builder_clone.addx(src_a, src_b)
-    });
+    engine.register_fn(
+        "+",
+        move |src_a: ValId, src_b: ValId| -> Result<ValId, Box<EvalAltResult>> {
+            builder_clone
+                .addx(src_a, src_b)
+                .map_err(|err| Box::<EvalAltResult>::from(err))
+        },
+    );
 
     // Register sub operation
     let builder_clone = builder.clone();
-    engine.register_fn("sub", move |src_a: ValId, src_b: ValId| -> ValId {
-        builder_clone.sub(src_a, src_b)
-    });
+    engine.register_fn(
+        "sub",
+        move |src_a: ValId, src_b: ValId| -> Result<ValId, Box<EvalAltResult>> {
+            builder_clone
+                .sub(src_a, src_b)
+                .map_err(|err| Box::<EvalAltResult>::from(err))
+        },
+    );
     let builder_clone = builder.clone();
-    engine.register_fn("subs", move |src_a: ValId, src_b: ValId| -> ValId {
-        builder_clone.subs(src_a, src_b)
-    });
+    engine.register_fn(
+        "subs",
+        move |src_a: ValId, src_b: ValId| -> Result<ValId, Box<EvalAltResult>> {
+            builder_clone
+                .subs(src_a, src_b)
+                .map_err(|err| Box::<EvalAltResult>::from(err))
+        },
+    );
     let builder_clone = builder.clone();
-    engine.register_fn("ssub", move |src_a: ValId, src_b: ValId| -> ValId {
-        builder_clone.ssub(src_a, src_b)
-    });
+    engine.register_fn(
+        "ssub",
+        move |src_a: ValId, src_b: ValId| -> Result<ValId, Box<EvalAltResult>> {
+            builder_clone
+                .ssub(src_a, src_b)
+                .map_err(|err| Box::<EvalAltResult>::from(err))
+        },
+    );
     let builder_clone = builder.clone();
-    engine.register_fn("-", move |src_a: ValId, src_b: ValId| -> ValId {
-        builder_clone.subx(src_a, src_b)
-    });
+    engine.register_fn(
+        "-",
+        move |src_a: ValId, src_b: ValId| -> Result<ValId, Box<EvalAltResult>> {
+            builder_clone
+                .subx(src_a, src_b)
+                .map_err(|err| Box::<EvalAltResult>::from(err))
+        },
+    );
 
     // Register mac operation
     let builder_clone = builder.clone();
     engine.register_fn(
         "mac",
-        move |src_a: ValId, src_b: ValId, cst_b: ValId| -> ValId {
-            builder_clone.mac(src_a, src_b, cst_b)
+        move |src_a: ValId, src_b: ValId, cst_b: ValId| -> Result<ValId, Box<EvalAltResult>> {
+            builder_clone
+                .mac(src_a, src_b, cst_b)
+                .map_err(|err| Box::<EvalAltResult>::from(err))
         },
     );
     let builder_clone = builder.clone();
     engine.register_fn(
         "*+",
-        move |cst_a: ValId, src_a: ValId, src_b: ValId| -> ValId {
-            builder_clone.mac(cst_a, src_a, src_b)
+        move |cst_a: ValId, src_a: ValId, src_b: ValId| -> Result<ValId, Box<EvalAltResult>> {
+            builder_clone
+                .mac(cst_a, src_a, src_b)
+                .map_err(|err| Box::<EvalAltResult>::from(err))
         },
     );
 
     // Register Pbs operation (for explicit calls)
     let builder_clone = builder.clone();
-    engine.register_fn("pbs_ml", move |src: ValId, lut: ValId| -> Array {
-        builder_clone
-            .pbs_ml(src, lut)
-            .into_iter()
-            .map(Dynamic::from)
-            .collect()
-    });
+    engine.register_fn(
+        "pbs_ml",
+        move |src: ValId, lut: ValId| -> Result<Array, Box<EvalAltResult>> {
+            Ok(builder_clone
+                .pbs_ml(src, lut)?
+                .into_iter()
+                .map(Dynamic::from)
+                .collect())
+        },
+    );
     // Register Variante for single PBS to reduce boilerplate code
     let builder_clone = builder.clone();
-    engine.register_fn("pbs", move |src: ValId, lut: ValId| -> ValId {
-        builder_clone.pbs(src, lut)
-    });
+    engine.register_fn(
+        "pbs",
+        move |src: ValId, lut: ValId| -> Result<ValId, Box<EvalAltResult>> {
+            builder_clone
+                .pbs(src, lut)
+                .map_err(|err| Box::<EvalAltResult>::from(err))
+        },
+    );
 
     (engine, builder)
 }

@@ -1,6 +1,6 @@
-use std::ops::Index;
-use crate::utils::Store;
 use super::{Dialect, IR, OpId};
+use crate::utils::Store;
+use std::ops::Index;
 
 /// Represents the liveness of an operation in dead code analysis.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -26,7 +26,6 @@ impl DeadCodeAnalysis {
 }
 
 impl DeadCodeAnalysis {
-
     /// Performs dead code analysis on the given IR.
     pub fn from_ir<D: Dialect>(ir: &IR<D>) -> Self {
         let mut states: Store<OpId, _> = ir
@@ -59,7 +58,8 @@ impl DeadCodeAnalysis {
 
     /// Returns an iterator over all active operations and their liveness status.
     pub fn get_statuses_iter(&self) -> impl Iterator<Item = (OpId, &Liveness)> {
-        self.raw_get_statuses_iter().filter_map(|(i, s)| s.map(|v| (i, v)))
+        self.raw_get_statuses_iter()
+            .filter_map(|(i, s)| s.map(|v| (i, v)))
     }
 }
 
@@ -102,10 +102,10 @@ mod test {
     }
 
     #[test]
-    fn test_single_effect_operation() {
+    fn test_single_effect_operation() -> Result<(), IRError<TestDialect>> {
         let mut ir = IR::<TestDialect>::empty();
-        let (input_op, input_vals) = ir.add_op(Operations::IntInput { pos: 0 }, svec![]);
-        let (return_op, _) = ir.add_op(Operations::Return, input_vals);
+        let (input_op, input_vals) = ir.add_op(Operations::IntInput { pos: 0 }, svec![])?;
+        let (return_op, _) = ir.add_op(Operations::Return, input_vals)?;
         ir.check_ir(
             "
             %0 : Int = int_input<pos: 0>();
@@ -127,14 +127,16 @@ mod test {
             return(%0);
             ",
         );
+        Ok(())
     }
 
     #[test]
-    fn test_dead_operation_no_users() {
+    fn test_dead_operation_no_users() -> Result<(), IRError<TestDialect>> {
         let mut ir = IR::<TestDialect>::empty();
-        let (input_op, input_vals) = ir.add_op(Operations::IntInput { pos: 0 }, svec![]);
-        let (add_op, _add_vals) = ir.add_op(Operations::Add, svec![input_vals[0], input_vals[0]]);
-        let (return_op, _) = ir.add_op(Operations::Return, svec![input_vals[0]]);
+        let (input_op, input_vals) = ir.add_op(Operations::IntInput { pos: 0 }, svec![])?;
+        let (add_op, _add_vals) =
+            ir.add_op(Operations::Add, svec![input_vals[0], input_vals[0]])?;
+        let (return_op, _) = ir.add_op(Operations::Return, svec![input_vals[0]])?;
 
         ir.check_ir(
             "
@@ -162,16 +164,17 @@ mod test {
             return(%0);
             ",
         );
+        Ok(())
     }
 
     #[test]
-    fn test_dependency_chain_all_live() {
+    fn test_dependency_chain_all_live() -> Result<(), IRError<TestDialect>> {
         let mut ir = IR::<TestDialect>::empty();
-        let (input1, vals1) = ir.add_op(Operations::IntInput { pos: 0 }, svec![]);
-        let (input2, vals2) = ir.add_op(Operations::IntInput { pos: 1 }, svec![]);
-        let (add_op, add_vals) = ir.add_op(Operations::Add, svec![vals1[0], vals2[0]]);
-        let (inc_op, inc_vals) = ir.add_op(Operations::Inc, add_vals);
-        let (return_op, _) = ir.add_op(Operations::Return, inc_vals);
+        let (input1, vals1) = ir.add_op(Operations::IntInput { pos: 0 }, svec![])?;
+        let (input2, vals2) = ir.add_op(Operations::IntInput { pos: 1 }, svec![])?;
+        let (add_op, add_vals) = ir.add_op(Operations::Add, svec![vals1[0], vals2[0]])?;
+        let (inc_op, inc_vals) = ir.add_op(Operations::Inc, add_vals)?;
+        let (return_op, _) = ir.add_op(Operations::Return, inc_vals)?;
 
         ir.check_ir(
             "
@@ -202,16 +205,17 @@ mod test {
             return(%3);
             ",
         );
+        Ok(())
     }
 
     #[test]
-    fn test_diamond_pattern_partial_dead() {
+    fn test_diamond_pattern_partial_dead() -> Result<(), IRError<TestDialect>> {
         let mut ir = IR::<TestDialect>::empty();
-        let (input_op, input_vals) = ir.add_op(Operations::IntInput { pos: 0 }, svec![]);
-        let (inc1_op, inc1_vals) = ir.add_op(Operations::Inc, input_vals.clone());
-        let (inc2_op, inc2_vals) = ir.add_op(Operations::Inc, input_vals);
-        let (add_op, _) = ir.add_op(Operations::Add, svec![inc1_vals[0], inc2_vals[0]]);
-        let (return_op, _) = ir.add_op(Operations::Return, svec![inc1_vals[0]]);
+        let (input_op, input_vals) = ir.add_op(Operations::IntInput { pos: 0 }, svec![])?;
+        let (inc1_op, inc1_vals) = ir.add_op(Operations::Inc, input_vals.clone())?;
+        let (inc2_op, inc2_vals) = ir.add_op(Operations::Inc, input_vals)?;
+        let (add_op, _) = ir.add_op(Operations::Add, svec![inc1_vals[0], inc2_vals[0]])?;
+        let (return_op, _) = ir.add_op(Operations::Return, svec![inc1_vals[0]])?;
 
         ir.check_ir(
             "
@@ -247,16 +251,17 @@ mod test {
             return(%1);
         ",
         );
+        Ok(())
     }
 
     #[test]
-    fn test_multiple_effects() {
+    fn test_multiple_effects() -> Result<(), IRError<TestDialect>> {
         let mut ir = IR::<TestDialect>::empty();
-        let (input1, vals1) = ir.add_op(Operations::IntInput { pos: 0 }, svec![]);
-        let (input2, vals2) = ir.add_op(Operations::IntInput { pos: 1 }, svec![]);
-        let (add_op, _) = ir.add_op(Operations::Add, svec![vals1[0], vals2[0]]);
-        let (return1, _) = ir.add_op(Operations::Return, svec![vals1[0]]);
-        let (return2, _) = ir.add_op(Operations::Return, svec![vals2[0]]);
+        let (input1, vals1) = ir.add_op(Operations::IntInput { pos: 0 }, svec![])?;
+        let (input2, vals2) = ir.add_op(Operations::IntInput { pos: 1 }, svec![])?;
+        let (add_op, _) = ir.add_op(Operations::Add, svec![vals1[0], vals2[0]])?;
+        let (return1, _) = ir.add_op(Operations::Return, svec![vals1[0]])?;
+        let (return2, _) = ir.add_op(Operations::Return, svec![vals2[0]])?;
 
         ir.check_ir(
             "
@@ -287,14 +292,15 @@ mod test {
             return(%1);
             ",
         );
+        Ok(())
     }
 
     #[test]
-    fn test_all_operations_dead() {
+    fn test_all_operations_dead() -> Result<(), IRError<TestDialect>> {
         let mut ir = IR::<TestDialect>::empty();
-        let (input_op, input_vals) = ir.add_op(Operations::IntInput { pos: 0 }, svec![]);
-        let (add_op, add_vals) = ir.add_op(Operations::Add, svec![input_vals[0], input_vals[0]]);
-        let (inc_op, _) = ir.add_op(Operations::Inc, add_vals);
+        let (input_op, input_vals) = ir.add_op(Operations::IntInput { pos: 0 }, svec![])?;
+        let (add_op, add_vals) = ir.add_op(Operations::Add, svec![input_vals[0], input_vals[0]])?;
+        let (inc_op, _) = ir.add_op(Operations::Inc, add_vals)?;
 
         ir.check_ir(
             "
@@ -319,14 +325,15 @@ mod test {
             // %_2 : Int = inc(%_1);
             ",
         );
+        Ok(())
     }
 
     #[test]
-    fn test_with_already_deleted_operations() {
+    fn test_with_already_deleted_operations() -> Result<(), IRError<TestDialect>> {
         let mut ir = IR::<TestDialect>::empty();
-        let (input_op, input_vals) = ir.add_op(Operations::IntInput { pos: 0 }, svec![]);
-        let (add_op, _) = ir.add_op(Operations::Add, svec![input_vals[0], input_vals[0]]);
-        let (return_op, _) = ir.add_op(Operations::Return, input_vals);
+        let (input_op, input_vals) = ir.add_op(Operations::IntInput { pos: 0 }, svec![])?;
+        let (add_op, _) = ir.add_op(Operations::Add, svec![input_vals[0], input_vals[0]])?;
+        let (return_op, _) = ir.add_op(Operations::Return, input_vals)?;
 
         ir.delete_op(add_op);
 
@@ -355,18 +362,18 @@ mod test {
             return(%0);
             ",
         );
+        Ok(())
     }
 
     #[test]
-    fn test_complex_mixed_scenario() {
+    fn test_complex_mixed_scenario() -> Result<(), IRError<TestDialect>> {
         let mut ir = IR::<TestDialect>::empty();
-        let (input1, vals1) = ir.add_op(Operations::IntInput { pos: 0 }, svec![]);
-        let (input2, vals2) = ir.add_op(Operations::IntInput { pos: 1 }, svec![]);
-        let (dead_add1, dead_vals1) = ir.add_op(Operations::Add, svec![vals1[0], vals2[0]]);
-        let (dead_add2, _) =
-            ir.add_op(Operations::Add, svec![dead_vals1[0], dead_vals1[0]]);
-        let (live_inc, live_vals) = ir.add_op(Operations::Inc, svec![vals1[0]]);
-        let (return_op, _) = ir.add_op(Operations::Return, live_vals);
+        let (input1, vals1) = ir.add_op(Operations::IntInput { pos: 0 }, svec![])?;
+        let (input2, vals2) = ir.add_op(Operations::IntInput { pos: 1 }, svec![])?;
+        let (dead_add1, dead_vals1) = ir.add_op(Operations::Add, svec![vals1[0], vals2[0]])?;
+        let (dead_add2, _) = ir.add_op(Operations::Add, svec![dead_vals1[0], dead_vals1[0]])?;
+        let (live_inc, live_vals) = ir.add_op(Operations::Inc, svec![vals1[0]])?;
+        let (return_op, _) = ir.add_op(Operations::Return, live_vals)?;
 
         ir.check_ir(
             "
@@ -405,5 +412,6 @@ mod test {
             return(%3);
             ",
         );
+        Ok(())
     }
 }

@@ -3,7 +3,7 @@
 
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use crate::gir::{IR, ValId};
+use crate::gir::{IR, IRError, ValId};
 use crate::ioplang::{Ioplang, Operations, Types};
 use crate::svec;
 use crate::utils::SmallVec;
@@ -58,17 +58,17 @@ impl TryFrom<IopBuilder> for IR<Ioplang> {
 
 /// Implement basics operation as function for ease binding with frontend
 impl IopBuilder {
-    pub fn add(&self, src_a: ValId, src_b: ValId) -> ValId {
+    pub fn add(&self, src_a: ValId, src_b: ValId) -> Result<ValId, IRError<Ioplang>> {
         let mut ir = self.ir.lock().unwrap();
-        let (_node, ret) = ir.add_op(Operations::AddCt, svec![src_a, src_b]);
-        ret[0]
+        let (_node, ret) = ir.add_op(Operations::AddCt, svec![src_a, src_b])?;
+        Ok(ret[0])
     }
-    pub fn adds(&self, src_a: ValId, src_b: ValId) -> ValId {
+    pub fn adds(&self, src_a: ValId, src_b: ValId) -> Result<ValId, IRError<Ioplang>> {
         let mut ir = self.ir.lock().unwrap();
-        let (_node, ret) = ir.add_op(Operations::AddPt, svec![src_a, src_b]);
-        ret[0]
+        let (_node, ret) = ir.add_op(Operations::AddPt, svec![src_a, src_b])?;
+        Ok(ret[0])
     }
-    pub fn addx(&self, src_a: ValId, src_b: ValId) -> ValId {
+    pub fn addx(&self, src_a: ValId, src_b: ValId) -> Result<ValId, IRError<Ioplang>> {
         // Extract type in sub-scope to correctly handle ir mutex
         let (typ_a, typ_b) = {
             let ir = self.ir.lock().unwrap();
@@ -77,30 +77,29 @@ impl IopBuilder {
             (typ_a, typ_b)
         };
         match (typ_a, typ_b) {
-            (Types::CiphertextBlock, Types::CiphertextBlock) => self.add(src_a, src_b),
             (Types::CiphertextBlock, Types::PlaintextBlock) => self.adds(src_a, src_b),
             (Types::PlaintextBlock, Types::CiphertextBlock) => self.adds(src_b, src_a),
-            (a, b) => panic!("Unsupported Add on [{a} . {b}]"),
+            _ => self.add(src_a, src_b),
         }
     }
 
-    pub fn sub(&self, src_a: ValId, src_b: ValId) -> ValId {
+    pub fn sub(&self, src_a: ValId, src_b: ValId) -> Result<ValId, IRError<Ioplang>> {
         let mut ir = self.ir.lock().unwrap();
-        let (_node, ret) = ir.add_op(Operations::SubCt, svec![src_a, src_b]);
-        ret[0]
+        let (_node, ret) = ir.add_op(Operations::SubCt, svec![src_a, src_b])?;
+        Ok(ret[0])
     }
 
-    pub fn subs(&self, src_a: ValId, src_b: ValId) -> ValId {
+    pub fn subs(&self, src_a: ValId, src_b: ValId) -> Result<ValId, IRError<Ioplang>> {
         let mut ir = self.ir.lock().unwrap();
-        let (_node, ret) = ir.add_op(Operations::SubPt, svec![src_a, src_b]);
-        ret[0]
+        let (_node, ret) = ir.add_op(Operations::SubPt, svec![src_a, src_b])?;
+        Ok(ret[0])
     }
-    pub fn ssub(&self, src_a: ValId, src_b: ValId) -> ValId {
+    pub fn ssub(&self, src_a: ValId, src_b: ValId) -> Result<ValId, IRError<Ioplang>> {
         let mut ir = self.ir.lock().unwrap();
-        let (_node, ret) = ir.add_op(Operations::PtSub, svec![src_a, src_b]);
-        ret[0]
+        let (_node, ret) = ir.add_op(Operations::PtSub, svec![src_a, src_b])?;
+        Ok(ret[0])
     }
-    pub fn subx(&self, src_a: ValId, src_b: ValId) -> ValId {
+    pub fn subx(&self, src_a: ValId, src_b: ValId) -> Result<ValId, IRError<Ioplang>> {
         // Extract type in sub-scope to correctly handle ir mutex
         let (typ_a, typ_b) = {
             let ir = self.ir.lock().unwrap();
@@ -110,37 +109,32 @@ impl IopBuilder {
         };
 
         match (typ_a, typ_b) {
-            (Types::CiphertextBlock, Types::CiphertextBlock) => self.sub(src_a, src_b),
             (Types::CiphertextBlock, Types::PlaintextBlock) => self.subs(src_a, src_b),
             (Types::PlaintextBlock, Types::CiphertextBlock) => self.ssub(src_a, src_b),
-            (a, b) => panic!("Unsupported Sub on [{a} . {b}]"),
+            _ => self.sub(src_a, src_b),
         }
     }
 
-    pub fn mac(&self, cst_a: ValId, src_a: ValId, src_b: ValId) -> ValId {
+    pub fn mac(&self, cst_a: ValId, src_a: ValId, src_b: ValId) -> Result<ValId, IRError<Ioplang>> {
         let mut ir = self.ir.lock().unwrap();
-        let (_node, ret) = ir.add_op(Operations::Mac, svec![cst_a, src_a, src_b]);
-        ret[0]
+        let (_node, ret) = ir.add_op(Operations::Mac, svec![cst_a, src_a, src_b])?;
+        Ok(ret[0])
     }
 
-    pub fn pbs_ml(&self, src: ValId, lut: ValId) -> SmallVec<ValId> {
+    pub fn pbs_ml(&self, src: ValId, lut: ValId) -> Result<SmallVec<ValId>, IRError<Ioplang>> {
         let mut ir = self.ir.lock().unwrap();
         let (_node, ret) = match ir.get_val(lut).get_type() {
-            Types::Lut1 => ir.add_op(Operations::Pbs, svec![src, lut]),
             Types::Lut2 => ir.add_op(Operations::Pbs2, svec![src, lut]),
             Types::Lut4 => ir.add_op(Operations::Pbs4, svec![src, lut]),
             Types::Lut8 => ir.add_op(Operations::Pbs8, svec![src, lut]),
-            dflt => panic!("Pbs with invalid lut [{dflt}]"),
-        };
-        ret
+            _ => ir.add_op(Operations::Pbs, svec![src, lut]),
+        }?;
+        Ok(ret)
     }
 
-    pub fn pbs(&self, src: ValId, lut: ValId) -> ValId {
+    pub fn pbs(&self, src: ValId, lut: ValId) -> Result<ValId, IRError<Ioplang>> {
         let mut ir = self.ir.lock().unwrap();
-        let (_node, ret) = match ir.get_val(lut).get_type() {
-            Types::Lut1 => ir.add_op(Operations::Pbs, svec![src, lut]),
-            dflt => panic!("PbsMl with invalid lut [{dflt}]"),
-        };
-        ret[0]
+        let (_node, ret) = ir.add_op(Operations::Pbs, svec![src, lut])?;
+        Ok(ret[0])
     }
 }
