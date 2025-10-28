@@ -11,7 +11,7 @@ fn input_array(index){
 /// Store one blk in output index at position
 fn output_blk(blk, index, pos){
     let acc = ct_var();
-    store(blk, acc, pos);
+    acc = store(blk, acc, pos);
     output(acc, index);
 }
 
@@ -22,9 +22,9 @@ fn output_array(blka, index){
     for item in enumerate(blka) { // Iterate over blk array
         let idx = item.index;
         let blk = item.value;
-        store(blk, acc, idx)
+        acc = store(blk, acc, idx)
     }
-    output(output, index)
+    output(acc, index)
 }
 
 /// Pack a vector of ct in pair

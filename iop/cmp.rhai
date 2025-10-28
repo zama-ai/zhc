@@ -27,7 +27,7 @@ let merged = zip(packed_a, packed_b).map(|v| {
     // pbs(sub(v[0],v[1]), cmp_sign)
     });
 
-// Reduce (tree-based reduce
+// Reduce (tree-based reduce)
 while merged.len() > 2 {
     let packed = tb::pack(merged);
     let reduced = packed.map(|x| pbs(x, cmp_reduce));
