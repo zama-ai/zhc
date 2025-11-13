@@ -69,7 +69,20 @@ impl<E: Event> Tracer<E> {
     }
 
     pub fn dump<P: AsRef<Path>>(&self, path: P) {
-        let json = serde_json::to_string_pretty(&self.trace).expect("Failed to serialize trace.");
+        // We add the last states that were not flushed yet to the dumped trace
+        let mut trace = self.trace.clone();
+        for (_, tracker) in self.simulatable_trackers.iter() {
+                trace.new_complete(
+                    tracker.state_change.as_ref().unwrap().as_ts(NS_IN_US),
+                    SIMULATABLES_PID,
+                    tracker.tid,
+                    &tracker.name,
+                    Some(json!({"val": tracker.state.as_ref().unwrap()})),
+                    (self.now - *tracker.state_change.as_ref().unwrap()).as_ts(NS_IN_US)
+                        - 5. * f64::EPSILON,
+                );
+        }
+        let json = serde_json::to_string_pretty(&trace).expect("Failed to serialize trace.");
         let mut file = File::create(path.as_ref()).expect("Failed to create file");
         file.write_all(json.as_bytes())
             .expect("Failed to write to file");

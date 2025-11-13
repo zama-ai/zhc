@@ -89,7 +89,7 @@ impl<S: Simulatable> Simulator<S> {
 
         if ACTIVATE_TRACING {
             self.simulatable.report(&mut self.tracer);
-            self.dump_trace("test_profile.json");
+            // self.dump_trace("test_profile.json");
         }
 
         if self.dispatcher.is_empty() {
