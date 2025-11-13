@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use crate::{create_rhai_engine, gir::IR, BuilderContext};
+use crate::{BuilderContext, create_rhai_engine, gir::IR};
 
 use super::Ioplang;
 
@@ -34,9 +34,10 @@ pub fn get_cmp_ir(integer_w: i64, msg_w: i64, carry_w: i64) -> IR<Ioplang> {
 }
 
 #[test]
-fn test_add_ir(){
+fn test_add_ir() {
     let ir = get_add_ir(16, 2, 2);
-    ir.check_ir("
+    ir.check_ir(
+        "
         %0 : Ciphertext = input<0, Ciphertext>();
         %1 : Index = constant<0_idx>();
         %2 : Index = constant<1_idx>();
@@ -142,13 +143,15 @@ fn test_add_ir(){
         %103 : Ciphertext = store_ct_block(%100, %102, %38);
         %104 : Ciphertext = store_ct_block(%101, %103, %39);
         output<0, Ciphertext>(%104);
-    ");
+    ",
+    );
 }
 
 #[test]
-fn test_sub_ir(){
+fn test_sub_ir() {
     let ir = get_sub_ir(16, 2, 2);
-    ir.check_ir("
+    ir.check_ir(
+        "
         %0 : Ciphertext = input<0, Ciphertext>();
         %1 : Index = constant<0_idx>();
         %2 : Index = constant<1_idx>();
@@ -278,13 +281,15 @@ fn test_sub_ir(){
         %127 : Ciphertext = store_ct_block(%124, %126, %47);
         %128 : Ciphertext = store_ct_block(%125, %127, %48);
         output<0, Ciphertext>(%128);
-    ");
+    ",
+    );
 }
 
 #[test]
-fn test_cmp_ir(){
+fn test_cmp_ir() {
     let ir = get_cmp_ir(16, 2, 2);
-    ir.check_ir("
+    ir.check_ir(
+        "
         %0 : Ciphertext = input<0, Ciphertext>();
         %1 : Index = constant<0_idx>();
         %2 : Index = constant<1_idx>();
@@ -355,5 +360,6 @@ fn test_cmp_ir(){
         %67 : CiphertextBlock = pbs(%66, %22);
         %68 : Ciphertext = store_ct_block(%67, %28, %29);
         output<0, Ciphertext>(%68);
-    ");
+    ",
+    );
 }

@@ -1,5 +1,6 @@
 pub mod gir;
 pub mod ioplang;
+pub mod sim;
 pub mod utils;
 
 mod frontend;

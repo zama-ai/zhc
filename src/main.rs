@@ -67,7 +67,7 @@ pub fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     };
     let (engine, builder) = create_rhai_engine(context);
 
-    //Execute user script to populate the builder
+    // Execute user script to populate the builder
     engine.run_file(PathBuf::from(&args.input))?;
 
     // //Dump IR in a file
@@ -75,7 +75,7 @@ pub fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     //     builder.lock().unwrap().write_to_file(out_ssa)?;
     // }
 
-    //Exract inner IR and convert into graph
+    // Exract inner IR and convert into graph
     drop(engine);
     let ir = Arc::new(gir::IR::<ioplang::Ioplang>::try_from(builder).unwrap());
     let graph = ir.to_contextual_graph();

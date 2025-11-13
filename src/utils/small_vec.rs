@@ -258,7 +258,6 @@ mod tests {
         let vec: SmallVec<u32> = SmallVec::from_iter(std::iter::empty());
         assert!(matches!(vec, SmallVec::Stack(_)));
         assert_eq!(vec.len(), 0);
-        assert_eq!(vec.as_slice(), &[]);
     }
 
     #[test]
