@@ -4,7 +4,7 @@ use super::*;
 use crate::utils::tracing::Microseconds;
 use std::path::Path;
 
-static ACTIVATE_TRACING: bool = true;
+static ACTIVATE_TRACING: bool = false;
 static S_IN_US: f64 = 1_000_000.;
 
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize)]

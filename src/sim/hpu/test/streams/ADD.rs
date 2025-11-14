@@ -17,43 +17,20 @@
             },
         ),
     ),
-    SUB(
-        DOpSub(
-            PeArithInsn {
-                dst_rid: RegId(
+    LD(
+        DOpLd(
+            PeMemInsn {
+                rid: RegId(
                     1,
                 ),
-                src0_rid: RegId(
-                    1,
-                ),
-                src1_rid: RegId(
-                    1,
-                ),
-                mul_factor: MulFactor(
-                    0,
+                slot: Addr(
+                    CtId(
+                        4,
+                    ),
                 ),
                 opcode: Opcode {
-                    optype: ARITH,
-                    subtype: 2,
-                },
-            },
-        ),
-    ),
-    ADDS(
-        DOpAdds(
-            PeArithMsgInsn {
-                dst_rid: RegId(
-                    1,
-                ),
-                src_rid: RegId(
-                    1,
-                ),
-                msg_cst: Cst(
-                    0,
-                ),
-                opcode: Opcode {
-                    optype: ARITH,
-                    subtype: 9,
+                    optype: MEM,
+                    subtype: 0,
                 },
             },
         ),
@@ -98,43 +75,20 @@
             },
         ),
     ),
-    SUB(
-        DOpSub(
-            PeArithInsn {
-                dst_rid: RegId(
+    LD(
+        DOpLd(
+            PeMemInsn {
+                rid: RegId(
                     4,
                 ),
-                src0_rid: RegId(
-                    4,
-                ),
-                src1_rid: RegId(
-                    4,
-                ),
-                mul_factor: MulFactor(
-                    0,
+                slot: Addr(
+                    CtId(
+                        5,
+                    ),
                 ),
                 opcode: Opcode {
-                    optype: ARITH,
-                    subtype: 2,
-                },
-            },
-        ),
-    ),
-    ADDS(
-        DOpAdds(
-            PeArithMsgInsn {
-                dst_rid: RegId(
-                    4,
-                ),
-                src_rid: RegId(
-                    4,
-                ),
-                msg_cst: Cst(
-                    3,
-                ),
-                opcode: Opcode {
-                    optype: ARITH,
-                    subtype: 9,
+                    optype: MEM,
+                    subtype: 0,
                 },
             },
         ),
@@ -198,43 +152,20 @@
             },
         ),
     ),
-    SUB(
-        DOpSub(
-            PeArithInsn {
-                dst_rid: RegId(
+    LD(
+        DOpLd(
+            PeMemInsn {
+                rid: RegId(
                     9,
                 ),
-                src0_rid: RegId(
-                    9,
-                ),
-                src1_rid: RegId(
-                    9,
-                ),
-                mul_factor: MulFactor(
-                    0,
+                slot: Addr(
+                    CtId(
+                        6,
+                    ),
                 ),
                 opcode: Opcode {
-                    optype: ARITH,
-                    subtype: 2,
-                },
-            },
-        ),
-    ),
-    ADDS(
-        DOpAdds(
-            PeArithMsgInsn {
-                dst_rid: RegId(
-                    9,
-                ),
-                src_rid: RegId(
-                    9,
-                ),
-                msg_cst: Cst(
-                    3,
-                ),
-                opcode: Opcode {
-                    optype: ARITH,
-                    subtype: 9,
+                    optype: MEM,
+                    subtype: 0,
                 },
             },
         ),
@@ -298,43 +229,20 @@
             },
         ),
     ),
-    SUB(
-        DOpSub(
-            PeArithInsn {
-                dst_rid: RegId(
+    LD(
+        DOpLd(
+            PeMemInsn {
+                rid: RegId(
                     14,
                 ),
-                src0_rid: RegId(
-                    14,
-                ),
-                src1_rid: RegId(
-                    14,
-                ),
-                mul_factor: MulFactor(
-                    0,
+                slot: Addr(
+                    CtId(
+                        7,
+                    ),
                 ),
                 opcode: Opcode {
-                    optype: ARITH,
-                    subtype: 2,
-                },
-            },
-        ),
-    ),
-    ADDS(
-        DOpAdds(
-            PeArithMsgInsn {
-                dst_rid: RegId(
-                    14,
-                ),
-                src_rid: RegId(
-                    14,
-                ),
-                msg_cst: Cst(
-                    3,
-                ),
-                opcode: Opcode {
-                    optype: ARITH,
-                    subtype: 9,
+                    optype: MEM,
+                    subtype: 0,
                 },
             },
         ),
@@ -584,7 +492,7 @@
                 ),
                 slot: Addr(
                     CtId(
-                        4,
+                        8,
                     ),
                 ),
                 opcode: Opcode {
@@ -744,7 +652,7 @@
                 ),
                 slot: Addr(
                     CtId(
-                        5,
+                        9,
                     ),
                 ),
                 opcode: Opcode {
@@ -762,7 +670,7 @@
                 ),
                 slot: Addr(
                     CtId(
-                        7,
+                        11,
                     ),
                 ),
                 opcode: Opcode {
@@ -780,7 +688,7 @@
                 ),
                 slot: Addr(
                     CtId(
-                        6,
+                        10,
                     ),
                 ),
                 opcode: Opcode {

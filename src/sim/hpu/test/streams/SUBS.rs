@@ -1,33 +1,15 @@
 [
-    LD(
-        DOpLd(
-            PeMemInsn {
-                rid: RegId(
-                    0,
-                ),
-                slot: Addr(
-                    CtId(
-                        0,
-                    ),
-                ),
-                opcode: Opcode {
-                    optype: MEM,
-                    subtype: 0,
-                },
-            },
-        ),
-    ),
     SUB(
         DOpSub(
             PeArithInsn {
                 dst_rid: RegId(
-                    1,
+                    0,
                 ),
                 src0_rid: RegId(
-                    1,
+                    0,
                 ),
                 src1_rid: RegId(
-                    1,
+                    0,
                 ),
                 mul_factor: MulFactor(
                     0,
@@ -43,13 +25,13 @@
         DOpAdds(
             PeArithMsgInsn {
                 dst_rid: RegId(
-                    1,
+                    0,
                 ),
                 src_rid: RegId(
-                    1,
+                    0,
                 ),
                 msg_cst: Cst(
-                    0,
+                    1,
                 ),
                 opcode: Opcode {
                     optype: ARITH,
@@ -58,14 +40,51 @@
             },
         ),
     ),
+    SSUB(
+        DOpSsub(
+            PeArithMsgInsn {
+                dst_rid: RegId(
+                    1,
+                ),
+                src_rid: RegId(
+                    0,
+                ),
+                msg_cst: Cst(
+                    3,
+                ),
+                opcode: Opcode {
+                    optype: ARITH,
+                    subtype: 11,
+                },
+            },
+        ),
+    ),
+    LD(
+        DOpLd(
+            PeMemInsn {
+                rid: RegId(
+                    2,
+                ),
+                slot: Addr(
+                    CtId(
+                        0,
+                    ),
+                ),
+                opcode: Opcode {
+                    optype: MEM,
+                    subtype: 0,
+                },
+            },
+        ),
+    ),
     ADD(
         DOpAdd(
             PeArithInsn {
                 dst_rid: RegId(
-                    2,
+                    3,
                 ),
                 src0_rid: RegId(
-                    0,
+                    2,
                 ),
                 src1_rid: RegId(
                     1,
@@ -80,24 +99,6 @@
             },
         ),
     ),
-    LD(
-        DOpLd(
-            PeMemInsn {
-                rid: RegId(
-                    3,
-                ),
-                slot: Addr(
-                    CtId(
-                        1,
-                    ),
-                ),
-                opcode: Opcode {
-                    optype: MEM,
-                    subtype: 0,
-                },
-            },
-        ),
-    ),
     SUB(
         DOpSub(
             PeArithInsn {
@@ -130,7 +131,7 @@
                     4,
                 ),
                 msg_cst: Cst(
-                    3,
+                    0,
                 ),
                 opcode: Opcode {
                     optype: ARITH,
@@ -146,7 +147,7 @@
                     6,
                 ),
                 src_rid: RegId(
-                    2,
+                    3,
                 ),
                 gid: PbsGid(
                     18,
@@ -158,24 +159,21 @@
             },
         ),
     ),
-    ADD(
-        DOpAdd(
-            PeArithInsn {
+    SSUB(
+        DOpSsub(
+            PeArithMsgInsn {
                 dst_rid: RegId(
                     5,
                 ),
-                src0_rid: RegId(
-                    3,
-                ),
-                src1_rid: RegId(
+                src_rid: RegId(
                     4,
                 ),
-                mul_factor: MulFactor(
-                    0,
+                msg_cst: Cst(
+                    3,
                 ),
                 opcode: Opcode {
                     optype: ARITH,
-                    subtype: 1,
+                    subtype: 11,
                 },
             },
         ),
@@ -188,7 +186,7 @@
                 ),
                 slot: Addr(
                     CtId(
-                        2,
+                        1,
                     ),
                 ),
                 opcode: Opcode {
@@ -198,17 +196,39 @@
             },
         ),
     ),
-    SUB(
-        DOpSub(
+    ADD(
+        DOpAdd(
             PeArithInsn {
                 dst_rid: RegId(
                     9,
                 ),
                 src0_rid: RegId(
-                    9,
+                    8,
                 ),
                 src1_rid: RegId(
-                    9,
+                    5,
+                ),
+                mul_factor: MulFactor(
+                    0,
+                ),
+                opcode: Opcode {
+                    optype: ARITH,
+                    subtype: 1,
+                },
+            },
+        ),
+    ),
+    SUB(
+        DOpSub(
+            PeArithInsn {
+                dst_rid: RegId(
+                    10,
+                ),
+                src0_rid: RegId(
+                    10,
+                ),
+                src1_rid: RegId(
+                    10,
                 ),
                 mul_factor: MulFactor(
                     0,
@@ -224,13 +244,13 @@
         DOpAdds(
             PeArithMsgInsn {
                 dst_rid: RegId(
-                    9,
+                    10,
                 ),
                 src_rid: RegId(
-                    9,
+                    10,
                 ),
                 msg_cst: Cst(
-                    3,
+                    1,
                 ),
                 opcode: Opcode {
                     optype: ARITH,
@@ -246,7 +266,7 @@
                     12,
                 ),
                 src_rid: RegId(
-                    5,
+                    9,
                 ),
                 gid: PbsGid(
                     18,
@@ -258,17 +278,54 @@
             },
         ),
     ),
+    SSUB(
+        DOpSsub(
+            PeArithMsgInsn {
+                dst_rid: RegId(
+                    11,
+                ),
+                src_rid: RegId(
+                    10,
+                ),
+                msg_cst: Cst(
+                    3,
+                ),
+                opcode: Opcode {
+                    optype: ARITH,
+                    subtype: 11,
+                },
+            },
+        ),
+    ),
+    LD(
+        DOpLd(
+            PeMemInsn {
+                rid: RegId(
+                    14,
+                ),
+                slot: Addr(
+                    CtId(
+                        2,
+                    ),
+                ),
+                opcode: Opcode {
+                    optype: MEM,
+                    subtype: 0,
+                },
+            },
+        ),
+    ),
     ADD(
         DOpAdd(
             PeArithInsn {
                 dst_rid: RegId(
-                    10,
+                    15,
                 ),
                 src0_rid: RegId(
-                    8,
+                    14,
                 ),
                 src1_rid: RegId(
-                    9,
+                    11,
                 ),
                 mul_factor: MulFactor(
                     0,
@@ -280,35 +337,17 @@
             },
         ),
     ),
-    LD(
-        DOpLd(
-            PeMemInsn {
-                rid: RegId(
-                    11,
-                ),
-                slot: Addr(
-                    CtId(
-                        3,
-                    ),
-                ),
-                opcode: Opcode {
-                    optype: MEM,
-                    subtype: 0,
-                },
-            },
-        ),
-    ),
     SUB(
         DOpSub(
             PeArithInsn {
                 dst_rid: RegId(
-                    14,
+                    16,
                 ),
                 src0_rid: RegId(
-                    14,
+                    16,
                 ),
                 src1_rid: RegId(
-                    14,
+                    16,
                 ),
                 mul_factor: MulFactor(
                     0,
@@ -324,13 +363,13 @@
         DOpAdds(
             PeArithMsgInsn {
                 dst_rid: RegId(
-                    14,
+                    16,
                 ),
                 src_rid: RegId(
-                    14,
+                    16,
                 ),
                 msg_cst: Cst(
-                    3,
+                    2,
                 ),
                 opcode: Opcode {
                     optype: ARITH,
@@ -343,10 +382,10 @@
         DOpPbsMl2(
             PePbsInsn {
                 dst_rid: RegId(
-                    16,
+                    18,
                 ),
                 src_rid: RegId(
-                    10,
+                    15,
                 ),
                 gid: PbsGid(
                     18,
@@ -358,17 +397,54 @@
             },
         ),
     ),
+    SSUB(
+        DOpSsub(
+            PeArithMsgInsn {
+                dst_rid: RegId(
+                    17,
+                ),
+                src_rid: RegId(
+                    16,
+                ),
+                msg_cst: Cst(
+                    3,
+                ),
+                opcode: Opcode {
+                    optype: ARITH,
+                    subtype: 11,
+                },
+            },
+        ),
+    ),
+    LD(
+        DOpLd(
+            PeMemInsn {
+                rid: RegId(
+                    20,
+                ),
+                slot: Addr(
+                    CtId(
+                        3,
+                    ),
+                ),
+                opcode: Opcode {
+                    optype: MEM,
+                    subtype: 0,
+                },
+            },
+        ),
+    ),
     ADD(
         DOpAdd(
             PeArithInsn {
                 dst_rid: RegId(
-                    15,
+                    21,
                 ),
                 src0_rid: RegId(
-                    11,
+                    20,
                 ),
                 src1_rid: RegId(
-                    14,
+                    17,
                 ),
                 mul_factor: MulFactor(
                     0,
@@ -384,10 +460,10 @@
         DOpPbsMl2F(
             PePbsInsn {
                 dst_rid: RegId(
-                    18,
+                    22,
                 ),
                 src_rid: RegId(
-                    15,
+                    21,
                 ),
                 gid: PbsGid(
                     18,
@@ -403,7 +479,7 @@
         DOpMuls(
             PeArithMsgInsn {
                 dst_rid: RegId(
-                    20,
+                    24,
                 ),
                 src_rid: RegId(
                     6,
@@ -422,13 +498,13 @@
         DOpAdds(
             PeArithMsgInsn {
                 dst_rid: RegId(
-                    20,
+                    24,
                 ),
                 src_rid: RegId(
-                    20,
+                    24,
                 ),
                 msg_cst: Cst(
-                    0,
+                    2,
                 ),
                 opcode: Opcode {
                     optype: ARITH,
@@ -441,10 +517,10 @@
         DOpPbs(
             PePbsInsn {
                 dst_rid: RegId(
-                    22,
+                    26,
                 ),
                 src_rid: RegId(
-                    20,
+                    24,
                 ),
                 gid: PbsGid(
                     19,
@@ -460,13 +536,13 @@
         DOpMac(
             PeArithInsn {
                 dst_rid: RegId(
-                    21,
+                    25,
                 ),
                 src0_rid: RegId(
                     12,
                 ),
                 src1_rid: RegId(
-                    20,
+                    24,
                 ),
                 mul_factor: MulFactor(
                     4,
@@ -482,10 +558,10 @@
         DOpPbs(
             PePbsInsn {
                 dst_rid: RegId(
-                    24,
+                    28,
                 ),
                 src_rid: RegId(
-                    21,
+                    25,
                 ),
                 gid: PbsGid(
                     20,
@@ -501,13 +577,13 @@
         DOpMac(
             PeArithInsn {
                 dst_rid: RegId(
-                    23,
+                    27,
                 ),
                 src0_rid: RegId(
-                    16,
+                    18,
                 ),
                 src1_rid: RegId(
-                    21,
+                    25,
                 ),
                 mul_factor: MulFactor(
                     8,
@@ -523,10 +599,10 @@
         DOpPbs(
             PePbsInsn {
                 dst_rid: RegId(
-                    26,
+                    30,
                 ),
                 src_rid: RegId(
-                    23,
+                    27,
                 ),
                 gid: PbsGid(
                     21,
@@ -542,13 +618,13 @@
         DOpAdds(
             PeArithMsgInsn {
                 dst_rid: RegId(
-                    25,
+                    29,
                 ),
                 src_rid: RegId(
                     7,
                 ),
                 msg_cst: Cst(
-                    0,
+                    8,
                 ),
                 opcode: Opcode {
                     optype: ARITH,
@@ -561,10 +637,10 @@
         DOpPbsF(
             PePbsInsn {
                 dst_rid: RegId(
-                    27,
+                    31,
                 ),
                 src_rid: RegId(
-                    25,
+                    29,
                 ),
                 gid: PbsGid(
                     22,
@@ -580,7 +656,7 @@
         DOpSt(
             PeMemInsn {
                 rid: RegId(
-                    27,
+                    31,
                 ),
                 slot: Addr(
                     CtId(
@@ -598,10 +674,10 @@
         DOpAdds(
             PeArithMsgInsn {
                 dst_rid: RegId(
-                    28,
+                    32,
                 ),
                 src_rid: RegId(
-                    26,
+                    30,
                 ),
                 msg_cst: Cst(
                     1,
@@ -617,7 +693,48 @@
         DOpMac(
             PeArithInsn {
                 dst_rid: RegId(
-                    29,
+                    33,
+                ),
+                src0_rid: RegId(
+                    32,
+                ),
+                src1_rid: RegId(
+                    23,
+                ),
+                mul_factor: MulFactor(
+                    4,
+                ),
+                opcode: Opcode {
+                    optype: ARITH,
+                    subtype: 5,
+                },
+            },
+        ),
+    ),
+    PBS(
+        DOpPbs(
+            PePbsInsn {
+                dst_rid: RegId(
+                    35,
+                ),
+                src_rid: RegId(
+                    33,
+                ),
+                gid: PbsGid(
+                    22,
+                ),
+                opcode: Opcode {
+                    optype: PBST,
+                    subtype: 0,
+                },
+            },
+        ),
+    ),
+    MAC(
+        DOpMac(
+            PeArithInsn {
+                dst_rid: RegId(
+                    34,
                 ),
                 src0_rid: RegId(
                     28,
@@ -639,10 +756,10 @@
         DOpPbs(
             PePbsInsn {
                 dst_rid: RegId(
-                    31,
+                    37,
                 ),
                 src_rid: RegId(
-                    29,
+                    34,
                 ),
                 gid: PbsGid(
                     22,
@@ -658,51 +775,10 @@
         DOpMac(
             PeArithInsn {
                 dst_rid: RegId(
-                    30,
+                    36,
                 ),
                 src0_rid: RegId(
-                    24,
-                ),
-                src1_rid: RegId(
-                    17,
-                ),
-                mul_factor: MulFactor(
-                    4,
-                ),
-                opcode: Opcode {
-                    optype: ARITH,
-                    subtype: 5,
-                },
-            },
-        ),
-    ),
-    PBS(
-        DOpPbs(
-            PePbsInsn {
-                dst_rid: RegId(
-                    33,
-                ),
-                src_rid: RegId(
-                    30,
-                ),
-                gid: PbsGid(
-                    22,
-                ),
-                opcode: Opcode {
-                    optype: PBST,
-                    subtype: 0,
-                },
-            },
-        ),
-    ),
-    MAC(
-        DOpMac(
-            PeArithInsn {
-                dst_rid: RegId(
-                    32,
-                ),
-                src0_rid: RegId(
-                    22,
+                    26,
                 ),
                 src1_rid: RegId(
                     13,
@@ -721,10 +797,10 @@
         DOpPbsF(
             PePbsInsn {
                 dst_rid: RegId(
-                    34,
+                    38,
                 ),
                 src_rid: RegId(
-                    32,
+                    36,
                 ),
                 gid: PbsGid(
                     22,
@@ -740,7 +816,7 @@
         DOpSt(
             PeMemInsn {
                 rid: RegId(
-                    34,
+                    38,
                 ),
                 slot: Addr(
                     CtId(
@@ -758,7 +834,7 @@
         DOpSt(
             PeMemInsn {
                 rid: RegId(
-                    31,
+                    35,
                 ),
                 slot: Addr(
                     CtId(
@@ -776,7 +852,7 @@
         DOpSt(
             PeMemInsn {
                 rid: RegId(
-                    33,
+                    37,
                 ),
                 slot: Addr(
                     CtId(

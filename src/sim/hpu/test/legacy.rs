@@ -1,4 +1,4 @@
-use crate::sim::hpu::{Argument, DOpId, RawDOp, MASK_NONE, MASK_PBS2, MASK_PBS4, MASK_PBS8};
+use crate::sim::{hpu::{Argument, DOpId, RawDOp, MASK_NONE, MASK_PBS2, MASK_PBS4, MASK_PBS8}, Cycle};
 
 mod legacy {
     pub struct RegId(pub u8);
@@ -212,12 +212,67 @@ impl From<legacy::DOp> for RawDOp {
     }
 }
 
-pub fn adds() -> impl Iterator<Item = crate::sim::hpu::DOp> {
-    use legacy::*;
-    use legacy::DOp::*;
-    use legacy::DOpType::*;
-    use legacy::MemId::*;
-    use legacy::ImmId::*;
-    let a: Vec<legacy::DOp> = include!("streams/adds.rs");
-    a.into_iter().enumerate().map(|(id, op)| crate::sim::hpu::DOp { raw: op.into(), id: DOpId(id as u16) })
+macro_rules! stream {
+    ($name: ident) => {
+        #[allow(unused_imports, non_snake_case)]
+        pub fn $name() -> (impl Iterator<Item = crate::sim::hpu::DOp>, Cycle) {
+            use legacy::*;
+            use legacy::DOp::*;
+            use legacy::DOpType::*;
+            use legacy::MemId::*;
+            use legacy::ImmId::*;
+            let stream: Vec<legacy::DOp> = Vec::from(include!(concat!("streams/", stringify!($name), ".rs")));
+            let lat: usize = include!(concat!("streams/", stringify!($name), ".cycles"));
+            (stream.into_iter().enumerate().map(|(id, op)| crate::sim::hpu::DOp { raw: op.into(), id: DOpId(id as u16) }), Cycle(lat))
+        }
+    };
 }
+
+stream!(ADDS);
+stream!(SUBS);
+stream!(SSUB);
+stream!(MULS);
+stream!(DIVS);
+stream!(MODS);
+stream!(OVF_ADDS);
+stream!(OVF_SUBS);
+stream!(OVF_SSUB);
+stream!(OVF_MULS);
+stream!(SHIFTS_R);
+stream!(SHIFTS_L);
+stream!(ROTS_R);
+stream!(ROTS_L);
+stream!(ADD);
+stream!(SUB);
+stream!(MUL);
+stream!(DIV);
+stream!(MOD);
+stream!(OVF_ADD);
+stream!(OVF_SUB);
+stream!(OVF_MUL);
+stream!(SHIFT_R);
+stream!(SHIFT_L);
+stream!(ROT_R);
+stream!(ROT_L);
+stream!(BW_AND);
+stream!(BW_OR);
+stream!(BW_XOR);
+stream!(CMP_GT);
+stream!(CMP_GTE);
+stream!(CMP_LT);
+stream!(CMP_LTE);
+stream!(CMP_EQ);
+stream!(CMP_NEQ);
+stream!(IF_THEN_ZERO);
+stream!(IF_THEN_ELSE);
+stream!(ERC_20);
+stream!(MEMCPY);
+stream!(ILOG2);
+stream!(COUNT0);
+stream!(COUNT1);
+stream!(LEAD0);
+stream!(LEAD1);
+stream!(TRAIL0);
+stream!(TRAIL1);
+stream!(ADD_SIMD);
+stream!(ERC_20_SIMD);
