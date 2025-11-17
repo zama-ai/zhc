@@ -130,7 +130,7 @@
                     4,
                 ),
                 msg_cst: Cst(
-                    3,
+                    1,
                 ),
                 opcode: Opcode {
                     optype: ARITH,
@@ -230,7 +230,7 @@
                     9,
                 ),
                 msg_cst: Cst(
-                    3,
+                    1,
                 ),
                 opcode: Opcode {
                     optype: ARITH,
@@ -330,7 +330,7 @@
                     14,
                 ),
                 msg_cst: Cst(
-                    3,
+                    2,
                 ),
                 opcode: Opcode {
                     optype: ARITH,

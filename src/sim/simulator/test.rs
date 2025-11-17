@@ -252,7 +252,6 @@ impl Simulatable for Pipeline {
 #[test]
 fn test_empty_simulation() {
     let mut sim: Simulator<Counter> = Simulator::new(FREQ);
-
     matches!(sim.step(), SimulationState::SimulationOver);
 }
 

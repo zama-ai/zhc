@@ -55,6 +55,7 @@ impl Simulatable for PeMem {
                     self.has_room_for_dops(),
                     "Dispatch Error: Dispatched on a filled PE"
                 );
+                dispatcher.dispatch_now(Events::IscUnlockIssue(dop.id));
                 self.push_dop(dop.clone());
                 if !self.busy() {
                     dispatcher.dispatch_now(Events::PeMemLaunchProcessing);

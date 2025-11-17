@@ -7,6 +7,7 @@ mod latencies;
 mod pe_alu;
 mod pe_mem;
 mod pe_pbs;
+mod pe_ctl;
 mod retirement;
 mod config;
 #[cfg(test)]
@@ -19,6 +20,7 @@ pub use latencies::*;
 use pe_alu::PeAlu;
 use pe_mem::PeMem;
 pub use pe_pbs::*;
+pub use pe_ctl::*;
 pub use retirement::*;
 pub use config::*;
 use serde::Serialize;
@@ -30,6 +32,7 @@ pub struct Hpu {
     pe_mem: PeMem,
     pe_pbs: PePbs,
     pe_alu: PeAlu,
+    pe_ctl: PeCtl,
     retirement: Retirement,
 }
 
@@ -41,6 +44,7 @@ impl Simulatable for Hpu {
         self.pe_mem.handle(dispatcher, trigger.clone());
         self.pe_pbs.handle(dispatcher, trigger.clone());
         self.pe_alu.handle(dispatcher, trigger.clone());
+        self.pe_ctl.handle(dispatcher, trigger.clone());
         self.retirement.handle(dispatcher, trigger.clone());
     }
 
@@ -49,6 +53,7 @@ impl Simulatable for Hpu {
         self.pe_mem.power_up(dispatcher);
         self.pe_pbs.power_up(dispatcher);
         self.pe_alu.power_up(dispatcher);
+        self.pe_ctl.power_up(dispatcher);
         self.retirement.power_up(dispatcher);
     }
 
@@ -57,6 +62,7 @@ impl Simulatable for Hpu {
         tracer.add_simulatable(&self.pe_mem);
         tracer.add_simulatable(&self.pe_pbs);
         tracer.add_simulatable(&self.pe_alu);
+        tracer.add_simulatable(&self.pe_ctl);
         tracer.add_simulatable(&self.retirement);
     }
 }
@@ -87,6 +93,7 @@ impl Hpu {
                     config.pbs_processing_latency_m,
                 ),
             ),
+            pe_ctl: PeCtl,
             retirement: Retirement::default(),
         }
     }

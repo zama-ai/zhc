@@ -24,6 +24,10 @@ impl<E: Event> Dispatcher<E> {
         self.dispatch_later(Cycle::ZERO, event);
     }
 
+    pub fn dispatch_next(&mut self, event: E) {
+        self.dispatch_later(Cycle::ONE, event);
+    }
+
     pub fn dispatch_later(&mut self, after_n_cycles: Cycle, event: E) {
         self.triggers.push(Trigger {
             at: self.now + after_n_cycles,

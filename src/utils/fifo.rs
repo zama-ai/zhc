@@ -46,6 +46,10 @@ impl<T> Fifo<T> {
         self.len() == 0
     }
 
+    pub fn has_elements(&self) -> bool {
+        self.len() > 0
+    }
+
     pub fn is_full(&self) -> bool {
         self.len() == self.capacity()
     }
