@@ -656,7 +656,7 @@ mod tests {
         let dop2 = create_mock_dop(2, false);
         let dop3 = create_mock_dop(3, false);
         let dop4 = create_mock_dop(4, false);
-        let dop5 = create_mock_dop(5, false);
+        let _ = create_mock_dop(5, false);
 
         // Fill waiting area
         memory.launch_load(dop1);

@@ -37,6 +37,10 @@ impl<'s, D: Dialect> OpRef<'s, D> {
         self.state.is_inactive()
     }
 
+    pub fn is_input(&self) -> bool {
+        self.signature.get_args_arity() == 0
+    }
+
     pub fn is_effect(&self) -> bool {
         self.signature.get_returns_arity() == 0
     }

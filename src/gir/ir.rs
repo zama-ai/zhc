@@ -11,33 +11,8 @@ use std::{
 };
 
 use super::{
-    Dialect, DialectOperations, IRError, Op, OpId, OpIdRaw, OpMut, OpRef, Printer, Signature, Val,
-    ValId, ValIdRaw, ValMut,
+    op_map::OpMap, Dialect, DialectOperations, IRError, Op, OpId, OpIdRaw, OpMut, OpRef, Printer, Signature, State, Val, ValId, ValIdRaw, ValMut
 };
-
-#[derive(Debug, Clone, Copy)]
-pub(super) enum State {
-    Active,
-    Inactive,
-}
-
-impl State {
-    pub(super) fn is_active(&self) -> bool {
-        matches!(self, State::Active)
-    }
-
-    pub(super) fn is_inactive(&self) -> bool {
-        matches!(self, State::Inactive)
-    }
-
-    pub(super) fn shutdown(&mut self) {
-        assert!(
-            self.is_active(),
-            "Tried to shut an already inactive element"
-        );
-        *self = State::Inactive
-    }
-}
 
 pub(super) type Depth = u8;
 
@@ -224,6 +199,14 @@ impl<D: Dialect> IR<D> {
             }
         }
     }
+
+    pub(super) fn new_empty_op_map<V>(&self) -> OpMap<V> {
+        OpMap::new_empty(self)
+    }
+
+    pub(super) fn new_filled_op_map<V: Clone>(&self, v: V) -> OpMap<V> {
+        OpMap::new_filled(self, v)
+    }
 }
 
 // Public API
@@ -324,7 +307,7 @@ impl<D: Dialect> IR<D> {
             signature: sig.clone(),
             args: args.clone(),
             returns: svec![],
-            state: State::Active,
+            state: State::Active(()),
             depth,
         };
         let opid = self.raw_insert_op(op);
@@ -344,7 +327,7 @@ impl<D: Dialect> IR<D> {
                     users: svec![],
                     origin: opid,
                     typ: ty,
-                    state: State::Active,
+                    state: State::Active(()),
                 };
                 self.raw_insert_val(ret)
             })

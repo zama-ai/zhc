@@ -46,6 +46,13 @@ impl<I: StoreIndex, V> Store<I, V> {
             .map(|(i, v)| (I::from_usize(i), v))
     }
 
+    pub fn enumerate_iter_mut(&mut self) -> impl Iterator<Item = (I, &mut V)> {
+        self.0
+            .iter_mut()
+            .enumerate()
+            .map(|(i, v)| (I::from_usize(i), v))
+    }
+
     pub fn iter(&self) -> std::slice::Iter<'_, V> {
         self.0.iter()
     }
@@ -58,6 +65,7 @@ impl<I: StoreIndex, V> Store<I, V> {
         self.0.iter_mut()
     }
 }
+
 impl<I: StoreIndex, V> Index<I> for Store<I, V> {
     type Output = V;
     fn index(&self, index: I) -> &Self::Output {
