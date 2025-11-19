@@ -1,5 +1,8 @@
+#![allow(dead_code)]
+
 pub mod gir;
 pub mod ioplang;
+pub mod hpulang;
 pub mod sim;
 pub mod utils;
 
