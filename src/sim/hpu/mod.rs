@@ -28,12 +28,12 @@ use serde::Serialize;
 
 #[derive(Debug, Serialize)]
 pub struct Hpu {
-    scheduler: InstructionScheduler,
-    pe_mem: PeMem,
-    pe_pbs: PePbs,
-    pe_alu: PeAlu,
-    pe_ctl: PeCtl,
-    retirement: Retirement,
+    pub scheduler: InstructionScheduler,
+    pub pe_mem: PeMem,
+    pub pe_pbs: PePbs,
+    pub pe_alu: PeAlu,
+    pub pe_ctl: PeCtl,
+    pub retirement: Retirement,
 }
 
 impl Simulatable for Hpu {

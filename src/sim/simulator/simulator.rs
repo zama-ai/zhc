@@ -128,6 +128,10 @@ impl<S: Simulatable> Simulator<S> {
     pub fn dump_trace<P: AsRef<Path>>(&self, path: P) {
         self.tracer.dump(path);
     }
+
+    pub fn simulatable(&self) -> &S {
+        &self.simulatable
+    }
 }
 
 impl<S: Simulatable> AsRef<S> for Simulator<S> {

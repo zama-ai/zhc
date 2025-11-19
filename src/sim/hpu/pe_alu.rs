@@ -11,7 +11,6 @@ pub struct PeAlu {
 }
 
 impl PeAlu {
-
     pub fn new(
         fifo_capacity: usize,
         read_latency: ConstantLatency,

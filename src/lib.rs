@@ -5,6 +5,7 @@ pub mod ioplang;
 pub mod hpulang;
 pub mod sim;
 pub mod utils;
+pub mod pipeline;
 
 mod frontend;
 pub use frontend::{BuilderContext, create_rhai_engine};
