@@ -1,0 +1,10 @@
+[package]
+name = "hpuc_pipeline"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+hpuc_ir = { path = "../hpuc_ir" }
+hpuc_sim = { path = "../hpuc_sim" }
+hpuc_utils = { path = "../hpuc_utils" }
+hpuc_langs = { path = "../hpuc_langs" }

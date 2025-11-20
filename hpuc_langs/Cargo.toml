@@ -1,0 +1,8 @@
+[package]
+name = "hpuc_langs"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+hpuc_ir = { path = "../hpuc_ir" }
+hpuc_utils = { path = "../hpuc_utils" }

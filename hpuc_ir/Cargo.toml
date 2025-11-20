@@ -1,0 +1,8 @@
+[package]
+name = "hpuc_ir"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+hpuc_utils = { path = "../hpuc_utils" }
+petgraph = "0.8.3"

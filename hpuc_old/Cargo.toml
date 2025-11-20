@@ -1,0 +1,14 @@
+[package]
+name = "hpu_compiler"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+hpuc_utils = { path = "../hpuc_utils" }
+hpuc_ir = { path = "../hpuc_ir" }
+hpuc_langs = { path = "../hpuc_langs" }
+hpuc_frontend = { path = "../hpuc_frontend" }
+hpuc_gui = { path = "../hpuc_gui" }
+
+clap = { version = "4.5", features = ["derive"] }
+clap-num = "1.2.0"
