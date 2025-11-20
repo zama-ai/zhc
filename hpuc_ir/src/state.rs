@@ -7,6 +7,7 @@ pub enum State<T = ()> {
     Inactive(T),
 }
 
+#[allow(dead_code)]
 impl<T> State<T> {
     /// Returns `true` if the state is active.
     pub fn is_active(&self) -> bool {

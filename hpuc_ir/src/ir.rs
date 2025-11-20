@@ -46,15 +46,15 @@ impl<D: Dialect> Debug for IR<D> {
 
 // This impl block contains the private implementations
 impl<D: Dialect> IR<D> {
-    pub(super) fn raw_n_ops(&self) -> OpIdRaw {
+    pub(crate) fn raw_n_ops(&self) -> OpIdRaw {
         self.op_states.len()
     }
 
-    pub(super) fn raw_has_opid(&self, opid: OpId) -> bool {
+    pub(crate) fn raw_has_opid(&self, opid: OpId) -> bool {
         opid.0 < self.raw_n_ops()
     }
 
-    pub(super) fn raw_get_op(&self, opid: OpId) -> OpRef<'_, D> {
+    pub(crate) fn raw_get_op(&self, opid: OpId) -> OpRef<'_, D> {
         assert!(self.raw_has_opid(opid), "Unknown opid");
         OpRef {
             ir: self,
@@ -68,7 +68,7 @@ impl<D: Dialect> IR<D> {
         }
     }
 
-    pub(super) fn raw_get_op_mut(&mut self, opid: OpId) -> OpMut<'_, D> {
+    pub(crate) fn raw_get_op_mut(&mut self, opid: OpId) -> OpMut<'_, D> {
         assert!(self.raw_has_opid(opid), "Unknown opid");
         OpMut {
             operation: &mut self.op_operations[opid],
@@ -81,15 +81,15 @@ impl<D: Dialect> IR<D> {
         }
     }
 
-    pub(super) fn raw_n_vals(&self) -> ValIdRaw {
+    pub(crate) fn raw_n_vals(&self) -> ValIdRaw {
         self.val_states.len()
     }
 
-    pub(super) fn raw_has_valid(&self, valid: ValId) -> bool {
+    pub(crate) fn raw_has_valid(&self, valid: ValId) -> bool {
         valid.0 < self.raw_n_vals()
     }
 
-    pub(super) fn raw_get_val(&self, valid: ValId) -> ValRef<'_, D> {
+    pub(crate) fn raw_get_val(&self, valid: ValId) -> ValRef<'_, D> {
         assert!(self.raw_has_valid(valid), "Unkown valid");
         ValRef {
             id: valid,
@@ -101,7 +101,7 @@ impl<D: Dialect> IR<D> {
         }
     }
 
-    pub(super) fn raw_get_val_mut(&mut self, valid: ValId) -> ValMut<'_, D> {
+    pub(crate) fn raw_get_val_mut(&mut self, valid: ValId) -> ValMut<'_, D> {
         assert!(self.raw_has_valid(valid), "Unkown valid");
         ValMut {
             id: valid,
@@ -112,15 +112,15 @@ impl<D: Dialect> IR<D> {
         }
     }
 
-    pub(super) fn raw_ops_iter(&self) -> impl Iterator<Item = OpRef<'_, D>> {
+    pub(crate) fn raw_ops_iter(&self) -> impl Iterator<Item = OpRef<'_, D>> {
         OpId::range(0, self.raw_n_ops()).map(|opid| self.raw_get_op(opid))
     }
 
-    pub(super) fn raw_vals_iter(&self) -> impl Iterator<Item = ValRef<'_, D>> {
+    pub(crate) fn raw_vals_iter(&self) -> impl Iterator<Item = ValRef<'_, D>> {
         ValId::range(0, self.raw_n_vals()).map(|valid| self.raw_get_val(valid))
     }
 
-    pub(super) fn raw_insert_op(&mut self, op: Op<D>) -> OpId {
+    pub(crate) fn raw_insert_op(&mut self, op: Op<D>) -> OpId {
         let opid = OpId(self.raw_n_ops());
         let Op {
             operation,
@@ -140,7 +140,7 @@ impl<D: Dialect> IR<D> {
         opid
     }
 
-    pub(super) fn raw_insert_val(&mut self, val: Val<D>) -> ValId {
+    pub(crate) fn raw_insert_val(&mut self, val: Val<D>) -> ValId {
         let valid = ValId(self.raw_n_vals());
         let Val {
             users,
@@ -156,7 +156,7 @@ impl<D: Dialect> IR<D> {
         valid
     }
 
-    pub(super) fn raw_get_topological_order(&self) -> impl Iterator<Item = OpId> {
+    pub(crate) fn raw_get_topological_order(&self) -> impl Iterator<Item = OpId> {
         let max_depth = *self.op_depth.iter().max().unwrap_or(&0);
         let mut depth_buckets = vec![svec![]; (max_depth + 1) as usize];
         for op in self.raw_ops_iter() {
@@ -165,7 +165,7 @@ impl<D: Dialect> IR<D> {
         depth_buckets.into_iter().flat_map(|b| b.into_iter())
     }
 
-    pub(super) fn raw_topological_ops_iter(&self) -> impl Iterator<Item = OpRef<'_, D>> {
+    pub(crate) fn raw_topological_ops_iter(&self) -> impl Iterator<Item = OpRef<'_, D>> {
         self.raw_get_topological_order()
             .map(|opid| self.raw_get_op(opid))
     }
@@ -360,7 +360,7 @@ impl<D: Dialect> IR<D> {
         // Now we are going to check that the new value is not reachable by any user. That would
         // mean a cycle is introduced by the mutation.
         for user in old.get_users_iter() {
-            if user.reaches(new.get_origin()) {
+            if user.reaches(&new.get_origin()) {
                 panic!("Tried to replace a value with one it reaches.");
             }
         }
@@ -483,6 +483,14 @@ impl<D: Dialect> IR<D> {
 
     pub fn new_filled_op_map<V: Clone>(&self, v: V) -> OpMap<V> {
         OpMap::new_filled(self, v)
+    }
+
+    pub fn new_empty_val_map<V>(&self) -> super::val_map::ValMap<V> {
+        super::val_map::ValMap::new_empty(self)
+    }
+
+    pub fn new_filled_val_map<V: Clone>(&self, v: V) -> super::val_map::ValMap<V> {
+        super::val_map::ValMap::new_filled(self, v)
     }
 }
 
