@@ -1,6 +1,8 @@
-use std::hash::Hash;
+use std::{fmt::Display, hash::Hash};
 
 use hpuc_utils::FastSet;
+
+use crate::Printer;
 
 use super::{Depth, Dialect, IR, OpId, Signature, State, ValId, val_ref::ValRef};
 
@@ -19,6 +21,13 @@ pub struct OpRef<'s, D: Dialect> {
     pub(super) returns: &'s [ValId],
     pub(super) state: &'s State,
     pub(super) depth: &'s Depth,
+}
+
+impl<'s, D: Dialect> Display for OpRef<'s, D>{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let printer = Printer::from_ir(self.ir, true, true);
+        printer.format_opref(f, self.to_owned())
+    }
 }
 
 impl<'s, D: Dialect> Hash for OpRef<'s, D>{
@@ -158,6 +167,17 @@ impl<'s, D: Dialect> OpRef<'s, D> {
         }
         output.into_iter()
     }
+
+
+    /// Returns an iterator over all operations that can reach the current operation, including itself.
+    ///
+    /// Combines the results of `get_reached_iter()` with the current operation to provide
+    /// a complete set of all operations in the forward reachability cone starting from
+    /// this operation.
+    pub fn get_inc_reaching_iter(&self) -> impl Iterator<Item = OpRef<'s, D>> {
+        self.get_reaching_iter().chain(std::iter::once(self.to_owned()))
+    }
+
 
     /// Returns an iterator over all operations that can be reached from the current operation.
     ///

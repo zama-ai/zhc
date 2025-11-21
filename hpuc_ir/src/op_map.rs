@@ -1,4 +1,5 @@
 use std::ops::{Index, IndexMut};
+use std::fmt::Debug;
 
 use hpuc_utils::Store;
 
@@ -166,5 +167,11 @@ impl<T> Index<OpId> for OpMap<T> {
 impl<T> IndexMut<OpId> for OpMap<T> {
     fn index_mut(&mut self, index: OpId) -> &mut Self::Output {
         self.get_mut(&index).unwrap()
+    }
+}
+
+impl<T: Debug> Debug for OpMap<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_map().entries(self.iter()).finish()
     }
 }

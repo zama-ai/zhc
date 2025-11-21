@@ -1,3 +1,7 @@
+use std::fmt::Display;
+
+use crate::Printer;
+
 use super::{Dialect, IR, OpId, OpRef, State, ValId};
 
 #[derive(Debug, Clone)]
@@ -8,6 +12,13 @@ pub struct ValRef<'s, D: Dialect> {
     pub(super) origin: &'s OpId,
     pub(super) typ: &'s D::Types,
     pub(super) state: &'s State,
+}
+
+impl<'s, D: Dialect> Display for ValRef<'s, D>{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let printer = Printer::from_ir(self.ir, true, true);
+        printer.format_arg(f, self.to_owned())
+    }
 }
 
 impl<'s, D: Dialect> PartialEq for ValRef<'s, D> {

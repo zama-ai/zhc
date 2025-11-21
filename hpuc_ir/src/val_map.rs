@@ -1,4 +1,4 @@
-use std::ops::{Index, IndexMut};
+use std::{fmt::Debug, ops::{Index, IndexMut}};
 
 use hpuc_utils::Store;
 
@@ -166,5 +166,11 @@ impl<T> Index<ValId> for ValMap<T> {
 impl<T> IndexMut<ValId> for ValMap<T> {
     fn index_mut(&mut self, index: ValId) -> &mut Self::Output {
         self.get_mut(&index).unwrap()
+    }
+}
+
+impl<T: Debug> Debug for ValMap<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_map().entries(self.iter()).finish()
     }
 }
