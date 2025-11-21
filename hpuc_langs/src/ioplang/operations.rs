@@ -23,7 +23,7 @@ impl Display for Litteral {
 pub enum Operations {
     Input { pos: usize, typ: Types },
     Output { pos: usize, typ: Types },
-    Variable { typ: Types },
+    Let { typ: Types },
     Constant { value: Litteral },
     GenerateLut { name: String, deg: usize },
     AddCt,
@@ -47,7 +47,7 @@ impl Display for Operations {
         match self {
             Operations::Input { pos, typ } => write!(f, "input<{}, {}>", pos, typ),
             Operations::Output { pos, typ } => write!(f, "output<{}, {}>", pos, typ),
-            Operations::Variable { typ } => write!(f, "variable<{}>", typ),
+            Operations::Let { typ } => write!(f, "let<{}>", typ),
             Operations::Constant { value } => write!(f, "constant<{}>", value),
             Operations::GenerateLut { deg, name } => write!(f, "gen_lut{deg}<{name}>"),
             Operations::Mac => write!(f, "mac"),
@@ -76,7 +76,7 @@ impl DialectOperations for Operations {
         match self {
             Operations::Input { typ, .. } => sig![() -> (typ.clone())],
             Operations::Output { typ, .. } => sig![(typ.clone()) -> ()],
-            Operations::Variable { typ, .. } => sig![() -> (typ.clone())],
+            Operations::Let { typ, .. } => sig![() -> (typ.clone())],
             Operations::Constant {
                 value: Litteral::PlaintextBlock(_),
             } => sig![() -> (PlaintextBlock)],

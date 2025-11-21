@@ -156,7 +156,7 @@ pub fn create_rhai_engine(context: BuilderContext) -> (Engine, IopBuilder) {
 
         let (_, ct) = ir
             .add_op(
-                Operations::Variable {
+                Operations::Let {
                     typ: Types::Ciphertext,
                 },
                 svec![],

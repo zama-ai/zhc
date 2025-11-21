@@ -16,7 +16,7 @@ impl GraphFmt for (OpId, Context) {
         match operation {
             ioplang::Operations::Input { pos, .. } => format!("In<{pos}>"),
             ioplang::Operations::Output { pos, .. } => format!("Out<{pos}>"),
-            ioplang::Operations::Variable { .. } => "Var".to_string(),
+            ioplang::Operations::Let { .. } => "Let".to_string(),
             ioplang::Operations::Constant { value } => match value {
                 ioplang::Litteral::PlaintextBlock(val) => format!("Pt<{val}>"),
                 ioplang::Litteral::Index(val) => format!("Idx<{val}>"),
@@ -45,7 +45,7 @@ impl GraphShow for (OpId, Context) {
             // IO kind
             ioplang::Operations::Input { .. }
             | ioplang::Operations::Output { .. }
-            | ioplang::Operations::Variable { .. }
+            | ioplang::Operations::Let { .. }
             | ioplang::Operations::Constant { .. }
             | ioplang::Operations::GenerateLut { .. }
             | ioplang::Operations::ExtractCtBlock
@@ -75,7 +75,7 @@ impl GraphShow for (OpId, Context) {
             // IO kind
             ioplang::Operations::Input { .. }
             | ioplang::Operations::Output { .. }
-            | ioplang::Operations::Variable { .. }
+            | ioplang::Operations::Let { .. }
             | ioplang::Operations::Constant { .. }
             | ioplang::Operations::GenerateLut { .. } => Color32::WHITE,
 
