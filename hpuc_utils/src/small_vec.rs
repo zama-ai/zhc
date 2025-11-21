@@ -2,9 +2,10 @@ use super::StackVec;
 use crate::StackVecIntoIter;
 use std::{hash::Hash, usize};
 
+/// Iterator that yields elements from a `SmallVec` by value.
 pub enum SmallVecIntoIter<A> {
     Heap(std::vec::IntoIter<A>),
-    Stack(StackVecIntoIter<A>),
+    Stack(StackVecIntoIter<'static, A>),
 }
 
 impl<A> Iterator for SmallVecIntoIter<A> {
@@ -18,6 +19,12 @@ impl<A> Iterator for SmallVecIntoIter<A> {
     }
 }
 
+/// A vector that can store elements either on the stack or heap for optimal performance.
+///
+/// Small collections are stored inline on the stack to avoid heap allocation overhead.
+/// When the collection grows beyond the stack capacity, it automatically transitions
+/// to heap storage. This provides excellent performance for small collections while
+/// maintaining the flexibility of dynamic growth.
 #[derive(Clone, Debug)]
 pub enum SmallVec<A> {
     Heap(Vec<A>),
@@ -25,10 +32,16 @@ pub enum SmallVec<A> {
 }
 
 impl<A> SmallVec<A> {
+    /// Creates an empty `SmallVec`.
     pub fn new() -> Self {
         SmallVec::Stack(StackVec::new())
     }
 
+    /// Creates an empty `SmallVec` with at least the specified `cap`.
+    ///
+    /// If `cap` is within the stack capacity, the vector will use stack storage.
+    /// Otherwise, it will be allocated on the heap. The vector will be able to
+    /// hold at least `cap` elements without reallocating.
     pub fn with_capacity(cap: usize) -> Self {
         if cap <= StackVec::<A>::static_capacity() {
             SmallVec::Stack(StackVec::new())
@@ -37,6 +50,7 @@ impl<A> SmallVec<A> {
         }
     }
 
+    /// Returns a slice containing the entire vector.
     pub fn as_slice(&self) -> &[A] {
         match self {
             SmallVec::Heap(h) => h.as_slice(),
@@ -44,6 +58,7 @@ impl<A> SmallVec<A> {
         }
     }
 
+    /// Returns a mutable slice containing the entire vector.
     pub fn as_mut_slice(&mut self) -> &mut [A] {
         match self {
             SmallVec::Heap(h) => h.as_mut_slice(),
@@ -51,6 +66,11 @@ impl<A> SmallVec<A> {
         }
     }
 
+    /// Appends an element to the back of the vector.
+    ///
+    /// If the vector is currently using stack storage and adding `value` would
+    /// exceed the stack capacity, the vector will be moved to heap storage
+    /// before the element is added.
     pub fn push(&mut self, value: A) {
         if let SmallVec::Stack(stack_vec) = self
             && !stack_vec.may_push()
@@ -65,6 +85,18 @@ impl<A> SmallVec<A> {
         }
     }
 
+    /// Removes and returns the last element from the vector.
+    pub fn pop(&mut self) -> Option<A> {
+        match self {
+            SmallVec::Heap(items) => items.pop(),
+            SmallVec::Stack(stack_vec) => stack_vec.pop(),
+        }
+    }
+
+    /// Moves all elements from `other` into this vector, leaving `other` empty.
+    ///
+    /// If the combined length would exceed stack capacity, this vector will
+    /// be moved to heap storage before the append operation.
     pub fn append(&mut self, other: &mut SmallVec<A>) {
         if let SmallVec::Stack(l) = self
             && let SmallVec::Stack(r) = other
@@ -96,6 +128,21 @@ impl<A> SmallVec<A> {
         }
     }
 
+    /// Removes and returns the element at the specified `index`.
+    ///
+    /// All elements after `index` are shifted left by one position.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `index` is out of bounds.
+    pub fn remove(&mut self, index: usize) -> A {
+        match self {
+            SmallVec::Heap(items) => items.remove(index),
+            SmallVec::Stack(stack_vec) => stack_vec.remove(index),
+        }
+    }
+
+    /// Sorts the vector in-place in ascending order.
     pub fn sort_unstable(&mut self)
     where
         A: Ord,
@@ -103,6 +150,7 @@ impl<A> SmallVec<A> {
         self.as_mut_slice().sort_unstable();
     }
 
+    /// Returns an iterator over references to the elements.
     pub fn iter(&self) -> std::slice::Iter<'_, A> {
         match self {
             SmallVec::Heap(h) => h.iter(),
@@ -110,6 +158,7 @@ impl<A> SmallVec<A> {
         }
     }
 
+    /// Returns an iterator over mutable references to the elements.
     pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, A> {
         match self {
             SmallVec::Heap(h) => h.iter_mut(),
@@ -117,6 +166,7 @@ impl<A> SmallVec<A> {
         }
     }
 
+    /// Converts the vector into an iterator that yields elements by value.
     pub fn into_iter(self) -> SmallVecIntoIter<A> {
         match self {
             SmallVec::Heap(h) => SmallVecIntoIter::Heap(h.into_iter()),
@@ -124,11 +174,17 @@ impl<A> SmallVec<A> {
         }
     }
 
+    /// Returns the number of elements in the vector.
     pub fn len(&self) -> usize {
         match self {
             SmallVec::Heap(h) => h.len(),
             SmallVec::Stack(s) => s.len(),
         }
+    }
+
+    /// Returns `true` if the vector contains no elements.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 }
 
@@ -206,6 +262,10 @@ impl<A: Hash> Hash for SmallVec<A> {
 
 impl<A: Eq> Eq for SmallVec<A> {}
 
+/// Creates a `SmallVec` containing the provided elements.
+///
+/// This macro provides a convenient way to create `SmallVec` instances with
+/// known elements at compile time, similar to the `vec!` macro for `Vec`.
 #[macro_export]
 macro_rules! svec {
     () => {

@@ -1,4 +1,5 @@
 use std::fmt::Debug;
+use std::marker::PhantomData;
 use std::mem::{ManuallyDrop, MaybeUninit};
 
 const STACK_BYTES: usize = 64;
@@ -11,18 +12,30 @@ union AlignedStorage<A> {
     _align: ManuallyDrop<[A; 0]>,
 }
 
+/// A stack-allocated vector with a fixed capacity.
+///
+/// `StackVec` stores elements in a fixed-size buffer allocated on the stack,
+/// providing vector-like functionality without heap allocation. The capacity
+/// is determined by the size of the element type and cannot exceed the
+/// stack buffer size.
 pub struct StackVec<A> {
     data: AlignedStorage<A>,
     len: usize,
 }
 
-pub struct StackVecIntoIter<A> {
+/// An iterator that moves elements out of a `StackVec`.
+///
+/// This iterator is created by calling `drain_all` or `into_iter` on a `StackVec`.
+/// It yields owned elements and properly handles cleanup of any remaining
+/// elements when dropped.
+pub struct StackVecIntoIter<'a, A> {
     data: AlignedStorage<A>,
     start: usize,
     end: usize,
+    lifetime: PhantomData<&'a u8>,
 }
 
-impl<A> Iterator for StackVecIntoIter<A> {
+impl<'a, A> Iterator for StackVecIntoIter<'a, A> {
     type Item = A;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -44,11 +57,10 @@ impl<A> Iterator for StackVecIntoIter<A> {
     }
 }
 
-impl<A> ExactSizeIterator for StackVecIntoIter<A> {}
+impl<'a, A> ExactSizeIterator for StackVecIntoIter<'a, A> {}
 
-impl<A> Drop for StackVecIntoIter<A> {
+impl<'a, A> Drop for StackVecIntoIter<'a, A> {
     fn drop(&mut self) {
-        // Drop any remaining elements
         while self.start < self.end {
             unsafe {
                 let ptr = self.data.data.as_ptr() as *const A;
@@ -66,6 +78,16 @@ impl<A> Default for StackVec<A> {
 }
 
 impl<A> StackVec<A> {
+    /// Creates a new empty `StackVec`.
+    ///
+    /// The vector will have a capacity determined by the size of type `A`
+    /// and the available stack buffer space.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the type `A` is too large to fit in the stack buffer,
+    /// if `A` is a zero-sized type, or if `A` has alignment requirements
+    /// larger than its size.
     pub fn new() -> Self {
         let size = std::mem::size_of::<A>();
         let align = std::mem::align_of::<A>();
@@ -87,14 +109,23 @@ impl<A> StackVec<A> {
         }
     }
 
+    /// Returns a slice containing all elements in the vector.
     pub fn as_slice(&self) -> &[A] {
         unsafe { std::slice::from_raw_parts(self.data.data.as_ptr() as *const A, self.len) }
     }
 
+    /// Returns a mutable slice containing all elements in the vector.
     pub fn as_mut_slice(&mut self) -> &mut [A] {
         unsafe { std::slice::from_raw_parts_mut(self.data.data.as_mut_ptr() as *mut A, self.len) }
     }
 
+    /// Appends an element to the end of the vector.
+    ///
+    /// The `value` is moved into the vector and stored at the current length position.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the vector is at capacity and cannot accommodate another element.
     pub fn push(&mut self, value: A) {
         if self.may_push() {
             unsafe {
@@ -107,6 +138,76 @@ impl<A> StackVec<A> {
         }
     }
 
+    /// Removes and returns the last element from the vector.
+    ///
+    /// Returns `None` if the vector is empty, otherwise returns `Some(element)`
+    /// containing the removed element.
+    pub fn pop(&mut self) -> Option<A> {
+        if self.len() != 0 {
+            self.len -= 1;
+            unsafe {
+                let ptr = self.data.data.as_ptr() as *const A;
+                Some(std::ptr::read(ptr.add(self.len)))
+            }
+        } else {
+            None
+        }
+    }
+
+    /// Removes and returns the element at the specified `index`.
+    ///
+    /// All elements after the removed element are shifted left to fill the gap.
+    /// The vector's length is decreased by one.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `index` is out of bounds.
+    pub fn remove(&mut self, index: usize) -> A {
+        if index >= self.len {
+            panic!(
+                "index out of bounds: the len is {} but the index is {}",
+                self.len, index
+            );
+        }
+
+        unsafe {
+            let ptr = self.data.data.as_mut_ptr() as *mut A;
+            let value = std::ptr::read(ptr.add(index));
+            for i in index..self.len - 1 {
+                std::ptr::write(ptr.add(i), std::ptr::read(ptr.add(i + 1)));
+            }
+            self.len -= 1;
+            value
+        }
+    }
+
+    /// Searches for an element equal to `query` and returns its index.
+    ///
+    /// Returns `Some(index)` if an element equal to `query` is found,
+    /// or `None` if no such element exists. If multiple equal elements
+    /// exist, returns the index of the first occurrence.
+    pub fn search(&self, query: &A) -> Option<usize>
+    where
+        A: PartialEq,
+    {
+        for i in 0..self.len {
+            if &self[i] == query {
+                return Some(i);
+            }
+        }
+        None
+    }
+
+    /// Returns the maximum number of elements the vector can hold for type `A`.
+    ///
+    /// This is a compile-time constant that depends only on the size of type `A`
+    /// and the stack buffer size.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the type `A` is too large to fit in the stack buffer,
+    /// if `A` is a zero-sized type, or if `A` has alignment requirements
+    /// larger than its size.
     pub const fn static_capacity() -> usize {
         let size = std::mem::size_of::<A>();
         let align = std::mem::align_of::<A>();
@@ -122,18 +223,32 @@ impl<A> StackVec<A> {
         STACK_BYTES / size
     }
 
+    /// Returns the maximum number of elements this vector can hold.
     pub fn capacity(&self) -> usize {
         STACK_BYTES / std::mem::size_of::<A>()
     }
 
+    /// Returns `true` if the vector can accommodate one more element.
     pub fn may_push(&self) -> bool {
         self.len < self.capacity()
     }
 
+    /// Returns `true` if the vector can accommodate `other_len` additional elements.
+    ///
+    /// Uses saturating addition to prevent overflow when checking capacity.
     pub fn may_append(&self, other_len: usize) -> bool {
         self.len.saturating_add(other_len) <= self.capacity()
     }
 
+    /// Moves all elements from `other` into this vector.
+    ///
+    /// After the operation, `other` will be empty and this vector will contain
+    /// all elements from both vectors. The elements from `other` are appended
+    /// to the end of this vector in their original order.
+    ///
+    /// # Panics
+    ///
+    /// Panics if there is insufficient capacity to hold all elements from both vectors.
     pub fn append(&mut self, other: &mut StackVec<A>) {
         if !self.may_append(other.len) {
             panic!("StackVec overflow");
@@ -152,6 +267,27 @@ impl<A> StackVec<A> {
         }
     }
 
+    /// Removes all elements from the vector and returns them as an iterator.
+    ///
+    /// After calling this method, the vector will be empty. The returned iterator
+    /// yields owned elements and will properly drop any elements that are not
+    /// consumed when the iterator is dropped.
+    pub fn drain_all(&mut self) -> StackVecIntoIter<'_, A> {
+        let len = self.len;
+        self.len = 0;
+        let data = unsafe { std::ptr::read(&self.data) };
+        StackVecIntoIter {
+            data,
+            start: 0,
+            end: len,
+            lifetime: PhantomData,
+        }
+    }
+
+    /// Moves all elements from this vector into the specified `other` vector.
+    ///
+    /// After the operation, this vector will be empty and `other` will contain
+    /// all the moved elements appended to its existing contents.
     pub fn drain_to_vec(&mut self, other: &mut Vec<A>) {
         other.reserve(self.len);
         let ptr = unsafe { self.data.data.as_mut_ptr() as *const A };
@@ -161,21 +297,33 @@ impl<A> StackVec<A> {
         self.len = 0;
     }
 
+    /// Converts the `StackVec` into a `Vec`.
+    ///
+    /// All elements are moved from the stack vector to a new heap-allocated
+    /// vector. The returned `Vec` will have the same length and contain the
+    /// same elements in the same order.
     pub fn into_vec(mut self) -> Vec<A> {
         let mut vec = Vec::with_capacity(self.len);
         self.drain_to_vec(&mut vec);
         vec
     }
 
+    /// Returns an iterator over references to the elements.
     pub fn iter(&self) -> std::slice::Iter<'_, A> {
         self.as_slice().iter()
     }
 
+    /// Returns an iterator over mutable references to the elements.
     pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, A> {
         self.as_mut_slice().iter_mut()
     }
 
-    pub fn into_iter(self) -> StackVecIntoIter<A> {
+    /// Converts the vector into an iterator that yields owned elements.
+    ///
+    /// The vector is consumed and cannot be used after calling this method.
+    /// The returned iterator will properly drop any remaining elements when
+    /// it is dropped.
+    pub fn into_iter(self) -> StackVecIntoIter<'static, A> {
         let len = self.len;
         let data = unsafe { std::ptr::read(&self.data) };
         std::mem::forget(self);
@@ -183,9 +331,11 @@ impl<A> StackVec<A> {
             data,
             start: 0,
             end: len,
+            lifetime: PhantomData,
         }
     }
 
+    /// Returns the number of elements in the vector.
     pub fn len(&self) -> usize {
         self.len
     }
@@ -319,6 +469,103 @@ mod test {
     }
 
     #[test]
+    fn test_pop_basic() {
+        let mut vec = StackVec::new();
+
+        // Pop from empty vec should return None
+        assert_eq!(vec.pop(), None::<u32>);
+        assert_eq!(vec.len(), 0);
+
+        // Push some values and pop them
+        vec.push(1u32);
+        vec.push(2u32);
+        vec.push(3u32);
+        assert_eq!(vec.len(), 3);
+
+        // Pop returns last element
+        assert_eq!(vec.pop(), Some(3));
+        assert_eq!(vec.len(), 2);
+
+        assert_eq!(vec.pop(), Some(2));
+        assert_eq!(vec.len(), 1);
+
+        assert_eq!(vec.pop(), Some(1));
+        assert_eq!(vec.len(), 0);
+
+        // Pop from empty vec again
+        assert_eq!(vec.pop(), None);
+    }
+
+    #[test]
+    fn test_pop_ownership() {
+        let counter = Arc::new(AtomicUsize::new(0));
+
+        let mut vec = StackVec::new();
+        vec.push(DropTracker::new(1, counter.clone()));
+        vec.push(DropTracker::new(2, counter.clone()));
+        vec.push(DropTracker::new(3, counter.clone()));
+
+        assert_eq!(counter.load(Ordering::Relaxed), 3);
+
+        // Pop and immediately drop
+        {
+            let popped = vec.pop().unwrap();
+            assert_eq!(popped.id, 3);
+            assert_eq!(counter.load(Ordering::Relaxed), 3); // Still 3 because value moved out
+        } // popped drops here
+        assert_eq!(counter.load(Ordering::Relaxed), 2);
+
+        // Pop and keep alive
+        let popped2 = vec.pop().unwrap();
+        assert_eq!(popped2.id, 2);
+        assert_eq!(counter.load(Ordering::Relaxed), 2);
+
+        drop(vec); // This should drop the remaining element
+        assert_eq!(counter.load(Ordering::Relaxed), 1);
+
+        drop(popped2); // Drop the popped element
+        assert_eq!(counter.load(Ordering::Relaxed), 0);
+    }
+
+    #[test]
+    fn test_push_pop_sequence() {
+        let mut vec = StackVec::new();
+
+        // Test alternating push/pop
+        vec.push(10u32);
+        assert_eq!(vec.pop(), Some(10));
+
+        vec.push(20);
+        vec.push(30);
+        assert_eq!(vec.pop(), Some(30));
+        vec.push(40);
+        assert_eq!(vec.len(), 2);
+        assert_eq!(vec.as_slice(), &[20, 40]);
+
+        assert_eq!(vec.pop(), Some(40));
+        assert_eq!(vec.pop(), Some(20));
+        assert_eq!(vec.pop(), None);
+    }
+
+    #[test]
+    fn test_pop_lifo_order() {
+        let mut vec = StackVec::new();
+
+        // Push multiple elements
+        for i in 1..=5 {
+            vec.push(i * 10);
+        }
+
+        // Pop should return in LIFO order
+        assert_eq!(vec.pop(), Some(50));
+        assert_eq!(vec.pop(), Some(40));
+        assert_eq!(vec.pop(), Some(30));
+        assert_eq!(vec.pop(), Some(20));
+        assert_eq!(vec.pop(), Some(10));
+        assert_eq!(vec.pop(), None);
+    }
+
+    #[test]
     fn test_capacity_different_sizes() {
         let small_vec: StackVec<u8> = StackVec::new();
         assert_eq!(small_vec.capacity(), 64);
@@ -330,6 +577,312 @@ mod test {
         assert_eq!(large_vec.capacity(), 8);
     }
 
+    #[test]
+    fn test_remove_basic() {
+        let mut vec = StackVec::new();
+        vec.push(10u32);
+        vec.push(20);
+        vec.push(30);
+        vec.push(40);
+
+        // Remove from middle
+        let removed = vec.remove(1);
+        assert_eq!(removed, 20);
+        assert_eq!(vec.len(), 3);
+        assert_eq!(vec.as_slice(), &[10, 30, 40]);
+
+        // Remove from end
+        let removed = vec.remove(2);
+        assert_eq!(removed, 40);
+        assert_eq!(vec.len(), 2);
+        assert_eq!(vec.as_slice(), &[10, 30]);
+
+        // Remove from beginning
+        let removed = vec.remove(0);
+        assert_eq!(removed, 10);
+        assert_eq!(vec.len(), 1);
+        assert_eq!(vec.as_slice(), &[30]);
+
+        // Remove last element
+        let removed = vec.remove(0);
+        assert_eq!(removed, 30);
+        assert_eq!(vec.len(), 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "index out of bounds")]
+    fn test_remove_out_of_bounds() {
+        let mut vec = StackVec::new();
+        vec.push(10u32);
+        vec.remove(1); // Should panic
+    }
+
+    #[test]
+    #[should_panic(expected = "index out of bounds")]
+    fn test_remove_empty() {
+        let mut vec: StackVec<u32> = StackVec::new();
+        vec.remove(0); // Should panic
+    }
+
+    #[test]
+    fn test_remove_ownership() {
+        let counter = Arc::new(AtomicUsize::new(0));
+
+        let mut vec = StackVec::new();
+        vec.push(DropTracker::new(1, counter.clone()));
+        vec.push(DropTracker::new(2, counter.clone()));
+        vec.push(DropTracker::new(3, counter.clone()));
+
+        assert_eq!(counter.load(Ordering::Relaxed), 3);
+
+        // Remove middle element
+        {
+            let removed = vec.remove(1);
+            assert_eq!(removed.id, 2);
+            assert_eq!(counter.load(Ordering::Relaxed), 3); // Still 3 because value moved out
+        } // removed drops here
+        assert_eq!(counter.load(Ordering::Relaxed), 2);
+
+        // Verify remaining elements are correct
+        assert_eq!(vec.len(), 2);
+        assert_eq!(vec[0].id, 1);
+        assert_eq!(vec[1].id, 3);
+
+        drop(vec);
+        assert_eq!(counter.load(Ordering::Relaxed), 0);
+    }
+
+    #[test]
+    fn test_search_basic() {
+        let mut vec = StackVec::new();
+        vec.push(10u32);
+        vec.push(20);
+        vec.push(30);
+        vec.push(20); // Duplicate
+
+        // Search for existing elements
+        assert_eq!(vec.search(&10), Some(0));
+        assert_eq!(vec.search(&20), Some(1)); // Returns first occurrence
+        assert_eq!(vec.search(&30), Some(2));
+
+        // Search for non-existing element
+        assert_eq!(vec.search(&40), None);
+    }
+
+    #[test]
+    fn test_search_empty() {
+        let vec: StackVec<u32> = StackVec::new();
+        assert_eq!(vec.search(&10), None);
+    }
+
+    #[test]
+    fn test_search_single_element() {
+        let mut vec = StackVec::new();
+        vec.push(42u32);
+
+        assert_eq!(vec.search(&42), Some(0));
+        assert_eq!(vec.search(&41), None);
+    }
+
+    #[test]
+    fn test_search_custom_type() {
+        #[derive(PartialEq, Debug)]
+        struct Point {
+            x: i32,
+            y: i32,
+        }
+
+        let mut vec = StackVec::new();
+        vec.push(Point { x: 1, y: 2 });
+        vec.push(Point { x: 3, y: 4 });
+        vec.push(Point { x: 5, y: 6 });
+
+        assert_eq!(vec.search(&Point { x: 3, y: 4 }), Some(1));
+        assert_eq!(vec.search(&Point { x: 0, y: 0 }), None);
+    }
+
+    #[test]
+    fn test_search_after_remove() {
+        let mut vec = StackVec::new();
+        vec.push(10u32);
+        vec.push(20);
+        vec.push(30);
+
+        // Initially find element at index 2
+        assert_eq!(vec.search(&30), Some(2));
+
+        // Remove middle element
+        vec.remove(1);
+
+        // Element should now be at index 1
+        assert_eq!(vec.search(&30), Some(1));
+        assert_eq!(vec.search(&20), None); // Should no longer exist
+    }
+
+    #[test]
+    fn test_remove_search_integration() {
+        let mut vec = StackVec::new();
+        vec.push(100u32);
+        vec.push(200);
+        vec.push(300);
+        vec.push(400);
+        vec.push(500);
+
+        // Find and remove element
+        if let Some(index) = vec.search(&300) {
+            let removed = vec.remove(index);
+            assert_eq!(removed, 300);
+        }
+
+        assert_eq!(vec.len(), 4);
+        assert_eq!(vec.as_slice(), &[100, 200, 400, 500]);
+        assert_eq!(vec.search(&300), None);
+
+        // Verify other elements are still findable at correct indices
+        assert_eq!(vec.search(&100), Some(0));
+        assert_eq!(vec.search(&200), Some(1));
+        assert_eq!(vec.search(&400), Some(2));
+        assert_eq!(vec.search(&500), Some(3));
+    }
+    #[test]
+    fn test_drain_all_basic() {
+        let mut vec = StackVec::new();
+        vec.push(1u32);
+        vec.push(2);
+        vec.push(3);
+
+        let iter = vec.drain_all();
+
+        // Collect all elements from iterator
+        let collected: Vec<u32> = iter.collect();
+        assert_eq!(collected, vec![1, 2, 3]);
+
+        assert_eq!(vec.len(), 0); // Vector should be empty after drain
+    }
+
+    #[test]
+    fn test_drain_all_empty() {
+        let mut vec: StackVec<u32> = StackVec::new();
+        let mut iter = vec.drain_all();
+        assert_eq!(iter.next(), None);
+        drop(iter);
+        assert_eq!(vec.len(), 0);
+    }
+
+    #[test]
+    fn test_drain_all_ownership() {
+        let counter = Arc::new(AtomicUsize::new(0));
+
+        let mut vec = StackVec::new();
+        vec.push(DropTracker::new(1, counter.clone()));
+        vec.push(DropTracker::new(2, counter.clone()));
+        vec.push(DropTracker::new(3, counter.clone()));
+
+        assert_eq!(counter.load(Ordering::Relaxed), 3);
+
+        {
+            let mut iter = vec.drain_all();
+
+            assert_eq!(counter.load(Ordering::Relaxed), 3); // Elements still alive in iterator
+
+            // Consume first element
+            let first = iter.next().unwrap();
+            assert_eq!(first.id, 1);
+            drop(first);
+            assert_eq!(counter.load(Ordering::Relaxed), 2);
+
+            drop(iter);
+            assert_eq!(vec.len(), 0); // Vector is empty after drain
+            // Iterator drops remaining elements when it goes out of scope
+        }
+
+        assert_eq!(counter.load(Ordering::Relaxed), 0);
+    }
+
+    #[test]
+    fn test_drain_all_partial_consumption() {
+        let counter = Arc::new(AtomicUsize::new(0));
+
+        let mut vec = StackVec::new();
+        for i in 0..4 {
+            vec.push(DropTracker::new(i, counter.clone()));
+        }
+        assert_eq!(counter.load(Ordering::Relaxed), 4);
+
+        {
+            let mut iter = vec.drain_all();
+
+            // Only consume some elements
+            let _ = iter.next(); // consume first
+            let _ = iter.next(); // consume second
+            drop(iter);
+            assert_eq!(vec.len(), 0);
+            // Drop iterator with remaining elements
+        }
+
+        // All elements should be dropped
+        assert_eq!(counter.load(Ordering::Relaxed), 0);
+    }
+
+    #[test]
+    fn test_drain_all_size_hint() {
+        let mut vec = StackVec::new();
+        vec.push(1u32);
+        vec.push(2);
+        vec.push(3);
+
+        let iter = vec.drain_all();
+        assert_eq!(iter.size_hint(), (3, Some(3)));
+        assert_eq!(iter.len(), 3); // ExactSizeIterator
+    }
+
+    #[test]
+    fn test_drain_all_iterator_properties() {
+        let mut vec = StackVec::new();
+        for i in 1..=5 {
+            vec.push(i);
+        }
+
+        let mut iter = vec.drain_all();
+
+        // Test that iterator returns elements in order
+        assert_eq!(iter.next(), Some(1));
+        assert_eq!(iter.next(), Some(2));
+        assert_eq!(iter.size_hint(), (3, Some(3)));
+
+        let remaining: Vec<i32> = iter.collect();
+        assert_eq!(remaining, vec![3, 4, 5]);
+    }
+
+    #[test]
+    fn test_drain_all_single_element() {
+        let mut vec = StackVec::new();
+        vec.push(42u32);
+
+        let mut iter = vec.drain_all();
+
+        assert_eq!(iter.next(), Some(42));
+        assert_eq!(iter.next(), None);
+        drop(iter);
+        assert_eq!(vec.len(), 0);
+    }
+
+    #[test]
+    fn test_drain_all_after_operations() {
+        let mut vec = StackVec::new();
+        vec.push(1u32);
+        vec.push(2);
+        vec.push(3);
+
+        // Remove an element first
+        vec.remove(1); // Remove element 2
+        assert_eq!(vec.as_slice(), &[1, 3]);
+
+        // Drain remaining elements
+        let drained: Vec<u32> = vec.drain_all().collect();
+        assert_eq!(drained, vec![1, 3]);
+        assert_eq!(vec.len(), 0);
+    }
     #[test]
     #[should_panic(expected = "ZSTs are not supported")]
     fn test_zst_panic() {
