@@ -102,7 +102,7 @@ impl<'s, D: Dialect> OpRef<'s, D> {
     }
 
     /// Returns the argument value IDs as a slice.
-    pub fn get_args_valid(&self) -> &[ValId] {
+    pub fn get_arg_valids(&self) -> &[ValId] {
         self.args
     }
 
@@ -112,7 +112,7 @@ impl<'s, D: Dialect> OpRef<'s, D> {
     }
 
     /// Returns the return value IDs as a slice.
-    pub fn get_returns_valid(&self) -> &[ValId] {
+    pub fn get_return_valids(&self) -> &[ValId] {
         self.returns
     }
 

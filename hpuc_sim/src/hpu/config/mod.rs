@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use toml;
 
 use crate::{Cycle, MHz};
@@ -122,6 +122,7 @@ impl PhysicalConfig {
     }
 }
 
+#[derive(Clone, Debug, Serialize, PartialEq)]
 pub struct HpuConfig {
     pub freq: MHz,
     pub isc_depth: usize,
@@ -134,7 +135,8 @@ pub struct HpuConfig {
     pub alu_write_latency: usize,
     pub pbs_fifo_capacity: usize,
     pub pbs_memory_capacity: usize,
-    pub pbs_batch_size: usize,
+    pub pbs_min_batch_size: usize,
+    pub pbs_max_batch_size: usize,
     pub pbs_policy: Policy,
     pub pbs_load_unload_latency: usize,
     pub pbs_processing_latency_a: usize,
@@ -172,7 +174,8 @@ impl From<PhysicalConfig> for HpuConfig {
             alu_write_latency: blwe_coefs + 1,
             pbs_fifo_capacity: phy.fifo_size,
             pbs_memory_capacity: phy.ntt_params.total_pbs_nb,
-            pbs_batch_size: phy.ntt_params.batch_pbs_nb,
+            pbs_min_batch_size: phy.ntt_params.min_pbs_nb,
+            pbs_max_batch_size: phy.ntt_params.batch_pbs_nb,
             pbs_policy: Policy::Timeout(Cycle(phy.pbs_params.timeout)),
             pbs_load_unload_latency: kspbs_cnst_cost,
             pbs_processing_latency_a: kspbs_pbs_cost,

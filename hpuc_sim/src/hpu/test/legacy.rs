@@ -352,7 +352,7 @@ macro_rules! stream {
                     .enumerate()
                     .map(|(id, op)| crate::hpu::DOp {
                         raw: op.into(),
-                        id: DOpId(id as u16),
+                        id: DOpId(id),
                     }),
                 Cycle(lat),
             )

@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use super::*;
 use hpuc_utils::tracing::Microseconds;
@@ -7,7 +7,7 @@ use std::path::Path;
 static ACTIVATE_TRACING: bool = false;
 static S_IN_US: f64 = 1_000_000.;
 
-#[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Deserialize, Serialize)]
 pub struct MHz(pub(crate) f64);
 
 impl MHz {
@@ -93,16 +93,14 @@ impl<S: Simulatable> Simulator<S> {
 
         while let Some(trigger) = self.dispatcher.pop_now() {
             cond_encountered |= condition(&trigger);
-            self.tracer.add_event(&trigger.event);
+            if ACTIVATE_TRACING {
+                self.tracer.add_event(&trigger.event);
+            }
             self.simulatable.handle(&mut self.dispatcher, trigger);
         }
 
         if ACTIVATE_TRACING {
             self.simulatable.report(&mut self.tracer);
-            // if self.now() > Cycle(150000) {
-            //     self.dump_trace("test_profile.json");
-            //     panic!();
-            // }
         }
 
         if cond_encountered {
@@ -121,6 +119,11 @@ impl<S: Simulatable> Simulator<S> {
     pub fn play_until_event(&mut self, event: S::Event) {
         let event_eq = |trig: &Trigger<S::Event>| -> bool { trig.event == event };
         while let SimulationState::MayContinue = self.step_cond(event_eq) {}
+    }
+
+    pub fn play_until(&mut self, f: impl Fn(&S::Event) -> bool) {
+        let event_cond = |trig: &Trigger<S::Event>| -> bool { f(&trig.event) };
+        while let SimulationState::MayContinue = self.step_cond(event_cond) {}
     }
 
     pub fn dump_trace<P: AsRef<Path>>(&self, path: P) {

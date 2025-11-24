@@ -2,6 +2,8 @@ use std::{fmt::Debug, ops::{Index, IndexMut}};
 
 use hpuc_utils::Store;
 
+use crate::val_ref::ValRef;
+
 use super::{Dialect, IR, ValId, State};
 
 /// A map that associates values with value IDs, preserving the active/inactive state structure from an IR.
@@ -50,6 +52,48 @@ impl<T> ValMap<T> {
                 .map(|s| match s {
                     State::Active(_) => State::Active(Some(v.clone())),
                     State::Inactive(_) => State::Inactive(None),
+                })
+                .collect(),
+            n_stored: ir.n_vals(),
+            n_inactive: ir.raw_n_vals() - ir.n_vals()
+        }
+    }
+
+    /// Creates a new `ValMap` from the given `ir` by applying `f` to each active value.
+    ///
+    /// This method allows selective population of the map, where some active values may
+    /// not receive values based on the logic in `f`.
+    pub fn new_partially_mapped<D: Dialect>(ir: &IR<D>, f: impl Fn(ValRef<D>) -> Option<T>) -> Self {
+        ValMap {
+            store: ir
+                .raw_vals_iter()
+                .map(|val| {
+                    if val.is_active() {
+                        State::Active(f(val))
+                    } else {
+                        State::Inactive(None)
+                    }
+                })
+                .collect(),
+            n_stored: ir.n_vals(),
+            n_inactive: ir.raw_n_vals() - ir.n_vals()
+        }
+    }
+
+    /// Creates a new `ValMap` from the given `ir` by applying `f` to each active value.
+    ///
+    /// Unlike `new_partially_mapped`, this method guarantees that all active values will
+    /// have values in the resulting map, as `f` must return a `T` value rather than an `Option<T>`.
+    pub fn new_totally_mapped<D: Dialect>(ir: &IR<D>, f: impl Fn(ValRef<D>) -> T) -> Self {
+        ValMap {
+            store: ir
+                .raw_vals_iter()
+                .map(|val| {
+                    if val.is_active() {
+                        State::Active(Some(f(val)))
+                    } else {
+                        State::Inactive(None)
+                    }
                 })
                 .collect(),
             n_stored: ir.n_vals(),

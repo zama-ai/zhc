@@ -46,6 +46,12 @@ macro_rules! impl_index {
                 $name(val as $raw)
             }
         }
+
+        impl From<$name> for usize {
+            fn from(value: $name) -> Self {
+                <$name as StoreIndex>::as_usize(&value)
+            }
+        }
     };
 }
 

@@ -5,6 +5,12 @@ pub struct Retirement {
     dops: Vec<DOp>,
 }
 
+impl Retirement {
+    pub fn last_retired(&self) -> Option<&DOp> {
+        self.dops.last()
+    }
+}
+
 impl Simulatable for Retirement {
     type Event = Events;
 

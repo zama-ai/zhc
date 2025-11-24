@@ -1,7 +1,9 @@
 use hpuc_utils::svec;
 use hpuc_utils::{SmallVec, Store, StoreIndex};
 
+use crate::scheduling::forward::Schedule;
 use crate::val_ref::ValRef;
+use crate::ValMap;
 use std::{
     cmp::max,
     fmt::{Debug, Display},
@@ -477,20 +479,40 @@ impl<D: Dialect> IR<D> {
         output
     }
 
-    pub fn new_empty_op_map<V>(&self) -> OpMap<V> {
+    pub fn empty_opmap<V>(&self) -> OpMap<V> {
         OpMap::new_empty(self)
     }
 
-    pub fn new_filled_op_map<V: Clone>(&self, v: V) -> OpMap<V> {
+    pub fn filled_opmap<V: Clone>(&self, v: V) -> OpMap<V> {
         OpMap::new_filled(self, v)
     }
 
-    pub fn new_empty_val_map<V>(&self) -> super::val_map::ValMap<V> {
-        super::val_map::ValMap::new_empty(self)
+    pub fn partially_mapped_opmap<V>(&self, f: impl Fn(OpRef<D>) -> Option<V>) -> OpMap<V> {
+        OpMap::new_partially_mapped(self, f)
     }
 
-    pub fn new_filled_val_map<V: Clone>(&self, v: V) -> super::val_map::ValMap<V> {
-        super::val_map::ValMap::new_filled(self, v)
+    pub fn totally_mapped_opmap<V>(&self, f: impl Fn(OpRef<D>) -> V) -> OpMap<V> {
+        OpMap::new_totally_mapped(self, f)
+    }
+
+    pub fn empty_valmap<V>(&self) -> ValMap<V> {
+        ValMap::new_empty(self)
+    }
+
+    pub fn filled_valmap<V: Clone>(&self, v: V) -> ValMap<V> {
+        ValMap::new_filled(self, v)
+    }
+
+    pub fn partially_mapped_valmap<V>(&self, f: impl Fn(ValRef<D>) -> Option<V>) -> ValMap<V> {
+        ValMap::new_partially_mapped(self, f)
+    }
+
+    pub fn totally_mapped_valmap<V>(&self, f: impl Fn(ValRef<D>) -> V) -> ValMap<V> {
+        ValMap::new_totally_mapped(self, f)
+    }
+
+    pub fn get_topological_order_schedule(&self) -> Schedule {
+        Schedule(self.topological_ops_iter().map(|a| a.get_id()).collect())
     }
 }
 

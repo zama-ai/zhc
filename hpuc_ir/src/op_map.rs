@@ -3,6 +3,8 @@ use std::fmt::Debug;
 
 use hpuc_utils::Store;
 
+use crate::OpRef;
+
 use super::{Dialect, IR, OpId, State};
 
 /// A map that associates values with operation IDs, preserving the active/inactive state structure from an IR.
@@ -51,6 +53,48 @@ impl<T> OpMap<T> {
                 .map(|s| match s {
                     State::Active(_) => State::Active(Some(v.clone())),
                     State::Inactive(_) => State::Inactive(None),
+                })
+                .collect(),
+            n_stored: ir.n_ops(),
+            n_inactive: ir.raw_n_ops() - ir.n_ops()
+        }
+    }
+
+    /// Creates a new `OpMap` from the given `ir` by applying `f` to each active operation.
+    ///
+    /// This method allows selective population of the map, where some active operations may
+    /// not receive values based on the logic in `f`.
+    pub fn new_partially_mapped<D: Dialect>(ir: &IR<D>, f: impl Fn(OpRef<D>) -> Option<T>) -> Self {
+        OpMap {
+            store: ir
+                .raw_ops_iter()
+                .map(|op| {
+                    if op.is_active() {
+                        State::Active(f(op))
+                    } else {
+                        State::Inactive(None)
+                    }
+                })
+                .collect(),
+            n_stored: ir.n_ops(),
+            n_inactive: ir.raw_n_ops() - ir.n_ops()
+        }
+    }
+
+    /// Creates a new `OpMap` from the given `ir` by applying `f` to each active operation.
+    ///
+    /// Unlike `new_partially_mapped`, this method guarantees that all active operations will
+    /// have values in the resulting map, as `f` must return a `T` value rather than an `Option<T>`.
+    pub fn new_totally_mapped<D: Dialect>(ir: &IR<D>, f: impl Fn(OpRef<D>) -> T) -> Self {
+        OpMap {
+            store: ir
+                .raw_ops_iter()
+                .map(|op| {
+                    if op.is_active() {
+                        State::Active(Some(f(op)))
+                    } else {
+                        State::Inactive(None)
+                    }
                 })
                 .collect(),
             n_stored: ir.n_ops(),

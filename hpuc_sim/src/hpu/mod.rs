@@ -33,6 +33,7 @@ pub struct Hpu {
     pub pe_alu: PeAlu,
     pub pe_ctl: PeCtl,
     pub retirement: Retirement,
+    pub config: HpuConfig
 }
 
 impl Simulatable for Hpu {
@@ -83,7 +84,7 @@ impl Hpu {
             pe_pbs: PePbs::new(
                 config.pbs_fifo_capacity,
                 config.pbs_memory_capacity,
-                config.pbs_batch_size as BatchSize,
+                config.pbs_max_batch_size as BatchSize,
                 config.pbs_policy,
                 ConstantLatency::new(config.pbs_load_unload_latency),
                 FlatLinLatency::new(
@@ -94,6 +95,7 @@ impl Hpu {
             ),
             pe_ctl: PeCtl,
             retirement: Retirement::default(),
+            config
         }
     }
 }

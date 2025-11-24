@@ -1,16 +1,33 @@
 use std::fmt::Display;
+use serde::Serialize;
 
 pub const MASK_NONE: usize = usize::MAX;
 pub const MASK_PBS2: usize = usize::MAX << 1;
 pub const MASK_PBS4: usize = usize::MAX << 2;
 pub const MASK_PBS8: usize = usize::MAX << 3;
 
-use serde::Serialize;
 #[derive(Debug, Clone, Eq)]
 pub enum Argument {
     Immediate { val: usize },
     Memory { addr: usize },
     Register { mask: usize, addr: usize },
+}
+
+impl Argument {
+    pub const IMM_ZERO: Self = Argument::Immediate { val: 0 };
+    pub const MEM_ZERO: Self = Argument::Memory { addr: 0 };
+    pub fn reg(addr: impl Into<usize>) -> Self {
+        Argument::Register { mask: MASK_NONE, addr: addr.into() }
+    }
+    pub fn reg2(addr: impl Into<usize>) -> Self {
+        Argument::Register { mask: MASK_PBS2, addr: addr.into() }
+    }
+    pub fn reg4(addr: impl Into<usize>) -> Self {
+        Argument::Register { mask: MASK_PBS4, addr: addr.into() }
+    }
+    pub fn reg8(addr: impl Into<usize>) -> Self {
+        Argument::Register { mask: MASK_PBS8, addr: addr.into() }
+    }
 }
 
 impl PartialEq for Argument {
@@ -309,7 +326,7 @@ impl RawDOp {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
-pub struct DOpId(pub u16);
+pub struct DOpId(pub usize);
 
 impl Display for DOpId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

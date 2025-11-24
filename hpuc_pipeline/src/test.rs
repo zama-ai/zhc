@@ -1,10 +1,8 @@
 use std::path::Path;
 
 use hpuc_frontend::{BuilderContext, create_rhai_engine};
-use hpuc_ir::{IR, translation::Translator};
+use hpuc_ir::IR;
 use hpuc_langs::ioplang::Ioplang;
-
-use crate::translation::IoplangToHpulang;
 
 fn get_ir(path: &Path, integer_w: i64, msg_w: i64, carry_w: i64) -> IR<Ioplang> {
     let context = BuilderContext {
@@ -363,79 +361,5 @@ fn test_cmp_ir() {
         %68 : Ciphertext = store_ct_block(%67, %28, %29);
         output<0, Ciphertext>(%68);
     ",
-    );
-}
-
-#[test]
-fn test_add_translate() {
-    let iop_ir = get_add_ir(16, 2, 2);
-    let hpu_ir = IoplangToHpulang.translate(&iop_ir);
-    hpu_ir.check_ir(
-        "
-        %0 : CtRegister = src_ld<0.0_tsrc>();
-        %1 : CtRegister = src_ld<0.1_tsrc>();
-        %2 : CtRegister = src_ld<0.2_tsrc>();
-        %3 : CtRegister = src_ld<0.3_tsrc>();
-        %4 : CtRegister = src_ld<0.4_tsrc>();
-        %5 : CtRegister = src_ld<0.5_tsrc>();
-        %6 : CtRegister = src_ld<0.6_tsrc>();
-        %7 : CtRegister = src_ld<0.7_tsrc>();
-        %8 : CtRegister = src_ld<1.0_tsrc>();
-        %9 : CtRegister = src_ld<1.1_tsrc>();
-        %10 : CtRegister = src_ld<1.2_tsrc>();
-        %11 : CtRegister = src_ld<1.3_tsrc>();
-        %12 : CtRegister = src_ld<1.4_tsrc>();
-        %13 : CtRegister = src_ld<1.5_tsrc>();
-        %14 : CtRegister = src_ld<1.6_tsrc>();
-        %15 : CtRegister = src_ld<1.7_tsrc>();
-        %16 : CtRegister = add_ct(%0, %8);
-        %17 : CtRegister = add_ct(%1, %9);
-        %18 : CtRegister = add_ct(%2, %10);
-        %19 : CtRegister = add_ct(%3, %11);
-        %20 : CtRegister = add_ct(%4, %12);
-        %21 : CtRegister = add_ct(%5, %13);
-        %22 : CtRegister = add_ct(%6, %14);
-        %23 : CtRegister = add_ct(%7, %15);
-        %24 : CtRegister, %25 : CtRegister = pbs_2<Lut@0>(%16);
-        %26 : CtRegister = pbs<Lut@0>(%17);
-        %27 : CtRegister = pbs<Lut@0>(%18);
-        %28 : CtRegister = pbs<Lut@0>(%19);
-        %29 : CtRegister = pbs<Lut@0>(%20);
-        %30 : CtRegister = pbs<Lut@0>(%21);
-        %31 : CtRegister = pbs<Lut@0>(%22);
-        %32 : CtRegister = pbs<Lut@0>(%23);
-        %33 : CtRegister = add_ct(%26, %25);
-        %34 : CtRegister = add_ct(%30, %29);
-        %35 : CtRegister = add_ct(%17, %25);
-        dst_st<0.0_tdst>(%24);
-        %36 : CtRegister = add_ct(%27, %33);
-        %37 : CtRegister = add_ct(%31, %34);
-        %38 : CtRegister = pbs<Lut@0>(%33);
-        dst_st<0.1_tdst>(%35);
-        %39 : CtRegister = add_ct(%28, %36);
-        %40 : CtRegister = add_ct(%32, %37);
-        %41 : CtRegister = pbs<Lut@0>(%36);
-        %42 : CtRegister = add_ct(%18, %38);
-        %43 : CtRegister = pbs<Lut@0>(%39);
-        %44 : CtRegister = pbs<Lut@0>(%40);
-        %45 : CtRegister = add_ct(%19, %41);
-        dst_st<0.2_tdst>(%42);
-        %46 : CtRegister = add_cst<1_imm>(%44);
-        %47 : CtRegister = add_ct(%29, %43);
-        %48 : CtRegister = add_ct(%34, %43);
-        %49 : CtRegister = add_ct(%37, %43);
-        dst_st<0.3_tdst>(%45);
-        %50 : CtRegister = mac<0_imm>(%43, %46);
-        %51 : CtRegister = pbs<Lut@0>(%47);
-        %52 : CtRegister = pbs<Lut@0>(%48);
-        %53 : CtRegister = pbs<Lut@0>(%49);
-        %54 : CtRegister = pbs<Lut@0>(%50);
-        %55 : CtRegister = add_ct(%20, %51);
-        %56 : CtRegister = add_ct(%21, %52);
-        %57 : CtRegister = add_ct(%22, %53);
-        dst_st<0.4_tdst>(%55);
-        dst_st<0.5_tdst>(%56);
-        dst_st<0.6_tdst>(%57);
-        ",
     );
 }

@@ -23,7 +23,7 @@ impl Translator for IoplangToHpulang {
         // It is very simple, and as such pretty fast. Every operation is matched against its optype, and
         // translated to an equivalent operation in the Hpulang.
         let mut output = IR::empty();
-        let mut map = input.new_empty_val_map::<ValId>();
+        let mut map = input.empty_valmap::<ValId>();
 
         // Ioplang has a value semantics. This means that dst are defined by use, and as such, only known
         // at the end of the program when `output` ops are given. Hpulang has a register semantics, and
@@ -77,19 +77,19 @@ impl Translator for IoplangToHpulang {
                     let (_, valids) = output
                         .add_op(
                             HpuOp::AddCt,
-                            svec![map[op.get_args_valid()[0]], map[op.get_args_valid()[1]]],
+                            svec![map[op.get_arg_valids()[0]], map[op.get_arg_valids()[1]]],
                         )
                         .unwrap();
-                    map.insert(op.get_returns_valid()[0], valids[0]);
+                    map.insert(op.get_return_valids()[0], valids[0]);
                 }
                 IopOp::SubCt => {
                     let (_, valids) = output
                         .add_op(
                             HpuOp::SubCt,
-                            svec![map[op.get_args_valid()[0]], map[op.get_args_valid()[1]]],
+                            svec![map[op.get_arg_valids()[0]], map[op.get_arg_valids()[1]]],
                         )
                         .unwrap();
-                    map.insert(op.get_returns_valid()[0], valids[0]);
+                    map.insert(op.get_return_valids()[0], valids[0]);
                 }
                 IopOp::Mac => {
                     let IopOp::Constant {
@@ -109,15 +109,15 @@ impl Translator for IoplangToHpulang {
                             svec![map[op.get_arg_valids()[1]], map[op.get_arg_valids()[2]]],
                         )
                         .unwrap();
-                    map.insert(op.get_returns_valid()[0], valids[0]);
+                    map.insert(op.get_return_valids()[0], valids[0]);
                 }
                 IopOp::AddPt => {
-                    let (_, valids) = if map.contains_key(&op.get_args_valid()[1]) {
+                    let (_, valids) = if map.contains_key(&op.get_arg_valids()[1]) {
                         // The plaintext input is not constant.
                         output
                             .add_op(
                                 HpuOp::AddPt,
-                                svec![map[op.get_args_valid()[0]], map[op.get_args_valid()[1]]],
+                                svec![map[op.get_arg_valids()[0]], map[op.get_arg_valids()[1]]],
                             )
                             .unwrap()
                     } else {
@@ -138,19 +138,19 @@ impl Translator for IoplangToHpulang {
                                 HpuOp::AddCst {
                                     cst: Immediate(cst),
                                 },
-                                svec![map[op.get_args_valid()[0]]],
+                                svec![map[op.get_arg_valids()[0]]],
                             )
                             .unwrap()
                     };
-                    map.insert(op.get_returns_valid()[0], valids[0]);
+                    map.insert(op.get_return_valids()[0], valids[0]);
                 }
                 IopOp::SubPt => {
-                    let (_, valids) = if map.contains_key(&op.get_args_valid()[1]) {
+                    let (_, valids) = if map.contains_key(&op.get_arg_valids()[1]) {
                         // The plaintext input is not constant.
                         output
                             .add_op(
                                 HpuOp::SubPt,
-                                svec![map[op.get_args_valid()[0]], map[op.get_args_valid()[1]]],
+                                svec![map[op.get_arg_valids()[0]], map[op.get_arg_valids()[1]]],
                             )
                             .unwrap()
                     } else {
@@ -171,19 +171,19 @@ impl Translator for IoplangToHpulang {
                                 HpuOp::SubCst {
                                     cst: Immediate(cst),
                                 },
-                                svec![map[op.get_args_valid()[0]]],
+                                svec![map[op.get_arg_valids()[0]]],
                             )
                             .unwrap()
                     };
-                    map.insert(op.get_returns_valid()[0], valids[0]);
+                    map.insert(op.get_return_valids()[0], valids[0]);
                 }
                 IopOp::PtSub => {
-                    let (_, valids) = if map.contains_key(&op.get_args_valid()[0]) {
+                    let (_, valids) = if map.contains_key(&op.get_arg_valids()[0]) {
                         // The plaintext input is not constant.
                         output
                             .add_op(
                                 HpuOp::PtSub,
-                                svec![map[op.get_args_valid()[0]], map[op.get_args_valid()[1]]],
+                                svec![map[op.get_arg_valids()[0]], map[op.get_arg_valids()[1]]],
                             )
                             .unwrap()
                     } else {
@@ -204,19 +204,19 @@ impl Translator for IoplangToHpulang {
                                 HpuOp::CstSub {
                                     cst: Immediate(cst),
                                 },
-                                svec![map[op.get_args_valid()[1]]],
+                                svec![map[op.get_arg_valids()[1]]],
                             )
                             .unwrap()
                     };
-                    map.insert(op.get_returns_valid()[0], valids[0]);
+                    map.insert(op.get_return_valids()[0], valids[0]);
                 }
                 IopOp::MulPt => {
-                    let (_, valids) = if map.contains_key(&op.get_args_valid()[1]) {
+                    let (_, valids) = if map.contains_key(&op.get_arg_valids()[1]) {
                         // The plaintext input is not constant.
                         output
                             .add_op(
                                 HpuOp::MulPt,
-                                svec![map[op.get_args_valid()[0]], map[op.get_args_valid()[1]]],
+                                svec![map[op.get_arg_valids()[0]], map[op.get_arg_valids()[1]]],
                             )
                             .unwrap()
                     } else {
@@ -237,11 +237,11 @@ impl Translator for IoplangToHpulang {
                                 HpuOp::MulCst {
                                     cst: Immediate(cst),
                                 },
-                                svec![map[op.get_args_valid()[0]]],
+                                svec![map[op.get_arg_valids()[0]]],
                             )
                             .unwrap()
                     };
-                    map.insert(op.get_returns_valid()[0], valids[0]);
+                    map.insert(op.get_return_valids()[0], valids[0]);
                 }
                 IopOp::ExtractCtBlock => {
                     let src_pos = op
@@ -279,7 +279,7 @@ impl Translator for IoplangToHpulang {
                             svec![],
                         )
                         .unwrap();
-                    map.insert(op.get_returns_valid()[0], valids[0]);
+                    map.insert(op.get_return_valids()[0], valids[0]);
                 }
                 IopOp::ExtractPtBlock => {
                     let imm_pos = op
@@ -317,7 +317,7 @@ impl Translator for IoplangToHpulang {
                             svec![],
                         )
                         .unwrap();
-                    map.insert(op.get_returns_valid()[0], valids[0]);
+                    map.insert(op.get_return_valids()[0], valids[0]);
                 }
                 IopOp::StoreCtBlock => {
                     let dst_pos = op
@@ -351,7 +351,7 @@ impl Translator for IoplangToHpulang {
                             HpuOp::DstSt {
                                 to: TDstId { dst_pos, block_pos },
                             },
-                            svec![map[op.get_args_valid()[0]]],
+                            svec![map[op.get_arg_valids()[0]]],
                         )
                         .unwrap();
                 }
@@ -361,10 +361,10 @@ impl Translator for IoplangToHpulang {
                             HpuOp::Pbs {
                                 lut: LutMemoryAdress(0),
                             },
-                            svec![map[op.get_args_valid()[0]]],
+                            svec![map[op.get_arg_valids()[0]]],
                         )
                         .unwrap();
-                    map.insert(op.get_returns_valid()[0], valids[0]);
+                    map.insert(op.get_return_valids()[0], valids[0]);
                 }
                 IopOp::Pbs2 => {
                     let (_, valids) = output
@@ -372,11 +372,11 @@ impl Translator for IoplangToHpulang {
                             HpuOp::Pbs2 {
                                 lut: LutMemoryAdress(0),
                             },
-                            svec![map[op.get_args_valid()[0]]],
+                            svec![map[op.get_arg_valids()[0]]],
                         )
                         .unwrap();
-                    map.insert(op.get_returns_valid()[0], valids[0]);
-                    map.insert(op.get_returns_valid()[1], valids[1]);
+                    map.insert(op.get_return_valids()[0], valids[0]);
+                    map.insert(op.get_return_valids()[1], valids[1]);
                 }
                 IopOp::Pbs4 => {
                     let (_, valids) = output
@@ -384,13 +384,13 @@ impl Translator for IoplangToHpulang {
                             HpuOp::Pbs4 {
                                 lut: LutMemoryAdress(0),
                             },
-                            svec![map[op.get_args_valid()[0]]],
+                            svec![map[op.get_arg_valids()[0]]],
                         )
                         .unwrap();
-                    map.insert(op.get_returns_valid()[0], valids[0]);
-                    map.insert(op.get_returns_valid()[1], valids[1]);
-                    map.insert(op.get_returns_valid()[2], valids[2]);
-                    map.insert(op.get_returns_valid()[3], valids[3]);
+                    map.insert(op.get_return_valids()[0], valids[0]);
+                    map.insert(op.get_return_valids()[1], valids[1]);
+                    map.insert(op.get_return_valids()[2], valids[2]);
+                    map.insert(op.get_return_valids()[3], valids[3]);
                 }
                 IopOp::Pbs8 => {
                     let (_, valids) = output
@@ -398,17 +398,17 @@ impl Translator for IoplangToHpulang {
                             HpuOp::Pbs8 {
                                 lut: LutMemoryAdress(0),
                             },
-                            svec![map[op.get_args_valid()[0]]],
+                            svec![map[op.get_arg_valids()[0]]],
                         )
                         .unwrap();
-                    map.insert(op.get_returns_valid()[0], valids[0]);
-                    map.insert(op.get_returns_valid()[1], valids[1]);
-                    map.insert(op.get_returns_valid()[2], valids[2]);
-                    map.insert(op.get_returns_valid()[3], valids[3]);
-                    map.insert(op.get_returns_valid()[4], valids[4]);
-                    map.insert(op.get_returns_valid()[5], valids[5]);
-                    map.insert(op.get_returns_valid()[6], valids[6]);
-                    map.insert(op.get_returns_valid()[7], valids[7]);
+                    map.insert(op.get_return_valids()[0], valids[0]);
+                    map.insert(op.get_return_valids()[1], valids[1]);
+                    map.insert(op.get_return_valids()[2], valids[2]);
+                    map.insert(op.get_return_valids()[3], valids[3]);
+                    map.insert(op.get_return_valids()[4], valids[4]);
+                    map.insert(op.get_return_valids()[5], valids[5]);
+                    map.insert(op.get_return_valids()[6], valids[6]);
+                    map.insert(op.get_return_valids()[7], valids[7]);
                 }
             }
         }

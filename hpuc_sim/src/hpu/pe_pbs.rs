@@ -6,7 +6,7 @@ use crate::Cycle;
 
 use super::*;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 pub enum Policy {
     /// Flush occurs on full batches.
     Wait,
@@ -45,11 +45,11 @@ pub struct PePbsMemory {
     //              | loading | waiting | working | parking | unloading |
     //              |  area   |  area   |  area   |  area   |  area     |
     //                        ^         ^         ^         ^
-    //                  loading     working     parking     unloading
+    //                  waiting     working     parking     unloading
     //                 boundary    boundary     boundary    boundary
     //             <----------------------- id --------------------------
     memory: Fifo<DOp>,
-    loading_boundary: usize,
+    waiting_boundary: usize,
     working_boundary: usize,
     parking_boundary: usize,
     unloading_boundary: usize,
@@ -58,7 +58,7 @@ pub struct PePbsMemory {
 
 impl PePbsMemory {
     pub fn n_loading(&self) -> usize {
-        self.len() - self.loading_boundary
+        self.len() - self.waiting_boundary
     }
 
     pub fn has_loading(&self) -> bool {
@@ -66,7 +66,7 @@ impl PePbsMemory {
     }
 
     pub fn n_waiting(&self) -> usize {
-        self.loading_boundary - self.working_boundary
+        self.waiting_boundary - self.working_boundary
     }
 
     pub fn has_waiting(&self) -> bool {
@@ -101,7 +101,7 @@ impl PePbsMemory {
         assert!(max_batch_size <= capacity);
         PePbsMemory {
             memory: Fifo::with_capacity(capacity),
-            loading_boundary: 0,
+            waiting_boundary: 0,
             working_boundary: 0,
             parking_boundary: 0,
             unloading_boundary: 0,
@@ -117,7 +117,7 @@ impl PePbsMemory {
 
     pub fn land_load(&mut self) {
         assert!(self.has_loading());
-        self.loading_boundary += 1;
+        self.waiting_boundary += 1;
     }
 
     pub fn launch_work(&mut self, batch_size: BatchSize) {
@@ -140,7 +140,7 @@ impl PePbsMemory {
 
     pub fn land_unload(&mut self) -> DOp {
         assert!(self.has_unloading());
-        self.loading_boundary -= 1;
+        self.waiting_boundary -= 1;
         self.working_boundary -= 1;
         self.parking_boundary -= 1;
         self.unloading_boundary -= 1;
@@ -150,7 +150,7 @@ impl PePbsMemory {
     pub fn loadings(&self) -> PePbsMemoryView {
         PePbsMemoryView {
             memory: self,
-            range_bottom: self.loading_boundary,
+            range_bottom: self.waiting_boundary,
             range_top: self.len(),
         }
     }
@@ -159,7 +159,7 @@ impl PePbsMemory {
         PePbsMemoryView {
             memory: self,
             range_bottom: self.working_boundary,
-            range_top: self.loading_boundary,
+            range_top: self.waiting_boundary,
         }
     }
 
@@ -334,6 +334,18 @@ impl PePbs {
             active_timeouts: ActiveTimeouts(VecDeque::new()),
             max_batch_size,
         }
+    }
+
+    pub fn memory(&self) -> &PePbsMemory {
+        &self.memory
+    }
+
+    pub fn available(&self) -> bool {
+        self.memory.may_load()
+    }
+
+    pub fn busy(&self) -> bool {
+        !self.memory.may_load()
     }
 }
 
@@ -513,7 +525,7 @@ fn get_dop_number_outputs(dop: &DOp) -> usize {
 mod tests {
     use super::*;
 
-    fn create_mock_dop(id: u16, is_flush: bool) -> DOp {
+    fn create_mock_dop(id: usize, is_flush: bool) -> DOp {
         if is_flush {
             DOp {
                 raw: RawDOp::PBS_F {

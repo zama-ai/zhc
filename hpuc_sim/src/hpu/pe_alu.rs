@@ -36,6 +36,10 @@ impl PeAlu {
         self.current.is_some()
     }
 
+    pub fn available(&self) -> bool {
+        self.current.is_none()
+    }
+
     pub fn push_dop(&mut self, dop: DOp) {
         self.queue.push_back(dop);
     }
