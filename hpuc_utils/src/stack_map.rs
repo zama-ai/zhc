@@ -1,0 +1,192 @@
+use crate::StackVec;
+
+/// A map backed by a stack-allocated vector for small key-value collections.
+#[derive(Clone)]
+pub struct StackMap<K: Eq, V>(pub(super) StackVec<(K, V)>);
+
+impl<K: Eq, V> StackMap<K, V> {
+    /// Creates an empty map.
+    pub fn new() -> Self {
+        StackMap(StackVec::new())
+    }
+
+    /// Returns the maximum number of key-value pairs the map can hold.
+    pub fn capacity(&self) -> usize {
+        self.0.capacity()
+    }
+
+    /// Inserts a key-value pair into the map.
+    ///
+    /// If the key already exists, replaces its value and returns the old value.
+    /// Otherwise, inserts the new pair and returns `None`.
+    pub fn insert(&mut self, k: K, v: V) -> Option<V> {
+        match self.0.as_slice().iter().position(|(a, _)| *a == k) {
+            Some(pos) => {
+                let mut output = v;
+                std::mem::swap(&mut self.0[pos].1, &mut output);
+                Some(output)
+            }
+            None => {
+                self.0.push((k, v));
+                None
+            }
+        }
+    }
+
+    /// Returns a reference to the value corresponding to the key.
+    pub fn get(&self, k: &K) -> Option<&V> {
+        self.0
+            .as_slice()
+            .iter()
+            .find_map(|(a, v)| if a == k { Some(v) } else { None })
+    }
+
+    /// Returns a mutable reference to the value corresponding to the key.
+    pub fn get_mut(&mut self, k: &K) -> Option<&mut V> {
+        self.0
+            .as_mut_slice()
+            .iter_mut()
+            .find_map(|(a, v)| if a == k { Some(v) } else { None })
+    }
+
+    /// Removes a key-value pair from the map and returns the value.
+    ///
+    /// Returns `None` if the key was not present in the map.
+    pub fn remove(&mut self, k: &K) -> Option<V> {
+        match self.0.as_slice().iter().position(|(a, _)| a == k) {
+            Some(pos) => {
+                Some(self.0.remove(pos).1)
+            }
+            None => {
+                None
+            }
+        }
+    }
+
+    /// Returns `true` if the map contains the specified key.
+    pub fn contains_key(&self, k: &K) -> bool {
+        self.get(k).is_some()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new() {
+        let map: StackMap<i32, String> = StackMap::new();
+        assert!(!map.contains_key(&1));
+    }
+
+    #[test]
+    fn test_insert_and_get() {
+        let mut map = StackMap::new();
+
+        // Insert new key-value pair
+        assert_eq!(map.insert("key1", 42), None);
+        assert_eq!(map.get(&"key1"), Some(&42));
+
+        // Insert another key-value pair
+        assert_eq!(map.insert("key2", 24), None);
+        assert_eq!(map.get(&"key2"), Some(&24));
+
+        // Update existing key
+        assert_eq!(map.insert("key1", 100), Some(42));
+        assert_eq!(map.get(&"key1"), Some(&100));
+    }
+
+    #[test]
+    fn test_get_nonexistent() {
+        let map: StackMap<i32, String> = StackMap::new();
+        assert_eq!(map.get(&1), None);
+    }
+
+    #[test]
+    fn test_get_mut() {
+        let mut map = StackMap::new();
+        map.insert("key", 42);
+
+        // Modify value through mutable reference
+        if let Some(value) = map.get_mut(&"key") {
+            *value = 100;
+        }
+
+        assert_eq!(map.get(&"key"), Some(&100));
+
+        // Try to get mutable reference to nonexistent key
+        assert_eq!(map.get_mut(&"nonexistent"), None);
+    }
+
+    #[test]
+    fn test_remove() {
+        let mut map = StackMap::new();
+        map.insert("key1", 42);
+        map.insert("key2", 24);
+
+        // Remove existing key
+        assert_eq!(map.remove(&"key1"), Some(42));
+        assert_eq!(map.get(&"key1"), None);
+        assert_eq!(map.get(&"key2"), Some(&24));
+
+        // Remove nonexistent key
+        assert_eq!(map.remove(&"nonexistent"), None);
+
+        // Remove remaining key
+        assert_eq!(map.remove(&"key2"), Some(24));
+        assert_eq!(map.get(&"key2"), None);
+    }
+
+    #[test]
+    fn test_contains_key() {
+        let mut map = StackMap::new();
+
+        assert!(!map.contains_key(&"key"));
+
+        map.insert("key", 42);
+        assert!(map.contains_key(&"key"));
+
+        map.remove(&"key");
+        assert!(!map.contains_key(&"key"));
+    }
+
+    #[test]
+    fn test_map_clone() {
+        let mut map1 = StackMap::new();
+        map1.insert(1u8, 42);
+        map1.insert(2u8, 24);
+
+        let map2 = map1.clone();
+
+        assert_eq!(map2.get(&1u8), Some(&42));
+        assert_eq!(map2.get(&2u8), Some(&24));
+
+        // Ensure they are independent
+        map1.insert(3u8, 100);
+        assert_eq!(map1.get(&3u8), Some(&100));
+        assert_eq!(map2.get(&3u8), None);
+    }
+
+    #[test]
+    fn test_multiple_operations() {
+        let mut map = StackMap::new();
+
+        // Test sequence of operations
+        map.insert(1u8, 1u8);
+        map.insert(2, 2);
+        map.insert(3, 3);
+
+        assert!(map.contains_key(&1));
+        assert!(map.contains_key(&2));
+        assert!(map.contains_key(&3));
+
+        map.remove(&2);
+        assert!(!map.contains_key(&2));
+
+        map.insert(1, 11); // Update existing
+        assert_eq!(map.get(&1), Some(&11));
+
+        map.insert(4, 4);
+        assert_eq!(map.get(&4), Some(&4));
+    }
+}
