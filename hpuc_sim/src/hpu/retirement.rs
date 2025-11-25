@@ -11,8 +11,10 @@ impl Retirement {
     }
 }
 
-impl<D: Dispatch<Event = Events>> Simulatable<D> for Retirement {
-    fn handle(&mut self, _dispatcher: &mut D, trigger: Trigger<D::Event>) {
+impl Simulatable for Retirement {
+    type Event = Events;
+
+    fn handle(&mut self, _dispatcher: &mut impl Dispatch<Event = Events>, trigger: Trigger<Events>) {
         match trigger.event {
             Events::IscRetireDOp(dop) => {
                 self.dops.push(dop);

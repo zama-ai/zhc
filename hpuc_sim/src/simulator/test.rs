@@ -33,11 +33,13 @@ impl Counter {
     }
 }
 
-impl Simulatable<Dispatcher<CounterEvent>> for Counter {
+impl Simulatable for Counter {
+    type Event = CounterEvent;
+
     fn handle(
         &mut self,
-        dispatcher: &mut Dispatcher<CounterEvent>,
-        trigger: Trigger<CounterEvent>,
+        dispatcher: &mut impl Dispatch<Event = Self::Event>,
+        trigger: Trigger<Self::Event>,
     ) {
         match trigger.event {
             CounterEvent::Increment => {
@@ -87,11 +89,13 @@ impl PingPong {
     }
 }
 
-impl Simulatable<Dispatcher<PingPongEvent>> for PingPong {
+impl Simulatable for PingPong {
+    type Event = PingPongEvent;
+
     fn handle(
         &mut self,
-        dispatcher: &mut Dispatcher<PingPongEvent>,
-        trigger: Trigger<PingPongEvent>,
+        dispatcher: &mut impl Dispatch<Event = Self::Event>,
+        trigger: Trigger<Self::Event>,
     ) {
         match trigger.event {
             PingPongEvent::Ping => {
@@ -145,8 +149,10 @@ impl Timer {
     }
 }
 
-impl Simulatable<Dispatcher<TimerEvent>> for Timer {
-    fn handle(&mut self, dispatcher: &mut Dispatcher<TimerEvent>, trigger: Trigger<TimerEvent>) {
+impl Simulatable for Timer {
+    type Event = TimerEvent;
+
+    fn handle(&mut self, dispatcher: &mut impl Dispatch<Event = Self::Event>, trigger: Trigger<Self::Event>) {
         match trigger.event {
             TimerEvent::Tick => {
                 self.ticks += 1;
@@ -202,11 +208,13 @@ impl Pipeline {
     }
 }
 
-impl Simulatable<Dispatcher<PipelineEvent>> for Pipeline {
+impl Simulatable for Pipeline {
+    type Event = PipelineEvent;
+
     fn handle(
         &mut self,
-        dispatcher: &mut Dispatcher<PipelineEvent>,
-        trigger: Trigger<PipelineEvent>,
+        dispatcher: &mut impl Dispatch<Event = Self::Event>,
+        trigger: Trigger<Self::Event>,
     ) {
         match trigger.event {
             PipelineEvent::StartItem => {
@@ -239,13 +247,13 @@ impl Simulatable<Dispatcher<PipelineEvent>> for Pipeline {
 
 #[test]
 fn test_empty_simulation() {
-    let mut sim: Simulator<Dispatcher<CounterEvent>, Counter> = Simulator::new(FREQ);
+    let mut sim: Simulator<Counter> = Simulator::new(FREQ);
     matches!(sim.step(), SimulationState::SimulationOver);
 }
 
 #[test]
 fn test_simple_counter() {
-    let mut sim: Simulator<Dispatcher<CounterEvent>, Counter> = Simulator::new(FREQ);
+    let mut sim: Simulator<Counter> = Simulator::new(FREQ);
     sim.simulatable = Counter::new(5);
 
     // Start the counter
@@ -260,7 +268,7 @@ fn test_simple_counter() {
 
 #[test]
 fn test_ping_pong() {
-    let mut sim: Simulator<Dispatcher<PingPongEvent>, PingPong> = Simulator::new(FREQ);
+    let mut sim: Simulator<PingPong> = Simulator::new(FREQ);
     sim.simulatable = PingPong::new(3);
 
     // Start with a ping
@@ -276,7 +284,7 @@ fn test_ping_pong() {
 
 #[test]
 fn test_timer() {
-    let mut sim: Simulator<Dispatcher<TimerEvent>, Timer> = Simulator::new(FREQ);
+    let mut sim: Simulator<Timer> = Simulator::new(FREQ);
     sim.simulatable = Timer::new(4, Cycle(10)); // 4 ticks, every 10 cycles
 
     // Start timer
@@ -290,7 +298,7 @@ fn test_timer() {
 
 #[test]
 fn test_pipeline() {
-    let mut sim: Simulator<Dispatcher<PipelineEvent>, Pipeline> = Simulator::new(FREQ);
+    let mut sim: Simulator<Pipeline> = Simulator::new(FREQ);
     sim.simulatable = Pipeline::new(2); // Process 2 items
 
     // Start pipeline
@@ -310,7 +318,7 @@ fn test_pipeline() {
 
 #[test]
 fn test_simultaneous_events() {
-    let mut sim: Simulator<Dispatcher<TimerEvent>, Timer> = Simulator::new(FREQ);
+    let mut sim: Simulator<Timer> = Simulator::new(FREQ);
     sim.simulatable = Timer::new(10, Cycle(5));
 
     // Submit multiple events at same time
@@ -324,7 +332,7 @@ fn test_simultaneous_events() {
 
 #[test]
 fn test_simulation_step_by_step() {
-    let mut sim: Simulator<Dispatcher<CounterEvent>, Counter> = Simulator::new(FREQ);
+    let mut sim: Simulator<Counter> = Simulator::new(FREQ);
     sim.simulatable = Counter::new(3);
 
     sim.dispatch_later(Cycle(2), CounterEvent::Increment);
@@ -374,11 +382,13 @@ fn test_power_up_scheduling() {
 
     impl Event for AutoStartEvent {}
 
-    impl Simulatable<Dispatcher<AutoStartEvent>> for AutoStart {
+    impl Simulatable for AutoStart {
+        type Event = AutoStartEvent;
+
         fn handle(
             &mut self,
-            dispatcher: &mut Dispatcher<AutoStartEvent>,
-            trigger: Trigger<AutoStartEvent>,
+            dispatcher: &mut impl Dispatch<Event = Self::Event>,
+            trigger: Trigger<Self::Event>,
         ) {
             match trigger.event {
                 AutoStartEvent::Boot => {
@@ -395,14 +405,14 @@ fn test_power_up_scheduling() {
             }
         }
 
-        fn power_up(&self, dispatcher: &mut Dispatcher<AutoStartEvent>) {
+        fn power_up(&self, dispatcher: &mut impl Dispatch<Event = Self::Event>) {
             // Schedule boot event 1 cycle after power up
             dispatcher.dispatch_later(Cycle(1), AutoStartEvent::Boot);
         }
     }
 
     // Default constructor should call power_up and schedule initial events
-    let mut sim: Simulator<Dispatcher<AutoStartEvent>, AutoStart> = Simulator::new(FREQ);
+    let mut sim: Simulator<AutoStart> = Simulator::new(FREQ);
 
     sim.play();
 
@@ -442,11 +452,13 @@ fn test_tuple_composition() {
         count: usize,
     }
 
-    impl Simulatable<Dispatcher<SharedEvent>> for CounterA {
+    impl Simulatable for CounterA {
+        type Event = SharedEvent;
+
         fn handle(
             &mut self,
-            dispatcher: &mut Dispatcher<SharedEvent>,
-            trigger: Trigger<SharedEvent>,
+            dispatcher: &mut impl Dispatch<Event = Self::Event>,
+            trigger: Trigger<Self::Event>,
         ) {
             match trigger.event {
                 SharedEvent::CountA => {
@@ -460,11 +472,13 @@ fn test_tuple_composition() {
         }
     }
 
-    impl Simulatable<Dispatcher<SharedEvent>> for CounterB {
+    impl Simulatable for CounterB {
+        type Event = SharedEvent;
+
         fn handle(
             &mut self,
-            dispatcher: &mut Dispatcher<SharedEvent>,
-            trigger: Trigger<SharedEvent>,
+            dispatcher: &mut impl Dispatch<Event = Self::Event>,
+            trigger: Trigger<Self::Event>,
         ) {
             match trigger.event {
                 SharedEvent::CountB => {
@@ -478,7 +492,7 @@ fn test_tuple_composition() {
         }
     }
 
-    let mut sim: Simulator<Dispatcher<SharedEvent>, (CounterA, CounterB)> = Simulator::new(FREQ);
+    let mut sim: Simulator<(CounterA, CounterB)> = Simulator::new(FREQ);
 
     // Start the system
     sim.dispatch_later(Cycle(1), SharedEvent::CountA);
@@ -520,11 +534,13 @@ fn test_tuple_power_up() {
         inits: usize,
     }
 
-    impl Simulatable<Dispatcher<StartEvent>> for EarlyStarter {
+    impl Simulatable for EarlyStarter {
+        type Event = StartEvent;
+
         fn handle(
             &mut self,
-            _dispatcher: &mut Dispatcher<StartEvent>,
-            trigger: Trigger<StartEvent>,
+            _dispatcher: &mut impl Dispatch<Event = Self::Event>,
+            trigger: Trigger<Self::Event>,
         ) {
             match trigger.event {
                 StartEvent::InitEarly => {
@@ -534,16 +550,18 @@ fn test_tuple_power_up() {
             }
         }
 
-        fn power_up(&self, dispatcher: &mut Dispatcher<StartEvent>) {
+        fn power_up(&self, dispatcher: &mut impl Dispatch<Event = Self::Event>) {
             dispatcher.dispatch_later(Cycle(2), StartEvent::InitEarly);
         }
     }
 
-    impl Simulatable<Dispatcher<StartEvent>> for LateStarter {
+    impl Simulatable for LateStarter {
+        type Event = StartEvent;
+
         fn handle(
             &mut self,
-            _dispatcher: &mut Dispatcher<StartEvent>,
-            trigger: Trigger<StartEvent>,
+            _dispatcher: &mut impl Dispatch<Event = Self::Event>,
+            trigger: Trigger<Self::Event>,
         ) {
             match trigger.event {
                 StartEvent::InitLate => {
@@ -553,14 +571,13 @@ fn test_tuple_power_up() {
             }
         }
 
-        fn power_up(&self, dispatcher: &mut Dispatcher<StartEvent>) {
+        fn power_up(&self, dispatcher: &mut impl Dispatch<Event = Self::Event>) {
             dispatcher.dispatch_later(Cycle(5), StartEvent::InitLate);
         }
     }
 
     // Both components should schedule power-up events
-    let mut sim: Simulator<Dispatcher<StartEvent>, (EarlyStarter, LateStarter)> =
-        Simulator::new(FREQ);
+    let mut sim: Simulator<(EarlyStarter, LateStarter)> = Simulator::new(FREQ);
 
     sim.play();
 
@@ -600,42 +617,47 @@ fn test_triple_tuple_composition() {
         count: usize,
     }
 
-    impl Simulatable<Dispatcher<TripleEvent>> for ComponentA {
+    impl Simulatable for ComponentA {
+        type Event = TripleEvent;
+
         fn handle(
             &mut self,
-            _dispatcher: &mut Dispatcher<TripleEvent>,
-            _trigger: Trigger<TripleEvent>,
+            _dispatcher: &mut impl Dispatch<Event = Self::Event>,
+            _trigger: Trigger<Self::Event>,
         ) {
             self.count += 1;
         }
     }
 
-    impl Simulatable<Dispatcher<TripleEvent>> for ComponentB {
+    impl Simulatable for ComponentB {
+        type Event = TripleEvent;
+
         fn handle(
             &mut self,
-            _dispatcher: &mut Dispatcher<TripleEvent>,
-            _trigger: Trigger<TripleEvent>,
+            _dispatcher: &mut impl Dispatch<Event = Self::Event>,
+            _trigger: Trigger<Self::Event>,
         ) {
             self.count += 2;
         }
     }
 
-    impl Simulatable<Dispatcher<TripleEvent>> for ComponentC {
+    impl Simulatable for ComponentC {
+        type Event = TripleEvent;
+
         fn handle(
             &mut self,
-            _dispatcher: &mut Dispatcher<TripleEvent>,
-            _trigger: Trigger<TripleEvent>,
+            _dispatcher: &mut impl Dispatch<Event = Self::Event>,
+            _trigger: Trigger<Self::Event>,
         ) {
             self.count += 3;
         }
-        fn report<'t>(&self, tracer: &mut Tracer<TripleEvent>) {
+        fn report(&self, tracer: &mut Tracer<Self::Event>) {
             tracer.add_simulatable(self);
             tracer.add_counter("ComponentC_count", self.count as f64);
         }
     }
 
-    let mut sim: Simulator<Dispatcher<TripleEvent>, (ComponentA, ComponentB, ComponentC)> =
-        Simulator::new(FREQ);
+    let mut sim: Simulator<(ComponentA, ComponentB, ComponentC)> = Simulator::new(FREQ);
 
     sim.dispatch_later(Cycle(1), TripleEvent::Ping);
     sim.dispatch_later(Cycle(10), TripleEvent::Ping);

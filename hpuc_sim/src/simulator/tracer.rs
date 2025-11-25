@@ -136,7 +136,7 @@ impl<E: Event> Tracer<E> {
         );
     }
 
-    pub fn add_simulatable<D: Dispatch, S: Simulatable<D>>(&mut self, simulatable: &S) {
+    pub fn add_simulatable<S: Simulatable>(&mut self, simulatable: &S) {
         let address = simulatable as *const S as usize;
         if !self.simulatable_trackers.contains_key(&address) {
             let tid = self.simulatable_trackers.len() + 1;

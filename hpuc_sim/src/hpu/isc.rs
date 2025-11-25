@@ -366,12 +366,14 @@ impl InstructionScheduler {
     }
 }
 
-impl<D: Dispatch<Event = Events>> Simulatable<D> for InstructionScheduler {
-    fn power_up(&self, dispatcher: &mut D) {
+impl Simulatable for InstructionScheduler {
+    type Event = Events;
+
+    fn power_up(&self, dispatcher: &mut impl Dispatch<Event = Events>) {
         dispatcher.dispatch_later(Cycle(1), Events::IscQuery);
     }
 
-    fn handle(&mut self, dispatcher: &mut D, trigger: Trigger<D::Event>) {
+    fn handle(&mut self, dispatcher: &mut impl Dispatch<Event = Events>, trigger: Trigger<Events>) {
         match trigger.event {
             Events::IscPushDOps(small_vec) => {
                 self.dop_target += small_vec.len();

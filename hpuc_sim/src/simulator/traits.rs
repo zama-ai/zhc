@@ -30,16 +30,18 @@ pub trait Dispatch {
 }
 
 /// Trait implemented by types that can be simulated.
-pub trait Simulatable<D: Dispatch>: Sized + Serialize {
-    fn handle(&mut self, dispatcher: &mut D, trigger: Trigger<D::Event>);
+pub trait Simulatable: Sized + Serialize {
+    type Event: Event;
 
-    fn power_up(&self, _: &mut D) {}
+    fn handle(&mut self, dispatcher: &mut impl Dispatch<Event = Self::Event>, trigger: Trigger<Self::Event>);
+
+    fn power_up(&self, _: &mut impl Dispatch<Event = Self::Event>) {}
 
     fn name(&self) -> String {
         type_name_of_val(self).into()
     }
 
-    fn report(&self, tracer: &mut Tracer<D::Event>) {
+    fn report(&self, tracer: &mut Tracer<Self::Event>) {
         tracer.add_simulatable(self);
     }
 }
@@ -47,25 +49,27 @@ pub trait Simulatable<D: Dispatch>: Sized + Serialize {
 macro_rules! impl_simulatable_for_tuple {
     ($($T:ident),+) => {
         #[allow(non_snake_case)]
-        impl<Dispatcher: Dispatch, $($T),+> Simulatable<Dispatcher> for ($($T,)+)
+        impl<E: Event, $($T),+> Simulatable for ($($T,)+)
         where
-            $($T: Simulatable<Dispatcher>,)+
+            $($T: Simulatable<Event = E>,)+
         {
-            fn handle(&mut self, dispatcher: &mut Dispatcher, trigger: Trigger<Dispatcher::Event>) {
+            type Event = E;
+
+            fn handle(&mut self, dispatcher: &mut impl Dispatch<Event = Self::Event>, trigger: Trigger<Self::Event>) {
                 let ($($T),+) = self ;
                 $(
                 $T.handle(dispatcher, trigger.clone());
                 )+
             }
 
-            fn power_up(&self, dispatcher: &mut Dispatcher) {
+            fn power_up(&self, dispatcher: &mut impl Dispatch<Event = Self::Event>) {
                 let ($($T),+) = self ;
                 $(
                 $T.power_up(dispatcher);
                 )+
             }
 
-            fn report(&self, tracer: &mut Tracer<Dispatcher::Event>) {
+            fn report(&self, tracer: &mut Tracer<Self::Event>) {
                 let ($($T),+) = self ;
                 $(
                 $T.report(tracer);

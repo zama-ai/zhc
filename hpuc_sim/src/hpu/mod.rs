@@ -35,8 +35,10 @@ pub struct Hpu {
     pub config: HpuConfig,
 }
 
-impl<D: Dispatch<Event = Events>> Simulatable<D> for Hpu {
-    fn handle(&mut self, dispatcher: &mut D, trigger: Trigger<D::Event>) {
+impl Simulatable for Hpu {
+    type Event = Events;
+
+    fn handle(&mut self, dispatcher: &mut impl Dispatch<Event=Events>, trigger: Trigger<Events>) {
         self.scheduler.handle(dispatcher, trigger.clone());
         self.pe_mem.handle(dispatcher, trigger.clone());
         self.pe_pbs.handle(dispatcher, trigger.clone());
@@ -45,7 +47,7 @@ impl<D: Dispatch<Event = Events>> Simulatable<D> for Hpu {
         self.retirement.handle(dispatcher, trigger.clone());
     }
 
-    fn power_up(&self, dispatcher: &mut D) {
+    fn power_up(&self, dispatcher: &mut impl Dispatch<Event=Events>) {
         self.scheduler.power_up(dispatcher);
         self.pe_mem.power_up(dispatcher);
         self.pe_pbs.power_up(dispatcher);
@@ -54,13 +56,13 @@ impl<D: Dispatch<Event = Events>> Simulatable<D> for Hpu {
         self.retirement.power_up(dispatcher);
     }
 
-    fn report<'t>(&self, tracer: &mut Tracer<D::Event>) {
-        tracer.add_simulatable::<D, _>(&self.scheduler);
-        tracer.add_simulatable::<D, _>(&self.pe_mem);
-        tracer.add_simulatable::<D, _>(&self.pe_pbs);
-        tracer.add_simulatable::<D, _>(&self.pe_alu);
-        tracer.add_simulatable::<D, _>(&self.pe_ctl);
-        tracer.add_simulatable::<D, _>(&self.retirement);
+    fn report<'t>(&self, tracer: &mut Tracer<Events>) {
+        tracer.add_simulatable(&self.scheduler);
+        tracer.add_simulatable(&self.pe_mem);
+        tracer.add_simulatable(&self.pe_pbs);
+        tracer.add_simulatable(&self.pe_alu);
+        tracer.add_simulatable(&self.pe_ctl);
+        tracer.add_simulatable(&self.retirement);
     }
 }
 

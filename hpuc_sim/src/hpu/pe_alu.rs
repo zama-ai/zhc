@@ -48,8 +48,10 @@ impl PeAlu {
     }
 }
 
-impl<D: Dispatch<Event = Events>> Simulatable<D> for PeAlu {
-    fn handle(&mut self, dispatcher: &mut D, trigger: Trigger<D::Event>) {
+impl Simulatable for PeAlu {
+    type Event = Events;
+
+    fn handle(&mut self, dispatcher: &mut impl Dispatch<Event = Events>, trigger: Trigger<Events>) {
         match trigger.event {
             Events::IscIssueDOp(dop) if dop.raw.affinity() == Affinity::Alu => {
                 assert!(

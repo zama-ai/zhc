@@ -26,30 +26,33 @@ pub enum SimulationState {
     CondEncountered,
 }
 
-pub struct Simulator<D: Dispatch, S: Simulatable<D>> {
+pub struct Simulator<S: Simulatable, D: Dispatch<Event = S::Event> = Dispatcher<<S as Simulatable>::Event>> {
     pub simulatable: S,
     quantum: Microseconds,
     tracer: Tracer<D::Event>,
     dispatcher: D,
 }
 
-impl<D: Dispatch, S: Simulatable<D>> Simulator<D, S> {
+impl<S: Simulatable> Simulator<S> {
+    pub fn from_simulatable(freq: MHz, simulatable: S) -> Self {
+        Self::from_simulatable_and_dispatcher(freq, simulatable, Dispatcher::default())
+    }
+}
+
+impl<S: Simulatable, D: Dispatch<Event = S::Event>> Simulator<S, D> {
     pub fn new(freq: MHz) -> Self
     where
         D: Default,
         S: Default,
     {
         let simulatable = S::default();
-        Self::from_simulatable(freq, simulatable)
+        let dispatcher = D::default();
+        Self::from_simulatable_and_dispatcher(freq, simulatable, dispatcher)
     }
 
-    pub fn from_simulatable(freq: MHz, simulatable: S) -> Self
-    where
-        D: Default,
-    {
+    pub fn from_simulatable_and_dispatcher(freq: MHz, simulatable: S, mut dispatcher: D) -> Self {
         let quantum = freq.period();
         let tracer = Tracer::new();
-        let mut dispatcher = D::default();
         simulatable.power_up(&mut dispatcher);
         Simulator {
             simulatable,
@@ -139,7 +142,7 @@ impl<D: Dispatch, S: Simulatable<D>> Simulator<D, S> {
     }
 }
 
-impl<D: Dispatch, S: Simulatable<D>> AsRef<S> for Simulator<D, S> {
+impl<S: Simulatable, D: Dispatch<Event = S::Event>> AsRef<S> for Simulator<S, D> {
     fn as_ref(&self) -> &S {
         &self.simulatable
     }
