@@ -3,7 +3,7 @@ use std::{cell::Cell, collections::VecDeque, fmt::Display, ops::Index};
 use hpuc_langs::doplang::Affinity;
 use hpuc_utils::Fifo;
 
-use crate::Cycle;
+use crate::{Cycle, Dispatch};
 
 use super::*;
 
@@ -350,10 +350,8 @@ impl PePbs {
     }
 }
 
-impl Simulatable for PePbs {
-    type Event = Events;
-
-    fn handle(&mut self, dispatcher: &mut Dispatcher<Self::Event>, trigger: Trigger<Self::Event>) {
+impl<D: Dispatch<Event = Events>> Simulatable<D> for PePbs {
+    fn handle(&mut self, dispatcher: &mut D, trigger: Trigger<D::Event>) {
         match trigger.event {
             Events::IscIssueDOp(dop) if dop.raw.affinity() == Affinity::Pbs => {
                 // -------------------------------------------------------------

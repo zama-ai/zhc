@@ -1,6 +1,8 @@
 use hpuc_langs::doplang::Affinity;
 use hpuc_utils::Fifo;
 
+use crate::Dispatch;
+
 use super::*;
 
 #[derive(Debug, Serialize)]
@@ -46,10 +48,8 @@ impl PeMem {
     }
 }
 
-impl Simulatable for PeMem {
-    type Event = Events;
-
-    fn handle(&mut self, dispatcher: &mut Dispatcher<Self::Event>, trigger: Trigger<Self::Event>) {
+impl<D: Dispatch<Event = Events>> Simulatable<D> for PeMem {
+    fn handle(&mut self, dispatcher: &mut D, trigger: Trigger<D::Event>) {
         match trigger.event {
             Events::IscIssueDOp(dop) if dop.raw.affinity() == Affinity::Mem => {
                 assert!(
