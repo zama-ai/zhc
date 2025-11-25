@@ -37,7 +37,7 @@ impl Display for TDstId {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct LutMemoryAdress(pub usize);
 
 impl Display for LutMemoryAdress {

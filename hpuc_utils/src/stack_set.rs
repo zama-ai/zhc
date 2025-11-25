@@ -59,6 +59,10 @@ impl<T: Eq> StackSet<T>{
     pub fn is_full(&self) -> bool {
         self.0.len() == self.0.capacity()
     }
+
+    pub fn iter(&self) -> std::slice::Iter<'_, T> {
+        self.0.iter()
+    }
 }
 
 impl<T: Eq> std::iter::FromIterator<T> for StackSet<T> {

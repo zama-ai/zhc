@@ -292,14 +292,19 @@ impl<D: Dialect> IR<D> {
         walker.map(|valid| self.get_val(valid))
     }
 
-    pub fn mutate_ops(&mut self, mut f: impl FnMut(&mut D::Operations)) {
-        self.raw_linear_opwalker().collect::<SmallVec<_>>().into_iter().for_each(|opid| {
+    pub fn mutate_ops(&mut self, f: impl FnMut(&mut D::Operations)) {
+        self.mutate_ops_with_walker(self.raw_linear_opwalker().collect::<SmallVec<_>>().into_iter(), f);
+    }
+
+    pub fn mutate_ops_with_walker(&mut self, walker: impl OpWalker, mut f: impl FnMut(&mut D::Operations)) {
+        walker.for_each(|opid| {
             let opmut = self.raw_get_op_mut(opid);
             if opmut.state.is_active() {
                 f(opmut.operation);
             };
         });
     }
+
 
     pub fn add_op(
         &mut self,

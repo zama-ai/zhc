@@ -12,6 +12,23 @@ pub enum SmallSet<T: Eq + Hash> {
     Stack(StackSet<T>),
 }
 
+/// Iterator over references to elements in a SmallSet.
+pub enum SmallSetIter<'a, T> {
+    Heap(std::collections::hash_set::Iter<'a, T>),
+    Stack(std::slice::Iter<'a, T>),
+}
+
+impl<'a, T> Iterator for SmallSetIter<'a, T> {
+    type Item = &'a T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            SmallSetIter::Heap(iter) => iter.next(),
+            SmallSetIter::Stack(iter) => iter.next(),
+        }
+    }
+}
+
 impl<T: Eq + Hash> SmallSet<T> {
     /// Creates a new empty set.
     pub fn new() -> Self {
@@ -67,7 +84,16 @@ impl<T: Eq + Hash> SmallSet<T> {
             SmallSet::Heap(fast_set) => fast_set.contains(value),
         }
     }
+
+    /// Returns an iterator over references to the elements.
+    pub fn iter(&self) -> SmallSetIter<'_, T> {
+        match self {
+            SmallSet::Heap(h) => SmallSetIter::Heap(h.iter()),
+            SmallSet::Stack(s) => SmallSetIter::Stack(s.iter()),
+        }
+    }
 }
+
 impl<T: Eq + Hash> std::iter::FromIterator<T> for SmallSet<T> {
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
         let mut set = SmallSet::new();

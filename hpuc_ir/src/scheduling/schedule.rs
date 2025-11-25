@@ -1,4 +1,4 @@
-use crate::{traversal::OpWalker, Dialect, OpId, IR};
+use crate::{traversal::OpWalker, OpId};
 
 use super::Selected;
 
