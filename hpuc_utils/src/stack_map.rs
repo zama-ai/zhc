@@ -1,4 +1,5 @@
 use crate::StackVec;
+use std::fmt::Debug;
 
 /// A map backed by a stack-allocated vector for small key-value collections.
 #[derive(Clone)]
@@ -67,7 +68,22 @@ impl<K: Eq, V> StackMap<K, V> {
     pub fn contains_key(&self, k: &K) -> bool {
         self.get(k).is_some()
     }
+
+    // Check if the map has reached its capacity.
+    pub fn is_full(&self) -> bool {
+        self.0.len() == self.0.capacity()
+    }
 }
+
+impl<K: Eq + Debug, V: Debug> Debug for StackMap<K, V> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0
+            .iter()
+            .fold(&mut f.debug_map(), |acc, (k, v)| acc.entry(k, v))
+            .finish()
+    }
+}
+
 
 #[cfg(test)]
 mod tests {
