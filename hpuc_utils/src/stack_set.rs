@@ -1,4 +1,4 @@
-use crate::StackVec;
+use crate::{StackVec, StackVecIntoIter};
 use std::fmt::Debug;
 
 /// A stack-allocated set that maintains unique elements.
@@ -60,8 +60,19 @@ impl<T: Eq> StackSet<T>{
         self.0.len() == self.0.capacity()
     }
 
+    /// Returns an iterator over the elements in the set.
     pub fn iter(&self) -> std::slice::Iter<'_, T> {
         self.0.iter()
+    }
+
+    /// Returns a mutable iterator over the elements in the set.
+    pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, T> {
+        self.0.iter_mut()
+    }
+
+    /// Consumes the set and returns an iterator over its elements.
+    pub fn into_iter(self) -> StackVecIntoIter<'static, T> {
+        self.0.into_iter()
     }
 }
 
