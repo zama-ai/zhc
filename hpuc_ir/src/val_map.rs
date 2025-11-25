@@ -63,10 +63,10 @@ impl<T> ValMap<T> {
     ///
     /// This method allows selective population of the map, where some active values may
     /// not receive values based on the logic in `f`.
-    pub fn new_partially_mapped<D: Dialect>(ir: &IR<D>, f: impl Fn(ValRef<D>) -> Option<T>) -> Self {
+    pub fn new_partially_mapped<D: Dialect>(ir: &IR<D>, mut f: impl FnMut(ValRef<D>) -> Option<T>) -> Self {
         ValMap {
             store: ir
-                .raw_vals_iter()
+                .raw_walk_vals_linear()
                 .map(|val| {
                     if val.is_active() {
                         State::Active(f(val))
@@ -84,10 +84,10 @@ impl<T> ValMap<T> {
     ///
     /// Unlike `new_partially_mapped`, this method guarantees that all active values will
     /// have values in the resulting map, as `f` must return a `T` value rather than an `Option<T>`.
-    pub fn new_totally_mapped<D: Dialect>(ir: &IR<D>, f: impl Fn(ValRef<D>) -> T) -> Self {
+    pub fn new_totally_mapped<D: Dialect>(ir: &IR<D>, mut f: impl FnMut(ValRef<D>) -> T) -> Self {
         ValMap {
             store: ir
-                .raw_vals_iter()
+                .raw_walk_vals_linear()
                 .map(|val| {
                     if val.is_active() {
                         State::Active(Some(f(val)))

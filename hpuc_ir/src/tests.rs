@@ -979,7 +979,7 @@ fn test_iteration_with_deleted_elements() -> Result<(), IRError<TestDialect>> {
 
     store.delete_op(op2_id); // Delete middle operation
 
-    let active_ops = store.ops_iter().map(|op| op.get_id()).covect();
+    let active_ops = store.walk_ops_linear().map(|op| op.get_id()).covect();
 
     // Should only see active operations
     assert_eq!(active_ops.len(), 2);
@@ -988,7 +988,7 @@ fn test_iteration_with_deleted_elements() -> Result<(), IRError<TestDialect>> {
     assert!(active_ops.contains(&op3_id));
 
     // Raw iterator should see all operations
-    let all_ops = store.raw_ops_iter().map(|op| op.get_id()).covect();
+    let all_ops = store.raw_walk_ops_linear().map(|op| op.get_id()).covect();
     assert_eq!(all_ops.len(), 3);
     Ok(())
 }
@@ -1105,10 +1105,10 @@ fn test_empty_ir_operations() -> Result<(), IRError<TestDialect>> {
 
     assert_eq!(store.n_ops(), 0);
     assert_eq!(store.n_vals(), 0);
-    assert_eq!(store.ops_iter().count(), 0);
+    assert_eq!(store.walk_ops_linear().count(), 0);
 
     // Check that topological order works on empty IR
-    let topo_ops: Vec<_> = store.raw_get_topological_order().collect();
+    let topo_ops: Vec<_> = store.raw_walk_ops_topo().collect();
     assert_eq!(topo_ops.len(), 0);
     Ok(())
 }
@@ -1128,8 +1128,7 @@ fn test_topological_order_with_deletions() -> Result<(), IRError<TestDialect>> {
 
     // Topological order should include deleted operations in raw iterator
     let all_topo: Vec<_> = store
-        .raw_topological_ops_iter()
-        .map(|op| op.get_id())
+        .raw_topological_opwalker()
         .collect();
     assert_eq!(all_topo.len(), 4);
     assert!(all_topo.contains(&op1_id));

@@ -64,10 +64,10 @@ impl<T> OpMap<T> {
     ///
     /// This method allows selective population of the map, where some active operations may
     /// not receive values based on the logic in `f`.
-    pub fn new_partially_mapped<D: Dialect>(ir: &IR<D>, f: impl Fn(OpRef<D>) -> Option<T>) -> Self {
+    pub fn new_partially_mapped<D: Dialect>(ir: &IR<D>, mut f: impl FnMut(OpRef<D>) -> Option<T>) -> Self {
         OpMap {
             store: ir
-                .raw_ops_iter()
+                .raw_walk_ops_linear()
                 .map(|op| {
                     if op.is_active() {
                         State::Active(f(op))
@@ -85,10 +85,10 @@ impl<T> OpMap<T> {
     ///
     /// Unlike `new_partially_mapped`, this method guarantees that all active operations will
     /// have values in the resulting map, as `f` must return a `T` value rather than an `Option<T>`.
-    pub fn new_totally_mapped<D: Dialect>(ir: &IR<D>, f: impl Fn(OpRef<D>) -> T) -> Self {
+    pub fn new_totally_mapped<D: Dialect>(ir: &IR<D>, mut f: impl FnMut(OpRef<D>) -> T) -> Self {
         OpMap {
             store: ir
-                .raw_ops_iter()
+                .raw_walk_ops_linear()
                 .map(|op| {
                     if op.is_active() {
                         State::Active(Some(f(op)))

@@ -31,7 +31,7 @@ impl Translator for IoplangToHpulang {
         // output position for each `let` ops upfront, to be able to correctly set the TDstId of the
         // `dst_st` ops
         let let_map: FastMap<OpId, usize> = input
-            .ops_iter()
+            .walk_ops_linear()
             .filter(|op| {
                 // Keep the ciphertext output ops.
                 matches!(
@@ -62,7 +62,7 @@ impl Translator for IoplangToHpulang {
             })
             .collect();
 
-        for op in input.topological_ops_iter() {
+        for op in input.walk_ops_topological() {
             match op.get_operation() {
                 IopOp::Input { .. } | IopOp::Let { .. } | IopOp::Constant { .. } => {
                     // Handled in consumers.

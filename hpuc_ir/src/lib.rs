@@ -2,6 +2,7 @@ pub mod cse;
 pub mod dce;
 pub mod scheduling;
 pub mod translation;
+pub mod traversal;
 
 mod dialect;
 mod id;

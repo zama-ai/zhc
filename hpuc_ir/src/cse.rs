@@ -66,7 +66,7 @@ impl CommonSubexpressionAnalysis {
         let mut expr_to_vn: FastMap<Expr<D>, ValueNumber> = FastMap::new();
 
         // We iterate following the topological order.
-        for op in ir.topological_ops_iter() {
+        for op in ir.walk_ops_topological() {
             // We retrieve the vns of the arguments of the operation. It is valid to do so since we
             // are iterating in topological order. For this reasons, the `valid_to_vn` map is
             // already populated for the arguments.

@@ -15,7 +15,7 @@ impl<D: Dialect> Printer<D> {
     pub fn from_ir(store: &IR<D>, show_types: bool, show_erased_ops: bool) -> Printer<D> {
         let mut names = HashMap::new();
         store
-            .raw_topological_ops_iter()
+            .raw_walk_ops_topo()
             .flat_map(|op| op.raw_get_returns_iter().collect::<Vec<_>>().into_iter())
             .fold(0, |name_id, val| {
                 names.insert(val.get_id(), Name(name_id));
@@ -96,7 +96,7 @@ impl<D: Dialect> Printer<D> {
     }
 
     pub fn format_ir(&self, f: &mut std::fmt::Formatter<'_>, store: &IR<D>) -> std::fmt::Result {
-        for opref in store.raw_topological_ops_iter() {
+        for opref in store.raw_walk_ops_topo() {
             self.format_opref(f, opref)?;
         }
         Ok(())

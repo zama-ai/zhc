@@ -1,8 +1,11 @@
 mod node;
 mod viewer;
+mod ext;
 pub use viewer::display;
 
 mod gui_impl;
+
+pub use ext::*;
 
 use eframe::egui::Color32;
 

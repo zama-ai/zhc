@@ -1,20 +1,10 @@
 //! Forward list scheduling implementation for instruction scheduling.
 //!
 //! This module provides a small framework for implementing forward list scheduling algorithms.
-use crate::{Dialect, OpId, OpMap, IR};
+use crate::{Dialect, OpMap, IR};
 
+use super::{Ready, Retired, Schedule, Selected};
 
-/// Represents an operation that has completed execution and can be retired.
-#[derive(Clone, Debug, Copy, Hash, PartialEq, Eq)]
-pub struct Retired(pub OpId);
-
-/// Represents an operation that is ready to be scheduled for execution.
-#[derive(Clone, Debug, Copy, Hash, PartialEq, Eq)]
-pub struct Ready(pub OpId);
-
-/// Represents an operation that has been selected for execution.
-#[derive(Clone, Debug, Copy, Hash, PartialEq, Eq)]
-pub struct Selected(pub OpId);
 
 /// Trait for implementing forward list scheduling algorithms.
 ///
@@ -40,8 +30,6 @@ pub trait ForwardSimulator {
     /// and can be retired.
     fn advance(&mut self) -> impl Iterator<Item = Retired>;
 }
-
-
 
 pub trait ForwardScheduler: ForwardSimulator {
     /// Performs forward list scheduling on the given IR using the specified scheduler.
@@ -82,74 +70,6 @@ impl<T: ForwardSimulator> ForwardScheduler for T {
     }
 }
 
-/// A sequence of operations in scheduled order.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Schedule(pub Vec<OpId>);
-
-impl Schedule {
-    /// Creates an empty schedule.
-    ///
-    /// Returns a new schedule with no operations, ready to be populated
-    /// by the scheduling algorithm.
-    pub fn empty() -> Self {
-        Self(Vec::new())
-    }
-
-    /// Gets the position of an operation in the schedule.
-    ///
-    /// Returns the zero-based index of the given `op` in the scheduled sequence.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the operation is not found in the schedule.
-    pub fn get_position(&self, op: &OpId) -> usize {
-        self.0.iter().position(|o| o == op).unwrap()
-    }
-
-    /// Adds selected operations to the schedule in order.
-    ///
-    /// Appends the operations from `selected` to the end of the current
-    /// schedule, maintaining the order they are yielded by the iterator.
-    fn issue_selected(&mut self, selected: impl Iterator<Item = Selected>) {
-        self.0.extend(selected.map(|a| a.0));
-    }
-
-    /// Returns the number of operations in the schedule.
-    pub fn len(&self) -> usize {
-        self.0.len()
-    }
-
-    /// Checks if the schedule respects topological ordering of dependencies.
-    ///
-    /// Verifies that all operations appear after their dependencies in the
-    /// scheduled sequence. Returns `true` if the schedule maintains correct
-    /// dependency ordering, `false` otherwise.
-    pub fn is_topological_order<D: Dialect>(&self, ir: &IR<D>) -> bool {
-        let mut setmap = ir.empty_opmap();
-        for opid in self.0.iter().copied() {
-            setmap.insert(opid, ());
-            let op = ir.get_op(opid);
-            for pred in op.get_predecessors_iter() {
-                if setmap.get(&pred.id).is_none() {
-                    return false;
-                }
-            }
-        }
-        true
-    }
-}
-/// Represents the execution state of an operation during scheduling.
-#[derive(Clone, Debug, PartialEq, Eq)]
-enum State {
-    /// Operation is waiting for dependencies, with count of remaining dependencies.
-    Locked(usize),
-    /// Operation is ready to be scheduled.
-    Ready,
-    /// Operation has been issued and is executing.
-    Active,
-    /// Operation has completed execution.
-    Retired,
-}
 
 /// Tracks the state of operations during the scheduling process.
 ///
@@ -168,7 +88,7 @@ impl<'i, D: Dialect> Tracker<'i, D> {
     /// - Operations with dependencies start in [`State::Locked`] with their dependency count
     fn from_ir(ir: &'i IR<D>) -> Self {
         let mut states = ir.filled_opmap(State::Retired);
-        ir.ops_iter()
+        ir.walk_ops_linear()
             .for_each(|op| match op.get_predecessors_iter().count() {
                 0 => {
                     states.insert(op.get_id(), State::Ready);
@@ -239,4 +159,18 @@ impl<'i, D: Dialect> Tracker<'i, D> {
             }
         }
     }
+}
+
+
+/// Represents the execution state of an operation during scheduling.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum State {
+    /// Operation is waiting for dependencies, with count of remaining dependencies.
+    Locked(usize),
+    /// Operation is ready to be scheduled.
+    Ready,
+    /// Operation has been issued and is executing.
+    Active,
+    /// Operation has completed execution.
+    Retired,
 }

@@ -1,14 +1,12 @@
 use hpuc_utils::svec;
-use hpuc_utils::{SmallVec, Store, StoreIndex};
+use hpuc_utils::{SmallVec, Store};
 
-use crate::scheduling::forward::Schedule;
+use crate::traversal::{OpWalk, OpWalker, ValWalk, ValWalker};
 use crate::val_ref::ValRef;
 use crate::ValMap;
 use std::{
     cmp::max,
     fmt::{Debug, Display},
-    mem::MaybeUninit,
-    sync::Arc,
 };
 
 use super::{
@@ -17,6 +15,14 @@ use super::{
 };
 
 pub(super) type Depth = u8;
+
+fn val_active<'a, D: Dialect>(val: &ValRef<'a, D>) -> bool {
+    val.is_active()
+}
+
+fn op_active<'a, D: Dialect>(op: &OpRef<'a, D>) -> bool {
+    op.is_active()
+}
 
 pub struct IR<D: Dialect> {
     pub(super) op_operations: Store<OpId, D::Operations>,
@@ -114,12 +120,41 @@ impl<D: Dialect> IR<D> {
         }
     }
 
-    pub(crate) fn raw_ops_iter(&self) -> impl Iterator<Item = OpRef<'_, D>> {
-        OpId::range(0, self.raw_n_ops()).map(|opid| self.raw_get_op(opid))
+    pub(crate) fn raw_linear_opwalker(&self) -> impl OpWalker {
+       OpId::range(0, self.raw_n_ops())
     }
 
-    pub(crate) fn raw_vals_iter(&self) -> impl Iterator<Item = ValRef<'_, D>> {
-        ValId::range(0, self.raw_n_vals()).map(|valid| self.raw_get_val(valid))
+    pub(crate) fn raw_topological_opwalker(&self) -> impl OpWalker {
+        let max_depth = *self.op_depth.iter().max().unwrap_or(&0);
+        let mut depth_buckets = vec![svec![]; (max_depth + 1) as usize];
+        for op in self.raw_walk_ops_linear() {
+            depth_buckets[op.get_depth() as usize].push(op.get_id());
+        }
+        depth_buckets.into_iter().flat_map(|b| b.into_iter())
+    }
+
+    pub(crate) fn raw_walk_ops(&self, walker: impl OpWalker) -> impl OpWalk<D> {
+        walker.map(|opid| self.raw_get_op(opid))
+    }
+
+    pub(crate) fn raw_walk_ops_linear(&self) -> impl OpWalk<D> {
+        self.raw_walk_ops(self.raw_linear_opwalker())
+    }
+
+    pub(crate) fn raw_walk_ops_topo(&self) -> impl OpWalk<D> {
+        self.raw_walk_ops(self.raw_topological_opwalker())
+    }
+
+    pub(crate) fn raw_linear_valwalker(&self) -> impl ValWalker {
+       ValId::range(0, self.raw_n_vals())
+    }
+
+    pub(crate) fn raw_walk_vals(&self, walker: impl ValWalker) -> impl ValWalk<D> {
+        walker.map(|valid| self.raw_get_val(valid))
+    }
+
+    pub(crate) fn raw_walk_vals_linear(&self) -> impl ValWalk<D> {
+        self.raw_walk_vals(self.raw_linear_valwalker())
     }
 
     pub(crate) fn raw_insert_op(&mut self, op: Op<D>) -> OpId {
@@ -158,19 +193,6 @@ impl<D: Dialect> IR<D> {
         valid
     }
 
-    pub(crate) fn raw_get_topological_order(&self) -> impl Iterator<Item = OpId> {
-        let max_depth = *self.op_depth.iter().max().unwrap_or(&0);
-        let mut depth_buckets = vec![svec![]; (max_depth + 1) as usize];
-        for op in self.raw_ops_iter() {
-            depth_buckets[op.get_depth() as usize].push(op.get_id());
-        }
-        depth_buckets.into_iter().flat_map(|b| b.into_iter())
-    }
-
-    pub(crate) fn raw_topological_ops_iter(&self) -> impl Iterator<Item = OpRef<'_, D>> {
-        self.raw_get_topological_order()
-            .map(|opid| self.raw_get_op(opid))
-    }
 
     // This static method allows to recursively update the depths of operations on mutation. In
     // theory, it _could_ be implemented as a mutable method, but the bck does not manage to prove
@@ -250,12 +272,33 @@ impl<D: Dialect> IR<D> {
         val
     }
 
-    pub fn ops_iter(&self) -> impl Iterator<Item = OpRef<'_, D>> {
-        self.raw_ops_iter().filter(|o| o.is_active())
+    pub fn walk_ops_linear(&self) -> impl OpWalk<D> {
+        self.raw_walk_ops_linear().filter(op_active)
     }
 
-    pub fn topological_ops_iter(&self) -> impl Iterator<Item = OpRef<'_, D>> {
-        self.raw_topological_ops_iter().filter(|o| o.is_active())
+    pub fn walk_ops_topological(&self) -> impl OpWalk<D> {
+        self.raw_walk_ops(self.raw_topological_opwalker()).filter(op_active)
+    }
+
+    pub fn walk_ops_with(&self, walker: impl OpWalker) -> impl OpWalk<D> {
+        walker.map(|opid| self.get_op(opid))
+    }
+
+    pub fn walk_vals_linear(&self) -> impl ValWalk<D> {
+        self.raw_walk_vals_linear().filter(val_active)
+    }
+
+    pub fn walk_vals_with(&self, walker: impl ValWalker) -> impl ValWalk<D> {
+        walker.map(|valid| self.get_val(valid))
+    }
+
+    pub fn mutate_ops(&mut self, mut f: impl FnMut(&mut D::Operations)) {
+        self.raw_linear_opwalker().collect::<SmallVec<_>>().into_iter().for_each(|opid| {
+            let opmut = self.raw_get_op_mut(opid);
+            if opmut.state.is_active() {
+                f(opmut.operation);
+            };
+        });
     }
 
     pub fn add_op(
@@ -397,7 +440,7 @@ impl<D: Dialect> IR<D> {
         new_mut.append(old_mut);
     }
 
-    pub fn batch_delete_op(&mut self, opids: impl Iterator<Item = OpId>) {
+    pub fn batch_delete_op(&mut self, opids: impl OpWalker) {
         let mut batch: Vec<_> = opids
             .map(|opid| (opid, self.get_op(opid).get_depth()))
             .collect();
@@ -453,32 +496,6 @@ impl<D: Dialect> IR<D> {
         }
     }
 
-    pub fn to_contextual_graph(
-        self: Arc<Self>,
-    ) -> petgraph::stable_graph::StableGraph<(OpId, Arc<Self>), (ValId, Arc<Self>)> {
-        use petgraph::stable_graph::*;
-        let mut output = StableGraph::new();
-        let mut idmap: Vec<MaybeUninit<NodeIndex>> =
-            vec![MaybeUninit::uninit(); self.raw_n_ops() as usize];
-        self.raw_ops_iter().for_each(|op| {
-            idmap[op.get_id().as_usize()] =
-                MaybeUninit::new(output.add_node((op.get_id(), self.clone())));
-        });
-        use std::iter::repeat;
-        self.raw_vals_iter()
-            .flat_map(|val| {
-                repeat(val.get_id())
-                    .zip(repeat(val.get_origin()))
-                    .zip(val.get_users_iter())
-            })
-            .for_each(|((valid, from), to)| {
-                let from_nix = unsafe { idmap[from.get_id().as_usize()].assume_init() };
-                let to_nix = unsafe { idmap[to.get_id().as_usize()].assume_init() };
-                output.add_edge(from_nix, to_nix, (valid, self.clone()));
-            });
-        output
-    }
-
     pub fn empty_opmap<V>(&self) -> OpMap<V> {
         OpMap::new_empty(self)
     }
@@ -487,11 +504,11 @@ impl<D: Dialect> IR<D> {
         OpMap::new_filled(self, v)
     }
 
-    pub fn partially_mapped_opmap<V>(&self, f: impl Fn(OpRef<D>) -> Option<V>) -> OpMap<V> {
+    pub fn partially_mapped_opmap<V>(&self, f: impl FnMut(OpRef<D>) -> Option<V>) -> OpMap<V> {
         OpMap::new_partially_mapped(self, f)
     }
 
-    pub fn totally_mapped_opmap<V>(&self, f: impl Fn(OpRef<D>) -> V) -> OpMap<V> {
+    pub fn totally_mapped_opmap<V>(&self, f: impl FnMut(OpRef<D>) -> V) -> OpMap<V> {
         OpMap::new_totally_mapped(self, f)
     }
 
@@ -503,17 +520,14 @@ impl<D: Dialect> IR<D> {
         ValMap::new_filled(self, v)
     }
 
-    pub fn partially_mapped_valmap<V>(&self, f: impl Fn(ValRef<D>) -> Option<V>) -> ValMap<V> {
+    pub fn partially_mapped_valmap<V>(&self, f: impl FnMut(ValRef<D>) -> Option<V>) -> ValMap<V> {
         ValMap::new_partially_mapped(self, f)
     }
 
-    pub fn totally_mapped_valmap<V>(&self, f: impl Fn(ValRef<D>) -> V) -> ValMap<V> {
+    pub fn totally_mapped_valmap<V>(&self, f: impl FnMut(ValRef<D>) -> V) -> ValMap<V> {
         ValMap::new_totally_mapped(self, f)
     }
 
-    pub fn get_topological_order_schedule(&self) -> Schedule {
-        Schedule(self.topological_ops_iter().map(|a| a.get_id()).collect())
-    }
 }
 
 impl<D: Dialect> Display for IR<D> {

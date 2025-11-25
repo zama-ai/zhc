@@ -6,7 +6,7 @@ use std::{
 pub use clap::Parser;
 pub use clap_num::maybe_hex;
 use hpuc_frontend::{BuilderContext, create_rhai_engine};
-use hpuc_gui::display;
+use hpuc_gui::{display, IRExt};
 use hpuc_ir::IR;
 use hpuc_langs::ioplang;
 

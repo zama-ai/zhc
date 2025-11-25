@@ -29,7 +29,7 @@ impl DeadCodeAnalysis {
     /// Performs dead code analysis on the given IR.
     pub fn from_ir<D: Dialect>(ir: &IR<D>) -> Self {
         let mut states: Store<OpId, _> = ir
-            .raw_ops_iter()
+            .raw_walk_ops_linear()
             .map(|op| {
                 if op.is_active() {
                     Some(Liveness::Dead)
@@ -39,7 +39,7 @@ impl DeadCodeAnalysis {
             })
             .collect();
         let mut worklist = Vec::new();
-        for effect in ir.raw_ops_iter().filter(|op| op.is_effect()) {
+        for effect in ir.raw_walk_ops_linear().filter(|op| op.is_effect()) {
             states[effect.get_id()] = Some(Liveness::Live);
             worklist.push(effect);
         }

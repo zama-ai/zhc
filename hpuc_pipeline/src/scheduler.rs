@@ -1,6 +1,5 @@
 use hpuc_ir::{
-    IR, OpId, OpMap, OpRef,
-    scheduling::forward::{ForwardSimulator, Ready, Retired, Selected},
+    scheduling::{forward::ForwardSimulator, Ready, Retired, Selected}, OpId, OpMap, OpRef, IR
 };
 use hpuc_langs::hpulang::Hpulang;
 use hpuc_sim::{
@@ -256,7 +255,7 @@ fn opref_to_dop<'a>(opref: OpRef<'a, Hpulang>, force_flush: bool) -> Option<DOp>
 
 #[cfg(test)]
 mod test {
-    use hpuc_ir::{scheduling::forward::ForwardScheduler, translation::Translator};
+    use hpuc_ir::{scheduling::forward::ForwardScheduler, translation::Translator, traversal::OpWalkerVerifier};
     use hpuc_sim::hpu::{HpuConfig, PhysicalConfig};
 
     use crate::{
@@ -274,8 +273,7 @@ mod test {
         let mut scheduler = Scheduler::init(&ir, config);
         let schedule = scheduler.schedule(&ir);
         assert_eq!(ir.n_ops() as usize, schedule.len());
-        assert!(schedule.is_topological_order(&ir));
-        assert_ne!(schedule, ir.get_topological_order_schedule());
+        assert!(schedule.get_walker().is_topo_sorted(&ir));
     }
 
     #[test]
@@ -286,8 +284,7 @@ mod test {
         let mut scheduler = Scheduler::init(&ir, config);
         let schedule = scheduler.schedule(&ir);
         assert_eq!(ir.n_ops() as usize, schedule.len());
-        assert!(schedule.is_topological_order(&ir));
-        assert_ne!(schedule, ir.get_topological_order_schedule());
+        assert!(schedule.get_walker().is_topo_sorted(&ir));
     }
 
     #[test]
@@ -298,7 +295,6 @@ mod test {
         let mut scheduler = Scheduler::init(&ir, config);
         let schedule = scheduler.schedule(&ir);
         assert_eq!(ir.n_ops() as usize, schedule.len());
-        assert!(schedule.is_topological_order(&ir));
-        assert_ne!(schedule, ir.get_topological_order_schedule());
+        assert!(schedule.get_walker().is_topo_sorted(&ir));
     }
 }
