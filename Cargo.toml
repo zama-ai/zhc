@@ -15,3 +15,11 @@ resolver = "3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 toml = "0.9"
+
+# Custom compilation profile
+# Compiles much faster for tests and allows reasonable performance for iterating
+[profile.devo]
+inherits = "dev"
+opt-level = 3
+lto = "off"
+debug-assertions = false
