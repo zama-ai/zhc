@@ -11,15 +11,27 @@ pub trait Event: Display + Clone + Serialize + PartialEq {}
 /// Traits for types handling event dispatch
 pub trait Dispatch {
     type Event: Event;
+    fn dispatch(&mut self, event: Self::Event, delay: Option<Cycle>);
+
+    fn dispatch_now(&mut self, event: Self::Event) {
+        self.dispatch(event, None);
+    }
+
+    fn dispatch_next(&mut self, event: Self::Event) {
+        self.dispatch(event, Some(Cycle::ONE));
+    }
+
+    fn dispatch_later(&mut self, after_n_cycles: Cycle, event: Self::Event) {
+        self.dispatch(event, Some(after_n_cycles));
+    }
+}
+
+/// Traits for types handling event simulation
+// TODO Find a better trait name ?
+pub trait Simulate {
+    type Event: Event;
 
     fn now(&self) -> Cycle;
-
-    fn dispatch_now(&mut self, event: Self::Event);
-
-    fn dispatch_next(&mut self, event: Self::Event);
-
-    fn dispatch_later(&mut self, after_n_cycles: Cycle, event: Self::Event);
-
     fn is_empty(&self) -> bool;
 
     fn advance(&mut self);
@@ -33,7 +45,11 @@ pub trait Dispatch {
 pub trait Simulatable: Sized + Serialize {
     type Event: Event;
 
-    fn handle(&mut self, dispatcher: &mut impl Dispatch<Event = Self::Event>, trigger: Trigger<Self::Event>);
+    fn handle(
+        &mut self,
+        dispatcher: &mut impl Dispatch<Event = Self::Event>,
+        trigger: Trigger<Self::Event>,
+    );
 
     fn power_up(&self, _: &mut impl Dispatch<Event = Self::Event>) {}
 

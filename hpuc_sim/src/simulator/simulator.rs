@@ -26,10 +26,14 @@ pub enum SimulationState {
     CondEncountered,
 }
 
-pub struct Simulator<S: Simulatable, D: Dispatch<Event = S::Event> = Dispatcher<<S as Simulatable>::Event>> {
+pub struct Simulator<S, D = Dispatcher<<S as Simulatable>::Event>>
+where
+    S: Simulatable,
+    D: Dispatch<Event = S::Event> + Simulate<Event = S::Event>,
+{
     pub simulatable: S,
     quantum: Microseconds,
-    tracer: Tracer<D::Event>,
+    tracer: Tracer<S::Event>,
     dispatcher: D,
 }
 
@@ -39,7 +43,11 @@ impl<S: Simulatable> Simulator<S> {
     }
 }
 
-impl<S: Simulatable, D: Dispatch<Event = S::Event>> Simulator<S, D> {
+impl<S, D> Simulator<S, D>
+where
+    S: Simulatable,
+    D: Dispatch<Event = S::Event> + Simulate<Event = S::Event>,
+{
     pub fn new(freq: MHz) -> Self
     where
         D: Default,
@@ -62,11 +70,11 @@ impl<S: Simulatable, D: Dispatch<Event = S::Event>> Simulator<S, D> {
         }
     }
 
-    pub fn dispatch(&mut self, event: D::Event) {
+    pub fn dispatch(&mut self, event: S::Event) {
         self.dispatcher.dispatch_now(event);
     }
 
-    pub fn dispatch_later(&mut self, after_n_cycles: Cycle, event: D::Event) {
+    pub fn dispatch_later(&mut self, after_n_cycles: Cycle, event: S::Event) {
         self.dispatcher.dispatch_later(after_n_cycles, event);
     }
 
@@ -85,7 +93,7 @@ impl<S: Simulatable, D: Dispatch<Event = S::Event>> Simulator<S, D> {
         self.step_cond(nope::<D>)
     }
 
-    fn step_cond(&mut self, condition: impl Fn(&Trigger<D::Event>) -> bool) -> SimulationState {
+    fn step_cond(&mut self, condition: impl Fn(&Trigger<S::Event>) -> bool) -> SimulationState {
         self.dispatcher.advance();
         self.tracer.set_now(self.dispatcher.now());
         let mut cond_encountered = false;
@@ -123,13 +131,13 @@ impl<S: Simulatable, D: Dispatch<Event = S::Event>> Simulator<S, D> {
         while let SimulationState::MayContinue = self.step() {}
     }
 
-    pub fn play_until_event(&mut self, event: D::Event) {
-        let event_eq = |trig: &Trigger<D::Event>| -> bool { trig.event == event };
+    pub fn play_until_event(&mut self, event: S::Event) {
+        let event_eq = |trig: &Trigger<S::Event>| -> bool { trig.event == event };
         while let SimulationState::MayContinue = self.step_cond(event_eq) {}
     }
 
-    pub fn play_until(&mut self, f: impl Fn(&D::Event) -> bool) {
-        let event_cond = |trig: &Trigger<D::Event>| -> bool { f(&trig.event) };
+    pub fn play_until(&mut self, f: impl Fn(&S::Event) -> bool) {
+        let event_cond = |trig: &Trigger<S::Event>| -> bool { f(&trig.event) };
         while let SimulationState::MayContinue = self.step_cond(event_cond) {}
     }
 
@@ -142,7 +150,11 @@ impl<S: Simulatable, D: Dispatch<Event = S::Event>> Simulator<S, D> {
     }
 }
 
-impl<S: Simulatable, D: Dispatch<Event = S::Event>> AsRef<S> for Simulator<S, D> {
+impl<S, D> AsRef<S> for Simulator<S, D>
+where
+    S: Simulatable,
+    D: Dispatch<Event = S::Event> + Simulate<Event = S::Event>,
+{
     fn as_ref(&self) -> &S {
         &self.simulatable
     }

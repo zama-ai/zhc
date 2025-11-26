@@ -19,23 +19,21 @@ impl<E: Event> Default for Dispatcher<E> {
 impl<E: Event> Dispatch for Dispatcher<E> {
     type Event = E;
 
-    fn now(&self) -> Cycle {
-        self.now
-    }
+    fn dispatch(&mut self, event: Self::Event, delay: Option<Cycle>) {
+        let delay = delay.unwrap_or(Cycle::ZERO);
 
-    fn dispatch_now(&mut self, event: Self::Event) {
-        self.dispatch_later(Cycle::ZERO, event);
-    }
-
-    fn dispatch_next(&mut self, event: Self::Event) {
-        self.dispatch_later(Cycle::ONE, event);
-    }
-
-    fn dispatch_later(&mut self, after_n_cycles: Cycle, event: Self::Event) {
         self.triggers.push(Trigger {
-            at: self.now + after_n_cycles,
+            at: self.now + delay,
             event,
         });
+    }
+}
+
+impl<E: Event> Simulate for Dispatcher<E> {
+    type Event = E;
+
+    fn now(&self) -> Cycle {
+        self.now
     }
 
     fn is_empty(&self) -> bool {
