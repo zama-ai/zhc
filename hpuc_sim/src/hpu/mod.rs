@@ -38,7 +38,7 @@ pub struct Hpu {
 impl Simulatable for Hpu {
     type Event = Events;
 
-    fn handle(&mut self, dispatcher: &mut impl Dispatch<Event=Events>, trigger: Trigger<Events>) {
+    fn handle(&mut self, dispatcher: &mut impl Dispatch<Event = Self::Event>, trigger: Trigger<Self::Event>) {
         self.scheduler.handle(dispatcher, trigger.clone());
         self.pe_mem.handle(dispatcher, trigger.clone());
         self.pe_pbs.handle(dispatcher, trigger.clone());

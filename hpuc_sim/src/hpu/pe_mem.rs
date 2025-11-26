@@ -51,7 +51,7 @@ impl PeMem {
 impl Simulatable for PeMem {
     type Event = Events;
 
-    fn handle(&mut self, dispatcher: &mut impl Dispatch<Event = Events>, trigger: Trigger<Events>) {
+    fn handle(&mut self, dispatcher: &mut impl Dispatch<Event = Self::Event>, trigger: Trigger<Self::Event>) {
         match trigger.event {
             Events::IscIssueDOp(dop) if dop.raw.affinity() == Affinity::Mem => {
                 assert!(

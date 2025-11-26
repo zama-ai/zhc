@@ -373,7 +373,7 @@ impl Simulatable for InstructionScheduler {
         dispatcher.dispatch_later(Cycle(1), Events::IscQuery);
     }
 
-    fn handle(&mut self, dispatcher: &mut impl Dispatch<Event = Events>, trigger: Trigger<Events>) {
+    fn handle(&mut self, dispatcher: &mut impl Dispatch<Event = Self::Event>, trigger: Trigger<Self::Event>) {
         match trigger.event {
             Events::IscPushDOps(small_vec) => {
                 self.dop_target += small_vec.len();
