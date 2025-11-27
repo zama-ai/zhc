@@ -18,7 +18,13 @@ impl<E: Event> Default for Dispatcher<E> {
 
 impl<E: Event> Dispatch for Dispatcher<E> {
     type Event = E;
-
+    fn contains_event(&self, event: &Self::Event) -> bool {
+        self.triggers
+            .iter()
+            .map(|trigger| &trigger.event)
+            .find(|e| *e == event)
+            .is_some()
+    }
     fn dispatch(&mut self, event: Self::Event, delay: Option<Cycle>) {
         let delay = delay.unwrap_or(Cycle::ZERO);
 
@@ -54,13 +60,5 @@ impl<E: Event> Simulate for Dispatcher<E> {
         } else {
             None
         }
-    }
-
-    fn contains_event(&self, event: &Self::Event) -> bool {
-        self.triggers
-            .iter()
-            .map(|trigger| &trigger.event)
-            .find(|e| *e == event)
-            .is_some()
     }
 }

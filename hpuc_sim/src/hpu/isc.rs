@@ -373,44 +373,57 @@ impl Simulatable for InstructionScheduler {
         dispatcher.dispatch_later(Cycle(1), Events::IscQuery);
     }
 
-    fn handle(&mut self, dispatcher: &mut impl Dispatch<Event = Self::Event>, trigger: Trigger<Self::Event>) {
-        match trigger.event {
+    fn handle(
+        &mut self,
+        dispatcher: &mut impl Dispatch<Event = Self::Event>,
+        trigger: Trigger<Self::Event>,
+    ) {
+        let may_unlock = match trigger.event {
             Events::IscPushDOps(small_vec) => {
                 self.dop_target += small_vec.len();
                 self.front_buffer.extend(small_vec.into_iter());
+                true
             }
             Events::IscUnlockWrite(dopid) => {
                 // The unlocks are buffered to be later processed during the isc query.
                 self.write_unlock_buffer.push_back(dopid);
+                true
             }
             Events::IscUnlockRead(dopid) => {
                 // The unlocks are buffered to be later processed during the isc query.
                 self.read_unlock_buffer.push_back(dopid);
+                true
             }
             Events::IscUnlockIssue(dopid) => {
                 // The unlocks are buffered to be later processed during the isc query.
                 self.issue_unlock_buffer.push_back(dopid);
+                true
             }
             Events::PePbsAvailable => {
                 self.tracker_pbs.available = true;
+                true
             }
             Events::PePbsUnavailable => {
                 self.tracker_pbs.available = false;
+                false
             }
             Events::PeAluAvailable => {
                 self.tracker_alu.available = true;
+                true
             }
             Events::PeAluUnavailable => {
                 self.tracker_alu.available = false;
+                false
             }
             Events::PeMemAvailable => {
                 self.tracker_mem.available = true;
+                true
             }
             Events::PeMemUnavailable => {
                 self.tracker_mem.available = false;
+                false
             }
             Events::IscQuery => {
-                dispatcher.dispatch_later(self.query_period, Events::IscQuery);
                 if self.has_issue_unlocks() {
                     dispatcher.dispatch_now(Events::IscQueryUnlockIssue);
                 } else if self.has_read_unlocks() {
@@ -420,30 +433,38 @@ impl Simulatable for InstructionScheduler {
                 } else if self.pool.slots_available() && self.has_pending_dops() {
                     dispatcher.dispatch_now(Events::IscQueryRefill);
                 } else if self.may_issue() {
-                    dispatcher.dispatch_now(Events::IscQueryIssue);
+                    dispatcher.dispatch_next(Events::IscQueryIssue);
                 }
+                false
             }
             Events::IscQueryUnlockRead => {
                 let opid = self.read_unlock_buffer.pop_front().unwrap();
                 self.pool.read_unlock(opid);
+                true
             }
             Events::IscQueryUnlockWrite => {
                 let opid = self.write_unlock_buffer.pop_front().unwrap();
                 self.pool.write_unlock(opid);
                 let dop = self.pool.retire(opid);
                 dispatcher.dispatch_now(Events::IscRetireDOp(dop));
+                true
             }
             Events::IscQueryUnlockIssue => {
                 let opid = self.issue_unlock_buffer.pop_front().unwrap();
                 self.pool.issue_unlock(opid);
+                true
             }
             Events::IscQueryRefill => {
                 let dop = self.front_buffer.pop_front().unwrap();
                 self.pool.refill(dop);
+                true
             }
             Events::IscQueryIssue => {
                 if let Some(dop) = self.pool.get_issuable(self.get_filter()) {
                     dispatcher.dispatch_now(Events::IscIssueDOp(dop));
+                    true
+                } else {
+                    false
                 }
             }
             Events::IscRetireDOp(_) => {
@@ -451,8 +472,15 @@ impl Simulatable for InstructionScheduler {
                 if self.dop_processed == self.dop_target {
                     dispatcher.dispatch_next(Events::IscProcessOver);
                 }
+                true
             }
-            _ => {}
+            _ => false,
         };
+
+        // Rearm IscQuery if needed
+        // I.e. Current event triggered a side effect and No IscQuery event is pending
+        if may_unlock && !dispatcher.contains_event(&Events::IscQuery) {
+            dispatcher.dispatch_later(self.query_period, Events::IscQuery);
+        }
     }
 }

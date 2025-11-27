@@ -11,6 +11,8 @@ pub trait Event: Display + Clone + Serialize + PartialEq {}
 /// Traits for types handling event dispatch
 pub trait Dispatch {
     type Event: Event;
+    fn contains_event(&self, event: &Self::Event) -> bool;
+
     fn dispatch(&mut self, event: Self::Event, delay: Option<Cycle>);
 
     fn dispatch_now(&mut self, event: Self::Event) {
@@ -37,8 +39,6 @@ pub trait Simulate {
     fn advance(&mut self);
 
     fn pop_now(&mut self) -> Option<Trigger<Self::Event>>;
-
-    fn contains_event(&self, event: &Self::Event) -> bool;
 }
 
 /// Trait implemented by types that can be simulated.

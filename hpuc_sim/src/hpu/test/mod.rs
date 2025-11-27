@@ -4,6 +4,8 @@ use crate::Simulator;
 
 mod legacy;
 
+const ACCURACY_TOLERANCE: f64 = 0.05;
+
 macro_rules! test_hpu_simulation {
     ($($name: ident => $cycles: literal),+) => {
         #[test]
@@ -12,63 +14,70 @@ macro_rules! test_hpu_simulation {
             $(
             let config = HpuConfig::from(PhysicalConfig::gaussian_64b_fast());
             let mut sim = Simulator::from_simulatable(config.freq, Hpu::new(config));
-            let (stream, lat) = legacy::$name();
+            let (stream, leg_lat) = legacy::$name();
             sim.dispatch(Events::IscPushDOps(stream.collect()));
             sim.play_until_event(Events::IscProcessOver);
+            // Check that current model stay in range with previous implementation
+            let accuracy_error = sim.now().0.abs_diff(leg_lat.0) as f64 / leg_lat.0 as f64;
+            println!("{}::> Expected: {:?}, Performed: {:?}, error: {}", stringify!($name), leg_lat, sim.now(), accuracy_error);
+            assert!(accuracy_error <= ACCURACY_TOLERANCE);
+
+            // Check that there are no diff with previous execution
+            // If small modification are made to the models those value must be updated
+            // println!("{} => {},", stringify!($name), sim.now().0);
             assert_eq!(sim.now(), Cycle($cycles));
-            println!("{}::> Expected: {:?}, Performed: {:?}, Ratio: {}", stringify!($name), lat, sim.now(), sim.now().0 as f64 / lat.0 as f64);
             )+
         }
     }
 }
 
 test_hpu_simulation!(
-    ADDS => 79838,
-    SUBS => 88070,
-    SSUB => 88094,
-    MULS => 153146,
-    DIVS => 5418230,
-    MODS => 5296106,
-    OVF_ADDS => 72158,
-    OVF_SUBS => 80378,
-    OVF_SSUB => 80402,
-    OVF_MULS => 624614,
-    SHIFTS_R => 14510,
-    SHIFTS_L => 14510,
-    ROTS_R => 14510,
-    ROTS_L => 14510,
-    ADD => 64430,
-    SUB => 72158,
-    MUL => 137510,
-    DIV => 5047250,
-    MOD => 4924118,
-    OVF_ADD => 56750,
-    OVF_SUB => 60374,
-    OVF_MUL => 609254,
-    SHIFT_R => 351530,
-    SHIFT_L => 347210,
-    ROT_R => 368150,
-    ROT_L => 368078,
-    BW_AND => 23090,
-    BW_OR => 23090,
-    BW_XOR => 23090,
-    CMP_GT => 54902,
-    CMP_GTE => 54902,
-    CMP_LT => 54902,
-    CMP_LTE => 54902,
-    CMP_EQ => 54902,
-    CMP_NEQ => 54902,
-    IF_THEN_ZERO => 23054,
-    IF_THEN_ELSE => 38186,
-    ERC_20 => 160622,
-    MEMCPY => 4298,
-    ILOG2 => 271046,
-    COUNT0 => 174422,
-    COUNT1 => 174422,
-    LEAD0 => 404522,
-    LEAD1 => 416450,
-    TRAIL0 => 400046,
-    TRAIL1 => 402242,
-    ADD_SIMD => 194030,
-    ERC_20_SIMD => 920594
+    ADDS         => 79938,
+    SUBS         => 88161,
+    SSUB         => 88186,
+    MULS         => 153239,
+    DIVS         => 5418991,
+    MODS         => 5296804,
+    OVF_ADDS     => 72250,
+    OVF_SUBS     => 80473,
+    OVF_SSUB     => 80498,
+    OVF_MULS     => 624753,
+    SHIFTS_R     => 14521,
+    SHIFTS_L     => 14521,
+    ROTS_R       => 14521,
+    ROTS_L       => 14521,
+    ADD          => 64531,
+    SUB          => 72264,
+    MUL          => 137621,
+    DIV          => 5047926,
+    MOD          => 4924796,
+    OVF_ADD      => 56841,
+    OVF_SUB      => 60476,
+    OVF_MUL      => 609406,
+    SHIFT_R      => 351577,
+    SHIFT_L      => 347282,
+    ROT_R        => 368205,
+    ROT_L        => 368140,
+    BW_AND       => 23119,
+    BW_OR        => 23119,
+    BW_XOR       => 23119,
+    CMP_GT       => 54982,
+    CMP_GTE      => 54982,
+    CMP_LT       => 54982,
+    CMP_LTE      => 54982,
+    CMP_EQ       => 54982,
+    CMP_NEQ      => 54982,
+    IF_THEN_ZERO => 23083,
+    IF_THEN_ELSE => 38231,
+    ERC_20       => 160780,
+    MEMCPY       => 4303,
+    ILOG2        => 271197,
+    COUNT0       => 174566,
+    COUNT1       => 174566,
+    LEAD0        => 404706,
+    LEAD1        => 416639,
+    TRAIL0       => 400209,
+    TRAIL1       => 402397,
+    ADD_SIMD     => 194074,
+    ERC_20_SIMD  => 921023
 );
