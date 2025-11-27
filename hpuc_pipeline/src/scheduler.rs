@@ -43,8 +43,6 @@ impl<'ir> Scheduler<'ir> {
             ImmLd { .. } => Affinity::Ctl,
             DstSt { .. } => Affinity::Mem,
             SrcLd { .. } => Affinity::Mem,
-            HeapSt => Affinity::Mem,
-            HeapLd => Affinity::Mem,
             Pbs { .. } => Affinity::Pbs,
             Pbs2 { .. } => Affinity::Pbs,
             Pbs4 { .. } => Affinity::Pbs,
@@ -194,83 +192,83 @@ fn opref_to_dop<'a>(opref: OpRef<'a, Hpulang>, force_flush: bool) -> Option<DOp>
     use hpuc_langs::hpulang::Operations::*;
     let raw = match opref.get_operation() {
         AddCt => Some(RawDOp::ADD {
-            dst: Argument::reg(opref.get_return_valids()[0]),
-            src1: Argument::reg(opref.get_arg_valids()[0]),
-            src2: Argument::reg(opref.get_arg_valids()[1]),
+            dst: Argument::ct_reg(opref.get_return_valids()[0]),
+            src1: Argument::ct_reg(opref.get_arg_valids()[0]),
+            src2: Argument::ct_reg(opref.get_arg_valids()[1]),
         }),
         SubCt => Some(RawDOp::SUB {
-            dst: Argument::reg(opref.get_return_valids()[0]),
-            src1: Argument::reg(opref.get_arg_valids()[0]),
-            src2: Argument::reg(opref.get_arg_valids()[1]),
+            dst: Argument::ct_reg(opref.get_return_valids()[0]),
+            src1: Argument::ct_reg(opref.get_arg_valids()[0]),
+            src2: Argument::ct_reg(opref.get_arg_valids()[1]),
         }),
         Mac { .. } => Some(RawDOp::MAC {
-            dst: Argument::reg(opref.get_return_valids()[0]),
-            src1: Argument::reg(opref.get_arg_valids()[0]),
-            src2: Argument::reg(opref.get_arg_valids()[1]),
-            cst: Argument::IMM_ZERO,
+            dst: Argument::ct_reg(opref.get_return_valids()[0]),
+            src1: Argument::ct_reg(opref.get_arg_valids()[0]),
+            src2: Argument::ct_reg(opref.get_arg_valids()[1]),
+            cst: Argument::pt_const(0),
         }),
         AddPt | AddCst { .. } => Some(RawDOp::ADDS {
-            dst: Argument::reg(opref.get_return_valids()[0]),
-            src: Argument::reg(opref.get_arg_valids()[0]),
-            cst: Argument::IMM_ZERO,
+            dst: Argument::ct_reg(opref.get_return_valids()[0]),
+            src: Argument::ct_reg(opref.get_arg_valids()[0]),
+            cst: Argument::pt_const(0),
         }),
         SubPt | SubCst { .. } => Some(RawDOp::SUBS {
-            dst: Argument::reg(opref.get_return_valids()[0]),
-            src: Argument::reg(opref.get_arg_valids()[0]),
-            cst: Argument::IMM_ZERO,
+            dst: Argument::ct_reg(opref.get_return_valids()[0]),
+            src: Argument::ct_reg(opref.get_arg_valids()[0]),
+            cst: Argument::pt_const(0),
         }),
         PtSub | CstSub { .. } => Some(RawDOp::SSUB {
-            dst: Argument::reg(opref.get_return_valids()[0]),
-            src: Argument::reg(opref.get_arg_valids()[0]),
-            cst: Argument::IMM_ZERO,
+            dst: Argument::ct_reg(opref.get_return_valids()[0]),
+            src: Argument::ct_reg(opref.get_arg_valids()[0]),
+            cst: Argument::pt_const(0),
         }),
         MulPt | MulCst { .. } => Some(RawDOp::MULS {
-            dst: Argument::reg(opref.get_return_valids()[0]),
-            src: Argument::reg(opref.get_arg_valids()[0]),
-            cst: Argument::IMM_ZERO,
+            dst: Argument::ct_reg(opref.get_return_valids()[0]),
+            src: Argument::ct_reg(opref.get_arg_valids()[0]),
+            cst: Argument::pt_const(0),
         }),
         ImmLd { .. } => None,
-        DstSt { .. } | HeapSt => Some(RawDOp::ST {
-            dst: Argument::MEM_ZERO,
-            src: Argument::reg(opref.get_arg_valids()[0]),
+        DstSt { to } => Some(RawDOp::ST {
+            dst: Argument::ct_var(to.dst_pos, to.block_pos),
+            src: Argument::ct_reg(opref.get_arg_valids()[0]),
         }),
-        SrcLd { .. } | HeapLd => Some(RawDOp::LD {
-            dst: Argument::reg(opref.get_return_valids()[0]),
-            src: Argument::MEM_ZERO,
+        SrcLd { from } => Some(RawDOp::LD {
+            dst: Argument::ct_reg(opref.get_return_valids()[0]),
+            src: Argument::ct_var(from.src_pos, from.block_pos),
         }),
         Pbs { .. } if !force_flush => Some(RawDOp::PBS {
-            dst: Argument::reg(opref.get_arg_valids()[0]),
-            src: Argument::reg(opref.get_return_valids()[0]),
+            dst: Argument::ct_reg(opref.get_arg_valids()[0]),
+            src: Argument::ct_reg(opref.get_return_valids()[0]),
         }),
         Pbs2 { .. } if !force_flush => Some(RawDOp::PBS_ML2 {
-            dst: Argument::reg(opref.get_arg_valids()[0]),
-            src: Argument::reg2(opref.get_return_valids()[0]),
+            dst: Argument::ct_reg(opref.get_arg_valids()[0]),
+            src: Argument::ct_reg2(opref.get_return_valids()[0]),
         }),
         Pbs4 { .. } if !force_flush => Some(RawDOp::PBS_ML4 {
-            dst: Argument::reg(opref.get_arg_valids()[0]),
-            src: Argument::reg4(opref.get_return_valids()[0]),
+            dst: Argument::ct_reg(opref.get_arg_valids()[0]),
+            src: Argument::ct_reg4(opref.get_return_valids()[0]),
         }),
         Pbs8 { .. } if !force_flush => Some(RawDOp::PBS_ML8 {
-            dst: Argument::reg(opref.get_arg_valids()[0]),
-            src: Argument::reg8(opref.get_return_valids()[0]),
+            dst: Argument::ct_reg(opref.get_arg_valids()[0]),
+            src: Argument::ct_reg8(opref.get_return_valids()[0]),
         }),
         PbsF { .. } | Pbs { .. } if force_flush => Some(RawDOp::PBS_F {
-            dst: Argument::reg(opref.get_arg_valids()[0]),
-            src: Argument::reg(opref.get_return_valids()[0]),
+            dst: Argument::ct_reg(opref.get_arg_valids()[0]),
+            src: Argument::ct_reg(opref.get_return_valids()[0]),
         }),
         Pbs2F { .. } | Pbs2 { .. } if force_flush => Some(RawDOp::PBS_ML2_F {
-            dst: Argument::reg(opref.get_arg_valids()[0]),
-            src: Argument::reg2(opref.get_return_valids()[0]),
+            dst: Argument::ct_reg(opref.get_arg_valids()[0]),
+            src: Argument::ct_reg2(opref.get_return_valids()[0]),
         }),
         Pbs4F { .. } | Pbs4 { .. } if force_flush => Some(RawDOp::PBS_ML4_F {
-            dst: Argument::reg(opref.get_arg_valids()[0]),
-            src: Argument::reg4(opref.get_return_valids()[0]),
+            dst: Argument::ct_reg(opref.get_arg_valids()[0]),
+            src: Argument::ct_reg4(opref.get_return_valids()[0]),
         }),
         Pbs8F { .. } | Pbs8 { .. } if force_flush => Some(RawDOp::PBS_ML8_F {
-            dst: Argument::reg(opref.get_arg_valids()[0]),
-            src: Argument::reg8(opref.get_return_valids()[0]),
+            dst: Argument::ct_reg(opref.get_arg_valids()[0]),
+            src: Argument::ct_reg8(opref.get_return_valids()[0]),
         }),
-        _ => unreachable!(),
+        a => unreachable!("Entered unreachable state: {}", a),
     };
 
     raw.map(|raw| DOp {
@@ -282,8 +280,9 @@ fn opref_to_dop<'a>(opref: OpRef<'a, Hpulang>, force_flush: bool) -> Option<DOp>
 #[cfg(test)]
 mod test {
     use hpuc_ir::{
-        scheduling::forward::ForwardScheduler, translation::Translator, traversal::OpWalkerVerifier,
+        scheduling::forward::ForwardScheduler, translation::Translator, traversal::OpWalkerVerifier, IR,
     };
+    use hpuc_langs::{hpulang::Hpulang, ioplang::Ioplang};
     use hpuc_sim::hpu::{HpuConfig, PhysicalConfig};
 
     use crate::{
@@ -293,9 +292,7 @@ mod test {
 
     use super::Scheduler;
 
-    #[test]
-    fn test_schedule_add_ir() {
-        let ir = get_add_ir(16, 2, 2);
+    fn pipeline(ir: &IR<Ioplang>) -> IR<Hpulang> {
         let mut ir = IoplangToHpulang.translate(&ir);
         let config = HpuConfig::from(PhysicalConfig::gaussian_64b_fast());
         let mut scheduler = Scheduler::init(&ir, config);
@@ -304,6 +301,12 @@ mod test {
         assert!(schedule.get_walker().is_topo_sorted(&ir));
         let flusher = scheduler.into_flusher();
         flusher.apply_flushes(&mut ir);
+        ir
+    }
+
+    #[test]
+    fn test_schedule_add_ir() {
+        let ir = pipeline(&get_add_ir(16, 2, 2));
         ir.check_ir(
             "
             %0 : CtRegister = src_ld<0.0_tsrc>();
@@ -367,15 +370,7 @@ mod test {
 
     #[test]
     fn test_schedule_cmp_ir() {
-        let ir = get_cmp_ir(16, 2, 2);
-        let mut ir = IoplangToHpulang.translate(&ir);
-        let config = HpuConfig::from(PhysicalConfig::gaussian_64b_fast());
-        let mut scheduler = Scheduler::init(&ir, config);
-        let schedule = scheduler.schedule(&ir);
-        assert_eq!(ir.n_ops() as usize, schedule.len());
-        assert!(schedule.get_walker().is_topo_sorted(&ir));
-        let flusher = scheduler.into_flusher();
-        flusher.apply_flushes(&mut ir);
+        let ir = pipeline(&get_cmp_ir(16, 2, 2));
         ir.check_ir(
             "
             %0 : CtRegister = src_ld<0.0_tsrc>();
@@ -423,15 +418,7 @@ mod test {
 
     #[test]
     fn test_schedule_sub_ir() {
-        let ir = get_sub_ir(16, 2, 2);
-        let mut ir = IoplangToHpulang.translate(&ir);
-        let config = HpuConfig::from(PhysicalConfig::gaussian_64b_fast());
-        let mut scheduler = Scheduler::init(&ir, config);
-        let schedule = scheduler.schedule(&ir);
-        assert_eq!(ir.n_ops() as usize, schedule.len());
-        assert!(schedule.get_walker().is_topo_sorted(&ir));
-        let flusher = scheduler.into_flusher();
-        flusher.apply_flushes(&mut ir);
+        let ir = pipeline(&get_sub_ir(16, 2, 2));
         ir.check_ir(
             "
             %0 : CtRegister = src_ld<0.0_tsrc>();

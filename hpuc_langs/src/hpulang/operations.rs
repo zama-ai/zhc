@@ -74,8 +74,6 @@ pub enum Operations {
     ImmLd { from: TImmId },
     DstSt { to: TDstId },
     SrcLd { from: TSrcId },
-    HeapSt,
-    HeapLd,
     Pbs { lut: LutMemoryAdress },
     Pbs2 { lut: LutMemoryAdress },
     Pbs4 { lut: LutMemoryAdress },
@@ -103,8 +101,6 @@ impl Display for Operations {
             Operations::ImmLd { from } => write!(f, "imm_ld<{}>", from),
             Operations::SrcLd { from } => write!(f, "src_ld<{}>", from),
             Operations::DstSt { to } => write!(f, "dst_st<{}>", to),
-            Operations::HeapLd => write!(f, "heap_ld"),
-            Operations::HeapSt => write!(f, "heap_st"),
             Operations::Pbs { lut } => write!(f, "pbs<{}>", lut),
             Operations::Pbs2 { lut } => write!(f, "pbs_2<{}>", lut),
             Operations::Pbs4 { lut } => write!(f, "pbs_4<{}>", lut),
@@ -136,8 +132,7 @@ impl DialectOperations for Operations {
             Operations::DstSt { .. } => sig![(CtRegister) -> ()],
             Operations::SrcLd { .. } => sig![() -> (CtRegister)],
             Operations::ImmLd { .. } => sig![() -> (PtImmediate)],
-            Operations::HeapSt => sig![(CtRegister) -> (CtHeap)],
-            Operations::HeapLd => sig![(CtHeap) -> (CtRegister)],
+
             Operations::Pbs { .. } => sig![(CtRegister) -> (CtRegister)],
             Operations::Pbs2 { .. } => sig![(CtRegister) -> (CtRegister, CtRegister)],
             Operations::Pbs4 { .. } => {

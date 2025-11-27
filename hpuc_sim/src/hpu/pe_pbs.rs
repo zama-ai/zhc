@@ -532,8 +532,8 @@ mod tests {
         if is_flush {
             DOp {
                 raw: RawDOp::PBS_F {
-                    dst: Argument::Immediate { val: 0 },
-                    src: Argument::Immediate { val: 0 },
+                    dst: Argument::PtConst { val: 0 },
+                    src: Argument::PtConst { val: 0 },
                 },
                 id: DOpId(id),
             }

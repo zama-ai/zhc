@@ -8,59 +8,117 @@ pub const MASK_PBS2: usize = usize::MAX << 1;
 pub const MASK_PBS4: usize = usize::MAX << 2;
 pub const MASK_PBS8: usize = usize::MAX << 3;
 
+/// A type representing the different kinds of operands that may occur in a dop stream.
+///
+/// # Note:
+///
+/// The doplang dialect is meant to support both pathed and unpatched streams:
+/// + Unpatched streams are exported to the hpu memory. They support variable ciphertext and plaintext, which are meant to be patched on the fly by the ucore.
+/// + Patched streams are streamed by the ucore to the hpu. They contain memory adresses instead of ciphertext variables, and constant immediates instead of plaintext variables.
+///
+/// Essentially, supporting unpatched streams allows to generate programs for the hpu, and supporting patched streams allows to load execution traces from the hpu.
 #[derive(Debug, Clone, Eq, Hash)]
 pub enum Argument {
-    Immediate { val: usize },
-    Memory { addr: usize },
-    Register { mask: usize, addr: usize },
+    /// A constant immediate plaintext.
+    PtConst { val: usize },
+    /// A ciphertext located on the heap.
+    CtHeap { addr: usize },
+    /// A ciphertext located in the io memory.
+    CtIo { addr: usize },
+    /// A ciphertext variable. Patched to a CtMemory by the ucore.
+    CtVar { id: usize, block: usize },
+    /// A plaintext variable. Patched to a PtConst by the ucore.
+    PtVar { id: usize, block: usize },
+    /// A ciphertext register.
+    CtReg { mask: usize, addr: usize },
 }
 
 impl Argument {
-    pub const IMM_ZERO: Self = Argument::Immediate { val: 0 };
-    pub const MEM_ZERO: Self = Argument::Memory { addr: 0 };
-    pub fn reg(addr: impl Into<usize>) -> Self {
-        Argument::Register {
+    pub fn ct_reg(addr: impl Into<usize>) -> Self {
+        Argument::CtReg {
             mask: MASK_NONE,
             addr: addr.into(),
         }
     }
-    pub fn reg2(addr: impl Into<usize>) -> Self {
-        Argument::Register {
+
+    pub fn ct_reg2(addr: impl Into<usize>) -> Self {
+        Argument::CtReg {
             mask: MASK_PBS2,
             addr: addr.into(),
         }
     }
-    pub fn reg4(addr: impl Into<usize>) -> Self {
-        Argument::Register {
+
+    pub fn ct_reg4(addr: impl Into<usize>) -> Self {
+        Argument::CtReg {
             mask: MASK_PBS4,
             addr: addr.into(),
         }
     }
-    pub fn reg8(addr: impl Into<usize>) -> Self {
-        Argument::Register {
+
+    pub fn ct_reg8(addr: impl Into<usize>) -> Self {
+        Argument::CtReg {
             mask: MASK_PBS8,
             addr: addr.into(),
         }
+    }
+
+    pub fn ct_var(id: usize, block: usize) -> Self {
+        Argument::CtVar { id, block }
+    }
+
+    pub fn pt_var(id: usize, block: usize) -> Self {
+        Argument::PtVar { id, block }
+    }
+
+    pub fn ct_heap(heap_slot: usize) -> Self {
+        Argument::CtHeap { addr: heap_slot }
+    }
+
+    pub fn ct_io(io_slot: usize) -> Self {
+        Argument::CtIo { addr: io_slot }
+    }
+
+    pub fn pt_const(val: usize) -> Self {
+        Argument::PtConst { val }
     }
 }
 
 impl PartialEq for Argument {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Argument::Immediate { val: lhs }, Argument::Immediate { val: rhs }) if lhs == rhs => {
-                true
-            }
-            (Argument::Memory { addr: lhs }, Argument::Memory { addr: rhs }) if lhs == rhs => true,
+            (Argument::PtConst { val: lhs }, Argument::PtConst { val: rhs }) => lhs == rhs,
+            (Argument::CtHeap { addr: lhs }, Argument::CtHeap { addr: rhs }) => lhs == rhs,
+            (Argument::CtIo { addr: lhs }, Argument::CtIo { addr: rhs }) => lhs == rhs,
             (
-                Argument::Register {
+                Argument::CtReg {
                     mask: lhs_m,
                     addr: lhs,
                 },
-                Argument::Register {
+                Argument::CtReg {
                     mask: rhs_m,
                     addr: rhs,
                 },
             ) => ((lhs ^ rhs) & (lhs_m & rhs_m)) == 0,
+            (
+                Argument::CtVar {
+                    id: lhs_id,
+                    block: lhs_block,
+                },
+                Argument::CtVar {
+                    id: rhs_id,
+                    block: rhs_block,
+                },
+            ) => (lhs_id, lhs_block) == (rhs_id, rhs_block),
+            (
+                Argument::PtVar {
+                    id: lhs_id,
+                    block: lhs_block,
+                },
+                Argument::PtVar {
+                    id: rhs_id,
+                    block: rhs_block,
+                },
+            ) => (lhs_id, lhs_block) == (rhs_id, rhs_block),
             _ => false,
         }
     }
@@ -69,12 +127,15 @@ impl PartialEq for Argument {
 impl Display for Argument {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Argument::Immediate { val } => write!(f, "I({})", val),
-            Argument::Memory { addr } => write!(f, "M({})", addr),
-            Argument::Register { mask, addr } if *mask == MASK_NONE => write!(f, "R({})", addr),
-            Argument::Register { mask, addr } if *mask == MASK_PBS2 => write!(f, "R({}, 2)", addr),
-            Argument::Register { mask, addr } if *mask == MASK_PBS4 => write!(f, "R({}, 4)", addr),
-            Argument::Register { mask, addr } if *mask == MASK_PBS8 => write!(f, "R({}, 8)", addr),
+            Argument::PtConst { val } => write!(f, "PT_I({})", val),
+            Argument::CtHeap { addr } => write!(f, "CT_H({})", addr),
+            Argument::CtIo { addr } => write!(f, "CT_IO({})", addr),
+            Argument::CtReg { mask, addr } if *mask == MASK_NONE => write!(f, "R({})", addr),
+            Argument::CtReg { mask, addr } if *mask == MASK_PBS2 => write!(f, "R({}, 2)", addr),
+            Argument::CtReg { mask, addr } if *mask == MASK_PBS4 => write!(f, "R({}, 4)", addr),
+            Argument::CtReg { mask, addr } if *mask == MASK_PBS8 => write!(f, "R({}, 8)", addr),
+            Argument::CtVar { id, block } => write!(f, "TC({}, {})", id, block),
+            Argument::PtVar { id, block } => write!(f, "TI({}, {})", id, block),
             _ => unreachable!(),
         }
     }
@@ -373,9 +434,9 @@ impl DialectOperations for Operations {
             | PBS_F { .. }
             | PBS_ML2_F { .. }
             | PBS_ML4_F { .. }
-            | PBS_ML8_F { .. } => sig![(Ctx) -> (Ctx)],
-            _INIT => sig![() -> (Ctx)],
-            SYNC => sig![(Ctx) -> ()],
+            | PBS_ML8_F { .. } => sig![(Ctx(0)) -> (Ctx(0))],
+            _INIT => sig![() -> (Ctx(0))],
+            SYNC => sig![(Ctx(0)) -> ()],
         }
     }
 }

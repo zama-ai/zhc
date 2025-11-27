@@ -421,16 +421,20 @@ impl Translator for IoplangToHpulang {
 
 #[cfg(test)]
 mod test {
-    use hpuc_ir::translation::Translator;
+    use hpuc_ir::{translation::Translator, IR};
+    use hpuc_langs::{hpulang::Hpulang, ioplang::Ioplang};
 
     use crate::test::{get_add_ir, get_cmp_ir, get_sub_ir};
 
     use super::IoplangToHpulang;
 
+    fn pipeline(ir: &IR<Ioplang>) -> IR<Hpulang> {
+        IoplangToHpulang.translate(&ir)
+    }
+
     #[test]
     fn test_translate_add_ir() {
-        let ir = get_add_ir(16, 2, 2);
-        let ir = IoplangToHpulang.translate(&ir);
+        let ir = pipeline(&get_add_ir(16, 2, 2));
         ir.check_ir(
             "
             %0 : CtRegister = src_ld<0.0_tsrc>();
@@ -494,8 +498,7 @@ mod test {
 
     #[test]
     fn test_translate_cmp_ir() {
-        let ir = get_cmp_ir(16, 2, 2);
-        let ir = IoplangToHpulang.translate(&ir);
+        let ir = pipeline(&get_cmp_ir(16, 2, 2));
         ir.check_ir(
             "
             %0 : CtRegister = src_ld<0.0_tsrc>();
@@ -543,8 +546,7 @@ mod test {
 
     #[test]
     fn test_translate_sub_ir() {
-        let ir = get_sub_ir(16, 2, 2);
-        let ir = IoplangToHpulang.translate(&ir);
+        let ir = pipeline(&get_sub_ir(16, 2, 2));
         ir.check_ir(
             "
             %0 : CtRegister = src_ld<0.0_tsrc>();

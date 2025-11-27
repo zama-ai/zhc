@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use hpuc_frontend::{BuilderContext, create_rhai_engine};
-use hpuc_ir::{dce::{eliminate_dead_code, DeadCodeAnalysis}, IR};
+use hpuc_ir::{dce::eliminate_dead_code, IR};
 use hpuc_langs::ioplang::Ioplang;
 
 fn get_ir(path: &Path, integer_w: i64, msg_w: i64, carry_w: i64) -> IR<Ioplang> {

@@ -62,7 +62,7 @@ fn zip_pack(in_a, in_b) {
     })
 }
 
-/// 
+///
 
 /// Clean noise on a vector of digit
 /// Some lib-operation could output noisy ciphertext
@@ -91,7 +91,7 @@ fn clean_ct(src) {
         let inv_src = pair[0];
         if pair.len() == 2 {
             inv_src = ssub(inv_src, pair[1]);
-        } 
+        }
         inv_src
     })
  }
