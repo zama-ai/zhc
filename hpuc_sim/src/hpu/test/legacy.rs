@@ -1,6 +1,8 @@
+use hpuc_langs::doplang::{Argument, MASK_NONE, MASK_PBS2, MASK_PBS4, MASK_PBS8};
+
 use crate::{
     Cycle,
-    hpu::{Argument, DOpId, MASK_NONE, MASK_PBS2, MASK_PBS4, MASK_PBS8, RawDOp},
+    hpu::{DOpId, RawDOp},
 };
 
 mod legacy {

@@ -1,3 +1,5 @@
+use hpuc_langs::doplang::Affinity;
+
 use super::*;
 
 #[derive(Debug, Serialize)]

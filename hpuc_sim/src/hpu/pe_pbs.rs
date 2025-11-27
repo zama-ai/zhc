@@ -1,5 +1,6 @@
 use std::{cell::Cell, collections::VecDeque, fmt::Display, ops::Index};
 
+use hpuc_langs::doplang::Affinity;
 use hpuc_utils::Fifo;
 
 use crate::Cycle;
@@ -523,6 +524,8 @@ fn get_dop_number_outputs(dop: &DOp) -> usize {
 
 #[cfg(test)]
 mod tests {
+    use hpuc_langs::doplang::Argument;
+
     use super::*;
 
     fn create_mock_dop(id: usize, is_flush: bool) -> DOp {

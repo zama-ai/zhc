@@ -1,5 +1,6 @@
 use super::*;
 use crate::Cycle;
+use hpuc_langs::doplang::Affinity;
 use hpuc_utils::FastSet;
 use serde::Serialize;
 use std::{collections::VecDeque, fmt::Display};

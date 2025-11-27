@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 hpuc_ir = { path = "../hpuc_ir" }
 hpuc_utils = { path = "../hpuc_utils" }
+serde = { workspace = true }

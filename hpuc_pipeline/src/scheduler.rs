@@ -2,10 +2,10 @@ use hpuc_ir::{
     IR, OpId, OpMap, OpRef,
     scheduling::{Ready, Retired, Selected, forward::ForwardSimulator},
 };
-use hpuc_langs::hpulang::Hpulang;
+use hpuc_langs::{doplang::{Affinity, Argument}, hpulang::Hpulang};
 use hpuc_sim::{
     Cycle, Simulator,
-    hpu::{Affinity, Argument, DOp, DOpId, Events, Hpu, HpuConfig, Policy, RawDOp},
+    hpu::{DOp, DOpId, Events, Hpu, HpuConfig, Policy, RawDOp},
 };
 use hpuc_utils::{SmallSet, SmallVec, StoreIndex};
 

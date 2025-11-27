@@ -1,3 +1,4 @@
+use hpuc_langs::doplang::Affinity;
 use hpuc_utils::Fifo;
 
 use super::*;
