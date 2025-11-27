@@ -126,75 +126,75 @@ fn test_construction() -> Result<(), IRError<TestDialect>> {
     assert_eq!(store.n_vals(), 8);
     assert!(lhs.is_active());
     assert_eq!(lhs.get_depth(), 1);
-    assert_eq!(lhs.get_args_iter().covect(), []);
-    assert_eq!(lhs.get_returns_iter().covect(), [p0.clone()]);
+    assert_eq!(lhs.get_args_iter().covec(), []);
+    assert_eq!(lhs.get_returns_iter().covec(), [p0.clone()]);
 
     assert!(rhs.is_active());
     assert_eq!(rhs.get_depth(), 1);
-    assert_eq!(rhs.get_args_iter().covect(), []);
-    assert_eq!(rhs.get_returns_iter().covect(), [p1.clone()]);
+    assert_eq!(rhs.get_args_iter().covec(), []);
+    assert_eq!(rhs.get_returns_iter().covec(), [p1.clone()]);
 
     assert!(p0.is_active());
     assert_eq!(p0.get_origin(), lhs);
-    assert_eq!(p0.get_users_iter().covect(), [join.clone(), split.clone()]);
+    assert_eq!(p0.get_users_iter().covec(), [join.clone(), split.clone()]);
 
     assert!(p1.is_active());
     assert_eq!(p1.get_origin(), rhs);
-    assert_eq!(p1.get_users_iter().covect(), [join.clone()]);
+    assert_eq!(p1.get_users_iter().covec(), [join.clone()]);
 
     assert!(join.is_active());
     assert_eq!(join.get_depth(), 2);
-    assert_eq!(join.get_args_iter().covect(), [p0.clone(), p1.clone()]);
-    assert_eq!(join.get_returns_iter().covect(), [p2.clone()]);
+    assert_eq!(join.get_args_iter().covec(), [p0.clone(), p1.clone()]);
+    assert_eq!(join.get_returns_iter().covec(), [p2.clone()]);
 
     assert!(p2.is_active());
     assert_eq!(p2.get_origin(), join);
-    assert_eq!(p2.get_users_iter().covect(), [split.clone()]);
+    assert_eq!(p2.get_users_iter().covec(), [split.clone()]);
 
     assert!(split.is_active());
     assert_eq!(split.get_depth(), 3);
-    assert_eq!(split.get_args_iter().covect(), [p2.clone(), p0.clone()]);
-    assert_eq!(split.get_returns_iter().covect(), [p3.clone(), p4.clone()]);
+    assert_eq!(split.get_args_iter().covec(), [p2.clone(), p0.clone()]);
+    assert_eq!(split.get_returns_iter().covec(), [p3.clone(), p4.clone()]);
 
     assert!(p3.is_active());
     assert_eq!(p3.get_origin(), split);
-    assert_eq!(p3.get_users_iter().covect(), [ulhs.clone(), effect.clone()]);
+    assert_eq!(p3.get_users_iter().covec(), [ulhs.clone(), effect.clone()]);
 
     assert!(p4.is_active());
     assert_eq!(p4.get_origin(), split);
-    assert_eq!(p4.get_users_iter().covect(), [urhs.clone()]);
+    assert_eq!(p4.get_users_iter().covec(), [urhs.clone()]);
 
     assert!(ulhs.is_active());
     assert_eq!(ulhs.get_depth(), 4);
-    assert_eq!(ulhs.get_args_iter().covect(), [p3.clone()]);
-    assert_eq!(ulhs.get_returns_iter().covect(), [p5.clone()]);
+    assert_eq!(ulhs.get_args_iter().covec(), [p3.clone()]);
+    assert_eq!(ulhs.get_returns_iter().covec(), [p5.clone()]);
 
     assert!(p5.is_active());
     assert_eq!(p5.get_origin(), ulhs);
-    assert_eq!(p5.get_users_iter().covect(), [final_add.clone()]);
+    assert_eq!(p5.get_users_iter().covec(), [final_add.clone()]);
 
     assert!(urhs.is_active());
     assert_eq!(urhs.get_depth(), 4);
-    assert_eq!(urhs.get_args_iter().covect(), [p4.clone()]);
-    assert_eq!(urhs.get_returns_iter().covect(), [p6.clone()]);
+    assert_eq!(urhs.get_args_iter().covec(), [p4.clone()]);
+    assert_eq!(urhs.get_returns_iter().covec(), [p6.clone()]);
 
     assert!(p6.is_active());
     assert_eq!(p6.get_origin(), urhs);
-    assert_eq!(p6.get_users_iter().covect(), [final_add.clone()]);
+    assert_eq!(p6.get_users_iter().covec(), [final_add.clone()]);
 
     assert!(final_add.is_active());
     assert_eq!(final_add.get_depth(), 5);
-    assert_eq!(final_add.get_args_iter().covect(), [p5.clone(), p6.clone()]);
-    assert_eq!(final_add.get_returns_iter().covect(), [p7.clone()]);
+    assert_eq!(final_add.get_args_iter().covec(), [p5.clone(), p6.clone()]);
+    assert_eq!(final_add.get_returns_iter().covec(), [p7.clone()]);
 
     assert!(p7.is_active());
     assert_eq!(p7.get_origin(), final_add);
-    assert_eq!(p7.get_users_iter().covect(), []);
+    assert_eq!(p7.get_users_iter().covec(), []);
 
     assert!(effect.is_active());
     assert_eq!(effect.get_depth(), 4);
-    assert_eq!(effect.get_args_iter().covect(), [p3.clone()]);
-    assert_eq!(effect.get_returns_iter().covect(), []);
+    assert_eq!(effect.get_args_iter().covec(), [p3.clone()]);
+    assert_eq!(effect.get_returns_iter().covec(), []);
     Ok(())
 }
 
@@ -673,8 +673,8 @@ fn test_replace_val_use() -> Result<(), IRError<TestDialect>> {
     let inc = store.get_op(inc_id);
     let v0 = store.get_val(v0[0]);
     let v1 = store.get_val(v1[0]);
-    assert_eq!(v0.get_users_iter().covect(), []);
-    assert_eq!(v1.get_users_iter().covect(), [inc.clone()]);
+    assert_eq!(v0.get_users_iter().covec(), []);
+    assert_eq!(v1.get_users_iter().covec(), [inc.clone()]);
     Ok(())
 }
 
@@ -979,7 +979,7 @@ fn test_iteration_with_deleted_elements() -> Result<(), IRError<TestDialect>> {
 
     store.delete_op(op2_id); // Delete middle operation
 
-    let active_ops = store.walk_ops_linear().map(|op| op.get_id()).covect();
+    let active_ops = store.walk_ops_linear().map(|op| op.get_id()).covec();
 
     // Should only see active operations
     assert_eq!(active_ops.len(), 2);
@@ -988,7 +988,7 @@ fn test_iteration_with_deleted_elements() -> Result<(), IRError<TestDialect>> {
     assert!(active_ops.contains(&op3_id));
 
     // Raw iterator should see all operations
-    let all_ops = store.raw_walk_ops_linear().map(|op| op.get_id()).covect();
+    let all_ops = store.raw_walk_ops_linear().map(|op| op.get_id()).covec();
     assert_eq!(all_ops.len(), 3);
     Ok(())
 }

@@ -1,5 +1,5 @@
 mod all_eq;
-mod collect_in_vec;
+mod collectors;
 mod erasable;
 mod fast_hash;
 mod fifo;
@@ -14,7 +14,7 @@ pub mod tracing;
 mod type_name;
 
 pub use all_eq::*;
-pub use collect_in_vec::*;
+pub use collectors::*;
 pub use erasable::*;
 pub use fast_hash::*;
 pub use fifo::*;
