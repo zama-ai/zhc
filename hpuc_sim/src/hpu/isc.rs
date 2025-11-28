@@ -156,7 +156,12 @@ impl Pool {
             .iter_mut()
             .for_each(|s| s.issue_lock.unlock(&opid));
         let index = self.slots.iter().position(|s| s.dop.id == opid).unwrap();
-        assert_eq!(self.slots[index].state, State::Pending);
+        assert_eq!(
+            self.slots[index].state,
+            State::Pending,
+            "State error encounter with {}",
+            self.slots[index]
+        );
         self.slots[index].state.transition();
     }
 
@@ -165,7 +170,12 @@ impl Pool {
             .iter_mut()
             .for_each(|s| s.read_lock.unlock(&opid));
         let index = self.slots.iter().position(|s| s.dop.id == opid).unwrap();
-        assert_eq!(self.slots[index].state, State::Issued);
+        assert_eq!(
+            self.slots[index].state,
+            State::Issued,
+            "State error encounter with {}",
+            self.slots[index]
+        );
         self.slots[index].state.transition();
     }
 
@@ -174,7 +184,12 @@ impl Pool {
             .iter_mut()
             .for_each(|s| s.write_lock.unlock(&opid));
         let index = self.slots.iter().position(|s| s.dop.id == opid).unwrap();
-        assert_eq!(self.slots[index].state, State::Loaded);
+        assert_eq!(
+            self.slots[index].state,
+            State::Loaded,
+            "State error encounter with {}",
+            self.slots[index]
+        );
         self.slots[index].state.transition();
         self.slots[index].state.transition();
     }
