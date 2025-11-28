@@ -26,6 +26,14 @@ macro_rules! test_hpu_simulation {
             // If small modification are made to the models those value must be updated
             // println!("{} => {},", stringify!($name), sim.now().0);
             assert_eq!(sim.now(), Cycle($cycles));
+
+            // Uncomment if you want to have trace dump of each operations
+            let filename = format!("/tmp/hpu_compiler/tests/hpu_{}.json", stringify!($name));
+            let path = std::path::Path::new(&filename);
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent).expect("Issue while creating output folder");
+            }
+            sim.dump_trace(&format!("/tmp/hpu_compiler/tests/hpu_{}.json", stringify!($name)));
             )+
         }
     }
