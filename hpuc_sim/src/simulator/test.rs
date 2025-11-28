@@ -152,7 +152,11 @@ impl Timer {
 impl Simulatable for Timer {
     type Event = TimerEvent;
 
-    fn handle(&mut self, dispatcher: &mut impl Dispatch<Event = Self::Event>, trigger: Trigger<Self::Event>) {
+    fn handle(
+        &mut self,
+        dispatcher: &mut impl Dispatch<Event = Self::Event>,
+        trigger: Trigger<Self::Event>,
+    ) {
         match trigger.event {
             TimerEvent::Tick => {
                 self.ticks += 1;
@@ -651,9 +655,9 @@ fn test_triple_tuple_composition() {
         ) {
             self.count += 3;
         }
-        fn report(&self, tracer: &mut Tracer<Self::Event>) {
-            tracer.add_simulatable(self);
-            tracer.add_counter("ComponentC_count", self.count as f64);
+        fn report(&self, at: Cycle, tracer: &mut Tracer<Self::Event>) {
+            tracer.add_simulatable(at, self);
+            tracer.add_counter(at, "ComponentC_count", self.count as f64);
         }
     }
 

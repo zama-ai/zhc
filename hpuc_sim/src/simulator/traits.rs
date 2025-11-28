@@ -57,8 +57,8 @@ pub trait Simulatable: Sized + Serialize {
         type_name_of_val(self).into()
     }
 
-    fn report(&self, tracer: &mut Tracer<Self::Event>) {
-        tracer.add_simulatable(self);
+    fn report(&self, at: Cycle, tracer: &mut Tracer<Self::Event>) {
+        tracer.add_simulatable(at, self);
     }
 }
 
@@ -85,10 +85,10 @@ macro_rules! impl_simulatable_for_tuple {
                 )+
             }
 
-            fn report(&self, tracer: &mut Tracer<Self::Event>) {
+            fn report(&self, at: Cycle, tracer: &mut Tracer<Self::Event>) {
                 let ($($T),+) = self ;
                 $(
-                $T.report(tracer);
+                $T.report(at, tracer);
                 )+
             }
         }

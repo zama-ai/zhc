@@ -30,7 +30,6 @@ pub struct CounterTracker {
 }
 
 pub struct Tracer<E: Event> {
-    now: Cycle,
     trace: Trace,
     // Events are added to the profile under pid 0
     event_trackers: FastMap<Discriminant<E>, EventTracker>,
@@ -42,7 +41,6 @@ pub struct Tracer<E: Event> {
 
 impl<E: Event> Tracer<E> {
     pub fn new() -> Self {
-        let now = Cycle::ZERO;
         let mut trace = Trace::default();
         trace.display_time_unit = Some(hpuc_utils::tracing::Unit::Nanoseconds);
         trace.set_process_name(EVENTS_PID, "Events");
@@ -52,7 +50,6 @@ impl<E: Event> Tracer<E> {
         let event_trackers = FastMap::new();
         let counter_trackers = FastMap::new();
         Tracer {
-            now,
             trace,
             simulatable_trackers,
             event_trackers,
@@ -60,15 +57,7 @@ impl<E: Event> Tracer<E> {
         }
     }
 
-    pub fn set_now(&mut self, new_now: Cycle) {
-        self.now = new_now;
-    }
-
-    pub fn now(&mut self) -> Cycle {
-        self.now
-    }
-
-    pub fn dump<P: AsRef<Path>>(&self, path: P) {
+    pub fn dump<P: AsRef<Path>>(&self, at: Cycle, path: P) {
         // We add the last states that were not flushed yet to the dumped trace
         let mut trace = self.trace.clone();
         for (_, tracker) in self.simulatable_trackers.iter() {
@@ -78,8 +67,7 @@ impl<E: Event> Tracer<E> {
                 tracker.tid,
                 &tracker.name,
                 Some(json!({"val": tracker.state.as_ref().unwrap()})),
-                (self.now - *tracker.state_change.as_ref().unwrap()).as_ts(NS_IN_US)
-                    - 5. * f64::EPSILON,
+                (at - *tracker.state_change.as_ref().unwrap()).as_ts(NS_IN_US) - 5. * f64::EPSILON,
             );
         }
         let json = serde_json::to_string_pretty(&trace).expect("Failed to serialize trace.");
@@ -88,7 +76,7 @@ impl<E: Event> Tracer<E> {
             .expect("Failed to write to file");
     }
 
-    pub fn add_counter<S: AsRef<str>>(&mut self, name: S, value: f64) {
+    pub fn add_counter<S: AsRef<str>>(&mut self, at: Cycle, name: S, value: f64) {
         if !self.counter_trackers.contains_key(name.as_ref()) {
             let tid = self.counter_trackers.len() + 1;
             self.counter_trackers
@@ -100,7 +88,7 @@ impl<E: Event> Tracer<E> {
 
         if tracker.state != Some(value) {
             self.trace.new_counter(
-                self.now.as_ts(NS_IN_US),
+                at.as_ts(NS_IN_US),
                 COUNTERS_PID,
                 tracker.tid,
                 name,
@@ -110,7 +98,7 @@ impl<E: Event> Tracer<E> {
         }
     }
 
-    pub fn add_event(&mut self, event: &E) {
+    pub fn add_event(&mut self, at: Cycle, event: &E) {
         if !self
             .event_trackers
             .contains_key(&std::mem::discriminant(event))
@@ -127,7 +115,7 @@ impl<E: Event> Tracer<E> {
             .unwrap();
         let state = serde_json::to_value(event).unwrap();
         self.trace.new_instant(
-            self.now.as_ts(NS_IN_US),
+            at.as_ts(NS_IN_US),
             EVENTS_PID,
             tracker.tid,
             &tracker.name,
@@ -136,7 +124,7 @@ impl<E: Event> Tracer<E> {
         );
     }
 
-    pub fn add_simulatable<S: Simulatable>(&mut self, simulatable: &S) {
+    pub fn add_simulatable<S: Simulatable>(&mut self, at: Cycle, simulatable: &S) {
         let address = simulatable as *const S as usize;
         if !self.simulatable_trackers.contains_key(&address) {
             let tid = self.simulatable_trackers.len() + 1;
@@ -156,7 +144,7 @@ impl<E: Event> Tracer<E> {
         let tracker = self.simulatable_trackers.get_mut(&address).unwrap();
         let state = serde_json::to_value(simulatable).unwrap();
         if tracker.state.is_none() {
-            tracker.state_change = Some(self.now);
+            tracker.state_change = Some(at);
             tracker.state = Some(state);
         } else if tracker.state.as_ref().unwrap() != &state {
             self.trace.new_complete(
@@ -165,10 +153,9 @@ impl<E: Event> Tracer<E> {
                 tracker.tid,
                 &tracker.name,
                 Some(json!({"val": tracker.state.as_ref().unwrap()})),
-                (self.now - *tracker.state_change.as_ref().unwrap()).as_ts(NS_IN_US)
-                    - 5. * f64::EPSILON,
+                (at - *tracker.state_change.as_ref().unwrap()).as_ts(NS_IN_US) - 5. * f64::EPSILON,
             );
-            tracker.state_change = Some(self.now);
+            tracker.state_change = Some(at);
             tracker.state = Some(state);
         }
     }

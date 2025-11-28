@@ -95,11 +95,10 @@ where
 
     fn step_cond(&mut self, condition: impl Fn(&Trigger<S::Event>) -> bool) -> SimulationState {
         self.dispatcher.advance();
-        self.tracer.set_now(self.dispatcher.now());
         let mut cond_encountered = false;
 
         if self.now().is_zero() {
-            self.simulatable.report(&mut self.tracer);
+            self.simulatable.report(self.now(), &mut self.tracer);
         }
 
         if self.dispatcher.is_empty() {
@@ -109,13 +108,13 @@ where
         while let Some(trigger) = self.dispatcher.pop_now() {
             cond_encountered |= condition(&trigger);
             if ACTIVATE_TRACING {
-                self.tracer.add_event(&trigger.event);
+                self.tracer.add_event(self.now(), &trigger.event);
             }
             self.simulatable.handle(&mut self.dispatcher, trigger);
         }
 
         if ACTIVATE_TRACING {
-            self.simulatable.report(&mut self.tracer);
+            self.simulatable.report(self.now(), &mut self.tracer);
         }
 
         if cond_encountered {
@@ -142,7 +141,7 @@ where
     }
 
     pub fn dump_trace<P: AsRef<Path>>(&self, path: P) {
-        self.tracer.dump(path);
+        self.tracer.dump(self.now(), path);
     }
 
     pub fn simulatable(&self) -> &S {

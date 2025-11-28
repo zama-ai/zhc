@@ -1,4 +1,4 @@
-use super::{Dispatch, Simulatable, Tracer, Trigger};
+use super::{Cycle, Dispatch, Simulatable, Tracer, Trigger};
 
 mod config;
 mod dops;
@@ -38,7 +38,11 @@ pub struct Hpu {
 impl Simulatable for Hpu {
     type Event = Events;
 
-    fn handle(&mut self, dispatcher: &mut impl Dispatch<Event = Self::Event>, trigger: Trigger<Self::Event>) {
+    fn handle(
+        &mut self,
+        dispatcher: &mut impl Dispatch<Event = Self::Event>,
+        trigger: Trigger<Self::Event>,
+    ) {
         self.scheduler.handle(dispatcher, trigger.clone());
         self.pe_mem.handle(dispatcher, trigger.clone());
         self.pe_pbs.handle(dispatcher, trigger.clone());
@@ -47,7 +51,7 @@ impl Simulatable for Hpu {
         self.retirement.handle(dispatcher, trigger.clone());
     }
 
-    fn power_up(&self, dispatcher: &mut impl Dispatch<Event=Events>) {
+    fn power_up(&self, dispatcher: &mut impl Dispatch<Event = Events>) {
         self.scheduler.power_up(dispatcher);
         self.pe_mem.power_up(dispatcher);
         self.pe_pbs.power_up(dispatcher);
@@ -56,13 +60,13 @@ impl Simulatable for Hpu {
         self.retirement.power_up(dispatcher);
     }
 
-    fn report<'t>(&self, tracer: &mut Tracer<Events>) {
-        tracer.add_simulatable(&self.scheduler);
-        tracer.add_simulatable(&self.pe_mem);
-        tracer.add_simulatable(&self.pe_pbs);
-        tracer.add_simulatable(&self.pe_alu);
-        tracer.add_simulatable(&self.pe_ctl);
-        tracer.add_simulatable(&self.retirement);
+    fn report<'t>(&self, at: Cycle, tracer: &mut Tracer<Events>) {
+        tracer.add_simulatable(at, &self.scheduler);
+        tracer.add_simulatable(at, &self.pe_mem);
+        tracer.add_simulatable(at, &self.pe_pbs);
+        tracer.add_simulatable(at, &self.pe_alu);
+        tracer.add_simulatable(at, &self.pe_ctl);
+        tracer.add_simulatable(at, &self.retirement);
     }
 }
 
