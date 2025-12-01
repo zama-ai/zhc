@@ -446,7 +446,8 @@ impl Simulatable for InstructionScheduler {
                 } else if self.has_write_unlocks() {
                     dispatcher.dispatch_now(Events::IscQueryUnlockWrite);
                 } else if self.pool.slots_available() && self.has_pending_dops() {
-                    dispatcher.dispatch_now(Events::IscQueryRefill);
+                    let dop = self.front_buffer.pop_front().unwrap();
+                    dispatcher.dispatch_now(Events::IscRefillDOp(dop));
                 } else if self.may_issue() {
                     dispatcher.dispatch_next(Events::IscQueryIssue);
                 }
@@ -469,8 +470,7 @@ impl Simulatable for InstructionScheduler {
                 self.pool.issue_unlock(opid);
                 true
             }
-            Events::IscQueryRefill => {
-                let dop = self.front_buffer.pop_front().unwrap();
+            Events::IscRefillDOp(dop) => {
                 self.pool.refill(dop);
                 true
             }

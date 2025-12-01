@@ -22,7 +22,7 @@ pub enum Events {
     IscQueryUnlockRead,
     IscQueryUnlockWrite,
     IscQueryUnlockIssue,
-    IscQueryRefill,
+    IscRefillDOp(DOp),
     IscQueryIssue,
     IscProcessOver,
 
@@ -64,7 +64,7 @@ impl Display for Events {
             Events::IscQueryUnlockRead => write!(f, "IscQueryUnlockRead"),
             Events::IscQueryUnlockWrite => write!(f, "IscQueryUnlockWrite"),
             Events::IscQueryUnlockIssue => write!(f, "IscQueryUnlockIssue"),
-            Events::IscQueryRefill => write!(f, "IscQueryRefill"),
+            Events::IscRefillDOp(_) => write!(f, "IscQueryRefill"),
             Events::IscQueryIssue => write!(f, "IscQueryIssue"),
             Events::IscProcessOver => write!(f, "IscProcessOver"),
             Events::PeAluLandProcessing => write!(f, "PeAluLandProcessing"),
