@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use hpuc_frontend::{BuilderContext, create_rhai_engine};
-use hpuc_ir::IR;
+use hpuc_ir::{dce::{eliminate_dead_code, DeadCodeAnalysis}, IR};
 use hpuc_langs::ioplang::Ioplang;
 
 fn get_ir(path: &Path, integer_w: i64, msg_w: i64, carry_w: i64) -> IR<Ioplang> {
@@ -20,17 +20,23 @@ fn get_ir(path: &Path, integer_w: i64, msg_w: i64, carry_w: i64) -> IR<Ioplang> 
 
 pub fn get_add_ir(integer_w: i64, msg_w: i64, carry_w: i64) -> IR<Ioplang> {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("iop/add.rhai");
-    get_ir(&path, integer_w, msg_w, carry_w)
+    let mut ir = get_ir(&path, integer_w, msg_w, carry_w);
+    eliminate_dead_code(&mut ir);
+    ir
 }
 
 pub fn get_sub_ir(integer_w: i64, msg_w: i64, carry_w: i64) -> IR<Ioplang> {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("iop/sub.rhai");
-    get_ir(&path, integer_w, msg_w, carry_w)
+    let mut ir = get_ir(&path, integer_w, msg_w, carry_w);
+    eliminate_dead_code(&mut ir);
+    ir
 }
 
 pub fn get_cmp_ir(integer_w: i64, msg_w: i64, carry_w: i64) -> IR<Ioplang> {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("iop/cmp.rhai");
-    get_ir(&path, integer_w, msg_w, carry_w)
+    let mut ir = get_ir(&path, integer_w, msg_w, carry_w);
+    eliminate_dead_code(&mut ir);
+    ir
 }
 
 #[test]
@@ -46,7 +52,6 @@ fn test_add_ir() {
         %5 : Index = constant<4_idx>();
         %6 : Index = constant<5_idx>();
         %7 : Index = constant<6_idx>();
-        %8 : Index = constant<7_idx>();
         %9 : Ciphertext = input<1, Ciphertext>();
         %10 : Index = constant<0_idx>();
         %11 : Index = constant<1_idx>();
@@ -55,21 +60,13 @@ fn test_add_ir() {
         %14 : Index = constant<4_idx>();
         %15 : Index = constant<5_idx>();
         %16 : Index = constant<6_idx>();
-        %17 : Index = constant<7_idx>();
         %18 : Lut2 = gen_lut2<ManyCarryMsg>();
-        %19 : Lut1 = gen_lut1<MsgOnly>();
-        %20 : Lut1 = gen_lut1<ReduceCarryPad>();
-        %21 : Lut1 = gen_lut1<SolveProp>();
-        %22 : Lut1 = gen_lut1<SolvePropCarry>();
         %23 : Lut1 = gen_lut1<SolvePropGroupFinal0>();
         %24 : Lut1 = gen_lut1<SolvePropGroupFinal1>();
         %25 : Lut1 = gen_lut1<SolvePropGroupFinal2>();
         %26 : Lut1 = gen_lut1<ExtractPropGroup0>();
         %27 : Lut1 = gen_lut1<ExtractPropGroup1>();
         %28 : Lut1 = gen_lut1<ExtractPropGroup2>();
-        %29 : Lut1 = gen_lut1<ExtractPropGroup3>();
-        %30 : PlaintextBlock = constant<1_pt_block>();
-        %31 : PlaintextBlock = constant<4_pt_block>();
         %32 : Ciphertext = let<Ciphertext>();
         %33 : Index = constant<0_idx>();
         %34 : Index = constant<1_idx>();
@@ -85,7 +82,6 @@ fn test_add_ir() {
         %44 : CiphertextBlock = extract_ct_block(%0, %5);
         %45 : CiphertextBlock = extract_ct_block(%0, %6);
         %46 : CiphertextBlock = extract_ct_block(%0, %7);
-        %47 : CiphertextBlock = extract_ct_block(%0, %8);
         %48 : CiphertextBlock = extract_ct_block(%9, %10);
         %49 : CiphertextBlock = extract_ct_block(%9, %11);
         %50 : CiphertextBlock = extract_ct_block(%9, %12);
@@ -93,7 +89,6 @@ fn test_add_ir() {
         %52 : CiphertextBlock = extract_ct_block(%9, %14);
         %53 : CiphertextBlock = extract_ct_block(%9, %15);
         %54 : CiphertextBlock = extract_ct_block(%9, %16);
-        %55 : CiphertextBlock = extract_ct_block(%9, %17);
         %56 : CiphertextBlock = add_ct(%40, %48);
         %57 : CiphertextBlock = add_ct(%41, %49);
         %58 : CiphertextBlock = add_ct(%42, %50);
@@ -101,7 +96,6 @@ fn test_add_ir() {
         %60 : CiphertextBlock = add_ct(%44, %52);
         %61 : CiphertextBlock = add_ct(%45, %53);
         %62 : CiphertextBlock = add_ct(%46, %54);
-        %63 : CiphertextBlock = add_ct(%47, %55);
         %64 : CiphertextBlock, %65 : CiphertextBlock = pbs2(%56, %18);
         %66 : CiphertextBlock = pbs(%57, %26);
         %67 : CiphertextBlock = pbs(%58, %27);
@@ -109,7 +103,6 @@ fn test_add_ir() {
         %69 : CiphertextBlock = pbs(%60, %26);
         %70 : CiphertextBlock = pbs(%61, %27);
         %71 : CiphertextBlock = pbs(%62, %28);
-        %72 : CiphertextBlock = pbs(%63, %29);
         %73 : CiphertextBlock = add_ct(%66, %65);
         %74 : CiphertextBlock = add_ct(%70, %69);
         %75 : CiphertextBlock = add_ct(%57, %65);
@@ -119,23 +112,18 @@ fn test_add_ir() {
         %79 : CiphertextBlock = pbs(%73, %23);
         %80 : Ciphertext = store_ct_block(%75, %76, %34);
         %81 : CiphertextBlock = add_ct(%68, %77);
-        %82 : CiphertextBlock = add_ct(%72, %78);
         %83 : CiphertextBlock = pbs(%77, %24);
         %84 : CiphertextBlock = add_ct(%58, %79);
         %85 : CiphertextBlock = pbs(%81, %25);
-        %86 : CiphertextBlock = pbs(%82, %20);
         %87 : CiphertextBlock = add_ct(%59, %83);
         %88 : Ciphertext = store_ct_block(%84, %80, %35);
-        %89 : CiphertextBlock = add_pt(%86, %30);
         %90 : CiphertextBlock = add_ct(%69, %85);
         %91 : CiphertextBlock = add_ct(%74, %85);
         %92 : CiphertextBlock = add_ct(%78, %85);
         %93 : Ciphertext = store_ct_block(%87, %88, %36);
-        %94 : CiphertextBlock = mac(%31, %85, %89);
         %95 : CiphertextBlock = pbs(%90, %25);
         %96 : CiphertextBlock = pbs(%91, %23);
         %97 : CiphertextBlock = pbs(%92, %24);
-        %98 : CiphertextBlock = pbs(%94, %22);
         %99 : CiphertextBlock = add_ct(%60, %95);
         %100 : CiphertextBlock = add_ct(%61, %96);
         %101 : CiphertextBlock = add_ct(%62, %97);
@@ -160,7 +148,6 @@ fn test_sub_ir() {
         %5 : Index = constant<4_idx>();
         %6 : Index = constant<5_idx>();
         %7 : Index = constant<6_idx>();
-        %8 : Index = constant<7_idx>();
         %9 : Ciphertext = input<1, Ciphertext>();
         %10 : Index = constant<0_idx>();
         %11 : Index = constant<1_idx>();
@@ -169,7 +156,6 @@ fn test_sub_ir() {
         %14 : Index = constant<4_idx>();
         %15 : Index = constant<5_idx>();
         %16 : Index = constant<6_idx>();
-        %17 : Index = constant<7_idx>();
         %18 : PlaintextBlock = constant<3_pt_block>();
         %19 : PlaintextBlock = constant<3_pt_block>();
         %20 : PlaintextBlock = constant<3_pt_block>();
@@ -177,21 +163,13 @@ fn test_sub_ir() {
         %22 : PlaintextBlock = constant<3_pt_block>();
         %23 : PlaintextBlock = constant<3_pt_block>();
         %24 : PlaintextBlock = constant<3_pt_block>();
-        %25 : PlaintextBlock = constant<3_pt_block>();
         %26 : Lut2 = gen_lut2<ManyCarryMsg>();
-        %27 : Lut1 = gen_lut1<MsgOnly>();
-        %28 : Lut1 = gen_lut1<ReduceCarryPad>();
-        %29 : Lut1 = gen_lut1<SolveProp>();
-        %30 : Lut1 = gen_lut1<SolvePropCarry>();
         %31 : Lut1 = gen_lut1<SolvePropGroupFinal0>();
         %32 : Lut1 = gen_lut1<SolvePropGroupFinal1>();
         %33 : Lut1 = gen_lut1<SolvePropGroupFinal2>();
         %34 : Lut1 = gen_lut1<ExtractPropGroup0>();
         %35 : Lut1 = gen_lut1<ExtractPropGroup1>();
         %36 : Lut1 = gen_lut1<ExtractPropGroup2>();
-        %37 : Lut1 = gen_lut1<ExtractPropGroup3>();
-        %38 : PlaintextBlock = constant<1_pt_block>();
-        %39 : PlaintextBlock = constant<4_pt_block>();
         %40 : Lut1 = gen_lut1<MsgOnly>();
         %41 : Ciphertext = let<Ciphertext>();
         %42 : Index = constant<0_idx>();
@@ -208,7 +186,6 @@ fn test_sub_ir() {
         %53 : CiphertextBlock = extract_ct_block(%0, %5);
         %54 : CiphertextBlock = extract_ct_block(%0, %6);
         %55 : CiphertextBlock = extract_ct_block(%0, %7);
-        %56 : CiphertextBlock = extract_ct_block(%0, %8);
         %57 : CiphertextBlock = extract_ct_block(%9, %10);
         %58 : CiphertextBlock = extract_ct_block(%9, %11);
         %59 : CiphertextBlock = extract_ct_block(%9, %12);
@@ -216,7 +193,6 @@ fn test_sub_ir() {
         %61 : CiphertextBlock = extract_ct_block(%9, %14);
         %62 : CiphertextBlock = extract_ct_block(%9, %15);
         %63 : CiphertextBlock = extract_ct_block(%9, %16);
-        %64 : CiphertextBlock = extract_ct_block(%9, %17);
         %65 : CiphertextBlock = pt_sub(%18, %57);
         %66 : CiphertextBlock = pt_sub(%19, %58);
         %67 : CiphertextBlock = pt_sub(%20, %59);
@@ -224,7 +200,6 @@ fn test_sub_ir() {
         %69 : CiphertextBlock = pt_sub(%22, %61);
         %70 : CiphertextBlock = pt_sub(%23, %62);
         %71 : CiphertextBlock = pt_sub(%24, %63);
-        %72 : CiphertextBlock = pt_sub(%25, %64);
         %73 : CiphertextBlock = add_ct(%49, %65);
         %74 : CiphertextBlock = add_ct(%50, %66);
         %75 : CiphertextBlock = add_ct(%51, %67);
@@ -232,7 +207,6 @@ fn test_sub_ir() {
         %77 : CiphertextBlock = add_ct(%53, %69);
         %78 : CiphertextBlock = add_ct(%54, %70);
         %79 : CiphertextBlock = add_ct(%55, %71);
-        %80 : CiphertextBlock = add_ct(%56, %72);
         %81 : CiphertextBlock, %82 : CiphertextBlock = pbs2(%73, %26);
         %83 : CiphertextBlock = pbs(%74, %34);
         %84 : CiphertextBlock = pbs(%75, %35);
@@ -240,7 +214,6 @@ fn test_sub_ir() {
         %86 : CiphertextBlock = pbs(%77, %34);
         %87 : CiphertextBlock = pbs(%78, %35);
         %88 : CiphertextBlock = pbs(%79, %36);
-        %89 : CiphertextBlock = pbs(%80, %37);
         %90 : CiphertextBlock = add_ct(%83, %82);
         %91 : CiphertextBlock = add_ct(%87, %86);
         %92 : CiphertextBlock = add_ct(%74, %82);
@@ -251,26 +224,21 @@ fn test_sub_ir() {
         %97 : CiphertextBlock = pbs(%92, %40);
         %98 : Ciphertext = store_ct_block(%93, %41, %42);
         %99 : CiphertextBlock = add_ct(%85, %94);
-        %100 : CiphertextBlock = add_ct(%89, %95);
         %101 : CiphertextBlock = pbs(%94, %32);
         %102 : CiphertextBlock = add_ct(%75, %96);
         %103 : Ciphertext = store_ct_block(%97, %98, %43);
         %104 : CiphertextBlock = pbs(%99, %33);
-        %105 : CiphertextBlock = pbs(%100, %28);
         %106 : CiphertextBlock = add_ct(%76, %101);
         %107 : CiphertextBlock = pbs(%102, %40);
-        %108 : CiphertextBlock = add_pt(%105, %38);
         %109 : CiphertextBlock = add_ct(%86, %104);
         %110 : CiphertextBlock = add_ct(%91, %104);
         %111 : CiphertextBlock = add_ct(%95, %104);
         %112 : CiphertextBlock = pbs(%106, %40);
         %113 : Ciphertext = store_ct_block(%107, %103, %44);
-        %114 : CiphertextBlock = mac(%39, %104, %108);
         %115 : CiphertextBlock = pbs(%109, %33);
         %116 : CiphertextBlock = pbs(%110, %31);
         %117 : CiphertextBlock = pbs(%111, %32);
         %118 : Ciphertext = store_ct_block(%112, %113, %45);
-        %119 : CiphertextBlock = pbs(%114, %30);
         %120 : CiphertextBlock = add_ct(%77, %115);
         %121 : CiphertextBlock = add_ct(%78, %116);
         %122 : CiphertextBlock = add_ct(%79, %117);
@@ -308,12 +276,9 @@ fn test_cmp_ir() {
         %15 : Index = constant<5_idx>();
         %16 : Index = constant<6_idx>();
         %17 : Index = constant<7_idx>();
-        %18 : Lut1 = gen_lut1<Shuffle>();
-        %19 : Lut1 = gen_lut1<None>();
         %20 : Lut1 = gen_lut1<CmpSign>();
         %21 : Lut1 = gen_lut1<CmpReduce>();
         %22 : Lut1 = gen_lut1<UserMrg>();
-        %23 : Lut1 = gen_lut1<UserCmp>();
         %24 : PlaintextBlock = constant<4_pt_block>();
         %25 : PlaintextBlock = constant<4_pt_block>();
         %26 : PlaintextBlock = constant<4_pt_block>();

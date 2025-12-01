@@ -544,7 +544,7 @@ impl<D: Dialect> IR<D> {
 
 impl<D: Dialect> Display for IR<D> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let printer = Printer::from_ir(self, true, true);
+        let printer = Printer::from_ir(self, true, false);
         printer.format_ir(f, self)
     }
 }

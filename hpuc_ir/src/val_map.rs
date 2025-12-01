@@ -210,13 +210,19 @@ impl<T> Index<ValId> for ValMap<T> {
     type Output = T;
 
     fn index(&self, index: ValId) -> &Self::Output {
-        self.get(&index).unwrap()
+        match self.get(&index) {
+            Some(a) => a,
+            None => panic!("Tried to get unmapped index {:?}", index),
+        }
     }
 }
 
 impl<T> IndexMut<ValId> for ValMap<T> {
     fn index_mut(&mut self, index: ValId) -> &mut Self::Output {
-        self.get_mut(&index).unwrap()
+        match self.get_mut(&index) {
+            Some(a) => a,
+            None => panic!("Tried to get unmapped index {:?}", index),
+        }
     }
 }
 

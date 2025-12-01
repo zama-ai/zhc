@@ -1,5 +1,6 @@
+use crate::OpMap;
+
 use super::{Dialect, IR, OpId};
-use hpuc_utils::Store;
 use std::ops::Index;
 
 /// Represents the liveness of an operation in dead code analysis.
@@ -16,40 +17,25 @@ pub enum Liveness {
 /// This analysis determines which operations in an IR are "live" (have observable effects
 /// or contribute to operations with observable effects) versus "dead" (can be safely removed).
 pub struct DeadCodeAnalysis {
-    states: Store<OpId, Option<Liveness>>,
-}
-
-impl DeadCodeAnalysis {
-    fn raw_get_statuses_iter(&self) -> impl Iterator<Item = (OpId, Option<&Liveness>)> {
-        self.states.enumerate_iter().map(|(i, a)| (i, a.as_ref()))
-    }
+    states: OpMap<Liveness>,
 }
 
 impl DeadCodeAnalysis {
     /// Performs dead code analysis on the given IR.
     pub fn from_ir<D: Dialect>(ir: &IR<D>) -> Self {
-        let mut states: Store<OpId, _> = ir
-            .raw_walk_ops_linear()
-            .map(|op| {
-                if op.is_active() {
-                    Some(Liveness::Dead)
-                } else {
-                    None
-                }
-            })
-            .collect();
+        let mut states = ir
+            .filled_opmap(Liveness::Dead);
+
         let mut worklist = Vec::new();
         for effect in ir.raw_walk_ops_linear().filter(|op| op.is_effect()) {
-            states[effect.get_id()] = Some(Liveness::Live);
+            states[effect.get_id()] = Liveness::Live;
             worklist.push(effect);
         }
         while let Some(op) = worklist.pop() {
             for pred in op.get_predecessors_iter() {
-                if states[pred.get_id()] == Some(Liveness::Dead) {
-                    states[pred.get_id()] = Some(Liveness::Live);
+                if states[pred.get_id()] == Liveness::Dead {
+                    states[pred.get_id()] = Liveness::Live;
                     worklist.push(pred);
-                } else if states[pred.get_id()].is_none() {
-                    panic!("Fatal error");
                 }
             }
         }
@@ -58,13 +44,18 @@ impl DeadCodeAnalysis {
 
     /// Returns an iterator over all active operations and their liveness status.
     pub fn get_statuses_iter(&self) -> impl Iterator<Item = (OpId, &Liveness)> {
-        self.raw_get_statuses_iter()
-            .filter_map(|(i, s)| s.map(|v| (i, v)))
+        self.states
+            .iter()
+    }
+
+    /// Returns whether the ir has dead nodes.
+    pub fn has_dead_code(&self) -> bool {
+        self.states.iter().any(|(_, a)| matches!(a, Liveness::Dead))
     }
 }
 
 impl Index<OpId> for DeadCodeAnalysis {
-    type Output = Option<Liveness>;
+    type Output = Liveness;
 
     fn index(&self, index: OpId) -> &Self::Output {
         &self.states[index]
@@ -112,8 +103,8 @@ mod test {
         );
 
         let analysis = DeadCodeAnalysis::from_ir(&ir);
-        assert_eq!(analysis[input_op], Some(Liveness::Live));
-        assert_eq!(analysis[return_op], Some(Liveness::Live));
+        assert_eq!(analysis[input_op], Liveness::Live);
+        assert_eq!(analysis[return_op], Liveness::Live);
 
         eliminate_dead_code(&mut ir);
         assert_eq!(ir.n_ops(), 2);
@@ -145,9 +136,9 @@ mod test {
         );
 
         let analysis = DeadCodeAnalysis::from_ir(&ir);
-        assert_eq!(analysis[input_op], Some(Liveness::Live));
-        assert_eq!(analysis[add_op], Some(Liveness::Dead));
-        assert_eq!(analysis[return_op], Some(Liveness::Live));
+        assert_eq!(analysis[input_op], Liveness::Live);
+        assert_eq!(analysis[add_op], Liveness::Dead);
+        assert_eq!(analysis[return_op], Liveness::Live);
 
         eliminate_dead_code(&mut ir);
         assert_eq!(ir.n_ops(), 2);
@@ -158,7 +149,6 @@ mod test {
         ir.check_ir(
             "
             %0 : Int = int_input<pos: 0>();
-            // %_1 : Int = add(%0, %0);
             return(%0);
             ",
         );
@@ -185,11 +175,11 @@ mod test {
         );
 
         let analysis = DeadCodeAnalysis::from_ir(&ir);
-        assert_eq!(analysis[input1], Some(Liveness::Live));
-        assert_eq!(analysis[input2], Some(Liveness::Live));
-        assert_eq!(analysis[add_op], Some(Liveness::Live));
-        assert_eq!(analysis[inc_op], Some(Liveness::Live));
-        assert_eq!(analysis[return_op], Some(Liveness::Live));
+        assert_eq!(analysis[input1], Liveness::Live);
+        assert_eq!(analysis[input2], Liveness::Live);
+        assert_eq!(analysis[add_op], Liveness::Live);
+        assert_eq!(analysis[inc_op], Liveness::Live);
+        assert_eq!(analysis[return_op], Liveness::Live);
 
         eliminate_dead_code(&mut ir);
         assert_eq!(ir.n_ops(), 5);
@@ -226,11 +216,11 @@ mod test {
         );
 
         let analysis = DeadCodeAnalysis::from_ir(&ir);
-        assert_eq!(analysis[input_op], Some(Liveness::Live));
-        assert_eq!(analysis[inc1_op], Some(Liveness::Live));
-        assert_eq!(analysis[inc2_op], Some(Liveness::Dead));
-        assert_eq!(analysis[add_op], Some(Liveness::Dead));
-        assert_eq!(analysis[return_op], Some(Liveness::Live));
+        assert_eq!(analysis[input_op], Liveness::Live);
+        assert_eq!(analysis[inc1_op], Liveness::Live);
+        assert_eq!(analysis[inc2_op], Liveness::Dead);
+        assert_eq!(analysis[add_op], Liveness::Dead);
+        assert_eq!(analysis[return_op], Liveness::Live);
 
         eliminate_dead_code(&mut ir);
         assert_eq!(ir.n_ops(), 3);
@@ -244,8 +234,6 @@ mod test {
             "
             %0 : Int = int_input<pos: 0>();
             %1 : Int = inc(%0);
-            // %_2 : Int = inc(%0);
-            // %_3 : Int = add(%1, %_2);
             return(%1);
         ",
         );
@@ -272,11 +260,11 @@ mod test {
         );
 
         let analysis = DeadCodeAnalysis::from_ir(&ir);
-        assert_eq!(analysis[input1], Some(Liveness::Live));
-        assert_eq!(analysis[input2], Some(Liveness::Live));
-        assert_eq!(analysis[add_op], Some(Liveness::Dead));
-        assert_eq!(analysis[return1], Some(Liveness::Live));
-        assert_eq!(analysis[return2], Some(Liveness::Live));
+        assert_eq!(analysis[input1], Liveness::Live);
+        assert_eq!(analysis[input2], Liveness::Live);
+        assert_eq!(analysis[add_op], Liveness::Dead);
+        assert_eq!(analysis[return1], Liveness::Live);
+        assert_eq!(analysis[return2], Liveness::Live);
 
         eliminate_dead_code(&mut ir);
         assert_eq!(ir.n_ops(), 4);
@@ -285,7 +273,6 @@ mod test {
             "
             %0 : Int = int_input<pos: 0>();
             %1 : Int = int_input<pos: 1>();
-            // %_2 : Int = add(%0, %1);
             return(%0);
             return(%1);
             ",
@@ -309,18 +296,15 @@ mod test {
         );
 
         let analysis = DeadCodeAnalysis::from_ir(&ir);
-        assert_eq!(analysis[input_op], Some(Liveness::Dead));
-        assert_eq!(analysis[add_op], Some(Liveness::Dead));
-        assert_eq!(analysis[inc_op], Some(Liveness::Dead));
+        assert_eq!(analysis[input_op], Liveness::Dead);
+        assert_eq!(analysis[add_op], Liveness::Dead);
+        assert_eq!(analysis[inc_op], Liveness::Dead);
 
         eliminate_dead_code(&mut ir);
         assert_eq!(ir.n_ops(), 0);
 
         ir.check_ir(
             "
-            // %_0 : Int = int_input<pos: 0>();
-            // %_1 : Int = add(%_0, %_0);
-            // %_2 : Int = inc(%_1);
             ",
         );
         Ok(())
@@ -338,15 +322,13 @@ mod test {
         ir.check_ir(
             "
             %0 : Int = int_input<pos: 0>();
-            // %_1 : Int = add(%0, %0);
             return(%0);
             ",
         );
 
         let analysis = DeadCodeAnalysis::from_ir(&ir);
-        assert_eq!(analysis[input_op], Some(Liveness::Live));
-        assert_eq!(analysis[add_op], None); // Already deleted
-        assert_eq!(analysis[return_op], Some(Liveness::Live));
+        assert_eq!(analysis[input_op], Liveness::Live);
+        assert_eq!(analysis[return_op], Liveness::Live);
 
         eliminate_dead_code(&mut ir);
         assert_eq!(ir.n_ops(), 2);
@@ -356,7 +338,6 @@ mod test {
         ir.check_ir(
             "
             %0 : Int = int_input<pos: 0>();
-            // %_1 : Int = add(%0, %0);
             return(%0);
             ",
         );
@@ -385,12 +366,12 @@ mod test {
         );
 
         let analysis = DeadCodeAnalysis::from_ir(&ir);
-        assert_eq!(analysis[input1], Some(Liveness::Live));
-        assert_eq!(analysis[input2], Some(Liveness::Dead));
-        assert_eq!(analysis[dead_add1], Some(Liveness::Dead));
-        assert_eq!(analysis[dead_add2], Some(Liveness::Dead));
-        assert_eq!(analysis[live_inc], Some(Liveness::Live));
-        assert_eq!(analysis[return_op], Some(Liveness::Live));
+        assert_eq!(analysis[input1], Liveness::Live);
+        assert_eq!(analysis[input2], Liveness::Dead);
+        assert_eq!(analysis[dead_add1], Liveness::Dead);
+        assert_eq!(analysis[dead_add2], Liveness::Dead);
+        assert_eq!(analysis[live_inc], Liveness::Live);
+        assert_eq!(analysis[return_op], Liveness::Live);
 
         eliminate_dead_code(&mut ir);
         assert_eq!(ir.n_ops(), 3);
@@ -403,10 +384,7 @@ mod test {
         ir.check_ir(
             "
             %0 : Int = int_input<pos: 0>();
-            // %_1 : Int = int_input<pos: 1>();
-            // %_2 : Int = add(%0, %_1);
             %3 : Int = inc(%0);
-            // %_4 : Int = add(%_2, %_2);
             return(%3);
             ",
         );

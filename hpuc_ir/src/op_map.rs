@@ -208,13 +208,19 @@ impl<T> Index<OpId> for OpMap<T> {
     type Output = T;
 
     fn index(&self, index: OpId) -> &Self::Output {
-        self.get(&index).unwrap()
+        match self.get(&index) {
+            Some(a) => a,
+            None => panic!("Tried to get unmapped index {:?}", index),
+        }
     }
 }
 
 impl<T> IndexMut<OpId> for OpMap<T> {
     fn index_mut(&mut self, index: OpId) -> &mut Self::Output {
-        self.get_mut(&index).unwrap()
+        match self.get_mut(&index) {
+            Some(a) => a,
+            None => panic!("Tried to get unmapped index {:?}", index),
+        }
     }
 }
 

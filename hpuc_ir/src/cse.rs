@@ -189,7 +189,6 @@ mod test {
             "
             %0 : Int = int_input<pos: 0>();
             %1 : Int = inc(%0);
-            // %_2 : Int = inc(%0);
             return(%1);
             ",
         );
@@ -226,7 +225,6 @@ mod test {
             %0 : Int = int_input<pos: 0>();
             %1 : Int = int_input<pos: 1>();
             %2 : Int = add(%0, %1);
-            // %_3 : Int = add(%1, %0);
             return(%2);
             ",
         );
@@ -285,7 +283,6 @@ mod test {
             %0 : Int = int_input<pos: 0>();
             %1 : Int = int_input<pos: 1>();
             %2 : Int, %3 : Int = div_rem(%0, %1);
-            // %_4 : Int, %_5 : Int = div_rem(%0, %1);
             %6 : Int = add(%2, %3);
             return(%6);
             ",

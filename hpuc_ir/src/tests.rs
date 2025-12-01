@@ -597,8 +597,6 @@ fn test_delete_op() -> Result<(), IRError<TestDialect>> {
     store.check_ir(
         "
             %0 : Int = int_input<pos: 0>();
-            // %_1 : Int = int_input<pos: 1>();
-            // %_2 : Int = add(%0, %_1);
             ",
     );
     assert!(store.raw_get_val(v2[0]).is_inactive());
