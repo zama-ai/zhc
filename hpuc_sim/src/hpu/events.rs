@@ -19,11 +19,7 @@ pub enum Events {
     IscUnlockSync(DOpId),
     IscRetireDOp(DOp),
     IscQuery,
-    IscQueryUnlockRead,
-    IscQueryUnlockWrite,
-    IscQueryUnlockIssue,
     IscRefillDOp(DOp),
-    IscQueryIssue,
     IscProcessOver,
 
     // PeAluAvents
@@ -61,11 +57,7 @@ impl Display for Events {
             Events::IscUnlockSync(_) => write!(f, "IscUnlockSync"),
             Events::IscRetireDOp(_) => write!(f, "IscRetireDOp"),
             Events::IscQuery => write!(f, "IscQuery"),
-            Events::IscQueryUnlockRead => write!(f, "IscQueryUnlockRead"),
-            Events::IscQueryUnlockWrite => write!(f, "IscQueryUnlockWrite"),
-            Events::IscQueryUnlockIssue => write!(f, "IscQueryUnlockIssue"),
             Events::IscRefillDOp(_) => write!(f, "IscQueryRefill"),
-            Events::IscQueryIssue => write!(f, "IscQueryIssue"),
             Events::IscProcessOver => write!(f, "IscProcessOver"),
             Events::PeAluLandProcessing => write!(f, "PeAluLandProcessing"),
             Events::PeAluLaunchProcessing => write!(f, "PeAluLaunchProcessing"),

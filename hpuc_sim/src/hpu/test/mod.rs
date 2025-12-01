@@ -28,64 +28,64 @@ macro_rules! test_hpu_simulation {
             assert_eq!(sim.now(), Cycle($cycles));
 
             // Uncomment if you want to have trace dump of each operations
-            let filename = format!("/tmp/hpu_compiler/tests/hpu_{}.json", stringify!($name));
-            let path = std::path::Path::new(&filename);
-            if let Some(parent) = path.parent() {
-                std::fs::create_dir_all(parent).expect("Issue while creating output folder");
-            }
-            sim.dump_trace(&format!("/tmp/hpu_compiler/tests/hpu_{}.json", stringify!($name)));
+            // let filename = format!("/tmp/hpu_compiler/tests/hpu_{}.json", stringify!($name));
+            // let path = std::path::Path::new(&filename);
+            // if let Some(parent) = path.parent() {
+            //     std::fs::create_dir_all(parent).expect("Issue while creating output folder");
+            // }
+            // sim.dump_trace(&format!("/tmp/hpu_compiler/tests/hpu_{}.json", stringify!($name)));
             )+
         }
     }
 }
 
 test_hpu_simulation!(
-    ADDS         => 79938,
-    SUBS         => 88161,
-    SSUB         => 88186,
-    MULS         => 153239,
-    DIVS         => 5418991,
-    MODS         => 5296804,
-    OVF_ADDS     => 72250,
-    OVF_SUBS     => 80473,
-    OVF_SSUB     => 80498,
-    OVF_MULS     => 624753,
-    SHIFTS_R     => 14521,
-    SHIFTS_L     => 14521,
-    ROTS_R       => 14521,
-    ROTS_L       => 14521,
-    ADD          => 64531,
-    SUB          => 72264,
-    MUL          => 137621,
-    DIV          => 5047926,
-    MOD          => 4924796,
-    OVF_ADD      => 56841,
-    OVF_SUB      => 60476,
-    OVF_MUL      => 609406,
-    SHIFT_R      => 351577,
-    SHIFT_L      => 347282,
-    ROT_R        => 368205,
-    ROT_L        => 368140,
-    BW_AND       => 23119,
-    BW_OR        => 23119,
-    BW_XOR       => 23119,
-    CMP_GT       => 54982,
-    CMP_GTE      => 54982,
-    CMP_LT       => 54982,
-    CMP_LTE      => 54982,
-    CMP_EQ       => 54982,
-    CMP_NEQ      => 54982,
-    IF_THEN_ZERO => 23083,
-    IF_THEN_ELSE => 38231,
-    ERC_20       => 160780,
-    MEMCPY       => 4303,
-    ILOG2        => 271197,
-    COUNT0       => 174566,
-    COUNT1       => 174566,
-    LEAD0        => 404706,
-    LEAD1        => 416639,
-    TRAIL0       => 400209,
-    TRAIL1       => 402397,
-    ADD_SIMD     => 194074,
-    ERC_20_SIMD  => 921023
+    ADDS => 79924,
+    SUBS => 88148,
+    SSUB => 88172,
+    MULS => 153224,
+    DIVS => 5418883,
+    MODS => 5296699,
+    OVF_ADDS => 72239,
+    OVF_SUBS => 80463,
+    OVF_SSUB => 80487,
+    OVF_MULS => 624735,
+    SHIFTS_R => 14519,
+    SHIFTS_L => 14519,
+    ROTS_R => 14519,
+    ROTS_L => 14519,
+    ADD => 64517,
+    SUB => 72250,
+    MUL => 137606,
+    DIV => 5047830,
+    MOD => 4924701,
+    OVF_ADD => 56831,
+    OVF_SUB => 60465,
+    OVF_MUL => 609388,
+    SHIFT_R => 351568,
+    SHIFT_L => 347273,
+    ROT_R => 368195,
+    ROT_L => 368130,
+    BW_AND => 23114,
+    BW_OR => 23114,
+    BW_XOR => 23114,
+    CMP_GT => 54972,
+    CMP_GTE => 54972,
+    CMP_LT => 54972,
+    CMP_LTE => 54972,
+    CMP_EQ => 54972,
+    CMP_NEQ => 54972,
+    IF_THEN_ZERO => 23078,
+    IF_THEN_ELSE => 38225,
+    ERC_20 => 160757,
+    MEMCPY => 4301,
+    ILOG2 => 271181,
+    COUNT0 => 174549,
+    COUNT1 => 174549,
+    LEAD0 => 404685,
+    LEAD1 => 416614,
+    TRAIL0 => 400190,
+    TRAIL1 => 402377,
+    ADD_SIMD => 194069,
+    ERC_20_SIMD => 920950
 );

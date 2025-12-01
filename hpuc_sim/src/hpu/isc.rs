@@ -440,44 +440,31 @@ impl Simulatable for InstructionScheduler {
             }
             Events::IscQuery => {
                 if self.has_issue_unlocks() {
-                    dispatcher.dispatch_now(Events::IscQueryUnlockIssue);
+                    let opid = self.issue_unlock_buffer.pop_front().unwrap();
+                    self.pool.issue_unlock(opid);
+                    true
                 } else if self.has_read_unlocks() {
-                    dispatcher.dispatch_now(Events::IscQueryUnlockRead);
+                    let opid = self.read_unlock_buffer.pop_front().unwrap();
+                    self.pool.read_unlock(opid);
+                    true
                 } else if self.has_write_unlocks() {
-                    dispatcher.dispatch_now(Events::IscQueryUnlockWrite);
+                    let opid = self.write_unlock_buffer.pop_front().unwrap();
+                    self.pool.write_unlock(opid);
+                    let dop = self.pool.retire(opid);
+                    dispatcher.dispatch_now(Events::IscRetireDOp(dop));
+                    true
                 } else if self.pool.slots_available() && self.has_pending_dops() {
                     let dop = self.front_buffer.pop_front().unwrap();
-                    dispatcher.dispatch_now(Events::IscRefillDOp(dop));
-                } else if self.may_issue() {
-                    dispatcher.dispatch_next(Events::IscQueryIssue);
-                }
-                false
-            }
-            Events::IscQueryUnlockRead => {
-                let opid = self.read_unlock_buffer.pop_front().unwrap();
-                self.pool.read_unlock(opid);
-                true
-            }
-            Events::IscQueryUnlockWrite => {
-                let opid = self.write_unlock_buffer.pop_front().unwrap();
-                self.pool.write_unlock(opid);
-                let dop = self.pool.retire(opid);
-                dispatcher.dispatch_now(Events::IscRetireDOp(dop));
-                true
-            }
-            Events::IscQueryUnlockIssue => {
-                let opid = self.issue_unlock_buffer.pop_front().unwrap();
-                self.pool.issue_unlock(opid);
-                true
-            }
-            Events::IscRefillDOp(dop) => {
-                self.pool.refill(dop);
-                true
-            }
-            Events::IscQueryIssue => {
-                if let Some(dop) = self.pool.get_issuable(self.get_filter()) {
-                    dispatcher.dispatch_now(Events::IscIssueDOp(dop));
+                    dispatcher.dispatch_now(Events::IscRefillDOp(dop.clone()));
+                    self.pool.refill(dop);
                     true
+                } else if self.may_issue() {
+                    if let Some(dop) = self.pool.get_issuable(self.get_filter()) {
+                        dispatcher.dispatch_now(Events::IscIssueDOp(dop));
+                        true
+                    } else {
+                        false
+                    }
                 } else {
                     false
                 }
