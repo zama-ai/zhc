@@ -31,7 +31,8 @@ impl<'a, T> Iterator for SmallSetIter<'a, T> {
 
 /// Iterator over mutable references to elements in a SmallSet.
 pub enum SmallSetIterMut<'a, T> {
-    Heap(std::collections::hash_set::Iter<'a, T>), // Note: HashSet doesn't support iter_mut for values
+    Heap(std::collections::hash_set::Iter<'a, T>), /* Note: HashSet doesn't support iter_mut
+                                                    * for values */
     Stack(std::slice::IterMut<'a, T>),
 }
 
@@ -40,7 +41,8 @@ impl<'a, T> Iterator for SmallSetIterMut<'a, T> {
 
     fn next(&mut self) -> Option<Self::Item> {
         match self {
-            SmallSetIterMut::Heap(_) => None, // HashSet doesn't support mutable iteration over values
+            SmallSetIterMut::Heap(_) => None, /* HashSet doesn't support mutable iteration over
+                                                * values */
             SmallSetIterMut::Stack(iter) => iter.next(),
         }
     }

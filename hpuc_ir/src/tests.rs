@@ -1127,9 +1127,7 @@ fn test_topological_order_with_deletions() -> Result<(), IRError<TestDialect>> {
     store.delete_op(op2_id); // Now safe to delete op2
 
     // Topological order should include deleted operations in raw iterator
-    let all_topo: Vec<_> = store
-        .raw_topological_opwalker()
-        .collect();
+    let all_topo: Vec<_> = store.raw_topological_opwalker().collect();
     assert_eq!(all_topo.len(), 4);
     assert!(all_topo.contains(&op1_id));
     assert!(all_topo.contains(&op2_id));

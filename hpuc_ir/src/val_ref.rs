@@ -14,7 +14,7 @@ pub struct ValRef<'s, D: Dialect> {
     pub(super) state: &'s State,
 }
 
-impl<'s, D: Dialect> Display for ValRef<'s, D>{
+impl<'s, D: Dialect> Display for ValRef<'s, D> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let printer = Printer::from_ir(self.ir, true, true);
         printer.format_arg(f, self.to_owned())

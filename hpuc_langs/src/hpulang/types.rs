@@ -14,7 +14,7 @@ impl Display for Types {
         match self {
             Types::CtRegister => write!(f, "CtRegister"),
             Types::CtHeap => write!(f, "CtHeap"),
-            Types::PtImmediate => write!(f, "PtImmediate")
+            Types::PtImmediate => write!(f, "PtImmediate"),
         }
     }
 }

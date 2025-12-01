@@ -9,8 +9,7 @@ use std::fmt::Debug;
 #[derive(Clone)]
 pub struct StackSet<T: Eq>(pub(super) StackVec<T>);
 
-impl<T: Eq> StackSet<T>{
-
+impl<T: Eq> StackSet<T> {
     /// Creates a new empty `StackSet`.
     pub fn new() -> Self {
         StackSet(StackVec::new())
@@ -43,10 +42,8 @@ impl<T: Eq> StackSet<T>{
             Some(i) => {
                 self.0.remove(i);
                 true
-            },
-            None => {
-                false
             }
+            None => false,
         }
     }
 

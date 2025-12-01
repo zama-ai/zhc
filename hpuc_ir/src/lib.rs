@@ -15,23 +15,23 @@ mod printer;
 mod signature;
 mod state;
 mod val;
+mod val_map;
 mod val_mut;
 mod val_ref;
-mod val_map;
 
 pub use dialect::*;
 pub use id::*;
 pub use ir::*;
 pub(crate) use op::*;
-pub(crate) use op_mut::*;
 pub use op_map::*;
+pub(crate) use op_mut::*;
 pub use op_ref::*;
 pub use printer::*;
 pub use signature::*;
 pub(crate) use state::*;
 pub(crate) use val::*;
-pub(crate) use val_mut::*;
 pub use val_map::*;
+pub(crate) use val_mut::*;
 
 /// Error use to report IR issue
 #[derive(Clone, Debug)]

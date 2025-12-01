@@ -1,16 +1,20 @@
-use std::{fmt::Debug, ops::{Index, IndexMut}};
+use std::{
+    fmt::Debug,
+    ops::{Index, IndexMut},
+};
 
 use hpuc_utils::Store;
 
 use crate::val_ref::ValRef;
 
-use super::{Dialect, IR, ValId, State};
+use super::{Dialect, IR, State, ValId};
 
-/// A map that associates values with value IDs, preserving the active/inactive state structure from an IR.
+/// A map that associates values with value IDs, preserving the active/inactive state structure from
+/// an IR.
 pub struct ValMap<T> {
     store: Store<ValId, State<Option<T>>>,
     n_stored: u16,
-    n_inactive: u16
+    n_inactive: u16,
 }
 
 impl<T> ValMap<T> {
@@ -33,7 +37,7 @@ impl<T> ValMap<T> {
                 })
                 .collect(),
             n_stored: 0,
-            n_inactive: ir.raw_n_vals() - ir.n_vals()
+            n_inactive: ir.raw_n_vals() - ir.n_vals(),
         }
     }
 
@@ -55,7 +59,7 @@ impl<T> ValMap<T> {
                 })
                 .collect(),
             n_stored: ir.n_vals(),
-            n_inactive: ir.raw_n_vals() - ir.n_vals()
+            n_inactive: ir.raw_n_vals() - ir.n_vals(),
         }
     }
 
@@ -63,7 +67,10 @@ impl<T> ValMap<T> {
     ///
     /// This method allows selective population of the map, where some active values may
     /// not receive values based on the logic in `f`.
-    pub fn new_partially_mapped<D: Dialect>(ir: &IR<D>, mut f: impl FnMut(ValRef<D>) -> Option<T>) -> Self {
+    pub fn new_partially_mapped<D: Dialect>(
+        ir: &IR<D>,
+        mut f: impl FnMut(ValRef<D>) -> Option<T>,
+    ) -> Self {
         ValMap {
             store: ir
                 .raw_walk_vals_linear()
@@ -76,7 +83,7 @@ impl<T> ValMap<T> {
                 })
                 .collect(),
             n_stored: ir.n_vals(),
-            n_inactive: ir.raw_n_vals() - ir.n_vals()
+            n_inactive: ir.raw_n_vals() - ir.n_vals(),
         }
     }
 
@@ -97,7 +104,7 @@ impl<T> ValMap<T> {
                 })
                 .collect(),
             n_stored: ir.n_vals(),
-            n_inactive: ir.raw_n_vals() - ir.n_vals()
+            n_inactive: ir.raw_n_vals() - ir.n_vals(),
         }
     }
 

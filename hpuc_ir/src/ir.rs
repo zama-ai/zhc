@@ -1,9 +1,9 @@
 use hpuc_utils::svec;
 use hpuc_utils::{SmallVec, Store};
 
+use crate::ValMap;
 use crate::traversal::{OpWalk, OpWalker, ValWalk, ValWalker};
 use crate::val_ref::ValRef;
-use crate::ValMap;
 use std::{
     cmp::max,
     fmt::{Debug, Display},
@@ -121,7 +121,7 @@ impl<D: Dialect> IR<D> {
     }
 
     pub(crate) fn raw_linear_opwalker(&self) -> impl OpWalker {
-       OpId::range(0, self.raw_n_ops())
+        OpId::range(0, self.raw_n_ops())
     }
 
     pub(crate) fn raw_topological_opwalker(&self) -> impl OpWalker {
@@ -146,7 +146,7 @@ impl<D: Dialect> IR<D> {
     }
 
     pub(crate) fn raw_linear_valwalker(&self) -> impl ValWalker {
-       ValId::range(0, self.raw_n_vals())
+        ValId::range(0, self.raw_n_vals())
     }
 
     pub(crate) fn raw_walk_vals(&self, walker: impl ValWalker) -> impl ValWalk<D> {
@@ -192,7 +192,6 @@ impl<D: Dialect> IR<D> {
         self.val_count += 1;
         valid
     }
-
 
     // This static method allows to recursively update the depths of operations on mutation. In
     // theory, it _could_ be implemented as a mutable method, but the bck does not manage to prove
@@ -277,7 +276,8 @@ impl<D: Dialect> IR<D> {
     }
 
     pub fn walk_ops_topological(&self) -> impl OpWalk<D> {
-        self.raw_walk_ops(self.raw_topological_opwalker()).filter(op_active)
+        self.raw_walk_ops(self.raw_topological_opwalker())
+            .filter(op_active)
     }
 
     pub fn walk_ops_with(&self, walker: impl OpWalker) -> impl OpWalk<D> {
@@ -293,10 +293,19 @@ impl<D: Dialect> IR<D> {
     }
 
     pub fn mutate_ops(&mut self, f: impl FnMut(&mut D::Operations)) {
-        self.mutate_ops_with_walker(self.raw_linear_opwalker().collect::<SmallVec<_>>().into_iter(), f);
+        self.mutate_ops_with_walker(
+            self.raw_linear_opwalker()
+                .collect::<SmallVec<_>>()
+                .into_iter(),
+            f,
+        );
     }
 
-    pub fn mutate_ops_with_walker(&mut self, walker: impl OpWalker, mut f: impl FnMut(&mut D::Operations)) {
+    pub fn mutate_ops_with_walker(
+        &mut self,
+        walker: impl OpWalker,
+        mut f: impl FnMut(&mut D::Operations),
+    ) {
         walker.for_each(|opid| {
             let opmut = self.raw_get_op_mut(opid);
             if opmut.state.is_active() {
@@ -304,7 +313,6 @@ impl<D: Dialect> IR<D> {
             };
         });
     }
-
 
     pub fn add_op(
         &mut self,
@@ -532,7 +540,6 @@ impl<D: Dialect> IR<D> {
     pub fn totally_mapped_valmap<V>(&self, f: impl FnMut(ValRef<D>) -> V) -> ValMap<V> {
         ValMap::new_totally_mapped(self, f)
     }
-
 }
 
 impl<D: Dialect> Display for IR<D> {

@@ -1,5 +1,5 @@
-use std::ops::{Index, IndexMut};
 use std::fmt::Debug;
+use std::ops::{Index, IndexMut};
 
 use hpuc_utils::Store;
 
@@ -7,11 +7,12 @@ use crate::OpRef;
 
 use super::{Dialect, IR, OpId, State};
 
-/// A map that associates values with operation IDs, preserving the active/inactive state structure from an IR.
+/// A map that associates values with operation IDs, preserving the active/inactive state structure
+/// from an IR.
 pub struct OpMap<T> {
     store: Store<OpId, State<Option<T>>>,
     n_stored: u16,
-    n_inactive: u16
+    n_inactive: u16,
 }
 
 impl<T> OpMap<T> {
@@ -34,7 +35,7 @@ impl<T> OpMap<T> {
                 })
                 .collect(),
             n_stored: 0,
-            n_inactive: ir.raw_n_ops() - ir.n_ops()
+            n_inactive: ir.raw_n_ops() - ir.n_ops(),
         }
     }
 
@@ -56,7 +57,7 @@ impl<T> OpMap<T> {
                 })
                 .collect(),
             n_stored: ir.n_ops(),
-            n_inactive: ir.raw_n_ops() - ir.n_ops()
+            n_inactive: ir.raw_n_ops() - ir.n_ops(),
         }
     }
 
@@ -64,7 +65,10 @@ impl<T> OpMap<T> {
     ///
     /// This method allows selective population of the map, where some active operations may
     /// not receive values based on the logic in `f`.
-    pub fn new_partially_mapped<D: Dialect>(ir: &IR<D>, mut f: impl FnMut(OpRef<D>) -> Option<T>) -> Self {
+    pub fn new_partially_mapped<D: Dialect>(
+        ir: &IR<D>,
+        mut f: impl FnMut(OpRef<D>) -> Option<T>,
+    ) -> Self {
         OpMap {
             store: ir
                 .raw_walk_ops_linear()
@@ -77,7 +81,7 @@ impl<T> OpMap<T> {
                 })
                 .collect(),
             n_stored: ir.n_ops(),
-            n_inactive: ir.raw_n_ops() - ir.n_ops()
+            n_inactive: ir.raw_n_ops() - ir.n_ops(),
         }
     }
 
@@ -98,7 +102,7 @@ impl<T> OpMap<T> {
                 })
                 .collect(),
             n_stored: ir.n_ops(),
-            n_inactive: ir.raw_n_ops() - ir.n_ops()
+            n_inactive: ir.raw_n_ops() - ir.n_ops(),
         }
     }
 

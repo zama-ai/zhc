@@ -1,6 +1,6 @@
 use std::fmt::{Debug, Display};
 
-use hpuc_ir::{sig, DialectOperations, Signature};
+use hpuc_ir::{DialectOperations, Signature, sig};
 
 use super::types::Types;
 
@@ -14,9 +14,9 @@ impl Display for Immediate {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct TSrcId{
+pub struct TSrcId {
     pub src_pos: usize,
-    pub block_pos: usize
+    pub block_pos: usize,
 }
 
 impl Display for TSrcId {
@@ -26,9 +26,9 @@ impl Display for TSrcId {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct TDstId{
+pub struct TDstId {
     pub dst_pos: usize,
-    pub block_pos: usize
+    pub block_pos: usize,
 }
 
 impl Display for TDstId {
@@ -47,9 +47,9 @@ impl Display for LutMemoryAdress {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct TImmId{
+pub struct TImmId {
     pub imm_pos: usize,
-    pub block_pos: usize
+    pub block_pos: usize,
 }
 
 impl Display for TImmId {
@@ -91,7 +91,7 @@ impl Display for Operations {
         match self {
             Operations::AddCt => write!(f, "add_ct"),
             Operations::SubCt => write!(f, "sub_ct"),
-            Operations::Mac { cst }  => write!(f, "mac<{}>", cst),
+            Operations::Mac { cst } => write!(f, "mac<{}>", cst),
             Operations::AddPt => write!(f, "add_pt"),
             Operations::SubPt => write!(f, "sub_pt"),
             Operations::PtSub => write!(f, "pt_sub"),
@@ -140,12 +140,20 @@ impl DialectOperations for Operations {
             Operations::HeapLd => sig![(CtHeap) -> (CtRegister)],
             Operations::Pbs { .. } => sig![(CtRegister) -> (CtRegister)],
             Operations::Pbs2 { .. } => sig![(CtRegister) -> (CtRegister, CtRegister)],
-            Operations::Pbs4 { .. } => sig![(CtRegister) -> (CtRegister, CtRegister, CtRegister, CtRegister)],
-            Operations::Pbs8 { .. } => sig![(CtRegister) -> (CtRegister, CtRegister, CtRegister, CtRegister, CtRegister, CtRegister, CtRegister, CtRegister)],
+            Operations::Pbs4 { .. } => {
+                sig![(CtRegister) -> (CtRegister, CtRegister, CtRegister, CtRegister)]
+            }
+            Operations::Pbs8 { .. } => {
+                sig![(CtRegister) -> (CtRegister, CtRegister, CtRegister, CtRegister, CtRegister, CtRegister, CtRegister, CtRegister)]
+            }
             Operations::PbsF { .. } => sig![(CtRegister) -> (CtRegister)],
             Operations::Pbs2F { .. } => sig![(CtRegister) -> (CtRegister, CtRegister)],
-            Operations::Pbs4F { .. } => sig![(CtRegister) -> (CtRegister, CtRegister, CtRegister, CtRegister)],
-            Operations::Pbs8F { .. } => sig![(CtRegister) -> (CtRegister, CtRegister, CtRegister, CtRegister, CtRegister, CtRegister, CtRegister, CtRegister)],
+            Operations::Pbs4F { .. } => {
+                sig![(CtRegister) -> (CtRegister, CtRegister, CtRegister, CtRegister)]
+            }
+            Operations::Pbs8F { .. } => {
+                sig![(CtRegister) -> (CtRegister, CtRegister, CtRegister, CtRegister, CtRegister, CtRegister, CtRegister, CtRegister)]
+            }
         }
     }
 }

@@ -65,13 +65,8 @@ impl<K: Eq + Hash, V> SmallMap<K, V> {
                 } else if !m.is_full() {
                     m.insert(k, v)
                 } else {
-                    *self = SmallMap::Heap(
-                        m
-                            .0
-                            .drain_all()
-                            .chain(std::iter::once((k, v)))
-                            .collect(),
-                    );
+                    *self =
+                        SmallMap::Heap(m.0.drain_all().chain(std::iter::once((k, v))).collect());
                     None
                 }
             }
@@ -85,7 +80,6 @@ impl<K: Eq + Hash, V> SmallMap<K, V> {
             SmallMap::Stack(m) => m.remove(k),
         }
     }
-
 }
 
 impl<K: Eq, V> Default for SmallMap<K, V> {

@@ -23,14 +23,14 @@ pub struct OpRef<'s, D: Dialect> {
     pub(super) depth: &'s Depth,
 }
 
-impl<'s, D: Dialect> Display for OpRef<'s, D>{
+impl<'s, D: Dialect> Display for OpRef<'s, D> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let printer = Printer::from_ir(self.ir, true, true);
         printer.format_opref(f, self.to_owned())
     }
 }
 
-impl<'s, D: Dialect> Hash for OpRef<'s, D>{
+impl<'s, D: Dialect> Hash for OpRef<'s, D> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.id.hash(state)
     }
@@ -160,7 +160,7 @@ impl<'s, D: Dialect> OpRef<'s, D> {
         let mut output = FastSet::new();
         let mut worklist = vec![self.clone()];
         while let Some(val) = worklist.pop() {
-            for op in val.get_args_iter().map(|a| a.get_origin()){
+            for op in val.get_args_iter().map(|a| a.get_origin()) {
                 output.insert(op.clone());
                 worklist.push(op);
             }
@@ -168,16 +168,16 @@ impl<'s, D: Dialect> OpRef<'s, D> {
         output.into_iter()
     }
 
-
-    /// Returns an iterator over all operations that can reach the current operation, including itself.
+    /// Returns an iterator over all operations that can reach the current operation, including
+    /// itself.
     ///
     /// Combines the results of `get_reached_iter()` with the current operation to provide
     /// a complete set of all operations in the forward reachability cone starting from
     /// this operation.
     pub fn get_inc_reaching_iter(&self) -> impl Iterator<Item = OpRef<'s, D>> {
-        self.get_reaching_iter().chain(std::iter::once(self.to_owned()))
+        self.get_reaching_iter()
+            .chain(std::iter::once(self.to_owned()))
     }
-
 
     /// Returns an iterator over all operations that can be reached from the current operation.
     ///
@@ -188,7 +188,7 @@ impl<'s, D: Dialect> OpRef<'s, D> {
         let mut output = FastSet::new();
         let mut worklist = vec![self.clone()];
         while let Some(val) = worklist.pop() {
-            for op in val.get_returns_iter().flat_map(|a| a.get_users_iter()){
+            for op in val.get_returns_iter().flat_map(|a| a.get_users_iter()) {
                 output.insert(op.clone());
                 worklist.push(op);
             }

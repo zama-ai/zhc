@@ -1,17 +1,15 @@
 //! Forward list scheduling implementation for instruction scheduling.
 //!
 //! This module provides a small framework for implementing forward list scheduling algorithms.
-use crate::{Dialect, OpMap, IR};
+use crate::{Dialect, IR, OpMap};
 
 use super::{Ready, Retired, Schedule, Selected};
-
 
 /// Trait for implementing forward list scheduling algorithms.
 ///
 /// Implementers of this trait define the scheduling policy by providing
 /// selection logic and simulation of execution timing.
 pub trait ForwardSimulator {
-
     /// The IR dialect this scheduler operates on.
     type Dialect: Dialect;
 
@@ -45,10 +43,7 @@ pub trait ForwardScheduler: ForwardSimulator {
 }
 
 impl<T: ForwardSimulator> ForwardScheduler for T {
-    fn schedule(
-        &mut self,
-        ir: &IR<Self::Dialect>,
-    ) -> Schedule {
+    fn schedule(&mut self, ir: &IR<Self::Dialect>) -> Schedule {
         let mut sched = Schedule::empty();
         let mut tracker = Tracker::from_ir(ir);
         let mut selected = Vec::new();
@@ -69,7 +64,6 @@ impl<T: ForwardSimulator> ForwardScheduler for T {
         sched
     }
 }
-
 
 /// Tracks the state of operations during the scheduling process.
 ///
@@ -160,7 +154,6 @@ impl<'i, D: Dialect> Tracker<'i, D> {
         }
     }
 }
-
 
 /// Represents the execution state of an operation during scheduling.
 #[derive(Clone, Debug, PartialEq, Eq)]

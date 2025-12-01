@@ -2,7 +2,10 @@ use hpuc_ir::{
     IR, OpId, OpMap, OpRef,
     scheduling::{Ready, Retired, Selected, forward::ForwardSimulator},
 };
-use hpuc_langs::{doplang::{Affinity, Argument}, hpulang::Hpulang};
+use hpuc_langs::{
+    doplang::{Affinity, Argument},
+    hpulang::Hpulang,
+};
 use hpuc_sim::{
     Cycle, Simulator,
     hpu::{DOp, DOpId, Events, Hpu, HpuConfig, Policy, RawDOp},
@@ -382,7 +385,8 @@ mod test {
         assert!(schedule.get_walker().is_topo_sorted(&ir));
         let flusher = scheduler.into_flusher();
         flusher.apply_flushes(&mut ir);
-        ir.check_ir("
+        ir.check_ir(
+            "
             %0 : CtRegister = src_ld<0.0_tsrc>();
             %1 : CtRegister = src_ld<0.1_tsrc>();
             %2 : CtRegister = src_ld<0.2_tsrc>();
@@ -422,7 +426,8 @@ mod test {
             %36 : CtRegister = mac<4_imm>(%35, %34);
             %37 : CtRegister = pbs<Lut@0>(%36);
             dst_st<0.0_tdst>(%37);
-            ");
+            ",
+        );
     }
 
     #[test]
@@ -436,7 +441,8 @@ mod test {
         assert!(schedule.get_walker().is_topo_sorted(&ir));
         let flusher = scheduler.into_flusher();
         flusher.apply_flushes(&mut ir);
-        ir.check_ir("
+        ir.check_ir(
+            "
             %0 : CtRegister = src_ld<0.0_tsrc>();
             %1 : CtRegister = src_ld<0.1_tsrc>();
             %2 : CtRegister = src_ld<0.2_tsrc>();
@@ -516,6 +522,7 @@ mod test {
             dst_st<0.4_tdst>(%70);
             dst_st<0.5_tdst>(%71);
             dst_st<0.6_tdst>(%72);
-            ");
+            ",
+        );
     }
 }

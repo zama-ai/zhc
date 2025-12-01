@@ -55,12 +55,8 @@ impl<K: Eq, V> StackMap<K, V> {
     /// Returns `None` if the key was not present in the map.
     pub fn remove(&mut self, k: &K) -> Option<V> {
         match self.0.as_slice().iter().position(|(a, _)| a == k) {
-            Some(pos) => {
-                Some(self.0.remove(pos).1)
-            }
-            None => {
-                None
-            }
+            Some(pos) => Some(self.0.remove(pos).1),
+            None => None,
         }
     }
 
@@ -83,7 +79,6 @@ impl<K: Eq + Debug, V: Debug> Debug for StackMap<K, V> {
             .finish()
     }
 }
-
 
 #[cfg(test)]
 mod tests {

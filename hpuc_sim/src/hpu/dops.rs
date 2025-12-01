@@ -1,5 +1,5 @@
-use std::fmt::Display;
 use serde::Serialize;
+use std::fmt::Display;
 
 pub type RawDOp = hpuc_langs::doplang::Operations;
 

@@ -33,7 +33,7 @@ pub struct Hpu {
     pub pe_alu: PeAlu,
     pub pe_ctl: PeCtl,
     pub retirement: Retirement,
-    pub config: HpuConfig
+    pub config: HpuConfig,
 }
 
 impl Simulatable for Hpu {
@@ -95,7 +95,7 @@ impl Hpu {
             ),
             pe_ctl: PeCtl,
             retirement: Retirement::default(),
-            config
+            config,
         }
     }
 }

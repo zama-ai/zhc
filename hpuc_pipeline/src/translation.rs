@@ -19,17 +19,17 @@ impl Translator for IoplangToHpulang {
         use hpuc_langs::ioplang::Operations as IopOp;
         use hpuc_langs::ioplang::Types as IopTy;
 
-        // This translator performs a flow-following translation of an IR in Ioplang to an IR in Hpulang.
-        // It is very simple, and as such pretty fast. Every operation is matched against its optype, and
-        // translated to an equivalent operation in the Hpulang.
+        // This translator performs a flow-following translation of an IR in Ioplang to an IR in
+        // Hpulang. It is very simple, and as such pretty fast. Every operation is matched
+        // against its optype, and translated to an equivalent operation in the Hpulang.
         let mut output = IR::empty();
         let mut map = input.empty_valmap::<ValId>();
 
-        // Ioplang has a value semantics. This means that dst are defined by use, and as such, only known
-        // at the end of the program when `output` ops are given. Hpulang has a register semantics, and
-        // as such, the return position must be known beforehand. For this reason, we need to gather the
-        // output position for each `let` ops upfront, to be able to correctly set the TDstId of the
-        // `dst_st` ops
+        // Ioplang has a value semantics. This means that dst are defined by use, and as such, only
+        // known at the end of the program when `output` ops are given. Hpulang has a
+        // register semantics, and as such, the return position must be known beforehand.
+        // For this reason, we need to gather the output position for each `let` ops
+        // upfront, to be able to correctly set the TDstId of the `dst_st` ops
         let let_map: FastMap<OpId, usize> = input
             .walk_ops_linear()
             .filter(|op| {
@@ -105,7 +105,9 @@ impl Translator for IoplangToHpulang {
                     };
                     let (_, valids) = output
                         .add_op(
-                            HpuOp::Mac { cst: Immediate(cst) },
+                            HpuOp::Mac {
+                                cst: Immediate(cst),
+                            },
                             svec![map[op.get_arg_valids()[1]], map[op.get_arg_valids()[2]]],
                         )
                         .unwrap();
@@ -425,7 +427,6 @@ mod test {
 
     use super::IoplangToHpulang;
 
-
     #[test]
     fn test_translate_add_ir() {
         let ir = get_add_ir(16, 2, 2);
@@ -637,6 +638,4 @@ mod test {
         ",
         );
     }
-
-
 }
