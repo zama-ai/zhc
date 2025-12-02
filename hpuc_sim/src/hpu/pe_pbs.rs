@@ -397,7 +397,7 @@ impl Simulatable for PePbs {
 
                 let dop = self.queue.pop_front();
                 self.memory.launch_load(dop.clone());
-                dispatcher.dispatch_later(
+                dispatcher.dispatch_after(
                     self.load_unload_latency.compute_latency(),
                     Events::PePbsLandLoadMemory(dop),
                 );
@@ -414,7 +414,7 @@ impl Simulatable for PePbs {
                 // Schedule a timeout.
                 if let Policy::Timeout(offset) = self.policy {
                     let timeout = TimeoutId::grab();
-                    dispatcher.dispatch_later(offset, Events::PePbsTimeout(timeout.clone()));
+                    dispatcher.dispatch_after(offset, Events::PePbsTimeout(timeout.clone()));
                     self.active_timeouts.0.push_back(timeout);
                 }
 
@@ -458,7 +458,7 @@ impl Simulatable for PePbs {
                 // We update the memory
                 self.memory.launch_work(batch_size);
                 // We schedule the land
-                dispatcher.dispatch_later(
+                dispatcher.dispatch_after(
                     self.processing_latency.compute_latency(batch_size),
                     Events::PePbsLandProcessing(batch_size),
                 );
@@ -488,7 +488,7 @@ impl Simulatable for PePbs {
                 let offset =
                     self.load_unload_latency.compute_latency() * get_dop_number_outputs(&unload);
                 self.memory.launch_unload();
-                dispatcher.dispatch_later(offset, Events::PePbsLandUnloadMemory(unload.id));
+                dispatcher.dispatch_after(offset, Events::PePbsLandUnloadMemory(unload.id));
             }
             Events::PePbsLandUnloadMemory(_) => {
                 assert!(self.memory.has_unloading());

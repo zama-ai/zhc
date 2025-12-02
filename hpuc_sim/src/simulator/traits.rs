@@ -5,12 +5,14 @@ use hpuc_utils::type_name_of_val;
 
 use super::*;
 
-/// Traits for types representing an event.
+/// Trait for types representing events.
 pub trait Event: Display + Clone + Serialize + PartialEq {}
 
-/// Traits for types handling event dispatch
+/// Trait for types handling event dispatch.
 pub trait Dispatch {
+
     type Event: Event;
+
     fn contains_event(&self, event: &Self::Event) -> bool;
 
     fn dispatch(&mut self, event: Self::Event, delay: Option<Cycle>);
@@ -23,26 +25,20 @@ pub trait Dispatch {
         self.dispatch(event, Some(Cycle::ONE));
     }
 
-    fn dispatch_later(&mut self, after_n_cycles: Cycle, event: Self::Event) {
+    fn dispatch_after(&mut self, after_n_cycles: Cycle, event: Self::Event) {
         self.dispatch(event, Some(after_n_cycles));
     }
-}
 
-/// Traits for types handling event simulation
-// TODO Find a better trait name ?
-pub trait Simulate {
-    type Event: Event;
-
-    fn now(&self) -> Cycle;
-    fn is_empty(&self) -> bool;
-
-    fn advance(&mut self);
-
-    fn pop_now(&mut self) -> Option<Trigger<Self::Event>>;
+    fn dispatch_after_if_no_there(&mut self, after_n_cycles: Cycle, event: Self::Event) {
+        if !self.contains_event(&event) {
+            self.dispatch_after(after_n_cycles, event);
+        }
+    }
 }
 
 /// Trait implemented by types that can be simulated.
 pub trait Simulatable: Sized + Serialize {
+
     type Event: Event;
 
     fn handle(

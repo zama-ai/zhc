@@ -76,15 +76,15 @@ impl Simulatable for PeMem {
                     self.current.replace(mdop.clone()).is_none(),
                     "Start Error: Started op while still busy"
                 );
-                dispatcher.dispatch_later(
+                dispatcher.dispatch_after(
                     self.read_latency.compute_latency(),
                     Events::IscUnlockRead(mdop.id),
                 );
-                dispatcher.dispatch_later(
+                dispatcher.dispatch_after(
                     self.write_latency.compute_latency(),
                     Events::IscUnlockWrite(mdop.id),
                 );
-                dispatcher.dispatch_later(
+                dispatcher.dispatch_after(
                     self.write_latency.compute_latency(),
                     Events::PeMemLandProcessing,
                 );

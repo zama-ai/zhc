@@ -35,24 +35,23 @@ impl<E: Event> Dispatch for Dispatcher<E> {
     }
 }
 
-impl<E: Event> Simulate for Dispatcher<E> {
-    type Event = E;
+impl<E: Event> Dispatcher<E> {
 
-    fn now(&self) -> Cycle {
+    pub fn now(&self) -> Cycle {
         self.now
     }
 
-    fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.triggers.is_empty()
     }
 
-    fn advance(&mut self) {
+    pub fn advance(&mut self) {
         if let Some(trigger) = self.triggers.peek() {
             self.now = trigger.at
         }
     }
 
-    fn pop_now(&mut self) -> Option<Trigger<Self::Event>> {
+    pub fn pop_now(&mut self) -> Option<Trigger<E>> {
         if let Some(trigger) = self.triggers.peek()
             && trigger.at == self.now
         {

@@ -46,7 +46,7 @@ impl Simulatable for Counter {
                 self.value += 1;
                 if self.value < self.target {
                     // Schedule next increment after 2 cycles
-                    dispatcher.dispatch_later(Cycle(2), CounterEvent::Increment)
+                    dispatcher.dispatch_after(Cycle(2), CounterEvent::Increment)
                 }
             }
         }
@@ -102,14 +102,14 @@ impl Simulatable for PingPong {
                 self.ping_count += 1;
                 if self.ping_count <= self.max_rounds {
                     // Pong responds after 3 cycles
-                    dispatcher.dispatch_later(Cycle(3), PingPongEvent::Pong);
+                    dispatcher.dispatch_after(Cycle(3), PingPongEvent::Pong);
                 }
             }
             PingPongEvent::Pong => {
                 self.pong_count += 1;
                 if self.pong_count < self.max_rounds {
                     // Ping responds after 5 cycles
-                    dispatcher.dispatch_later(Cycle(5), PingPongEvent::Ping);
+                    dispatcher.dispatch_after(Cycle(5), PingPongEvent::Ping);
                 }
             }
         }
@@ -161,7 +161,7 @@ impl Simulatable for Timer {
             TimerEvent::Tick => {
                 self.ticks += 1;
                 if self.ticks < self.max_ticks {
-                    dispatcher.dispatch_later(self.interval, TimerEvent::Tick)
+                    dispatcher.dispatch_after(self.interval, TimerEvent::Tick)
                 }
             }
         }
@@ -224,22 +224,22 @@ impl Simulatable for Pipeline {
             PipelineEvent::StartItem => {
                 self.items_started += 1;
                 // Stage 1 takes 4 cycles
-                dispatcher.dispatch_later(Cycle(4), PipelineEvent::Stage1Complete);
+                dispatcher.dispatch_after(Cycle(4), PipelineEvent::Stage1Complete);
 
                 // Start next item if available (with 1 cycle delay)
                 if self.items_started < self.items_to_process {
-                    dispatcher.dispatch_later(Cycle(1), PipelineEvent::StartItem);
+                    dispatcher.dispatch_after(Cycle(1), PipelineEvent::StartItem);
                 }
             }
             PipelineEvent::Stage1Complete => {
                 self.stage1_count += 1;
                 // Stage 2 takes 3 cycles
-                dispatcher.dispatch_later(Cycle(3), PipelineEvent::Stage2Complete);
+                dispatcher.dispatch_after(Cycle(3), PipelineEvent::Stage2Complete);
             }
             PipelineEvent::Stage2Complete => {
                 self.stage2_count += 1;
                 // Stage 3 takes 2 cycles
-                dispatcher.dispatch_later(Cycle(2), PipelineEvent::Stage3Complete);
+                dispatcher.dispatch_after(Cycle(2), PipelineEvent::Stage3Complete);
             }
             PipelineEvent::Stage3Complete => {
                 self.stage3_count += 1;
@@ -398,12 +398,12 @@ fn test_power_up_scheduling() {
                 AutoStartEvent::Boot => {
                     self.boots += 1;
                     // Schedule first tick after boot
-                    dispatcher.dispatch_later(Cycle(5), AutoStartEvent::Tick);
+                    dispatcher.dispatch_after(Cycle(5), AutoStartEvent::Tick);
                 }
                 AutoStartEvent::Tick => {
                     self.ticks += 1;
                     if self.ticks < 3 {
-                        dispatcher.dispatch_later(Cycle(2), AutoStartEvent::Tick);
+                        dispatcher.dispatch_after(Cycle(2), AutoStartEvent::Tick);
                     }
                 }
             }
@@ -411,7 +411,7 @@ fn test_power_up_scheduling() {
 
         fn power_up(&self, dispatcher: &mut impl Dispatch<Event = Self::Event>) {
             // Schedule boot event 1 cycle after power up
-            dispatcher.dispatch_later(Cycle(1), AutoStartEvent::Boot);
+            dispatcher.dispatch_after(Cycle(1), AutoStartEvent::Boot);
         }
     }
 
@@ -468,7 +468,7 @@ fn test_tuple_composition() {
                 SharedEvent::CountA => {
                     self.count += 1;
                     if self.count < 2 {
-                        dispatcher.dispatch_later(Cycle(3), SharedEvent::CountA);
+                        dispatcher.dispatch_after(Cycle(3), SharedEvent::CountA);
                     }
                 }
                 _ => {}
@@ -488,7 +488,7 @@ fn test_tuple_composition() {
                 SharedEvent::CountB => {
                     self.count += 10;
                     if self.count < 30 {
-                        dispatcher.dispatch_later(Cycle(4), SharedEvent::CountB);
+                        dispatcher.dispatch_after(Cycle(4), SharedEvent::CountB);
                     }
                 }
                 _ => {}
@@ -555,7 +555,7 @@ fn test_tuple_power_up() {
         }
 
         fn power_up(&self, dispatcher: &mut impl Dispatch<Event = Self::Event>) {
-            dispatcher.dispatch_later(Cycle(2), StartEvent::InitEarly);
+            dispatcher.dispatch_after(Cycle(2), StartEvent::InitEarly);
         }
     }
 
@@ -576,7 +576,7 @@ fn test_tuple_power_up() {
         }
 
         fn power_up(&self, dispatcher: &mut impl Dispatch<Event = Self::Event>) {
-            dispatcher.dispatch_later(Cycle(5), StartEvent::InitLate);
+            dispatcher.dispatch_after(Cycle(5), StartEvent::InitLate);
         }
     }
 

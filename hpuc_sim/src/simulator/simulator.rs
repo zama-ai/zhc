@@ -26,15 +26,14 @@ pub enum SimulationState {
     CondEncountered,
 }
 
-pub struct Simulator<S, D = Dispatcher<<S as Simulatable>::Event>>
+pub struct Simulator<S>
 where
     S: Simulatable,
-    D: Dispatch<Event = S::Event> + Simulate<Event = S::Event>,
 {
     pub simulatable: S,
     quantum: Microseconds,
     tracer: Tracer<S::Event>,
-    dispatcher: D,
+    dispatcher: Dispatcher<S::Event>,
 }
 
 impl<S: Simulatable> Simulator<S> {
@@ -43,22 +42,20 @@ impl<S: Simulatable> Simulator<S> {
     }
 }
 
-impl<S, D> Simulator<S, D>
+impl<S: Simulatable> Simulator<S>
 where
     S: Simulatable,
-    D: Dispatch<Event = S::Event> + Simulate<Event = S::Event>,
 {
     pub fn new(freq: MHz) -> Self
     where
-        D: Default,
         S: Default,
     {
         let simulatable = S::default();
-        let dispatcher = D::default();
+        let dispatcher = Dispatcher::default();
         Self::from_simulatable_and_dispatcher(freq, simulatable, dispatcher)
     }
 
-    pub fn from_simulatable_and_dispatcher(freq: MHz, simulatable: S, mut dispatcher: D) -> Self {
+    pub fn from_simulatable_and_dispatcher(freq: MHz, simulatable: S, mut dispatcher: Dispatcher<S::Event>) -> Self {
         let quantum = freq.period();
         let tracer = Tracer::new();
         simulatable.power_up(&mut dispatcher);
@@ -75,7 +72,7 @@ where
     }
 
     pub fn dispatch_later(&mut self, after_n_cycles: Cycle, event: S::Event) {
-        self.dispatcher.dispatch_later(after_n_cycles, event);
+        self.dispatcher.dispatch_after(after_n_cycles, event);
     }
 
     pub fn now(&self) -> Cycle {
@@ -87,10 +84,10 @@ where
     }
 
     pub fn step(&mut self) -> SimulationState {
-        fn nope<D: Dispatch>(_: &Trigger<D::Event>) -> bool {
+        fn nope<E: Event>(_: &Trigger<E>) -> bool {
             false
         }
-        self.step_cond(nope::<D>)
+        self.step_cond(nope::<S::Event>)
     }
 
     fn step_cond(&mut self, condition: impl Fn(&Trigger<S::Event>) -> bool) -> SimulationState {
@@ -149,10 +146,9 @@ where
     }
 }
 
-impl<S, D> AsRef<S> for Simulator<S, D>
+impl<S> AsRef<S> for Simulator<S>
 where
     S: Simulatable,
-    D: Dispatch<Event = S::Event> + Simulate<Event = S::Event>,
 {
     fn as_ref(&self) -> &S {
         &self.simulatable
