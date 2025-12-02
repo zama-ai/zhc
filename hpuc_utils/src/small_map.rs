@@ -80,6 +80,75 @@ impl<K: Eq + Hash, V> SmallMap<K, V> {
             SmallMap::Stack(m) => m.remove(k),
         }
     }
+
+    pub fn iter(&self) -> SmallMapIter<'_, K, V> {
+        match self {
+            SmallMap::Heap(m) => SmallMapIter::Heap(m.iter()),
+            SmallMap::Stack(m) => SmallMapIter::Stack(m.iter()),
+        }
+    }
+
+    pub fn iter_mut(&mut self) -> SmallMapMutIter<'_, K, V> {
+        match self {
+            SmallMap::Heap(m) => SmallMapMutIter::Heap(m.iter_mut()),
+            SmallMap::Stack(m) => SmallMapMutIter::Stack(m.iter_mut()),
+        }
+    }
+
+    pub fn into_iter(self) -> SmallMapIntoIter<K, V> {
+        match self {
+            SmallMap::Heap(m) => SmallMapIntoIter::Heap(m.into_iter()),
+            SmallMap::Stack(m) => SmallMapIntoIter::Stack(m.into_iter()),
+        }
+    }
+}
+
+pub enum SmallMapIter<'a, K: Eq, V> {
+    Heap(std::collections::hash_map::Iter<'a, K, V>),
+    Stack(crate::stack_map::StackMapIter<'a, K, V>),
+}
+
+impl<'a, K: Eq, V> Iterator for SmallMapIter<'a, K, V> {
+    type Item = (&'a K, &'a V);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            SmallMapIter::Heap(iter) => iter.next(),
+            SmallMapIter::Stack(iter) => iter.next(),
+        }
+    }
+}
+
+pub enum SmallMapMutIter<'a, K: Eq, V> {
+    Heap(std::collections::hash_map::IterMut<'a, K, V>),
+    Stack(crate::stack_map::StackMapMutIter<'a, K, V>),
+}
+
+impl<'a, K: Eq, V> Iterator for SmallMapMutIter<'a, K, V> {
+    type Item = (&'a K, &'a mut V);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            SmallMapMutIter::Heap(iter) => iter.next(),
+            SmallMapMutIter::Stack(iter) => iter.next(),
+        }
+    }
+}
+
+pub enum SmallMapIntoIter<K: Eq, V> {
+    Heap(std::collections::hash_map::IntoIter<K, V>),
+    Stack(crate::stack_map::StackMapIntoIter<K, V>),
+}
+
+impl<K: Eq, V> Iterator for SmallMapIntoIter<K, V> {
+    type Item = (K, V);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            SmallMapIntoIter::Heap(iter) => iter.next(),
+            SmallMapIntoIter::Stack(iter) => iter.next(),
+        }
+    }
 }
 
 impl<K: Eq, V> Default for SmallMap<K, V> {

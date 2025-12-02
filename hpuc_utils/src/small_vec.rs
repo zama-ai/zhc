@@ -1,6 +1,7 @@
 use super::StackVec;
 use crate::StackVecIntoIter;
 use std::{hash::Hash, usize};
+use std::fmt::Debug;
 
 /// Iterator that yields elements from a `SmallVec` by value.
 pub enum SmallVecIntoIter<A> {
@@ -25,10 +26,19 @@ impl<A> Iterator for SmallVecIntoIter<A> {
 /// When the collection grows beyond the stack capacity, it automatically transitions
 /// to heap storage. This provides excellent performance for small collections while
 /// maintaining the flexibility of dynamic growth.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum SmallVec<A> {
     Heap(Vec<A>),
     Stack(StackVec<A>),
+}
+
+impl<A: Debug> Debug for SmallVec<A>{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SmallVec::Heap(items) => items.fmt(f),
+            SmallVec::Stack(stack_vec) => stack_vec.fmt(f),
+        }
+    }
 }
 
 impl<A> SmallVec<A> {

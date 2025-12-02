@@ -29,25 +29,6 @@ impl<'a, T> Iterator for SmallSetIter<'a, T> {
     }
 }
 
-/// Iterator over mutable references to elements in a SmallSet.
-pub enum SmallSetIterMut<'a, T> {
-    Heap(std::collections::hash_set::Iter<'a, T>), /* Note: HashSet doesn't support iter_mut
-                                                    * for values */
-    Stack(std::slice::IterMut<'a, T>),
-}
-
-impl<'a, T> Iterator for SmallSetIterMut<'a, T> {
-    type Item = &'a mut T;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match self {
-            SmallSetIterMut::Heap(_) => None, /* HashSet doesn't support mutable iteration over
-                                                * values */
-            SmallSetIterMut::Stack(iter) => iter.next(),
-        }
-    }
-}
-
 /// Iterator that takes ownership of elements in a SmallSet.
 pub enum SmallSetIntoIter<T> {
     Heap(std::collections::hash_set::IntoIter<T>),
@@ -129,15 +110,6 @@ impl<T: Eq + Hash> SmallSet<T> {
         }
     }
 
-    /// Returns an iterator over mutable references to the elements.
-    /// Note: For heap storage, mutable iteration is not supported due to HashSet limitations.
-    pub fn iter_mut(&mut self) -> SmallSetIterMut<'_, T> {
-        match self {
-            SmallSet::Heap(h) => SmallSetIterMut::Heap(h.iter()),
-            SmallSet::Stack(s) => SmallSetIterMut::Stack(s.iter_mut()),
-        }
-    }
-
     /// Returns an iterator that takes ownership of the elements.
     pub fn into_iter(self) -> SmallSetIntoIter<T> {
         match self {
@@ -178,15 +150,6 @@ impl<'a, T: Eq + Hash> IntoIterator for &'a SmallSet<T> {
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
-    }
-}
-
-impl<'a, T: Eq + Hash> IntoIterator for &'a mut SmallSet<T> {
-    type Item = &'a mut T;
-    type IntoIter = SmallSetIterMut<'a, T>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.iter_mut()
     }
 }
 

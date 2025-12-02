@@ -1,4 +1,4 @@
-use crate::StackVec;
+use crate::{StackVec, StackVecIntoIter};
 use std::fmt::Debug;
 
 /// A map backed by a stack-allocated vector for small key-value collections.
@@ -68,6 +68,59 @@ impl<K: Eq, V> StackMap<K, V> {
     // Check if the map has reached its capacity.
     pub fn is_full(&self) -> bool {
         self.0.len() == self.0.capacity()
+    }
+
+    pub fn iter(&self) -> StackMapIter<'_, K, V> {
+        StackMapIter {
+            inner: self.0.as_slice().iter(),
+        }
+    }
+
+    pub fn iter_mut(&mut self) -> StackMapMutIter<'_, K, V> {
+        StackMapMutIter {
+            inner: self.0.as_mut_slice().iter_mut(),
+        }
+    }
+
+    pub fn into_iter(self) -> StackMapIntoIter<K, V> {
+        StackMapIntoIter {
+            inner: self.0.into_iter(),
+        }
+    }
+}
+
+pub struct StackMapMutIter<'a, K: Eq, V> {
+    inner: std::slice::IterMut<'a, (K, V)>,
+}
+
+impl<'a, K: Eq, V> Iterator for StackMapMutIter<'a, K, V> {
+    type Item = (&'a K, &'a mut V);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next().map(|(k, v)| (&*k, v))
+    }
+}
+
+pub struct StackMapIntoIter<K: Eq, V> {
+    inner: StackVecIntoIter<'static, (K, V)>,
+}
+
+impl<K: Eq, V> Iterator for StackMapIntoIter<K, V> {
+    type Item = (K, V);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next()
+    }
+}
+pub struct StackMapIter<'a, K: Eq, V> {
+    inner: std::slice::Iter<'a, (K, V)>,
+}
+
+impl<'a, K: Eq, V> Iterator for StackMapIter<'a, K, V> {
+    type Item = (&'a K, &'a V);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next().map(|(k, v)| (k, v))
     }
 }
 
@@ -200,4 +253,47 @@ mod tests {
         map.insert(4, 4);
         assert_eq!(map.get(&4), Some(&4));
     }
+
+    #[test]
+        fn test_iter() {
+            let mut map = StackMap::new();
+            map.insert(1u8, 42u8);
+            map.insert(2, 24);
+            map.insert(3, 100);
+
+            let mut collected: Vec<_> = map.iter().collect();
+            collected.sort_by_key(|(k, _)| *k);
+
+            assert_eq!(collected, vec![(&1, &42), (&2, &24), (&3, &100)]);
+        }
+
+        #[test]
+        fn test_iter_mut() {
+            let mut map = StackMap::new();
+            map.insert(1u8, 42u8);
+            map.insert(2, 24);
+            map.insert(3, 100);
+
+            // Modify values through mutable iterator
+            for (_, value) in map.iter_mut() {
+                *value *= 2;
+            }
+
+            assert_eq!(map.get(&1), Some(&84));
+            assert_eq!(map.get(&2), Some(&48));
+            assert_eq!(map.get(&3), Some(&200));
+        }
+
+        #[test]
+        fn test_into_iter() {
+            let mut map = StackMap::new();
+            map.insert(1u8, 42u8);
+            map.insert(2, 24);
+            map.insert(3, 100);
+
+            let mut collected: Vec<_> = map.into_iter().collect();
+            collected.sort_by_key(|(k, _)| *k);
+
+            assert_eq!(collected, vec![(1, 42), (2, 24), (3, 100)]);
+        }
 }
