@@ -1,6 +1,6 @@
 use super::*;
-use hpuc_langs::doplang::Affinity;
 use crate::{Cycle, Dispatch};
+use hpuc_langs::doplang::Affinity;
 use hpuc_utils::FastSet;
 use serde::Serialize;
 use std::{collections::VecDeque, fmt::Display};
@@ -249,7 +249,42 @@ impl Serialize for Slot {
     }
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, PartialOrd, Eq, Ord)]
+/// Used externally to extract a view of the Slot content
+#[derive(Debug)]
+pub struct SlotProperties {
+    pub rd_lock: u32,
+    pub wr_lock: u32,
+    pub issue_lock: u32,
+    pub state: State,
+    pub pdg: bool,
+    pub rd_pdg: bool,
+    pub vld: bool,
+}
+impl From<&Slot> for SlotProperties {
+    fn from(value: &Slot) -> Self {
+        // TODO rework isc flag encoding
+        // Proper generation if these bitflag could required to carry extra info in the Slot
+        let (pdg, rd_pdg, vld) = match value.state {
+            State::Pending => (true, true, true),
+            State::Issued => (true, true, true),
+            State::Loaded => (true, false, true),
+            State::Working => (true, false, true),
+            State::Finished => (false, false, true),
+        };
+        Self {
+            rd_lock: value.read_lock.len() as u32,
+            wr_lock: value.write_lock.len() as u32,
+            issue_lock: value.issue_lock.len() as u32,
+            state: value.state.clone(),
+            pdg,
+            rd_pdg,
+            vld,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, PartialOrd, Eq, Ord, Copy)]
+#[repr(u8)]
 pub enum State {
     /// First state. The DOp just landed in the isc pool, but was not yet dispatched to a PE. It is
     /// likely waiting for PE availability.
@@ -290,6 +325,31 @@ impl State {
     }
 }
 
+/// Command
+/// Represent the edge between State
+/// Use in IscNotify for external Hook
+#[derive(Debug, Clone, Serialize, PartialEq, PartialOrd, Eq, Ord, Copy)]
+#[repr(u8)]
+pub enum Command {
+    None = 0,
+    RdUnlock,
+    Retire,
+    Refill,
+    Issue,
+}
+
+impl Display for Command {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Command::None => write!(f, "NON"),
+            Command::RdUnlock => write!(f, "RDU"),
+            Command::Retire => write!(f, "RET"),
+            Command::Refill => write!(f, "REF"),
+            Command::Issue => write!(f, "ISS"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct PeTracker {
     available: bool,
@@ -320,7 +380,6 @@ pub struct InstructionScheduler {
     tracker_mem: PeTracker,
     tracker_alu: PeTracker,
     tracker_pbs: PeTracker,
-    issue_unlock_buffer: VecDeque<DOpId>,
     write_unlock_buffer: VecDeque<DOpId>,
     read_unlock_buffer: VecDeque<DOpId>,
     pool: Pool,
@@ -336,17 +395,12 @@ impl InstructionScheduler {
             tracker_pbs: PeTracker { available: true },
             tracker_alu: PeTracker { available: true },
             query_period,
-            issue_unlock_buffer: VecDeque::new(),
             write_unlock_buffer: VecDeque::new(),
             read_unlock_buffer: VecDeque::new(),
             pool: Pool::with_capacity(pool_capacity),
             dop_processed: 0,
             dop_target: 0,
         }
-    }
-
-    pub fn has_issue_unlocks(&self) -> bool {
-        !self.issue_unlock_buffer.is_empty()
     }
 
     pub fn has_write_unlocks(&self) -> bool {
@@ -387,6 +441,7 @@ impl Simulatable for InstructionScheduler {
         dispatcher: &mut impl Dispatch<Event = Self::Event>,
         trigger: Trigger<Self::Event>,
     ) {
+        // NB: Each event that triggered side effect rearm IscQuery if none is already pending
         match trigger.event {
             Events::IscPushDOps(small_vec) => {
                 self.dop_target += small_vec.len();
@@ -404,8 +459,7 @@ impl Simulatable for InstructionScheduler {
                 dispatcher.dispatch_after_if_no_there(self.query_period, Events::IscQuery);
             }
             Events::IscUnlockIssue(dopid) => {
-                // The unlocks are buffered to be later processed during the isc query.
-                self.issue_unlock_buffer.push_back(dopid);
+                self.pool.issue_unlock(dopid);
                 dispatcher.dispatch_after_if_no_there(self.query_period, Events::IscQuery);
             }
             Events::PePbsAvailable => {
@@ -430,27 +484,28 @@ impl Simulatable for InstructionScheduler {
                 self.tracker_mem.available = false;
             }
             Events::IscQuery => {
-                if self.has_issue_unlocks() {
-                    let opid = self.issue_unlock_buffer.pop_front().unwrap();
-                    self.pool.issue_unlock(opid);
-                    dispatcher.dispatch_after_if_no_there(self.query_period, Events::IscQuery);
-                } else if self.has_read_unlocks() {
+                if self.has_read_unlocks() {
                     let opid = self.read_unlock_buffer.pop_front().unwrap();
                     self.pool.read_unlock(opid);
+                    dispatcher.dispatch_now(Events::IscNotify(opid, Command::RdUnlock));
+                    dispatcher.dispatch_after_if_no_there(self.query_period, Events::IscQuery);
+                } else if self.pool.slots_available() && self.has_pending_dops() {
+                    let dop = self.front_buffer.pop_front().unwrap();
+                    // Used ?
+                    dispatcher.dispatch_now(Events::IscRefillDOp(dop.clone()));
+                    dispatcher.dispatch_now(Events::IscNotify(dop.id, Command::Refill));
+                    self.pool.refill(dop);
                     dispatcher.dispatch_after_if_no_there(self.query_period, Events::IscQuery);
                 } else if self.has_write_unlocks() {
                     let opid = self.write_unlock_buffer.pop_front().unwrap();
                     self.pool.write_unlock(opid);
                     let dop = self.pool.retire(opid);
+                    dispatcher.dispatch_now(Events::IscNotify(opid, Command::Retire));
                     dispatcher.dispatch_now(Events::IscRetireDOp(dop));
-                    dispatcher.dispatch_after_if_no_there(self.query_period, Events::IscQuery);
-                } else if self.pool.slots_available() && self.has_pending_dops() {
-                    let dop = self.front_buffer.pop_front().unwrap();
-                    dispatcher.dispatch_now(Events::IscRefillDOp(dop.clone()));
-                    self.pool.refill(dop);
                     dispatcher.dispatch_after_if_no_there(self.query_period, Events::IscQuery);
                 } else if self.may_issue() {
                     if let Some(dop) = self.pool.get_issuable(self.get_filter()) {
+                        dispatcher.dispatch_now(Events::IscNotify(dop.id, Command::Issue));
                         dispatcher.dispatch_now(Events::IscIssueDOp(dop));
                         dispatcher.dispatch_after_if_no_there(self.query_period, Events::IscQuery);
                     }
@@ -463,10 +518,7 @@ impl Simulatable for InstructionScheduler {
                 }
                 dispatcher.dispatch_after_if_no_there(self.query_period, Events::IscQuery);
             }
-            _ => {},
+            _ => {}
         };
-
-        // Rearm IscQuery if needed
-        // I.e. Current event triggered a side effect and No IscQuery event is pending
     }
 }

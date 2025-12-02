@@ -4,7 +4,7 @@ use serde::Serialize;
 
 use crate::Event;
 
-use super::{DOp, DOpId, TimeoutId};
+use super::{Command, DOp, DOpId, TimeoutId};
 
 pub type BatchSize = usize;
 
@@ -20,6 +20,8 @@ pub enum Events {
     IscQuery,
     IscRefillDOp(DOp),
     IscProcessOver,
+    // Used by external hook only
+    IscNotify(DOpId, Command),
 
     // PeAluAvents
     PeAluLaunchProcessing,
@@ -57,6 +59,7 @@ impl Display for Events {
             Events::IscQuery => write!(f, "IscQuery"),
             Events::IscRefillDOp(_) => write!(f, "IscQueryRefill"),
             Events::IscProcessOver => write!(f, "IscProcessOver"),
+            Events::IscNotify(_, _) => write!(f, "IscNotify"),
             Events::PeAluLandProcessing => write!(f, "PeAluLandProcessing"),
             Events::PeAluLaunchProcessing => write!(f, "PeAluLaunchProcessing"),
             Events::PeMemLandProcessing => write!(f, "PeMemLandProcessing"),
