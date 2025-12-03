@@ -191,7 +191,6 @@ impl Pool {
             self.slots[index]
         );
         self.slots[index].state.transition();
-        self.slots[index].state.transition();
     }
 
     pub fn get_issuable(&mut self, filt: AffinityFilter) -> Option<DOp> {
@@ -258,14 +257,11 @@ pub enum State {
     /// Second state. The DOp was issued to a PE. It is likely waiting for its sources to be loaded.
     Issued = 1,
     /// Third state. The DOp inputs were loaded to the PE. It is likely waiting for the PE to pick
-    /// it up.
+    /// it up, or is being worked on and its destinations are getting written to.
     Loaded = 2,
-    /// Fourth state. The DOp was picked up by the PE. It is being worked on, and its destinations
-    /// are getting writen to.
-    Working = 3,
     /// Fifth state. The DOp was completed by the PE. The desinations can be read, and the op
     /// retired.
-    Finished = 4,
+    Finished = 3,
 }
 
 impl Display for State {
@@ -274,7 +270,6 @@ impl Display for State {
             State::Pending => write!(f, "PEN"),
             State::Loaded => write!(f, "LOA"),
             State::Issued => write!(f, "ISS"),
-            State::Working => write!(f, "WOR"),
             State::Finished => write!(f, "FIN"),
         }
     }
@@ -289,8 +284,7 @@ impl State {
         match self {
             State::Pending => *self = State::Issued,
             State::Issued => *self = State::Loaded,
-            State::Loaded => *self = State::Working,
-            State::Working => *self = State::Finished,
+            State::Loaded => *self = State::Finished,
             State::Finished => unreachable!("Tried to transition while in final state"),
         }
     }
