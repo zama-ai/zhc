@@ -71,7 +71,7 @@ impl Simulatable for Hpu {
 }
 
 impl Hpu {
-    pub fn new(config: HpuConfig) -> Self {
+    pub fn new(config: &HpuConfig) -> Self {
         Hpu {
             scheduler: InstructionScheduler::new(config.isc_query_period, config.isc_depth),
             pe_mem: PeMem::new(
@@ -98,7 +98,7 @@ impl Hpu {
             ),
             pe_ctl: PeCtl,
             retirement: Retirement::default(),
-            config,
+            config: config.clone(),
         }
     }
 }

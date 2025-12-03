@@ -13,7 +13,7 @@ macro_rules! test_hpu_simulation {
         fn test_hpu_simulation() {
             $(
             let config = HpuConfig::from(PhysicalConfig::gaussian_64b_fast());
-            let mut sim = Simulator::from_simulatable(config.freq, Hpu::new(config));
+            let mut sim = Simulator::from_simulatable(config.freq, Hpu::new(&config));
             let (stream, leg_lat) = legacy::$name();
             sim.dispatch(Events::IscPushDOps(stream.collect()));
             sim.play_until_event(Events::IscProcessOver);

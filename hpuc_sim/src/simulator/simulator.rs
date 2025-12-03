@@ -8,14 +8,14 @@ static ACTIVATE_TRACING: bool = false;
 static S_IN_US: f64 = 1_000_000.;
 
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize, Serialize)]
-pub struct MHz(pub(crate) f64);
+pub struct MHz(pub f64);
 
 impl MHz {
     fn as_raw_hertz(&self) -> f64 {
         self.0 * 1_000_000.
     }
 
-    fn period(&self) -> Microseconds {
+    pub fn period(&self) -> Microseconds {
         (1. / self.as_raw_hertz()) * S_IN_US
     }
 }

@@ -8,6 +8,7 @@ use hpuc_langs::{
     doplang::{Argument, Doplang, Operations as DopOp},
     hpulang::{Hpulang, Operations as HpuOp},
 };
+use hpuc_sim::hpu::HpuConfig;
 use hpuc_utils::{CollectInSmallVec, CollectInVec, SmallMap, SmallVec, StoreIndex, svec};
 
 #[derive(Clone, Debug, Copy)]
@@ -671,8 +672,8 @@ impl<'ir> Allocator<'ir> {
     }
 }
 
-pub fn allocate_registers(ir: &IR<Hpulang>, schedule: impl OpWalker, nregs: usize) -> IR<Doplang> {
-    let allocator = Allocator::init(ir, schedule, nregs);
+pub fn allocate_registers(ir: &IR<Hpulang>, schedule: impl OpWalker, config: &HpuConfig) -> IR<Doplang> {
+    let allocator = Allocator::init(ir, schedule, config.regf_size);
     allocator.allocate_registers()
 }
 
@@ -688,12 +689,13 @@ mod test {
 
     fn pipeline(ir: &IR<Ioplang>) -> IR<Doplang> {
         let mut ir = IoplangToHpulang.translate(&ir);
-        let config = HpuConfig::from(PhysicalConfig::gaussian_64b_fast());
-        let mut scheduler = Scheduler::init(&ir, config);
+        let mut config = HpuConfig::from(PhysicalConfig::gaussian_64b_fast());
+        config.regf_size = 10;
+        let mut scheduler = Scheduler::init(&ir, &config);
         let schedule = scheduler.schedule(&ir);
         let flusher = scheduler.into_flusher();
         flusher.apply_flushes(&mut ir);
-        let allocated = allocate_registers(&ir, schedule.get_walker(), 10);
+        let allocated = allocate_registers(&ir, schedule.get_walker(), &config);
         allocated
     }
 

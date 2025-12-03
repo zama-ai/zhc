@@ -25,7 +25,7 @@ pub struct Scheduler<'ir> {
 }
 
 impl<'ir> Scheduler<'ir> {
-    pub fn init(ir: &IR<Hpulang>, config: HpuConfig) -> Scheduler {
+    pub fn init(ir: &'ir IR<Hpulang>, config: &HpuConfig) -> Scheduler<'ir> {
         use hpuc_langs::hpulang::Operations::*;
         let simulator = Simulator::from_simulatable(config.freq, Hpu::new(config));
         let affinities = ir.totally_mapped_opmap(|op| match op.get_operation() {
@@ -295,7 +295,7 @@ mod test {
     fn pipeline(ir: &IR<Ioplang>) -> IR<Hpulang> {
         let mut ir = IoplangToHpulang.translate(&ir);
         let config = HpuConfig::from(PhysicalConfig::gaussian_64b_fast());
-        let mut scheduler = Scheduler::init(&ir, config);
+        let mut scheduler = Scheduler::init(&ir, &config);
         let schedule = scheduler.schedule(&ir);
         assert_eq!(ir.n_ops() as usize, schedule.len());
         assert!(schedule.get_walker().is_topo_sorted(&ir));
