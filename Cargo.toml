@@ -4,7 +4,7 @@ members = [
     "hpuc_gui",
     "hpuc_ir",
     "hpuc_langs",
-    "hpuc_old",
+    "hpuc_bin",
     "hpuc_pipeline",
     "hpuc_sim",
     "hpuc_utils",
