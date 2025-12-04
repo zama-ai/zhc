@@ -48,6 +48,9 @@ impl GraphShow for (OpId, Context) {
             | ioplang::Operations::Let { .. }
             | ioplang::Operations::Constant { .. }
             | ioplang::Operations::GenerateLut { .. }
+            | ioplang::Operations::GenerateLut2 { .. }
+            | ioplang::Operations::GenerateLut4 { .. }
+            | ioplang::Operations::GenerateLut8 { .. }
             | ioplang::Operations::ExtractCtBlock
             | ioplang::Operations::ExtractPtBlock
             | ioplang::Operations::StoreCtBlock => Format::Rectangle,
@@ -77,7 +80,10 @@ impl GraphShow for (OpId, Context) {
             | ioplang::Operations::Output { .. }
             | ioplang::Operations::Let { .. }
             | ioplang::Operations::Constant { .. }
-            | ioplang::Operations::GenerateLut { .. } => Color32::WHITE,
+            | ioplang::Operations::GenerateLut { .. }
+            | ioplang::Operations::GenerateLut2 { .. }
+            | ioplang::Operations::GenerateLut4 { .. }
+            | ioplang::Operations::GenerateLut8 { .. } => Color32::WHITE,
 
             ioplang::Operations::ExtractCtBlock
             | ioplang::Operations::ExtractPtBlock

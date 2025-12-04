@@ -1,4 +1,4 @@
-use std::fmt::{Debug, Display};
+use std::{fmt::{Debug, Display}, hash::Hash, rc::Rc};
 
 use hpuc_ir::{DialectOperations, Signature, sig};
 
@@ -19,13 +19,52 @@ impl Display for Litteral {
     }
 }
 
+#[derive(Clone)]
+pub struct LutGenerator(Rc<Box<dyn Fn(u8) -> u8>>);
+
+impl LutGenerator {
+
+    pub fn new(f: impl Fn(u8) -> u8 + 'static) -> Self {
+        LutGenerator(Rc::new(Box::new(f)))
+    }
+
+    pub fn identity() -> Self {
+        LutGenerator(Rc::new(Box::new(|a| a)))
+    }
+}
+
+impl Debug for LutGenerator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "LutGenerator({:p})", Rc::as_ptr(&self.0))
+    }
+}
+
+impl PartialEq for LutGenerator {
+    fn eq(&self, other: &Self) -> bool {
+        let self_ptr = Rc::as_ptr(&self.0);
+        let other_ptr = Rc::as_ptr(&other.0);
+        self_ptr.eq(&other_ptr)
+    }
+}
+
+impl Eq for LutGenerator {}
+
+impl Hash for LutGenerator {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        state.write_usize(Rc::as_ptr(&self.0) as usize);
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Operations {
     Input { pos: usize, typ: Types },
     Output { pos: usize, typ: Types },
     Let { typ: Types },
     Constant { value: Litteral },
-    GenerateLut { name: String, deg: usize },
+    GenerateLut { name: String, gene: LutGenerator},
+    GenerateLut2 { name: String, gene: [LutGenerator; 2]},
+    GenerateLut4 { name: String, gene: [LutGenerator; 4]},
+    GenerateLut8 { name: String, gene: [LutGenerator; 8]},
     AddCt,
     SubCt,
     Mac,
@@ -49,7 +88,10 @@ impl Display for Operations {
             Operations::Output { pos, typ } => write!(f, "output<{}, {}>", pos, typ),
             Operations::Let { typ } => write!(f, "let<{}>", typ),
             Operations::Constant { value } => write!(f, "constant<{}>", value),
-            Operations::GenerateLut { deg, name } => write!(f, "gen_lut{deg}<{name}>"),
+            Operations::GenerateLut { name, .. } => write!(f, "gen_lut1<{name}>"),
+            Operations::GenerateLut2 { name, .. } => write!(f, "gen_lut2<{name}>"),
+            Operations::GenerateLut4 { name, .. } => write!(f, "gen_lut4<{name}>"),
+            Operations::GenerateLut8 { name, .. } => write!(f, "gen_lut8<{name}>"),
             Operations::Mac => write!(f, "mac"),
             Operations::AddCt => write!(f, "add_ct"),
             Operations::SubCt => write!(f, "sub_ct"),
@@ -83,11 +125,10 @@ impl DialectOperations for Operations {
             Operations::Constant {
                 value: Litteral::Index(_),
             } => sig![() -> (Index)],
-            Operations::GenerateLut { deg: 1, .. } => sig![()-> (Lut1)],
-            Operations::GenerateLut { deg: 2, .. } => sig![()-> (Lut2)],
-            Operations::GenerateLut { deg: 4, .. } => sig![()-> (Lut4)],
-            Operations::GenerateLut { deg: 8, .. } => sig![()-> (Lut8)],
-            Operations::GenerateLut { deg, .. } => panic!("Invalid GenerateLut degree {deg}"),
+            Operations::GenerateLut { .. } => sig![()-> (Lut1)],
+            Operations::GenerateLut2 { .. } => sig![()-> (Lut2)],
+            Operations::GenerateLut4 { .. } => sig![()-> (Lut4)],
+            Operations::GenerateLut8 { .. } => sig![()-> (Lut8)],
             Operations::AddCt => sig![(CiphertextBlock, CiphertextBlock) -> (CiphertextBlock)],
             Operations::SubCt => sig![(CiphertextBlock, CiphertextBlock) -> (CiphertextBlock)],
             Operations::Mac => {

@@ -73,6 +73,15 @@ impl Translator for IoplangToHpulang {
                 IopOp::GenerateLut { .. } => {
                     // TODO : Perform lut registering.
                 }
+                IopOp::GenerateLut2 { .. } => {
+                    // TODO : Perform lut registering.
+                }
+                IopOp::GenerateLut4 { .. } => {
+                    // TODO : Perform lut registering.
+                }
+                IopOp::GenerateLut8 { .. } => {
+                    // TODO : Perform lut registering.
+                }
                 IopOp::AddCt => {
                     let (_, valids) = output
                         .add_op(

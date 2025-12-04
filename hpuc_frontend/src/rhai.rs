@@ -1,6 +1,6 @@
 use super::builder::{BuilderContext, IopBuilder};
 use hpuc_ir::{IRError, ValId};
-use hpuc_langs::ioplang::{Ioplang, Litteral, Operations, Types};
+use hpuc_langs::ioplang::{Ioplang, Litteral, LutGenerator, Operations, Types};
 use hpuc_utils::svec;
 
 use rhai::{Array, Dynamic, Engine, EvalAltResult, INT, ImmutableString};
@@ -137,15 +137,52 @@ pub fn create_rhai_engine(context: BuilderContext) -> (Engine, IopBuilder) {
         "pbs_lut",
         move |name: ImmutableString, deg: i64| -> Result<ValId, Box<EvalAltResult>> {
             let mut ir = builder_clone.ir();
-            let (_, lut) = ir
-                .add_op(
+            let (_, lut) = match deg {
+                1 => ir.add_op(
                     Operations::GenerateLut {
                         name: name.to_string(),
-                        deg: deg as usize,
+                        gene: LutGenerator::identity(),
                     },
                     svec![],
-                )
-                .map_err(ToRhaiiError::to_rhaii_error)?;
+                ),
+                2 => ir.add_op(
+                    Operations::GenerateLut2 {
+                        name: name.to_string(),
+                        gene: [LutGenerator::identity(), LutGenerator::identity()],
+                    },
+                    svec![],
+                ),
+                4 => ir.add_op(
+                    Operations::GenerateLut4 {
+                        name: name.to_string(),
+                        gene: [
+                            LutGenerator::identity(),
+                            LutGenerator::identity(),
+                            LutGenerator::identity(),
+                            LutGenerator::identity(),
+                        ],
+                    },
+                    svec![],
+                ),
+                8 => ir.add_op(
+                    Operations::GenerateLut8 {
+                        name: name.to_string(),
+                        gene: [
+                            LutGenerator::identity(),
+                            LutGenerator::identity(),
+                            LutGenerator::identity(),
+                            LutGenerator::identity(),
+                            LutGenerator::identity(),
+                            LutGenerator::identity(),
+                            LutGenerator::identity(),
+                            LutGenerator::identity(),
+                        ],
+                    },
+                    svec![],
+                ),
+                _ => panic!()
+            }
+            .map_err(ToRhaiiError::to_rhaii_error)?;
             Ok(lut[0])
         },
     );
