@@ -12,6 +12,7 @@ mod stack_vec;
 mod store;
 pub mod tracing;
 mod type_name;
+mod interleave;
 
 pub use all_eq::*;
 pub use collectors::*;
@@ -26,3 +27,4 @@ pub use stack_set::*;
 pub use stack_vec::*;
 pub use store::*;
 pub use type_name::*;
+pub use interleave::*;
