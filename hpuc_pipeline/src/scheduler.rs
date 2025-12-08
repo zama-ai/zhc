@@ -8,7 +8,7 @@ use hpuc_langs::{
 };
 use hpuc_sim::{
     Cycle, Simulator,
-    hpu::{DOp, DOpId, Events, Hpu, HpuConfig, Policy, RawDOp},
+    hpu::{DOp, DOpId, Events, Hpu, HpuConfig, RawDOp},
 };
 use hpuc_utils::{SmallSet, SmallVec, StoreIndex};
 
@@ -27,7 +27,9 @@ pub struct Scheduler<'ir> {
 impl<'ir> Scheduler<'ir> {
     pub fn init(ir: &'ir IR<Hpulang>, config: &HpuConfig) -> Scheduler<'ir> {
         use hpuc_langs::hpulang::Operations::*;
-        let simulator = Simulator::from_simulatable(config.freq, Hpu::new(config));
+        let mut config = config.to_owned();
+        config.pbs_timeout = config.pbs_timeout * 10usize;
+        let simulator = Simulator::from_simulatable(config.freq, Hpu::new(&config));
         let affinities = ir.totally_mapped_opmap(|op| match op.get_operation() {
             AddCt => Affinity::Alu,
             SubCt => Affinity::Alu,
@@ -66,7 +68,10 @@ impl<'ir> Scheduler<'ir> {
         }
     }
 
-    pub fn into_flusher(self) -> Flusher {
+    pub fn into_flusher(mut self) -> Flusher {
+        if let Some((last_pbs_opid, _last_pbs_cycle)) = self.last_pbs {
+            self.should_flush.insert(last_pbs_opid);
+        }
         Flusher(self.should_flush)
     }
 }
@@ -147,11 +152,10 @@ impl<'ir> ForwardSimulator for Scheduler<'ir> {
             if hpu.pe_pbs.memory().n_waiting() >= hpu.config.pbs_min_batch_size - 1 {
                 self.should_flush.insert(*val);
             }
-            if let (Policy::Timeout(timeout), Some((last_pbs_opid, last_pbs_cycle))) =
-                (hpu.config.pbs_policy, self.last_pbs)
+            if let Some((last_pbs_opid, last_pbs_cycle)) = self.last_pbs
             {
                 let span_since_last = self.simulator.now() - last_pbs_cycle;
-                if span_since_last > timeout && !self.should_flush.contains(&last_pbs_opid) {
+                if span_since_last > hpu.config.pbs_timeout && !self.should_flush.contains(&last_pbs_opid) {
                     // Timeout was reached, which means that last_pbs should have been a flush...
                     self.should_flush.insert(last_pbs_opid);
                 }
@@ -365,7 +369,7 @@ mod test {
             dst_st<0.3_tdst>(%39);
             %43 : CtRegister = pbs<Lut@46>(%40);
             %44 : CtRegister = pbs<Lut@44>(%41);
-            %45 : CtRegister = pbs<Lut@45>(%42);
+            %45 : CtRegister = pbs_f<Lut@45>(%42);
             %46 : CtRegister = add_ct(%18, %43);
             %47 : CtRegister = add_ct(%19, %44);
             %48 : CtRegister = add_ct(%20, %45);
@@ -418,7 +422,7 @@ mod test {
             %34 : CtRegister = pbs<Lut@11>(%32);
             %35 : CtRegister = pbs_f<Lut@11>(%33);
             %36 : CtRegister = mac<4_imm>(%35, %34);
-            %37 : CtRegister = pbs<Lut@27>(%36);
+            %37 : CtRegister = pbs_f<Lut@27>(%36);
             dst_st<0.0_tdst>(%37);
             ",
         );
@@ -494,7 +498,7 @@ mod test {
             %59 : CtRegister = add_ct(%27, %56);
             %60 : CtRegister = pbs<Lut@1>(%57);
             %61 : CtRegister = pbs<Lut@1>(%58);
-            %62 : CtRegister = pbs<Lut@1>(%59);
+            %62 : CtRegister = pbs_f<Lut@1>(%59);
             dst_st<0.4_tdst>(%60);
             dst_st<0.5_tdst>(%61);
             dst_st<0.6_tdst>(%62);

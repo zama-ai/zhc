@@ -3,8 +3,6 @@ use toml;
 
 use crate::{Cycle, MHz};
 
-use super::Policy;
-
 fn default_freq() -> MHz {
     MHz(400.)
 }
@@ -137,7 +135,7 @@ pub struct HpuConfig {
     pub pbs_memory_capacity: usize,
     pub pbs_min_batch_size: usize,
     pub pbs_max_batch_size: usize,
-    pub pbs_policy: Policy,
+    pub pbs_timeout: Cycle,
     pub pbs_load_unload_latency: usize,
     pub pbs_processing_latency_a: usize,
     pub pbs_processing_latency_b: usize,
@@ -177,7 +175,7 @@ impl From<PhysicalConfig> for HpuConfig {
             pbs_memory_capacity: phy.ntt_params.total_pbs_nb,
             pbs_min_batch_size: phy.ntt_params.min_pbs_nb,
             pbs_max_batch_size: phy.ntt_params.batch_pbs_nb,
-            pbs_policy: Policy::Timeout(Cycle(phy.pbs_params.timeout)),
+            pbs_timeout: Cycle(phy.pbs_params.timeout),
             pbs_load_unload_latency: kspbs_cnst_cost,
             pbs_processing_latency_a: kspbs_pbs_cost,
             pbs_processing_latency_b: kspbs_cnst_cost,

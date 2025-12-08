@@ -88,7 +88,7 @@ impl Hpu {
                 config.pbs_fifo_capacity,
                 config.pbs_memory_capacity,
                 config.pbs_max_batch_size as BatchSize,
-                config.pbs_policy,
+                config.pbs_timeout,
                 ConstantLatency::new(config.pbs_load_unload_latency),
                 FlatLinLatency::new(
                     config.pbs_processing_latency_a,

@@ -7,14 +7,6 @@ use crate::{Cycle, Dispatch};
 
 use super::*;
 
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
-pub enum Policy {
-    /// Flush occurs on full batches.
-    Wait,
-    /// Flush occurs on full batches, or on timeout, n cycles after the last element was pushed.
-    Timeout(Cycle),
-}
-
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct TimeoutId(u8);
 
@@ -309,7 +301,7 @@ impl Serialize for ActiveTimeouts {
 pub struct PePbs {
     queue: Fifo<DOp>,
     memory: PePbsMemory,
-    policy: Policy,
+    timeout: Cycle,
     load_unload_latency: ConstantLatency,
     processing_latency: FlatLinLatency,
     active_timeouts: ActiveTimeouts,
@@ -321,7 +313,7 @@ impl PePbs {
         queue_capacity: usize,
         memory_capacity: usize,
         max_batch_size: BatchSize,
-        policy: Policy,
+        timeout: Cycle,
         load_unload_latency: ConstantLatency,
         processing_latency: FlatLinLatency,
     ) -> Self {
@@ -331,7 +323,7 @@ impl PePbs {
             memory: PePbsMemory::new(memory_capacity, max_batch_size),
             load_unload_latency,
             processing_latency,
-            policy,
+            timeout,
             active_timeouts: ActiveTimeouts(VecDeque::new()),
             max_batch_size,
         }
@@ -412,11 +404,10 @@ impl Simulatable for PePbs {
                 dispatcher.dispatch_now(Events::IscUnlockRead(dop.id));
 
                 // Schedule a timeout.
-                if let Policy::Timeout(offset) = self.policy {
-                    let timeout = TimeoutId::grab();
-                    dispatcher.dispatch_after(offset, Events::PePbsTimeout(timeout.clone()));
-                    self.active_timeouts.0.push_back(timeout);
-                }
+                let timeout = TimeoutId::grab();
+                dispatcher.dispatch_after(self.timeout, Events::PePbsTimeout(timeout.clone()));
+                self.active_timeouts.0.push_back(timeout);
+
 
                 // Land the load in memory.
                 self.memory.land_load();
@@ -449,11 +440,10 @@ impl Simulatable for PePbs {
                     self.memory.n_waiting() >= batch_size,
                     "Launch Error: batch_size mismatch"
                 );
-                if let Policy::Timeout(_) = self.policy {
-                    // We can cancel the pending timeouts for the batch.
-                    for _ in 0..batch_size {
-                        self.active_timeouts.0.pop_front();
-                    }
+
+                // We can cancel the pending timeouts for the batch.
+                for _ in 0..batch_size {
+                    self.active_timeouts.0.pop_front();
                 }
                 // We update the memory
                 self.memory.launch_work(batch_size);
