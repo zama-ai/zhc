@@ -37,10 +37,10 @@ impl Display for TDstId {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
-pub struct LutMemoryAdress(pub usize);
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub struct LutId(pub usize);
 
-impl Display for LutMemoryAdress {
+impl Display for LutId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Lut@{}", self.0)
     }
@@ -74,14 +74,14 @@ pub enum Operations {
     ImmLd { from: TImmId },
     DstSt { to: TDstId },
     SrcLd { from: TSrcId },
-    Pbs { lut: LutMemoryAdress },
-    Pbs2 { lut: LutMemoryAdress },
-    Pbs4 { lut: LutMemoryAdress },
-    Pbs8 { lut: LutMemoryAdress },
-    PbsF { lut: LutMemoryAdress },
-    Pbs2F { lut: LutMemoryAdress },
-    Pbs4F { lut: LutMemoryAdress },
-    Pbs8F { lut: LutMemoryAdress },
+    Pbs { lut: LutId },
+    Pbs2 { lut: LutId },
+    Pbs4 { lut: LutId },
+    Pbs8 { lut: LutId },
+    PbsF { lut: LutId },
+    Pbs2F { lut: LutId },
+    Pbs4F { lut: LutId },
+    Pbs8F { lut: LutId },
 }
 
 impl Display for Operations {

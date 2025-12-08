@@ -13,8 +13,8 @@ let lut_shuffle = pbs_lut("Shuffle", 1);
 let pbs_none = pbs_lut("None", 1);
 let cmp_sign = pbs_lut("CmpSign", 1);
 let cmp_reduce = pbs_lut("CmpReduce", 1);
-let user_mrg = pbs_lut("UserMrg", 1);
-let user_cmp = pbs_lut("UserCmp", 1);
+let user_mrg = pbs_lut("CmpGtMrg", 1);
+let user_cmp = pbs_lut("CmpGt", 1);
 
 // Pack A by pairs
 let packed_a = tb::pack(src_a);

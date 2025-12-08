@@ -278,7 +278,7 @@ fn test_cmp_ir() {
         %17 : Index = constant<7_idx>();
         %20 : Lut1 = gen_lut1<CmpSign>();
         %21 : Lut1 = gen_lut1<CmpReduce>();
-        %22 : Lut1 = gen_lut1<UserMrg>();
+        %22 : Lut1 = gen_lut1<CmpGtMrg>();
         %24 : PlaintextBlock = constant<4_pt_block>();
         %25 : PlaintextBlock = constant<4_pt_block>();
         %26 : PlaintextBlock = constant<4_pt_block>();
