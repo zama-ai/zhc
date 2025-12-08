@@ -268,7 +268,6 @@ impl From<&Slot> for SlotProperties {
             State::Pending => (true, true, true),
             State::Issued => (true, true, true),
             State::Loaded => (true, false, true),
-            State::Working => (true, false, true),
             State::Finished => (false, false, true),
         };
         Self {

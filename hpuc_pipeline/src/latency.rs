@@ -38,21 +38,21 @@ mod test {
     #[test]
     fn test_latency_add_ir() {
         let lat = pipeline(&get_add_ir(16, 2, 2));
-        assert_eq!(lat, Cycle(191268));
+        assert_eq!(lat, Cycle(191256));
         println!("{}us", lat.as_ts(MHz(400.).period()));
     }
 
     #[test]
     fn test_latency_sub_ir() {
         let lat = pipeline(&get_sub_ir(16, 2, 2));
-        assert_eq!(lat, Cycle(295059));
+        assert_eq!(lat, Cycle(295047));
         println!("{}us", lat.as_ts(MHz(400.).period()));
     }
 
     #[test]
     fn test_latency_cmp_ir() {
         let lat = pipeline(&get_cmp_ir(16, 2, 2));
-        assert_eq!(lat, Cycle(167486));
+        assert_eq!(lat, Cycle(167474));
         println!("{}us", lat.as_ts(MHz(400.).period()));
     }
 }
