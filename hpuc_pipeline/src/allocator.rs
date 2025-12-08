@@ -598,55 +598,61 @@ impl<'ir> Allocator<'ir> {
                         cst: Argument::pt_const(cst.0),
                     });
                 }
-                HpuOp::Pbs { .. } => {
+                HpuOp::Pbs { lut } => {
                     let [r_dst] = self.get_dst_registers([rets[0]]);
                     let r_src = self.get_src_register(args[0]);
                     self.add_dop(DopOp::PBS {
                         dst: Argument::ct_reg(r_dst.0),
                         src: Argument::ct_reg(r_src.0),
+                        lut: Argument::lut_id(lut)
                     });
                 }
-                HpuOp::PbsF { .. } => {
+                HpuOp::PbsF { lut } => {
                     let [r_dst] = self.get_dst_registers([rets[0]]);
                     let r_src = self.get_src_register(args[0]);
                     self.add_dop(DopOp::PBS_F {
                         dst: Argument::ct_reg(r_dst.0),
                         src: Argument::ct_reg(r_src.0),
+                        lut: Argument::lut_id(lut)
                     });
                 }
-                HpuOp::Pbs2 { .. } => {
+                HpuOp::Pbs2 { lut } => {
                     let [r_dst, ..] = self.get_dst_registers([rets[0], rets[1]]);
                     let r_src = self.get_src_register(args[0]);
                     self.add_dop(DopOp::PBS_ML2 {
                         dst: Argument::ct_reg2(r_dst.0),
                         src: Argument::ct_reg(r_src.0),
+                        lut: Argument::lut_id(lut)
                     });
                 }
-                HpuOp::Pbs2F { .. } => {
+                HpuOp::Pbs2F { lut } => {
                     let [r_dst, ..] = self.get_dst_registers([rets[0], rets[1]]);
                     let r_src = self.get_src_register(args[0]);
                     self.add_dop(DopOp::PBS_ML2_F {
                         dst: Argument::ct_reg2(r_dst.0),
                         src: Argument::ct_reg(r_src.0),
+                        lut: Argument::lut_id(lut)
                     });
                 }
-                HpuOp::Pbs4 { .. } => {
+                HpuOp::Pbs4 { lut } => {
                     let [r_dst, ..] = self.get_dst_registers([rets[0], rets[1], rets[2], rets[3]]);
                     let r_src = self.get_src_register(args[0]);
                     self.add_dop(DopOp::PBS_ML4 {
                         dst: Argument::ct_reg4(r_dst.0),
                         src: Argument::ct_reg(r_src.0),
+                        lut: Argument::lut_id(lut)
                     });
                 }
-                HpuOp::Pbs4F { .. } => {
+                HpuOp::Pbs4F { lut } => {
                     let [r_dst, ..] = self.get_dst_registers([rets[0], rets[1], rets[2], rets[3]]);
                     let r_src = self.get_src_register(args[0]);
                     self.add_dop(DopOp::PBS_ML4_F {
                         dst: Argument::ct_reg4(r_dst.0),
                         src: Argument::ct_reg(r_src.0),
+                        lut: Argument::lut_id(lut)
                     });
                 }
-                HpuOp::Pbs8 { .. } => {
+                HpuOp::Pbs8 { lut } => {
                     let [r_dst, ..] = self.get_dst_registers([
                         rets[0], rets[1], rets[2], rets[3], rets[4], rets[5], rets[6], rets[7],
                     ]);
@@ -654,9 +660,10 @@ impl<'ir> Allocator<'ir> {
                     self.add_dop(DopOp::PBS_ML8 {
                         dst: Argument::ct_reg8(r_dst.0),
                         src: Argument::ct_reg(r_src.0),
+                        lut: Argument::lut_id(lut)
                     });
                 }
-                HpuOp::Pbs8F { .. } => {
+                HpuOp::Pbs8F { lut } => {
                     let [r_dst, ..] = self.get_dst_registers([
                         rets[0], rets[1], rets[2], rets[3], rets[4], rets[5], rets[6], rets[7],
                     ]);
@@ -664,6 +671,7 @@ impl<'ir> Allocator<'ir> {
                     self.add_dop(DopOp::PBS_ML8_F {
                         dst: Argument::ct_reg8(r_dst.0),
                         src: Argument::ct_reg(r_src.0),
+                        lut: Argument::lut_id(lut)
                     });
                 }
             }
@@ -721,48 +729,48 @@ mod test {
             %14 : Ctx = LD<R(6), TC(1, 4)>(%13);
             %15 : Ctx = ADD<R(1), R(1), R(7)>(%14);
             %16 : Ctx = ST<CT_H(1), R(6)>(%15);
-            %17 : Ctx = PBS2<R(6, 2), R(0)>(%16);
+            %17 : Ctx = PBS2<R(6, 2), R(0), LUT(26)>(%16);
             %18 : Ctx = LD<R(0), TC(1, 5)>(%17);
             %19 : Ctx = ST<CT_H(2), R(6)>(%18);
             %20 : Ctx = LD<R(6), TC(1, 6)>(%19);
             %21 : Ctx = ADD<R(2), R(2), R(8)>(%20);
-            %22 : Ctx = PBS<R(8), R(1)>(%21);
+            %22 : Ctx = PBS<R(8), R(1), LUT(47)>(%21);
             %23 : Ctx = ADD<R(3), R(3), R(9)>(%22);
-            %24 : Ctx = PBS<R(9), R(2)>(%23);
+            %24 : Ctx = PBS<R(9), R(2), LUT(48)>(%23);
             %25 : Ctx = ST<CT_H(3), R(2)>(%24);
             %26 : Ctx = LD<R(2), CT_H(1)>(%25);
             %27 : Ctx = ADD<R(4), R(4), R(2)>(%26);
             %28 : Ctx = ST<CT_H(4), R(3)>(%27);
             %29 : Ctx = ST<CT_H(5), R(9)>(%28);
             %30 : Ctx = LD<R(9), CT_H(4)>(%29);
-            %31 : Ctx = PBS<R(3), R(9)>(%30);
+            %31 : Ctx = PBS<R(3), R(9), LUT(49)>(%30);
             %32 : Ctx = ADD<R(0), R(5), R(0)>(%31);
-            %33 : Ctx = PBS<R(5), R(4)>(%32);
+            %33 : Ctx = PBS<R(5), R(4), LUT(47)>(%32);
             %34 : Ctx = ST<CT_H(6), R(4)>(%33);
             %35 : Ctx = LD<R(4), CT_H(0)>(%34);
             %36 : Ctx = ADD<R(6), R(4), R(6)>(%35);
             %37 : Ctx = ST<CT_H(7), R(0)>(%36);
             %38 : Ctx = LD<R(9), CT_H(7)>(%37);
-            %39 : Ctx = PBS<R(0), R(9)>(%38);
+            %39 : Ctx = PBS<R(0), R(9), LUT(48)>(%38);
             %40 : Ctx = ST<CT_H(8), R(6)>(%39);
             %41 : Ctx = LD<R(9), CT_H(8)>(%40);
-            %42 : Ctx = PBSF<R(6), R(9)>(%41);
+            %42 : Ctx = PBSF<R(6), R(9), LUT(49)>(%41);
             %43 : Ctx = ADD<R(1), R(1), R(7)>(%42);
             %44 : Ctx = LD<R(9), CT_H(2)>(%43);
             %45 : Ctx = ST<TC(0, 0), R(9)>(%44);
             %46 : Ctx = ADD<R(7), R(8), R(7)>(%45);
             %47 : Ctx = ST<TC(0, 1), R(1)>(%46);
             %48 : Ctx = ADD<R(0), R(0), R(5)>(%47);
-            %49 : Ctx = PBSF<R(1), R(7)>(%48);
+            %49 : Ctx = PBSF<R(1), R(7), LUT(44)>(%48);
             %50 : Ctx = LD<R(8), CT_H(5)>(%49);
             %51 : Ctx = ADD<R(7), R(8), R(7)>(%50);
             %52 : Ctx = ADD<R(6), R(6), R(0)>(%51);
             %53 : Ctx = ST<CT_H(9), R(6)>(%52);
-            %54 : Ctx = PBSF<R(6), R(7)>(%53);
+            %54 : Ctx = PBSF<R(6), R(7), LUT(45)>(%53);
             %55 : Ctx = ADD<R(3), R(3), R(7)>(%54);
             %56 : Ctx = LD<R(7), CT_H(3)>(%55);
             %57 : Ctx = ADD<R(1), R(7), R(1)>(%56);
-            %58 : Ctx = PBSF<R(3), R(3)>(%57);
+            %58 : Ctx = PBSF<R(3), R(3), LUT(46)>(%57);
             %59 : Ctx = ST<CT_H(10), R(0)>(%58);
             %60 : Ctx = LD<R(0), CT_H(4)>(%59);
             %61 : Ctx = ADD<R(6), R(0), R(6)>(%60);
@@ -771,12 +779,12 @@ mod test {
             %64 : Ctx = ADD<R(1), R(5), R(3)>(%63);
             %65 : Ctx = LD<R(6), CT_H(10)>(%64);
             %66 : Ctx = ADD<R(5), R(6), R(3)>(%65);
-            %67 : Ctx = PBS<R(1), R(1)>(%66);
+            %67 : Ctx = PBS<R(1), R(1), LUT(46)>(%66);
             %68 : Ctx = ST<CT_H(11), R(1)>(%67);
             %69 : Ctx = LD<R(1), CT_H(9)>(%68);
             %70 : Ctx = ADD<R(3), R(1), R(3)>(%69);
-            %71 : Ctx = PBS<R(5), R(5)>(%70);
-            %72 : Ctx = PBS<R(3), R(3)>(%71);
+            %71 : Ctx = PBS<R(5), R(5), LUT(44)>(%70);
+            %72 : Ctx = PBS<R(3), R(3), LUT(45)>(%71);
             %73 : Ctx = ST<CT_H(12), R(3)>(%72);
             %74 : Ctx = LD<R(9), CT_H(6)>(%73);
             %75 : Ctx = LD<R(8), CT_H(11)>(%74);
@@ -827,9 +835,9 @@ mod test {
             %26 : Ctx = ADD<R(0), R(0), R(7)>(%25);
             %27 : Ctx = ADD<R(1), R(1), R(8)>(%26);
             %28 : Ctx = ST<CT_H(4), R(6)>(%27);
-            %29 : Ctx = PBS2<R(6, 2), R(0)>(%28);
+            %29 : Ctx = PBS2<R(6, 2), R(0), LUT(26)>(%28);
             %30 : Ctx = ADD<R(0), R(2), R(9)>(%29);
-            %31 : Ctx = PBS<R(2), R(1)>(%30);
+            %31 : Ctx = PBS<R(2), R(1), LUT(47)>(%30);
             %32 : Ctx = LD<R(9), CT_H(3)>(%31);
             %33 : Ctx = ST<CT_H(5), R(2)>(%32);
             %34 : Ctx = LD<R(2), CT_H(4)>(%33);
@@ -837,40 +845,40 @@ mod test {
             %36 : Ctx = ST<CT_H(6), R(0)>(%35);
             %37 : Ctx = ST<CT_H(7), R(6)>(%36);
             %38 : Ctx = LD<R(6), CT_H(6)>(%37);
-            %39 : Ctx = PBS<R(0), R(6)>(%38);
+            %39 : Ctx = PBS<R(0), R(6), LUT(48)>(%38);
             %40 : Ctx = LD<R(6), CT_H(2)>(%39);
             %41 : Ctx = ADD<R(5), R(6), R(5)>(%40);
             %42 : Ctx = ST<CT_H(8), R(8)>(%41);
             %43 : Ctx = ST<CT_H(9), R(0)>(%42);
             %44 : Ctx = LD<R(0), CT_H(8)>(%43);
-            %45 : Ctx = PBS<R(8), R(0)>(%44);
+            %45 : Ctx = PBS<R(8), R(0), LUT(49)>(%44);
             %46 : Ctx = LD<R(0), CT_H(1)>(%45);
             %47 : Ctx = ADD<R(4), R(0), R(4)>(%46);
             %48 : Ctx = ST<CT_H(10), R(5)>(%47);
             %49 : Ctx = ST<CT_H(11), R(8)>(%48);
             %50 : Ctx = LD<R(8), CT_H(10)>(%49);
-            %51 : Ctx = PBS<R(5), R(8)>(%50);
+            %51 : Ctx = PBS<R(5), R(8), LUT(47)>(%50);
             %52 : Ctx = LD<R(8), CT_H(0)>(%51);
             %53 : Ctx = ADD<R(3), R(8), R(3)>(%52);
             %54 : Ctx = ST<CT_H(12), R(4)>(%53);
             %55 : Ctx = ST<CT_H(13), R(5)>(%54);
             %56 : Ctx = LD<R(5), CT_H(12)>(%55);
-            %57 : Ctx = PBS<R(4), R(5)>(%56);
+            %57 : Ctx = PBS<R(4), R(5), LUT(48)>(%56);
             %58 : Ctx = ST<CT_H(14), R(3)>(%57);
             %59 : Ctx = LD<R(5), CT_H(14)>(%58);
-            %60 : Ctx = PBS<R(3), R(5)>(%59);
+            %60 : Ctx = PBS<R(3), R(5), LUT(49)>(%59);
             %61 : Ctx = ADD<R(1), R(1), R(7)>(%60);
             %62 : Ctx = ST<CT_H(15), R(3)>(%61);
             %63 : Ctx = LD<R(3), CT_H(7)>(%62);
-            %64 : Ctx = PBS<R(5), R(3)>(%63);
+            %64 : Ctx = PBS<R(5), R(3), LUT(1)>(%63);
             %65 : Ctx = ST<CT_H(16), R(5)>(%64);
             %66 : Ctx = LD<R(5), CT_H(5)>(%65);
             %67 : Ctx = ADD<R(7), R(5), R(7)>(%66);
-            %68 : Ctx = PBS<R(1), R(1)>(%67);
+            %68 : Ctx = PBS<R(1), R(1), LUT(1)>(%67);
             %69 : Ctx = ST<CT_H(17), R(1)>(%68);
             %70 : Ctx = LD<R(1), CT_H(13)>(%69);
             %71 : Ctx = ADD<R(4), R(4), R(1)>(%70);
-            %72 : Ctx = PBSF<R(1), R(7)>(%71);
+            %72 : Ctx = PBSF<R(1), R(7), LUT(44)>(%71);
             %73 : Ctx = ST<CT_H(18), R(1)>(%72);
             %74 : Ctx = LD<R(1), CT_H(9)>(%73);
             %75 : Ctx = ADD<R(7), R(1), R(7)>(%74);
@@ -887,15 +895,15 @@ mod test {
             %86 : Ctx = LD<R(8), CT_H(11)>(%85);
             %87 : Ctx = LD<R(7), CT_H(20)>(%86);
             %88 : Ctx = ADD<R(9), R(8), R(7)>(%87);
-            %89 : Ctx = PBS<R(7), R(7)>(%88);
+            %89 : Ctx = PBS<R(7), R(7), LUT(45)>(%88);
             %90 : Ctx = ST<CT_H(22), R(7)>(%89);
             %91 : Ctx = ST<CT_H(23), R(9)>(%90);
             %92 : Ctx = LD<R(9), CT_H(6)>(%91);
             %93 : Ctx = LD<R(8), CT_H(18)>(%92);
             %94 : Ctx = ADD<R(7), R(9), R(8)>(%93);
             %95 : Ctx = LD<R(8), CT_H(23)>(%94);
-            %96 : Ctx = PBS<R(9), R(8)>(%95);
-            %97 : Ctx = PBSF<R(7), R(7)>(%96);
+            %96 : Ctx = PBS<R(9), R(8), LUT(46)>(%95);
+            %97 : Ctx = PBSF<R(7), R(7), LUT(1)>(%96);
             %98 : Ctx = ST<CT_H(24), R(9)>(%97);
             %99 : Ctx = LD<R(8), CT_H(8)>(%98);
             %100 : Ctx = ST<CT_H(25), R(7)>(%99);
@@ -909,24 +917,24 @@ mod test {
             %108 : Ctx = ADD<R(9), R(8), R(7)>(%107);
             %109 : Ctx = ST<CT_H(27), R(9)>(%108);
             %110 : Ctx = LD<R(8), CT_H(26)>(%109);
-            %111 : Ctx = PBS<R(9), R(8)>(%110);
+            %111 : Ctx = PBS<R(9), R(8), LUT(1)>(%110);
             %112 : Ctx = ST<CT_H(28), R(9)>(%111);
             %113 : Ctx = LD<R(7), CT_H(19)>(%112);
             %114 : Ctx = LD<R(8), CT_H(24)>(%113);
             %115 : Ctx = ADD<R(9), R(7), R(8)>(%114);
             %116 : Ctx = ST<CT_H(29), R(9)>(%115);
             %117 : Ctx = LD<R(8), CT_H(27)>(%116);
-            %118 : Ctx = PBS<R(9), R(8)>(%117);
+            %118 : Ctx = PBS<R(9), R(8), LUT(46)>(%117);
             %119 : Ctx = ST<CT_H(30), R(9)>(%118);
             %120 : Ctx = LD<R(8), CT_H(21)>(%119);
             %121 : Ctx = LD<R(7), CT_H(24)>(%120);
             %122 : Ctx = ADD<R(9), R(8), R(7)>(%121);
             %123 : Ctx = ST<CT_H(31), R(9)>(%122);
             %124 : Ctx = LD<R(8), CT_H(29)>(%123);
-            %125 : Ctx = PBS<R(9), R(8)>(%124);
+            %125 : Ctx = PBS<R(9), R(8), LUT(44)>(%124);
             %126 : Ctx = ST<CT_H(32), R(9)>(%125);
             %127 : Ctx = LD<R(8), CT_H(31)>(%126);
-            %128 : Ctx = PBSF<R(9), R(8)>(%127);
+            %128 : Ctx = PBSF<R(9), R(8), LUT(45)>(%127);
             %129 : Ctx = ST<CT_H(33), R(9)>(%128);
             %130 : Ctx = LD<R(9), CT_H(28)>(%129);
             %131 : Ctx = ST<TC(0, 3), R(9)>(%130);
@@ -939,17 +947,17 @@ mod test {
             %138 : Ctx = ADD<R(9), R(8), R(7)>(%137);
             %139 : Ctx = ST<CT_H(35), R(9)>(%138);
             %140 : Ctx = LD<R(8), CT_H(34)>(%139);
-            %141 : Ctx = PBS<R(9), R(8)>(%140);
+            %141 : Ctx = PBS<R(9), R(8), LUT(1)>(%140);
             %142 : Ctx = ST<CT_H(36), R(9)>(%141);
             %143 : Ctx = LD<R(8), CT_H(14)>(%142);
             %144 : Ctx = LD<R(7), CT_H(33)>(%143);
             %145 : Ctx = ADD<R(9), R(8), R(7)>(%144);
             %146 : Ctx = ST<CT_H(37), R(9)>(%145);
             %147 : Ctx = LD<R(8), CT_H(35)>(%146);
-            %148 : Ctx = PBS<R(9), R(8)>(%147);
+            %148 : Ctx = PBS<R(9), R(8), LUT(1)>(%147);
             %149 : Ctx = ST<CT_H(38), R(9)>(%148);
             %150 : Ctx = LD<R(8), CT_H(37)>(%149);
-            %151 : Ctx = PBS<R(9), R(8)>(%150);
+            %151 : Ctx = PBS<R(9), R(8), LUT(1)>(%150);
             %152 : Ctx = ST<CT_H(39), R(9)>(%151);
             %153 : Ctx = LD<R(9), CT_H(36)>(%152);
             %154 : Ctx = ST<TC(0, 4), R(9)>(%153);
@@ -993,20 +1001,20 @@ mod test {
             %26 : Ctx = MAC<R(2), R(2), R(5), PT_I(4)>(%25);
             %27 : Ctx = SUB<R(0), R(0), R(6)>(%26);
             %28 : Ctx = SUB<R(1), R(1), R(4)>(%27);
-            %29 : Ctx = PBS<R(0), R(0)>(%28);
+            %29 : Ctx = PBS<R(0), R(0), LUT(10)>(%28);
             %30 : Ctx = LD<R(4), CT_H(0)>(%29);
             %31 : Ctx = SUB<R(3), R(4), R(3)>(%30);
-            %32 : Ctx = PBS<R(1), R(1)>(%31);
+            %32 : Ctx = PBS<R(1), R(1), LUT(10)>(%31);
             %33 : Ctx = LD<R(5), CT_H(1)>(%32);
             %34 : Ctx = SUB<R(2), R(5), R(2)>(%33);
-            %35 : Ctx = PBS<R(3), R(3)>(%34);
-            %36 : Ctx = PBSF<R(2), R(2)>(%35);
+            %35 : Ctx = PBS<R(3), R(3), LUT(10)>(%34);
+            %36 : Ctx = PBSF<R(2), R(2), LUT(10)>(%35);
             %37 : Ctx = MAC<R(0), R(1), R(0), PT_I(4)>(%36);
             %38 : Ctx = MAC<R(1), R(2), R(3), PT_I(4)>(%37);
-            %39 : Ctx = PBS<R(0), R(0)>(%38);
-            %40 : Ctx = PBSF<R(1), R(1)>(%39);
+            %39 : Ctx = PBS<R(0), R(0), LUT(11)>(%38);
+            %40 : Ctx = PBSF<R(1), R(1), LUT(11)>(%39);
             %41 : Ctx = MAC<R(0), R(1), R(0), PT_I(4)>(%40);
-            %42 : Ctx = PBS<R(0), R(0)>(%41);
+            %42 : Ctx = PBS<R(0), R(0), LUT(27)>(%41);
             %43 : Ctx = ST<TC(0, 0), R(0)>(%42);
             ");
     }

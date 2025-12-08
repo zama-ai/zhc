@@ -236,37 +236,45 @@ fn opref_to_dop<'a>(opref: OpRef<'a, Hpulang>, force_flush: bool) -> Option<DOp>
             dst: Argument::ct_reg(opref.get_return_valids()[0]),
             src: Argument::ct_var(from.src_pos, from.block_pos),
         }),
-        Pbs { .. } if !force_flush => Some(RawDOp::PBS {
+        Pbs { lut } if !force_flush => Some(RawDOp::PBS {
             dst: Argument::ct_reg(opref.get_arg_valids()[0]),
             src: Argument::ct_reg(opref.get_return_valids()[0]),
+            lut: Argument::lut_id(lut)
         }),
-        Pbs2 { .. } if !force_flush => Some(RawDOp::PBS_ML2 {
+        Pbs2 { lut } if !force_flush => Some(RawDOp::PBS_ML2 {
             dst: Argument::ct_reg(opref.get_arg_valids()[0]),
             src: Argument::ct_reg2(opref.get_return_valids()[0]),
+            lut: Argument::lut_id(lut)
         }),
-        Pbs4 { .. } if !force_flush => Some(RawDOp::PBS_ML4 {
+        Pbs4 { lut } if !force_flush => Some(RawDOp::PBS_ML4 {
             dst: Argument::ct_reg(opref.get_arg_valids()[0]),
             src: Argument::ct_reg4(opref.get_return_valids()[0]),
+            lut: Argument::lut_id(lut)
         }),
-        Pbs8 { .. } if !force_flush => Some(RawDOp::PBS_ML8 {
+        Pbs8 { lut } if !force_flush => Some(RawDOp::PBS_ML8 {
             dst: Argument::ct_reg(opref.get_arg_valids()[0]),
             src: Argument::ct_reg8(opref.get_return_valids()[0]),
+            lut: Argument::lut_id(lut)
         }),
-        PbsF { .. } | Pbs { .. } if force_flush => Some(RawDOp::PBS_F {
+        PbsF { lut } | Pbs { lut } if force_flush => Some(RawDOp::PBS_F {
             dst: Argument::ct_reg(opref.get_arg_valids()[0]),
             src: Argument::ct_reg(opref.get_return_valids()[0]),
+            lut: Argument::lut_id(lut)
         }),
-        Pbs2F { .. } | Pbs2 { .. } if force_flush => Some(RawDOp::PBS_ML2_F {
+        Pbs2F { lut } | Pbs2 { lut } if force_flush => Some(RawDOp::PBS_ML2_F {
             dst: Argument::ct_reg(opref.get_arg_valids()[0]),
             src: Argument::ct_reg2(opref.get_return_valids()[0]),
+            lut: Argument::lut_id(lut)
         }),
-        Pbs4F { .. } | Pbs4 { .. } if force_flush => Some(RawDOp::PBS_ML4_F {
+        Pbs4F { lut } | Pbs4 { lut } if force_flush => Some(RawDOp::PBS_ML4_F {
             dst: Argument::ct_reg(opref.get_arg_valids()[0]),
             src: Argument::ct_reg4(opref.get_return_valids()[0]),
+            lut: Argument::lut_id(lut)
         }),
-        Pbs8F { .. } | Pbs8 { .. } if force_flush => Some(RawDOp::PBS_ML8_F {
+        Pbs8F { lut } | Pbs8 { lut } if force_flush => Some(RawDOp::PBS_ML8_F {
             dst: Argument::ct_reg(opref.get_arg_valids()[0]),
             src: Argument::ct_reg8(opref.get_return_valids()[0]),
+            lut: Argument::lut_id(lut)
         }),
         a => unreachable!("Entered unreachable state: {}", a),
     };

@@ -9,3 +9,4 @@ hpuc_sim = { path = "../hpuc_sim" }
 hpuc_utils = { path = "../hpuc_utils" }
 hpuc_langs = { path = "../hpuc_langs" }
 hpuc_frontend = { path = "../hpuc_frontend" }
+bitfield-struct = "0.10.0"

@@ -534,6 +534,7 @@ mod tests {
                 raw: RawDOp::PBS_F {
                     dst: Argument::PtConst { val: 0 },
                     src: Argument::PtConst { val: 0 },
+                    lut: Argument::LutId { id: 0 }
                 },
                 id: DOpId(id),
             }

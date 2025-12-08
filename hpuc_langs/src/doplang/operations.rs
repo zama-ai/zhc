@@ -1,3 +1,5 @@
+use crate::hpulang::LutId;
+
 use super::types::Types;
 use hpuc_ir::{DialectOperations, Signature, sig};
 use serde::Serialize;
@@ -31,6 +33,8 @@ pub enum Argument {
     PtVar { id: usize, block: usize },
     /// A ciphertext register.
     CtReg { mask: usize, addr: usize },
+    /// A lut identifier.
+    LutId { id : usize }
 }
 
 impl Argument {
@@ -81,6 +85,10 @@ impl Argument {
     pub fn pt_const(val: usize) -> Self {
         Argument::PtConst { val }
     }
+
+    pub fn lut_id(val: LutId) -> Self {
+        Argument::LutId { id: val.0 }
+    }
 }
 
 impl PartialEq for Argument {
@@ -119,6 +127,11 @@ impl PartialEq for Argument {
                     block: rhs_block,
                 },
             ) => (lhs_id, lhs_block) == (rhs_id, rhs_block),
+            (
+                Argument::LutId { id: lhs_id }, Argument::LutId { id: rhs_id }
+            ) => {
+                lhs_id == rhs_id
+            },
             _ => false,
         }
     }
@@ -136,6 +149,7 @@ impl Display for Argument {
             Argument::CtReg { mask, addr } if *mask == MASK_PBS8 => write!(f, "R({}, 8)", addr),
             Argument::CtVar { id, block } => write!(f, "TC({}, {})", id, block),
             Argument::PtVar { id, block } => write!(f, "TI({}, {})", id, block),
+            Argument::LutId { id } => write!(f, "LUT({})", id),
             _ => unreachable!(),
         }
     }
@@ -210,34 +224,42 @@ pub enum Operations {
     PBS {
         dst: Argument,
         src: Argument,
+        lut: Argument,
     },
     PBS_ML2 {
         dst: Argument,
         src: Argument,
+        lut: Argument,
     },
     PBS_ML4 {
         dst: Argument,
         src: Argument,
+        lut: Argument,
     },
     PBS_ML8 {
         dst: Argument,
         src: Argument,
+        lut: Argument,
     },
     PBS_F {
         dst: Argument,
         src: Argument,
+        lut: Argument,
     },
     PBS_ML2_F {
         dst: Argument,
         src: Argument,
+        lut: Argument,
     },
     PBS_ML4_F {
         dst: Argument,
         src: Argument,
+        lut: Argument,
     },
     PBS_ML8_F {
         dst: Argument,
         src: Argument,
+        lut: Argument,
     },
     _INIT,
     SYNC,
@@ -261,14 +283,14 @@ impl Display for Operations {
             MULS { dst, src, cst } => write!(f, "MULS<{}, {}, {}>", dst, src, cst),
             LD { dst, src } => write!(f, "LD<{}, {}>", dst, src),
             ST { dst, src } => write!(f, "ST<{}, {}>", dst, src),
-            PBS { dst, src } => write!(f, "PBS<{}, {}>", dst, src),
-            PBS_ML2 { dst, src } => write!(f, "PBS2<{}, {}>", dst, src),
-            PBS_ML4 { dst, src } => write!(f, "PBS4<{}, {}>", dst, src),
-            PBS_ML8 { dst, src } => write!(f, "PBS8<{}, {}>", dst, src),
-            PBS_F { dst, src } => write!(f, "PBSF<{}, {}>", dst, src),
-            PBS_ML2_F { dst, src } => write!(f, "PBS2F<{}, {}>", dst, src),
-            PBS_ML4_F { dst, src } => write!(f, "PBS4F<{}, {}>", dst, src),
-            PBS_ML8_F { dst, src } => write!(f, "PBS8F<{}, {}>", dst, src),
+            PBS { dst, src, lut } => write!(f, "PBS<{}, {}, {}>", dst, src, lut),
+            PBS_ML2 { dst, src, lut } => write!(f, "PBS2<{}, {}, {}>", dst, src, lut),
+            PBS_ML4 { dst, src, lut } => write!(f, "PBS4<{}, {}, {}>", dst, src, lut),
+            PBS_ML8 { dst, src, lut } => write!(f, "PBS8<{}, {}, {}>", dst, src, lut),
+            PBS_F { dst, src , lut} => write!(f, "PBSF<{}, {}, {}>", dst, src, lut),
+            PBS_ML2_F { dst, src, lut } => write!(f, "PBS2F<{}, {}, {}>", dst, src, lut),
+            PBS_ML4_F { dst, src, lut } => write!(f, "PBS4F<{}, {}, {}>", dst, src, lut),
+            PBS_ML8_F { dst, src, lut } => write!(f, "PBS8F<{}, {}, {}>", dst, src, lut),
             _INIT => write!(f, "_INIT"),
             SYNC => write!(f, "SYNC"),
         }
