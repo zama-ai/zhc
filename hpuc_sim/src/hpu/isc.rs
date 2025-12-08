@@ -250,7 +250,7 @@ impl Serialize for Slot {
 }
 
 /// Provides a read-only view of instruction slot state for external analysis.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct SlotProperties {
     pub rd_lock: u32,
     pub wr_lock: u32,
@@ -282,7 +282,7 @@ impl From<&Slot> for SlotProperties {
     }
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, PartialOrd, Eq, Ord, Copy)]
+#[derive(Debug, Clone, Serialize, PartialEq, PartialOrd, Eq, Ord, Copy, Default)]
 #[repr(u8)]
 pub enum State {
     /// First state. The DOp just landed in the isc pool, but was not yet dispatched to a PE. It is
@@ -293,8 +293,9 @@ pub enum State {
     /// Third state. The DOp inputs were loaded to the PE. It is likely waiting for the PE to pick
     /// it up, or is being worked on and its destinations are getting written to.
     Loaded = 2,
-    /// Fifth state. The DOp was completed by the PE. The desinations can be read, and the op
+    /// Forth state. The DOp was completed by the PE. The desinations can be read, and the op
     /// retired.
+    #[default]
     Finished = 3,
 }
 
