@@ -1,7 +1,8 @@
 use std::path::Path;
 
+use hpuc_builder::{builder::Config, iops::cmp::cmp_gt};
 use hpuc_frontend::{BuilderContext, create_rhai_engine};
-use hpuc_ir::{dce::eliminate_dead_code, IR};
+use hpuc_ir::{IR, dce::eliminate_dead_code};
 use hpuc_langs::ioplang::Ioplang;
 
 fn get_ir(path: &Path, integer_w: i64, msg_w: i64, carry_w: i64) -> IR<Ioplang> {
@@ -33,8 +34,13 @@ pub fn get_sub_ir(integer_w: i64, msg_w: i64, carry_w: i64) -> IR<Ioplang> {
 }
 
 pub fn get_cmp_ir(integer_w: i64, msg_w: i64, carry_w: i64) -> IR<Ioplang> {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("iop/cmp.rhai");
-    let mut ir = get_ir(&path, integer_w, msg_w, carry_w);
+    let mut ir = cmp_gt(Config {
+        integer_width: integer_w as usize,
+        message_width: msg_w as usize,
+        carry_width: carry_w as usize,
+        nu_msg: 1,
+        nu_bool: 1,
+    });
     eliminate_dead_code(&mut ir);
     ir
 }
@@ -276,55 +282,55 @@ fn test_cmp_ir() {
         %15 : Index = constant<5_idx>();
         %16 : Index = constant<6_idx>();
         %17 : Index = constant<7_idx>();
-        %20 : Lut1 = gen_lut1<CmpSign>();
-        %21 : Lut1 = gen_lut1<CmpReduce>();
-        %22 : Lut1 = gen_lut1<CmpGtMrg>();
+        %18 : Lut1 = gen_lut1<CmpSign>();
+        %19 : Lut1 = gen_lut1<CmpReduce>();
+        %20 : Lut1 = gen_lut1<CmpGtMrg>();
+        %22 : PlaintextBlock = constant<4_pt_block>();
+        %23 : PlaintextBlock = constant<4_pt_block>();
         %24 : PlaintextBlock = constant<4_pt_block>();
         %25 : PlaintextBlock = constant<4_pt_block>();
-        %26 : PlaintextBlock = constant<4_pt_block>();
-        %27 : PlaintextBlock = constant<4_pt_block>();
-        %28 : Ciphertext = let<Ciphertext>();
-        %29 : Index = constant<0_idx>();
-        %30 : CiphertextBlock = extract_ct_block(%0, %1);
-        %31 : CiphertextBlock = extract_ct_block(%0, %2);
-        %32 : CiphertextBlock = extract_ct_block(%0, %3);
-        %33 : CiphertextBlock = extract_ct_block(%0, %4);
-        %34 : CiphertextBlock = extract_ct_block(%0, %5);
-        %35 : CiphertextBlock = extract_ct_block(%0, %6);
-        %36 : CiphertextBlock = extract_ct_block(%0, %7);
-        %37 : CiphertextBlock = extract_ct_block(%0, %8);
-        %38 : CiphertextBlock = extract_ct_block(%9, %10);
-        %39 : CiphertextBlock = extract_ct_block(%9, %11);
-        %40 : CiphertextBlock = extract_ct_block(%9, %12);
-        %41 : CiphertextBlock = extract_ct_block(%9, %13);
-        %42 : CiphertextBlock = extract_ct_block(%9, %14);
-        %43 : CiphertextBlock = extract_ct_block(%9, %15);
-        %44 : CiphertextBlock = extract_ct_block(%9, %16);
-        %45 : CiphertextBlock = extract_ct_block(%9, %17);
-        %46 : CiphertextBlock = mac(%24, %31, %30);
-        %47 : CiphertextBlock = mac(%24, %33, %32);
-        %48 : CiphertextBlock = mac(%24, %35, %34);
-        %49 : CiphertextBlock = mac(%24, %37, %36);
-        %50 : CiphertextBlock = mac(%25, %39, %38);
-        %51 : CiphertextBlock = mac(%25, %41, %40);
-        %52 : CiphertextBlock = mac(%25, %43, %42);
-        %53 : CiphertextBlock = mac(%25, %45, %44);
+        %26 : Ciphertext = let<Ciphertext>();
+        %27 : Index = constant<0_idx>();
+        %28 : CiphertextBlock = extract_ct_block(%0, %1);
+        %29 : CiphertextBlock = extract_ct_block(%0, %2);
+        %30 : CiphertextBlock = extract_ct_block(%0, %3);
+        %31 : CiphertextBlock = extract_ct_block(%0, %4);
+        %32 : CiphertextBlock = extract_ct_block(%0, %5);
+        %33 : CiphertextBlock = extract_ct_block(%0, %6);
+        %34 : CiphertextBlock = extract_ct_block(%0, %7);
+        %35 : CiphertextBlock = extract_ct_block(%0, %8);
+        %36 : CiphertextBlock = extract_ct_block(%9, %10);
+        %37 : CiphertextBlock = extract_ct_block(%9, %11);
+        %38 : CiphertextBlock = extract_ct_block(%9, %12);
+        %39 : CiphertextBlock = extract_ct_block(%9, %13);
+        %40 : CiphertextBlock = extract_ct_block(%9, %14);
+        %41 : CiphertextBlock = extract_ct_block(%9, %15);
+        %42 : CiphertextBlock = extract_ct_block(%9, %16);
+        %43 : CiphertextBlock = extract_ct_block(%9, %17);
+        %44 : CiphertextBlock = mac(%22, %29, %28);
+        %45 : CiphertextBlock = mac(%22, %31, %30);
+        %46 : CiphertextBlock = mac(%22, %33, %32);
+        %47 : CiphertextBlock = mac(%22, %35, %34);
+        %48 : CiphertextBlock = mac(%23, %37, %36);
+        %49 : CiphertextBlock = mac(%23, %39, %38);
+        %50 : CiphertextBlock = mac(%23, %41, %40);
+        %51 : CiphertextBlock = mac(%23, %43, %42);
+        %52 : CiphertextBlock = sub_ct(%44, %48);
+        %53 : CiphertextBlock = sub_ct(%45, %49);
         %54 : CiphertextBlock = sub_ct(%46, %50);
         %55 : CiphertextBlock = sub_ct(%47, %51);
-        %56 : CiphertextBlock = sub_ct(%48, %52);
-        %57 : CiphertextBlock = sub_ct(%49, %53);
-        %58 : CiphertextBlock = pbs(%54, %20);
-        %59 : CiphertextBlock = pbs(%55, %20);
-        %60 : CiphertextBlock = pbs(%56, %20);
-        %61 : CiphertextBlock = pbs(%57, %20);
-        %62 : CiphertextBlock = mac(%26, %59, %58);
-        %63 : CiphertextBlock = mac(%26, %61, %60);
-        %64 : CiphertextBlock = pbs(%62, %21);
-        %65 : CiphertextBlock = pbs(%63, %21);
-        %66 : CiphertextBlock = mac(%27, %65, %64);
-        %67 : CiphertextBlock = pbs(%66, %22);
-        %68 : Ciphertext = store_ct_block(%67, %28, %29);
-        output<0, Ciphertext>(%68);
+        %56 : CiphertextBlock = pbs(%52, %18);
+        %57 : CiphertextBlock = pbs(%53, %18);
+        %58 : CiphertextBlock = pbs(%54, %18);
+        %59 : CiphertextBlock = pbs(%55, %18);
+        %60 : CiphertextBlock = mac(%24, %57, %56);
+        %61 : CiphertextBlock = mac(%24, %59, %58);
+        %62 : CiphertextBlock = pbs(%60, %19);
+        %63 : CiphertextBlock = pbs(%61, %19);
+        %64 : CiphertextBlock = mac(%25, %63, %62);
+        %65 : CiphertextBlock = pbs(%64, %20);
+        %66 : Ciphertext = store_ct_block(%65, %26, %27);
+        output<0, Ciphertext>(%66);
     ",
     );
 }

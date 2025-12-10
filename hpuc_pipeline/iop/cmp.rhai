@@ -9,8 +9,6 @@ let src_a = tb::input_array(0);
 let src_b = tb::input_array(1);
 
 // Create required PbsLut
-let lut_shuffle = pbs_lut("Shuffle", 1);
-let pbs_none = pbs_lut("None", 1);
 let cmp_sign = pbs_lut("CmpSign", 1);
 let cmp_reduce = pbs_lut("CmpReduce", 1);
 let user_mrg = pbs_lut("CmpGtMrg", 1);
