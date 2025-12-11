@@ -7,12 +7,12 @@ use std::path::Path;
 static ACTIVATE_TRACING: bool = false;
 static S_IN_US: f64 = 1_000_000.;
 
-#[derive(Debug, Clone, Copy, PartialEq, Deserialize, Serialize)]
-pub struct MHz(pub f64);
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Hash)]
+pub struct MHz(pub usize);
 
 impl MHz {
     fn as_raw_hertz(&self) -> f64 {
-        self.0 * 1_000_000.
+        self.0 as f64 * 1_000_000.
     }
 
     pub fn period(&self) -> Microseconds {
@@ -55,7 +55,11 @@ where
         Self::from_simulatable_and_dispatcher(freq, simulatable, dispatcher)
     }
 
-    pub fn from_simulatable_and_dispatcher(freq: MHz, simulatable: S, mut dispatcher: Dispatcher<S::Event>) -> Self {
+    pub fn from_simulatable_and_dispatcher(
+        freq: MHz,
+        simulatable: S,
+        mut dispatcher: Dispatcher<S::Event>,
+    ) -> Self {
         let quantum = freq.period();
         let tracer = Tracer::new();
         simulatable.power_up(&mut dispatcher);
@@ -107,7 +111,15 @@ where
             if ACTIVATE_TRACING {
                 self.tracer.add_event(self.now(), &trigger.event);
             }
-            self.simulatable.handle(&mut self.dispatcher, trigger);
+            if let Err(e) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                self.simulatable.handle(&mut self.dispatcher, trigger);
+            })) {
+                if ACTIVATE_TRACING {
+                    self.dump_trace("test.json");
+                    eprintln!("Panic caught during simulatable.handle(): {:?}", e);
+                    panic!();
+                }
+            }
         }
 
         if ACTIVATE_TRACING {

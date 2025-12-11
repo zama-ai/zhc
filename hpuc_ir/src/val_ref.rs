@@ -16,8 +16,14 @@ pub struct ValRef<'s, D: Dialect> {
 
 impl<'s, D: Dialect> Display for ValRef<'s, D> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let printer = Printer::from_ir(self.ir, true, true);
-        printer.format_arg(f, self.to_owned())
+        if f.alternate() {
+            let printer = Printer::from_ir(self.ir, crate::PrintWalker::Linear, true, true);
+            printer.format_arg(f, self.to_owned())
+        } else {
+            let printer = Printer::from_ir(self.ir, crate::PrintWalker::Topo, true, true);
+            printer.format_arg(f, self.to_owned())
+        }
+
     }
 }
 

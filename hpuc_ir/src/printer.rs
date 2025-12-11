@@ -1,3 +1,5 @@
+use hpuc_utils::CollectInSmallVec;
+
 use super::{Dialect, IR, OpIdRaw, OpRef, ValId, val_ref::ValRef};
 use std::{collections::HashMap, marker::PhantomData};
 
@@ -8,25 +10,57 @@ pub struct Printer<D: Dialect> {
     names: HashMap<ValId, Name>,
     show_erased_ops: bool,
     show_types: bool,
+    walker: PrintWalker,
     phantom: PhantomData<D>,
 }
 
+pub enum PrintWalker {
+    Linear,
+    Topo
+}
+
 impl<D: Dialect> Printer<D> {
-    pub fn from_ir(store: &IR<D>, show_types: bool, show_erased_ops: bool) -> Printer<D> {
-        let mut names = HashMap::new();
-        store
-            .raw_walk_ops_topo()
-            .flat_map(|op| op.raw_get_returns_iter().collect::<Vec<_>>().into_iter())
-            .fold(0, |name_id, val| {
-                names.insert(val.get_id(), Name(name_id));
-                name_id + 1
-            });
+    pub fn from_ir(store: &IR<D>, walker: PrintWalker, show_types: bool, show_erased_ops: bool) -> Printer<D> {
+        let names = match walker {
+            PrintWalker::Linear => {
+                store
+                    .raw_walk_ops_linear()
+                    .flat_map(|op| op.get_return_valids().iter().cloned().cosvec().into_iter())
+                    .enumerate()
+                    .map(|(name_id, valid)| {(valid, Name(name_id as u16))})
+                    .collect()
+            },
+            PrintWalker::Topo => {
+                store
+                    .raw_walk_ops_topo()
+                    .flat_map(|op| op.get_return_valids().iter().cloned().cosvec().into_iter())
+                    .enumerate()
+                    .map(|(name_id, valid)| {(valid, Name(name_id as u16))})
+                    .collect()
+            },
+        };
         Printer {
             names,
             show_erased_ops,
             show_types,
+            walker,
             phantom: PhantomData,
         }
+    }
+
+    pub fn ir_to_string(&self, store: &IR<D>) -> String {
+        struct IRFormatter<'a, D: Dialect> {
+            printer: &'a Printer<D>,
+            store: &'a IR<D>,
+        }
+
+        impl<D: Dialect> std::fmt::Display for IRFormatter<'_, D> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                self.printer.format_ir(f, self.store)
+            }
+        }
+
+        format!("{}", IRFormatter { printer: self, store })
     }
 
     pub fn format_arg(
@@ -96,9 +130,20 @@ impl<D: Dialect> Printer<D> {
     }
 
     pub fn format_ir(&self, f: &mut std::fmt::Formatter<'_>, store: &IR<D>) -> std::fmt::Result {
-        for opref in store.raw_walk_ops_topo() {
-            self.format_opref(f, opref)?;
+        match self.walker {
+            PrintWalker::Linear => {
+                for opref in store.raw_walk_ops_linear() {
+                    self.format_opref(f, opref)?;
+                }
+            },
+            PrintWalker::Topo => {
+                for opref in store.raw_walk_ops_topo() {
+                    self.format_opref(f, opref)?;
+                }
+
+            },
         }
+
         Ok(())
     }
 }

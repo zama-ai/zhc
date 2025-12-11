@@ -72,7 +72,7 @@ pub mod test_dialect {
     }
 }
 
-use crate::{DialectOperations, IR, IRError};
+use crate::{Depth, DialectOperations, IRError, IR};
 use hpuc_utils::{CollectInVec, svec};
 
 use test_dialect::{Operations, TestDialect};
@@ -851,7 +851,7 @@ fn test_depth_overflow() {
         .expect("Bad add_op");
 
     // Create a chain that would cause depth overflow
-    for _ in 0..=u8::MAX {
+    for _ in 0..=Depth::MAX {
         let (_, new_vals) = store
             .add_op(Operations::Inc, svec![vals[0]])
             .expect("Bad add_op");

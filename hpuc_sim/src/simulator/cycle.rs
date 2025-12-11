@@ -2,7 +2,7 @@ use hpuc_utils::tracing::Microseconds;
 use serde::Serialize;
 use std::ops::{Add, Mul, Sub};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Hash)]
 pub struct Cycle(pub usize);
 
 impl Cycle {

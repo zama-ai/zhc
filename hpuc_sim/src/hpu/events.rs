@@ -4,7 +4,7 @@ use serde::Serialize;
 
 use crate::Event;
 
-use super::{DOp, DOpId, IscCommand, TimeoutId};
+use super::{DOp, DOpId, IscCommand};
 
 pub type BatchSize = usize;
 
@@ -42,7 +42,7 @@ pub enum Events {
     PePbsLandUnloadMemory(DOpId),
     PePbsLaunchProcessing(BatchSize),
     PePbsLandProcessing(BatchSize),
-    PePbsTimeout(TimeoutId),
+    PePbsTimeout(DOpId),
     PePbsAvailable,
     PePbsUnavailable,
 }

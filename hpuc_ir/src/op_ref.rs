@@ -25,8 +25,14 @@ pub struct OpRef<'s, D: Dialect> {
 
 impl<'s, D: Dialect> Display for OpRef<'s, D> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let printer = Printer::from_ir(self.ir, true, true);
-        printer.format_opref(f, self.to_owned())
+        if f.alternate() {
+            let printer = Printer::from_ir(self.ir, crate::PrintWalker::Linear, true, true);
+            printer.format_opref(f, self.to_owned())
+        } else {
+            let printer = Printer::from_ir(self.ir, crate::PrintWalker::Topo, true, true);
+            printer.format_opref(f, self.to_owned())
+        }
+
     }
 }
 
@@ -91,7 +97,7 @@ impl<'s, D: Dialect> OpRef<'s, D> {
         self.operation.clone()
     }
 
-    /// Returns the depth of the operation within the IR graph.
+    /// Returns the depth of the operation within the IR graph from the inputs.
     pub fn get_depth(&self) -> Depth {
         *self.depth
     }

@@ -4,7 +4,7 @@ use hpuc_langs::doplang::Doplang;
 
 pub type DOpRepr = u32;
 
-#[allow(non_camel_case_types)]
+#[allow(non_camel_case_types, dead_code)]
 enum DOpCode {
     ADD = 0b00_0001,
     SUB = 0b00_0010,
@@ -116,8 +116,9 @@ pub struct PeSyncHex {
     opcode: u8,
 }
 
-pub fn codegen(ir: &IR<Doplang>) -> Vec<DOpRepr> {
+pub fn generate_translation_table(ir: &IR<Doplang>) -> Vec<DOpRepr> {
     let mut output = Vec::with_capacity(ir.n_ops() as usize);
+    output.push(0); // reserve room for the length of the stream at the beginning of the stream.
     for op in ir.walk_ops_topological() {
         use hpuc_langs::doplang::Argument::*;
         use hpuc_langs::doplang::Operations::*;
@@ -484,49 +485,39 @@ pub fn codegen(ir: &IR<Doplang>) -> Vec<DOpRepr> {
                         .0,
                 );
             }
-            SYNC => {
-                output.push(
-                    PeSyncHex::new()
-                        .with_sid(0)
-                        .with_opcode(DOpCode::SYNC as u8)
-                        .0,
-                );
-            }
-            _INIT => {}
+            SYNC | _INIT => {}
             _ => {
                 panic!("Unexpected Doplang Operation encountered")
             }
         };
     }
+    output[0] = (output.len() - 1) as u32;
     output
 }
 
 #[cfg(test)]
 mod test {
 
-    use hpuc_ir::{IR, scheduling::forward::ForwardScheduler, translation::Translator};
+    use hpuc_ir::{IR, translation::Translator};
     use hpuc_langs::ioplang::Ioplang;
     use hpuc_sim::hpu::{HpuConfig, PhysicalConfig};
 
     use crate::{
         allocator::allocate_registers,
-        scheduler::Scheduler,
+        scheduler::schedule,
         test::{get_add_ir, get_cmp_ir, get_sub_ir},
         translation::IoplangToHpulang,
     };
 
-    use super::codegen;
+    use super::generate_translation_table;
 
     fn pipeline(ir: &IR<Ioplang>) -> Vec<u32> {
-        let mut ir = IoplangToHpulang.translate(&ir);
+        let ir = IoplangToHpulang.translate(&ir);
         let mut config = HpuConfig::from(PhysicalConfig::gaussian_64b_fast());
         config.regf_size = 10;
-        let mut scheduler = Scheduler::init(&ir, &config);
-        let schedule = scheduler.schedule(&ir);
-        let flusher = scheduler.into_flusher();
-        flusher.apply_flushes(&mut ir);
-        let allocated = allocate_registers(&ir, schedule.get_walker(), &config);
-        codegen(&allocated)
+        let scheduled = schedule(&ir, &config);
+        let allocated = allocate_registers(&scheduled, &config);
+        generate_translation_table(&allocated)
     }
 
     #[test]
@@ -538,6 +529,7 @@ mod test {
         assert_eq!(
             hex,
             vec![
+                0b00000000000000000000000001010100,
                 0b10000000000000000000001000000000,
                 0b10000000000000000000011000000001,
                 0b10000000000000000000101000000010,
@@ -627,7 +619,7 @@ mod test {
     }
 
     #[test]
-    fn test_allocate_sub_ir() {
+    fn test_hex_sub_ir() {
         let hex = pipeline(&get_sub_ir(16, 2, 2));
         // for a in hex.iter() {
         //     println!("{:#034b},", a);
@@ -635,6 +627,7 @@ mod test {
         assert_eq!(
             hex,
             vec![
+                0b00000000000000000000000010011110,
                 0b10000000000000000000001000000000,
                 0b10000000000000000000011000000001,
                 0b10000000000000000000101000000010,
@@ -798,7 +791,7 @@ mod test {
     }
 
     #[test]
-    fn test_allocate_cmp_ir() {
+    fn test_hex_cmp_ir() {
         let hex = pipeline(&get_cmp_ir(16, 2, 2));
         // for a in hex.iter() {
         //     println!("{:#034b},", a);
@@ -806,6 +799,7 @@ mod test {
         assert_eq!(
             hex,
             vec![
+                0b00000000000000000000000000110110,
                 0b10000000000000000000001000000000,
                 0b10000000000000000000011000000001,
                 0b00010100100000000000000010000000,
@@ -814,39 +808,50 @@ mod test {
                 0b10000000000000000001001000000011,
                 0b10000000000000000001011000000100,
                 0b00010100100000000100000100000001,
+                0b11000000000000000000000000000000,
                 0b10000000000000000001101000000010,
                 0b10000000000000000001111000000101,
                 0b10000000000001000000001000000110,
                 0b10000000000001000000011000000111,
                 0b00010100100000001100001000000011,
+                0b11000000000000000000000010000001,
                 0b10000000000001000000101000000100,
                 0b10000000000001000000111000001000,
                 0b10000000000001000001001000001001,
-                0b10000100000000000000000100000011,
-                0b10000000000001000001011000000011,
+                0b10000100000000000000000100000001,
+                0b10000000000001000001011000000001,
                 0b00010100100000001000001010000010,
+                0b11000000000000000000000110000011,
                 0b10000000000001000001101000000101,
-                0b10000100000000000000010100000010,
-                0b10000000000001000001111000000010,
+                0b10000100000000000000010100000011,
+                0b10000000000001000001111000000011,
                 0b00010100100000011000001110000110,
+                0b11000000000000000000000100000010,
                 0b00010100100000010000010000000100,
-                0b00010100100000100100000110000011,
-                0b00010100100000010100000100000010,
+                0b11000000000000000000001100000110,
+                0b00010100100000100100000010000001,
+                0b11000000000000000000001000000100,
+                0b00010100100000010100000110000011,
+                0b11000000000000000000000010000001,
+                0b11000000000000000000000110000011,
                 0b00001000000000011000000000000000,
-                0b00001000000000010000000010000001,
+                0b10000000000000000000000100000101,
+                0b00001000000000010000001010000100,
                 0b11000000000000101000000000000000,
-                0b10000000000000000000000100000100,
-                0b00001000000000001100001000000011,
+                0b10000000000000000000010100000110,
+                0b00001000000000000100001100000001,
+                0b11000000000000101000001000000100,
+                0b00001000000000001100000100000010,
                 0b11000000000000101000000010000001,
-                0b10000000000000000000010100000101,
-                0b00001000000000001000001010000010,
-                0b11000000000000101000000110000011,
                 0b11100000000000101000000100000010,
-                0b00010100100000000000000010000000,
-                0b00010100100000001100000100000001,
-                0b11000000000000101100000000000000,
+                0b00010100100000000000001000000000,
+                0b00010100100000000100000100000001,
+                0b11000000000000000000000000000000,
+                0b11100000000000000000000010000001,
+                0b11100000000000101100000000000000,
                 0b11100000000000101100000010000001,
                 0b00010100100000000000000010000000,
+                0b11100000000000000000000000000000,
                 0b11100000000001101100000000000000,
                 0b10000100000000000000001100000000,
             ]

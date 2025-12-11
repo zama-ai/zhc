@@ -1,28 +1,11 @@
-use std::{cell::Cell, collections::VecDeque, fmt::Display, ops::Index};
+use std::{fmt::Display, ops::Index};
 
 use hpuc_langs::doplang::Affinity;
-use hpuc_utils::Fifo;
+use hpuc_utils::{Fifo, SmallSet};
 
 use crate::{Cycle, Dispatch};
 
 use super::*;
-
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
-pub struct TimeoutId(u8);
-
-thread_local! {
-    static TIMEOUT_ID_GRAB_STATE: Cell<u8> = Cell::new(0);
-}
-
-impl TimeoutId {
-    pub fn grab() -> Self {
-        TIMEOUT_ID_GRAB_STATE.with(|c| {
-            let id = c.get();
-            c.set(id.wrapping_add(1));
-            Self(id)
-        })
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Hint {
@@ -156,6 +139,14 @@ impl PePbsMemory {
         }
     }
 
+    pub fn not_yet_workings(&self) -> PePbsMemoryView {
+        PePbsMemoryView {
+            memory: self,
+            range_bottom: self.working_boundary,
+            range_top: self.len(),
+        }
+    }
+
     pub fn workings(&self) -> PePbsMemoryView {
         PePbsMemoryView {
             memory: self,
@@ -216,6 +207,19 @@ impl PePbsMemory {
     pub fn may_load(&self) -> bool {
         !self.memory.is_full() && !self.is_loading()
     }
+
+    pub fn mutate_to_flush(&mut self, dopid: DOpId) {
+        let op = self.memory.iter_mut().find(|a| a.id == dopid).unwrap();
+        use hpuc_langs::doplang::Operations::*;
+        let new_op = match op.raw.clone() {
+            PBS { dst, src, lut } | PBS_F { dst, src, lut } => PBS_F { dst, src, lut},
+            PBS_ML2 { dst, src, lut } | PBS_ML2_F { dst, src, lut } => PBS_ML2_F { dst, src, lut},
+            PBS_ML4 { dst, src, lut } | PBS_ML4_F { dst, src, lut } => PBS_ML4_F { dst, src, lut },
+            PBS_ML8 { dst, src, lut } | PBS_ML8_F { dst, src, lut } => PBS_ML8_F { dst, src, lut },
+            _ => panic!(),
+        };
+        op.raw = new_op;
+    }
 }
 
 pub struct PePbsMemoryView<'m> {
@@ -272,7 +276,7 @@ impl Serialize for PePbsMemory {
 }
 
 #[derive(Debug)]
-pub struct ActiveTimeouts(VecDeque<TimeoutId>);
+pub struct ActiveTimeouts(SmallSet<DOpId>);
 
 impl Display for ActiveTimeouts {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -324,7 +328,7 @@ impl PePbs {
             load_unload_latency,
             processing_latency,
             timeout,
-            active_timeouts: ActiveTimeouts(VecDeque::new()),
+            active_timeouts: ActiveTimeouts(SmallSet::new()),
             max_batch_size,
         }
     }
@@ -345,7 +349,11 @@ impl PePbs {
 impl Simulatable for PePbs {
     type Event = Events;
 
-    fn handle(&mut self, dispatcher: &mut impl Dispatch<Event = Self::Event>, trigger: Trigger<Self::Event>) {
+    fn handle(
+        &mut self,
+        dispatcher: &mut impl Dispatch<Event = Self::Event>,
+        trigger: Trigger<Self::Event>,
+    ) {
         match trigger.event {
             Events::IscIssueDOp(dop) if dop.raw.affinity() == Affinity::Pbs => {
                 // -------------------------------------------------------------
@@ -404,10 +412,8 @@ impl Simulatable for PePbs {
                 dispatcher.dispatch_now(Events::IscUnlockRead(dop.id));
 
                 // Schedule a timeout.
-                let timeout = TimeoutId::grab();
-                dispatcher.dispatch_after(self.timeout, Events::PePbsTimeout(timeout.clone()));
-                self.active_timeouts.0.push_back(timeout);
-
+                dispatcher.dispatch_after(self.timeout, Events::PePbsTimeout(dop.id));
+                self.active_timeouts.0.insert(dop.id);
 
                 // Land the load in memory.
                 self.memory.land_load();
@@ -424,14 +430,36 @@ impl Simulatable for PePbs {
                     dispatcher.dispatch_now(Events::PePbsLaunchProcessing(batch_size));
                 }
             }
-            Events::PePbsTimeout(timeout) => {
-                if self.active_timeouts.0.contains(&timeout) {
-                    // TO REVIEW: This assumes that the timeout occurs while the unit is not busy.
-                    // It is unclear to me whether this is correct or not.
-                    let Hint::CanLaunchIncompleteBatch(batch_size) = self.memory.what_now() else {
-                        panic!("Unexpected state: {:?}", self.memory.what_now());
-                    };
-                    dispatcher.dispatch_now(Events::PePbsLaunchProcessing(batch_size));
+            Events::PePbsTimeout(dopid) => {
+                if self.active_timeouts.0.contains(&dopid) {
+                    // We remove the timeout.
+                    self.active_timeouts.0.remove(&dopid);
+
+                    // The operation should still be waiting....
+                    assert!(self.memory.not_yet_workings().iter().find(|a| a.id == dopid).is_some());
+
+                    match self.memory.what_now() {
+                        Hint::CanLaunchIncompleteBatch(batch_size) => {
+                            // If the pe is not busy, we start the processing.
+                            dispatcher.dispatch_now(Events::PePbsLaunchProcessing(batch_size));
+                        }
+                        Hint::AlreadyWorking => {
+                            // If the pe is already working, we ensure that there is a flush after the timeouted op.
+                            let is_flushed =
+                                self.memory
+                                    .not_yet_workings()
+                                    .iter()
+                                    .skip_while(|a| a.id != dopid)
+                                    .any(|a| a.raw.is_pbs_flush());
+                            if !is_flushed {
+                                self.memory.mutate_to_flush(dopid);
+                            }
+                        }
+                        _ => {
+                            // Other states should not be seen here ...
+                            panic!("Unexpected state encoutered during timeout");
+                        }
+                    }
                 }
             }
             Events::PePbsLaunchProcessing(batch_size) => {
@@ -441,12 +469,12 @@ impl Simulatable for PePbs {
                     "Launch Error: batch_size mismatch"
                 );
 
-                // We can cancel the pending timeouts for the batch.
-                for _ in 0..batch_size {
-                    self.active_timeouts.0.pop_front();
-                }
                 // We update the memory
                 self.memory.launch_work(batch_size);
+                // We can cancel the pending timeouts for the batch.
+                for op in self.memory.workings().iter() {
+                    self.active_timeouts.0.remove(&op.id);
+                }
                 // We schedule the land
                 dispatcher.dispatch_after(
                     self.processing_latency.compute_latency(batch_size),
@@ -524,7 +552,7 @@ mod tests {
                 raw: RawDOp::PBS_F {
                     dst: Argument::PtConst { val: 0 },
                     src: Argument::PtConst { val: 0 },
-                    lut: Argument::LutId { id: 0 }
+                    lut: Argument::LutId { id: 0 },
                 },
                 id: DOpId(id),
             }

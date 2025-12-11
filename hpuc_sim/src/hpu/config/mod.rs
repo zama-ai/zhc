@@ -4,7 +4,7 @@ use toml;
 use crate::{Cycle, MHz};
 
 fn default_freq() -> MHz {
-    MHz(400.)
+    MHz(400)
 }
 fn default_fifo_size() -> usize {
     8
@@ -120,7 +120,7 @@ impl PhysicalConfig {
     }
 }
 
-#[derive(Clone, Debug, Serialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, PartialEq, Eq, Hash)]
 pub struct HpuConfig {
     pub freq: MHz,
     pub isc_depth: usize,

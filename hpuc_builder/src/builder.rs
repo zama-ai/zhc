@@ -1,9 +1,9 @@
-use hpuc_ir::{IR, ValId};
+use hpuc_ir::{cse::eliminate_common_subexpressions, dce::eliminate_dead_code, ValId, IR};
 use hpuc_langs::ioplang::{Ioplang, Litteral, LutGenerator, Operations, Types};
 use hpuc_utils::{svec, ChunkIt, SmallVec};
 
-#[derive(Debug, Clone)]
-pub struct Config {
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct IntegerConfig {
     pub integer_width: usize,
     pub message_width: usize,
     pub carry_width: usize,
@@ -11,7 +11,7 @@ pub struct Config {
     pub nu_bool: usize, // Maximum computation that could be applied on boolean
 }
 
-impl Config {
+impl IntegerConfig {
     pub fn block_count(&self) -> usize {
         (self.integer_width + self.message_width - 1) / self.message_width
     }
@@ -31,16 +31,16 @@ pub struct Lut4(pub ValId);
 pub struct Lut8(pub ValId);
 
 pub struct Builder {
-    config: Config,
+    config: IntegerConfig,
     ir: IR<Ioplang>,
     input_ctr: usize,
     output_ctr: usize
 }
 
 impl Builder {
-    pub fn new(config: Config) -> Self {
+    pub fn new(config: &IntegerConfig) -> Self {
         Self {
-            config,
+            config: config.to_owned(),
             ir: IR::empty(),
             input_ctr: 0,
             output_ctr: 0
@@ -48,10 +48,13 @@ impl Builder {
     }
 
     pub fn into_ir(self) -> IR<Ioplang> {
-        self.ir
+        let mut ir = self.ir;
+        eliminate_dead_code(&mut ir);
+        eliminate_common_subexpressions(&mut ir);
+        ir
     }
 
-    pub fn config(&self) -> &Config {
+    pub fn config(&self) -> &IntegerConfig {
         &self.config
     }
 
@@ -208,10 +211,12 @@ impl Builder {
 
     pub fn pack(&mut self, blocks: SmallVec<CiphertextBlock>) -> SmallVec<CiphertextBlock> {
         let shift = self.constant(2usize.pow(self.config.message_width as u32));
+        let lut_none = self.decl_lut("None", |a| a);
         blocks.into_iter().chunk(2).map(|a| {
             match a {
                 hpuc_utils::Chunk::Complete(sv) => {
-                    self.mac(shift, sv[1], sv[0])
+                    let maced = self.mac(shift, sv[1], sv[0]);
+                    self.pbs(maced, lut_none)
                 },
                 hpuc_utils::Chunk::Rest(sv) => {
                     sv[0]

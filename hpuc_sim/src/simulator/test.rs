@@ -2,7 +2,7 @@ use serde::Serialize;
 
 use super::*;
 
-pub static FREQ: MHz = MHz(400_000_000.);
+pub static FREQ: MHz = MHz(400);
 
 // Simple counter that increments until reaching a limit
 #[derive(Debug, Default, Serialize)]

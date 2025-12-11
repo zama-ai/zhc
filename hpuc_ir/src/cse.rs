@@ -43,9 +43,9 @@ pub trait AllowCse: Dialect {
 
 #[derive(Hash, PartialEq, Eq)]
 pub struct Expr<D: Dialect> {
-    op: D::Operations,
-    args: SmallVec<ValueNumber>,
-    ret_pos: u8,
+    pub op: D::Operations,
+    pub args: SmallVec<ValueNumber>,
+    pub ret_pos: u8,
 }
 
 pub struct CanReplace {

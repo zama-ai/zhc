@@ -1,7 +1,7 @@
 use hpuc_utils::svec;
 use hpuc_utils::{SmallVec, Store};
 
-use crate::ValMap;
+use crate::{PrintWalker, ValMap};
 use crate::traversal::{OpWalk, OpWalker, ValWalk, ValWalker};
 use crate::val_ref::ValRef;
 use std::{
@@ -14,7 +14,7 @@ use super::{
     State, Val, ValId, ValIdRaw, ValMut, op_map::OpMap,
 };
 
-pub(super) type Depth = u8;
+pub type Depth = u16;
 
 fn val_active<'a, D: Dialect>(val: &ValRef<'a, D>) -> bool {
     val.is_active()
@@ -498,8 +498,16 @@ impl<D: Dialect> IR<D> {
     }
 
     pub fn check_ir(&self, expected: &str) {
+        self.check_ir_gen(PrintWalker::Topo, expected);
+    }
+
+    pub fn check_ir_linear(&self, expected: &str) {
+        self.check_ir_gen(PrintWalker::Linear, expected);
+    }
+
+    fn check_ir_gen(&self, walker: PrintWalker, expected: &str) {
         let clean = |inp: &str| inp.replace(' ', "").replace('\n', "");
-        let repr = format!("{}", self);
+        let repr = Printer::from_ir(self, walker, true, false).ir_to_string(self);
         if clean(&repr) != clean(expected) {
             println!(
                 "Failed to check ir.\nExpected:\n{}\nActual:\n{}",
@@ -540,11 +548,18 @@ impl<D: Dialect> IR<D> {
     pub fn totally_mapped_valmap<V>(&self, f: impl FnMut(ValRef<D>) -> V) -> ValMap<V> {
         ValMap::new_totally_mapped(self, f)
     }
+
 }
 
 impl<D: Dialect> Display for IR<D> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let printer = Printer::from_ir(self, true, false);
-        printer.format_ir(f, self)
+        if f.alternate() {
+            let printer = Printer::from_ir(self, crate::PrintWalker::Linear, true, false);
+            printer.format_ir(f, self)
+        } else {
+            let printer = Printer::from_ir(self, crate::PrintWalker::Topo, true, false);
+            printer.format_ir(f, self)
+
+        }
     }
 }
