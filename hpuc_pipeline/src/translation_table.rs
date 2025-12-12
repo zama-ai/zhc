@@ -126,8 +126,8 @@ pub struct PeSyncHex {
 
 /// Generates binary instruction encodings from device operation IR.
 ///
-/// Converts the intermediate representation `ir` containing device operations 
-/// into a vector of binary instruction representations suitable for execution 
+/// Converts the intermediate representation `ir` containing device operations
+/// into a vector of binary instruction representations suitable for execution
 /// on the target hardware.
 pub fn generate_translation_table(ir: &IR<Doplang>) -> Vec<DOpRepr> {
     let mut output = Vec::with_capacity(ir.n_ops() as usize);

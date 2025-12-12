@@ -1,5 +1,8 @@
 /// Interleaves elements from this iterator with elements from a separator iterator.
-pub trait SeparateWith where Self: Iterator + Sized {
+pub trait SeparateWith
+where
+    Self: Iterator + Sized,
+{
     /// Creates an iterator that alternates between elements from `self` and `s`.
     ///
     /// The resulting iterator starts with an element from `self`, then takes one
@@ -22,17 +25,21 @@ impl<I: Iterator> SeparateWith for I {
 pub enum Separated<A: Iterator, S: Iterator<Item = A::Item>> {
     OnMain(A, S),
     OnSep(S, A),
-    Finished
+    Finished,
 }
 
-impl<A: Iterator, S: Iterator<Item=A::Item>> Separated<A, S> {
+impl<A: Iterator, S: Iterator<Item = A::Item>> Separated<A, S> {
     fn to_sep(&mut self) {
-        let Separated::OnMain(a, s) = std::mem::replace(self, Separated::Finished) else {panic!()};
+        let Separated::OnMain(a, s) = std::mem::replace(self, Separated::Finished) else {
+            panic!()
+        };
         let _ = std::mem::replace(self, Separated::OnSep(s, a));
     }
 
     fn to_main(&mut self) {
-        let Separated::OnSep(s, a) = std::mem::replace(self, Separated::Finished) else {panic!()};
+        let Separated::OnSep(s, a) = std::mem::replace(self, Separated::Finished) else {
+            panic!()
+        };
         let _ = std::mem::replace(self, Separated::OnMain(a, s));
     }
 
@@ -49,7 +56,7 @@ impl<A: Iterator, S: Iterator<Item=A::Item>> Separated<A, S> {
     }
 }
 
-impl<A: Iterator, S: Iterator<Item=A::Item>> Iterator for Separated<A, S> {
+impl<A: Iterator, S: Iterator<Item = A::Item>> Iterator for Separated<A, S> {
     type Item = A::Item;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -61,10 +68,10 @@ impl<A: Iterator, S: Iterator<Item=A::Item>> Iterator for Separated<A, S> {
         match out {
             Some(_) => {
                 self.alternate();
-            },
+            }
             None => {
                 self.finish();
-            },
+            }
         };
         out
     }

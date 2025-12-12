@@ -121,16 +121,16 @@ impl<I: StoreIndex, V> FromIterator<V> for Store<I, V> {
 pub trait StoreIndex: Copy {
     /// The raw numeric type used to represent this index internally.
     type Raw;
-    
+
     /// Converts this index to its raw numeric representation.
     fn as_raw(&self) -> Self::Raw;
-    
+
     /// Converts this index to a `usize` for array/vector indexing.
     fn as_usize(&self) -> usize;
-    
+
     /// Creates a raw representation from a `usize`.
     fn raw_from_usize(val: usize) -> Self::Raw;
-    
+
     /// Creates an index from a `usize`.
     fn from_usize(val: usize) -> Self;
 }

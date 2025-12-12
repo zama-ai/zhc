@@ -24,8 +24,7 @@ pub struct DeadCodeAnalysis {
 impl DeadCodeAnalysis {
     /// Performs dead code analysis on the given IR.
     pub fn from_ir<D: Dialect>(ir: &IR<D>) -> Self {
-        let mut states = ir
-            .filled_opmap(Liveness::Dead);
+        let mut states = ir.filled_opmap(Liveness::Dead);
 
         let mut worklist = Vec::new();
         for effect in ir.raw_walk_ops_linear().filter(|op| op.is_effect()) {
@@ -45,8 +44,7 @@ impl DeadCodeAnalysis {
 
     /// Returns an iterator over all active operations and their liveness status.
     pub fn get_statuses_iter(&self) -> impl Iterator<Item = (OpId, &Liveness)> {
-        self.states
-            .iter()
+        self.states.iter()
     }
 
     /// Returns `true` if the IR contains any dead operations.

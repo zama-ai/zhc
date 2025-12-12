@@ -15,10 +15,13 @@ pub const MASK_PBS8: usize = usize::MAX << 3;
 /// # Note:
 ///
 /// The doplang dialect is meant to support both pathed and unpatched streams:
-/// + Unpatched streams are exported to the hpu memory. They support variable ciphertext and plaintext, which are meant to be patched on the fly by the ucore.
-/// + Patched streams are streamed by the ucore to the hpu. They contain memory adresses instead of ciphertext variables, and constant immediates instead of plaintext variables.
+/// + Unpatched streams are exported to the hpu memory. They support variable ciphertext and
+///   plaintext, which are meant to be patched on the fly by the ucore.
+/// + Patched streams are streamed by the ucore to the hpu. They contain memory adresses instead of
+///   ciphertext variables, and constant immediates instead of plaintext variables.
 ///
-/// Essentially, supporting unpatched streams allows to generate programs for the hpu, and supporting patched streams allows to load execution traces from the hpu.
+/// Essentially, supporting unpatched streams allows to generate programs for the hpu, and
+/// supporting patched streams allows to load execution traces from the hpu.
 #[derive(Debug, Clone, Eq, Hash)]
 pub enum Argument {
     /// A constant immediate plaintext.
@@ -34,7 +37,7 @@ pub enum Argument {
     /// A ciphertext register.
     CtReg { mask: usize, addr: usize },
     /// A lut identifier.
-    LutId { id : usize }
+    LutId { id: usize },
 }
 
 impl Argument {
@@ -127,11 +130,7 @@ impl PartialEq for Argument {
                     block: rhs_block,
                 },
             ) => (lhs_id, lhs_block) == (rhs_id, rhs_block),
-            (
-                Argument::LutId { id: lhs_id }, Argument::LutId { id: rhs_id }
-            ) => {
-                lhs_id == rhs_id
-            },
+            (Argument::LutId { id: lhs_id }, Argument::LutId { id: rhs_id }) => lhs_id == rhs_id,
             _ => false,
         }
     }
@@ -287,7 +286,7 @@ impl Display for Operations {
             PBS_ML2 { dst, src, lut } => write!(f, "PBS2<{}, {}, {}>", dst, src, lut),
             PBS_ML4 { dst, src, lut } => write!(f, "PBS4<{}, {}, {}>", dst, src, lut),
             PBS_ML8 { dst, src, lut } => write!(f, "PBS8<{}, {}, {}>", dst, src, lut),
-            PBS_F { dst, src , lut} => write!(f, "PBSF<{}, {}, {}>", dst, src, lut),
+            PBS_F { dst, src, lut } => write!(f, "PBSF<{}, {}, {}>", dst, src, lut),
             PBS_ML2_F { dst, src, lut } => write!(f, "PBS2F<{}, {}, {}>", dst, src, lut),
             PBS_ML4_F { dst, src, lut } => write!(f, "PBS4F<{}, {}, {}>", dst, src, lut),
             PBS_ML8_F { dst, src, lut } => write!(f, "PBS8F<{}, {}, {}>", dst, src, lut),

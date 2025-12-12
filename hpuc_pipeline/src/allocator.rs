@@ -88,11 +88,13 @@ impl RegisterState {
 
 /// A structure representing a register file.
 ///
-/// In our case, a regfile is a map from registers identifiers to optional values stored at a certain point in time.
+/// In our case, a regfile is a map from registers identifiers to optional values stored at a
+/// certain point in time.
 ///
 /// # Notes:
-/// For many-lut pbses, we need to be able to store in contiguous ranges of the regfile (with proper alignment).
-/// For this reasons, some methods take a const `RANGE_SIZE`, which represents the size of the expected range to be targetted.
+/// For many-lut pbses, we need to be able to store in contiguous ranges of the regfile (with proper
+/// alignment). For this reasons, some methods take a const `RANGE_SIZE`, which represents the size
+/// of the expected range to be targetted.
 #[derive(Debug)]
 struct RegisterFile(Vec<RegisterState>);
 
@@ -235,7 +237,8 @@ impl LiveRange {
     }
 
     pub fn next_use(&self, point: OpIdRaw) -> Option<OpIdRaw> {
-        // The uses are ordered by construction, so the first use that is greater or equal to now is the next use.
+        // The uses are ordered by construction, so the first use that is greater or equal to now is
+        // the next use.
         self.uses.iter().copied().find(|u| *u >= point)
     }
 }
@@ -333,9 +336,10 @@ impl Display for Heap {
 
 /// # Note:
 ///
-/// The allocator directly emits an ir in the doplang dialect. This means that no further scheduling will be performed on the spilled instructions.
-/// If register pressure turns out to be a big contender, it may make sense to try to better schedule the spills (to lift them slightly up in the
-/// stream, ensuring that no time is spent waiting for them).
+/// The allocator directly emits an ir in the doplang dialect. This means that no further scheduling
+/// will be performed on the spilled instructions. If register pressure turns out to be a big
+/// contender, it may make sense to try to better schedule the spills (to lift them slightly up in
+/// the stream, ensuring that no time is spent waiting for them).
 struct Allocator<'ir> {
     input: &'ir IR<Hpulang>,
     output: IR<Doplang>,
@@ -680,8 +684,8 @@ impl<'ir> Allocator<'ir> {
 
 /// Allocates physical registers to values in the scheduled IR.
 ///
-/// Takes a scheduled intermediate representation `ir` containing HPU operations 
-/// and the hardware configuration `config` to produce a new IR in the device 
+/// Takes a scheduled intermediate representation `ir` containing HPU operations
+/// and the hardware configuration `config` to produce a new IR in the device
 /// operation language with physical register assignments for all values.
 pub fn allocate_registers(ir: &IR<Hpulang>, config: &HpuConfig) -> IR<Doplang> {
     let allocator = Allocator::init(ir, config.regf_size);

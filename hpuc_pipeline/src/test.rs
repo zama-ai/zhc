@@ -2,7 +2,7 @@ use std::path::Path;
 
 use hpuc_builder::{builder::IntegerConfig, iops::cmp::cmp_gt};
 use hpuc_frontend::{BuilderContext, create_rhai_engine};
-use hpuc_ir::{cse::eliminate_common_subexpressions, dce::eliminate_dead_code, IR};
+use hpuc_ir::{IR, cse::eliminate_common_subexpressions, dce::eliminate_dead_code};
 use hpuc_langs::ioplang::Ioplang;
 
 fn get_ir(path: &Path, integer_w: i64, msg_w: i64, carry_w: i64) -> IR<Ioplang> {

@@ -37,7 +37,6 @@ impl<E: Event> Dispatch for Dispatcher<E> {
 }
 
 impl<E: Event> Dispatcher<E> {
-
     /// Returns the current simulation cycle.
     pub fn now(&self) -> Cycle {
         self.now

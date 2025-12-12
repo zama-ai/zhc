@@ -1,7 +1,10 @@
 use crate::SmallVec;
 
 /// Splits an iterator into fixed-size chunks.
-pub trait ChunkIt where Self: Iterator + Sized {
+pub trait ChunkIt
+where
+    Self: Iterator + Sized,
+{
     /// Creates an iterator that yields chunks of elements from this iterator.
     ///
     /// Each chunk contains up to `chunks_size` elements. The last chunk may
@@ -12,7 +15,10 @@ pub trait ChunkIt where Self: Iterator + Sized {
 
 impl<A: Iterator> ChunkIt for A {
     fn chunk(self, chunks_size: usize) -> Chunked<Self> {
-        Chunked { original: self, chunks_size }
+        Chunked {
+            original: self,
+            chunks_size,
+        }
     }
 }
 
@@ -24,17 +30,17 @@ pub enum Chunk<A> {
     /// A complete chunk containing exactly the requested number of elements.
     Complete(SmallVec<A>),
     /// A partial chunk containing the remaining elements when the iterator ends.
-    Rest(SmallVec<A>)
+    Rest(SmallVec<A>),
 }
 
 /// An iterator that yields chunks of elements from another iterator.
-pub struct Chunked<A: Iterator>{
+pub struct Chunked<A: Iterator> {
     original: A,
-    chunks_size: usize
+    chunks_size: usize,
 }
 
 impl<A: Iterator> Iterator for Chunked<A> {
-    type Item =  Chunk<A::Item>;
+    type Item = Chunk<A::Item>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let mut output = SmallVec::new();
@@ -42,7 +48,7 @@ impl<A: Iterator> Iterator for Chunked<A> {
             None => return None,
             Some(v) => output.push(v),
         };
-        for _ in 0..self.chunks_size-1 {
+        for _ in 0..self.chunks_size - 1 {
             match self.original.next() {
                 None => return Some(Chunk::Rest(output)),
                 Some(v) => output.push(v),

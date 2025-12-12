@@ -10,7 +10,6 @@ pub trait Event: Display + Clone + Serialize + PartialEq {}
 
 /// Manages event scheduling and delivery within the simulation.
 pub trait Dispatch {
-
     type Event: Event;
 
     /// Checks if the given `event` is already scheduled for dispatch.
@@ -46,7 +45,6 @@ pub trait Dispatch {
 
 /// Defines the interface for components that participate in discrete event simulation.
 pub trait Simulatable: Sized + Serialize {
-
     type Event: Event;
 
     /// Processes the given `trigger` event and updates internal state.

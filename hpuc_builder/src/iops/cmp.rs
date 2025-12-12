@@ -1,6 +1,6 @@
 use hpuc_ir::IR;
 use hpuc_langs::ioplang::Ioplang;
-use hpuc_utils::{svec, CollectInSmallVec, MultiZip};
+use hpuc_utils::{CollectInSmallVec, MultiZip, svec};
 
 use crate::builder::{Builder, IntegerConfig};
 
@@ -40,7 +40,7 @@ enum Kind {
     Lt,
     Lte,
     Eq,
-    Neq
+    Neq,
 }
 
 impl Kind {
@@ -99,7 +99,10 @@ fn cmp(config: &IntegerConfig, kind: Kind) -> IR<Ioplang> {
     // reduce (tree-based reduce)
     while merged.len() > 2 {
         let packed = b.pack(merged);
-        let reduced = packed.into_iter().map(|x| b.pbs(x, lut_cmp_reduce)).cosvec();
+        let reduced = packed
+            .into_iter()
+            .map(|x| b.pbs(x, lut_cmp_reduce))
+            .cosvec();
         // prepare next iter
         merged = reduced;
     }

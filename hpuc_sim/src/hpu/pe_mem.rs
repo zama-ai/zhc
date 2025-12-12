@@ -17,7 +17,8 @@ pub struct PeMem {
 impl PeMem {
     /// Creates a new memory processing element with the specified parameters.
     ///
-    /// The memory PE is initialized with the given `fifo_capacity`, `read_latency`, and `write_latency`.
+    /// The memory PE is initialized with the given `fifo_capacity`, `read_latency`, and
+    /// `write_latency`.
     pub fn new(
         fifo_capacity: usize,
         read_latency: ConstantLatency,
@@ -55,7 +56,11 @@ impl PeMem {
 impl Simulatable for PeMem {
     type Event = Events;
 
-    fn handle(&mut self, dispatcher: &mut impl Dispatch<Event = Self::Event>, trigger: Trigger<Self::Event>) {
+    fn handle(
+        &mut self,
+        dispatcher: &mut impl Dispatch<Event = Self::Event>,
+        trigger: Trigger<Self::Event>,
+    ) {
         match trigger.event {
             Events::IscIssueDOp(dop) if dop.raw.affinity() == Affinity::Mem => {
                 assert!(

@@ -62,6 +62,16 @@ macro_rules! impl_index {
     };
 }
 
-impl_index!(OpId, OpIdRaw, u16, "Identifier for operations within an IR.");
+impl_index!(
+    OpId,
+    OpIdRaw,
+    u16,
+    "Identifier for operations within an IR."
+);
 impl_index!(ValId, ValIdRaw, u16, "Identifier for values within an IR.");
-impl_index!(ValueNumber, ValueNumberRaw, u16, "Identifier used in value numbering for optimization passes.");
+impl_index!(
+    ValueNumber,
+    ValueNumberRaw,
+    u16,
+    "Identifier used in value numbering for optimization passes."
+);

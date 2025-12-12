@@ -213,8 +213,8 @@ impl PePbsMemory {
         let op = self.memory.iter_mut().find(|a| a.id == dopid).unwrap();
         use hpuc_langs::doplang::Operations::*;
         let new_op = match op.raw.clone() {
-            PBS { dst, src, lut } | PBS_F { dst, src, lut } => PBS_F { dst, src, lut},
-            PBS_ML2 { dst, src, lut } | PBS_ML2_F { dst, src, lut } => PBS_ML2_F { dst, src, lut},
+            PBS { dst, src, lut } | PBS_F { dst, src, lut } => PBS_F { dst, src, lut },
+            PBS_ML2 { dst, src, lut } | PBS_ML2_F { dst, src, lut } => PBS_ML2_F { dst, src, lut },
             PBS_ML4 { dst, src, lut } | PBS_ML4_F { dst, src, lut } => PBS_ML4_F { dst, src, lut },
             PBS_ML8 { dst, src, lut } | PBS_ML8_F { dst, src, lut } => PBS_ML8_F { dst, src, lut },
             _ => panic!(),
@@ -443,7 +443,13 @@ impl Simulatable for PePbs {
                     self.active_timeouts.0.remove(&dopid);
 
                     // The operation should still be waiting....
-                    assert!(self.memory.not_yet_workings().iter().find(|a| a.id == dopid).is_some());
+                    assert!(
+                        self.memory
+                            .not_yet_workings()
+                            .iter()
+                            .find(|a| a.id == dopid)
+                            .is_some()
+                    );
 
                     match self.memory.what_now() {
                         Hint::CanLaunchIncompleteBatch(batch_size) => {
@@ -451,13 +457,14 @@ impl Simulatable for PePbs {
                             dispatcher.dispatch_now(Events::PePbsLaunchProcessing(batch_size));
                         }
                         Hint::AlreadyWorking => {
-                            // If the pe is already working, we ensure that there is a flush after the timeouted op.
-                            let is_flushed =
-                                self.memory
-                                    .not_yet_workings()
-                                    .iter()
-                                    .skip_while(|a| a.id != dopid)
-                                    .any(|a| a.raw.is_pbs_flush());
+                            // If the pe is already working, we ensure that there is a flush after
+                            // the timeouted op.
+                            let is_flushed = self
+                                .memory
+                                .not_yet_workings()
+                                .iter()
+                                .skip_while(|a| a.id != dopid)
+                                .any(|a| a.raw.is_pbs_flush());
                             if !is_flushed {
                                 self.memory.mutate_to_flush(dopid);
                             }

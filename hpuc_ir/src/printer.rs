@@ -24,7 +24,7 @@ pub enum PrintWalker {
     /// Print operations in the order they were added to the IR.
     Linear,
     /// Print operations in topological order (dependencies before users).
-    Topo
+    Topo,
 }
 
 impl<D: Dialect> Printer<D> {
@@ -33,24 +33,25 @@ impl<D: Dialect> Printer<D> {
     /// The `walker` determines traversal order, `show_types` controls whether
     /// type annotations are included, and `show_erased_ops` determines whether
     /// inactive operations are displayed.
-    pub fn from_ir(store: &IR<D>, walker: PrintWalker, show_types: bool, show_erased_ops: bool) -> Printer<D> {
+    pub fn from_ir(
+        store: &IR<D>,
+        walker: PrintWalker,
+        show_types: bool,
+        show_erased_ops: bool,
+    ) -> Printer<D> {
         let names = match walker {
-            PrintWalker::Linear => {
-                store
-                    .raw_walk_ops_linear()
-                    .flat_map(|op| op.get_return_valids().iter().cloned().cosvec().into_iter())
-                    .enumerate()
-                    .map(|(name_id, valid)| {(valid, Name(name_id as u16))})
-                    .collect()
-            },
-            PrintWalker::Topo => {
-                store
-                    .raw_walk_ops_topo()
-                    .flat_map(|op| op.get_return_valids().iter().cloned().cosvec().into_iter())
-                    .enumerate()
-                    .map(|(name_id, valid)| {(valid, Name(name_id as u16))})
-                    .collect()
-            },
+            PrintWalker::Linear => store
+                .raw_walk_ops_linear()
+                .flat_map(|op| op.get_return_valids().iter().cloned().cosvec().into_iter())
+                .enumerate()
+                .map(|(name_id, valid)| (valid, Name(name_id as u16)))
+                .collect(),
+            PrintWalker::Topo => store
+                .raw_walk_ops_topo()
+                .flat_map(|op| op.get_return_valids().iter().cloned().cosvec().into_iter())
+                .enumerate()
+                .map(|(name_id, valid)| (valid, Name(name_id as u16)))
+                .collect(),
         };
         Printer {
             names,
@@ -74,7 +75,13 @@ impl<D: Dialect> Printer<D> {
             }
         }
 
-        format!("{}", IRFormatter { printer: self, store })
+        format!(
+            "{}",
+            IRFormatter {
+                printer: self,
+                store
+            }
+        )
     }
 
     /// Formats a value reference as an argument in an operation.
@@ -153,13 +160,12 @@ impl<D: Dialect> Printer<D> {
                 for opref in store.raw_walk_ops_linear() {
                     self.format_opref(f, opref)?;
                 }
-            },
+            }
             PrintWalker::Topo => {
                 for opref in store.raw_walk_ops_topo() {
                     self.format_opref(f, opref)?;
                 }
-
-            },
+            }
         }
 
         Ok(())

@@ -1,9 +1,9 @@
 use hpuc_utils::svec;
 use hpuc_utils::{SmallVec, Store};
 
-use crate::{PrintWalker, ValMap};
 use crate::traversal::{OpWalk, OpWalker, ValWalk, ValWalker};
 use crate::val_ref::ValRef;
+use crate::{PrintWalker, ValMap};
 use std::{
     cmp::max,
     fmt::{Debug, Display},
@@ -632,7 +632,6 @@ impl<D: Dialect> IR<D> {
     pub fn totally_mapped_valmap<V>(&self, f: impl FnMut(ValRef<D>) -> V) -> ValMap<V> {
         ValMap::new_totally_mapped(self, f)
     }
-
 }
 
 impl<D: Dialect> Display for IR<D> {
@@ -643,7 +642,6 @@ impl<D: Dialect> Display for IR<D> {
         } else {
             let printer = Printer::from_ir(self, crate::PrintWalker::Topo, true, false);
             printer.format_ir(f, self)
-
         }
     }
 }

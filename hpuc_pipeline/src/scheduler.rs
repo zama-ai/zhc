@@ -25,8 +25,8 @@ use hpuc_utils::{MultiZip, SmallSet, SmallVec, StoreIndex};
 
 /// Schedules operations in the IR for optimal execution on the target HPU.
 ///
-/// Takes an intermediate representation `ir` containing HPU operations and the 
-/// hardware configuration `config` to produce a new IR with operations 
+/// Takes an intermediate representation `ir` containing HPU operations and the
+/// hardware configuration `config` to produce a new IR with operations
 /// reordered for better performance while preserving semantic correctness.
 pub fn schedule<'a, 'b>(ir: &'a IR<Hpulang>, config: &'b HpuConfig) -> IR<Hpulang> {
     let mut scheduler = Scheduler::init(ir, config);

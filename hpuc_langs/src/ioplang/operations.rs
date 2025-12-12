@@ -1,4 +1,8 @@
-use std::{fmt::{Debug, Display}, hash::Hash, rc::Rc};
+use std::{
+    fmt::{Debug, Display},
+    hash::Hash,
+    rc::Rc,
+};
 
 use hpuc_ir::{DialectOperations, Signature, sig};
 
@@ -23,7 +27,6 @@ impl Display for Litteral {
 pub struct LutGenerator(Rc<Box<dyn Fn(u8) -> u8>>);
 
 impl LutGenerator {
-
     pub fn new(f: impl Fn(u8) -> u8 + 'static) -> Self {
         LutGenerator(Rc::new(Box::new(f)))
     }
@@ -57,14 +60,36 @@ impl Hash for LutGenerator {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Operations {
-    Input { pos: usize, typ: Types },
-    Output { pos: usize, typ: Types },
-    Let { typ: Types },
-    Constant { value: Litteral },
-    GenerateLut { name: String, gene: LutGenerator},
-    GenerateLut2 { name: String, gene: [LutGenerator; 2]},
-    GenerateLut4 { name: String, gene: [LutGenerator; 4]},
-    GenerateLut8 { name: String, gene: [LutGenerator; 8]},
+    Input {
+        pos: usize,
+        typ: Types,
+    },
+    Output {
+        pos: usize,
+        typ: Types,
+    },
+    Let {
+        typ: Types,
+    },
+    Constant {
+        value: Litteral,
+    },
+    GenerateLut {
+        name: String,
+        gene: LutGenerator,
+    },
+    GenerateLut2 {
+        name: String,
+        gene: [LutGenerator; 2],
+    },
+    GenerateLut4 {
+        name: String,
+        gene: [LutGenerator; 4],
+    },
+    GenerateLut8 {
+        name: String,
+        gene: [LutGenerator; 8],
+    },
     AddCt,
     SubCt,
     Mac,

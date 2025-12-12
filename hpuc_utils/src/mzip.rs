@@ -50,7 +50,10 @@ mod tests {
 
         let zipped: Vec<_> = (iter1, iter2, iter3).mzip().collect();
 
-        assert_eq!(zipped, vec![(1, 'a', true), (2, 'b', false), (3, 'c', true)]);
+        assert_eq!(
+            zipped,
+            vec![(1, 'a', true), (2, 'b', false), (3, 'c', true)]
+        );
     }
 
     #[test]

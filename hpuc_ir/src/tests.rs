@@ -72,7 +72,7 @@ pub mod test_dialect {
     }
 }
 
-use crate::{Depth, DialectOperations, IRError, IR};
+use crate::{Depth, DialectOperations, IR, IRError};
 use hpuc_utils::{CollectInVec, svec};
 
 use test_dialect::{Operations, TestDialect};

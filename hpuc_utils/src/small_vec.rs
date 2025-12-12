@@ -1,7 +1,7 @@
 use super::StackVec;
 use crate::StackVecIntoIter;
-use std::{hash::Hash, usize};
 use std::fmt::Debug;
+use std::{hash::Hash, usize};
 
 /// Iterator that moves elements out of a `SmallVec` by value.
 ///
@@ -36,7 +36,7 @@ pub enum SmallVec<A> {
     Stack(StackVec<A>),
 }
 
-impl<A: Debug> Debug for SmallVec<A>{
+impl<A: Debug> Debug for SmallVec<A> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             SmallVec::Heap(items) => items.fmt(f),

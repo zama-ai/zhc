@@ -7,21 +7,25 @@
 
 use hpuc_ir::IR;
 use hpuc_langs::doplang::Doplang;
-use hpuc_sim::{hpu::{DOp, DOpId, Events, Hpu, HpuConfig}, Cycle, Simulator};
+use hpuc_sim::{
+    Cycle, Simulator,
+    hpu::{DOp, DOpId, Events, Hpu, HpuConfig},
+};
 
 /// Computes the execution latency for the given device operation IR.
 ///
-/// Takes an intermediate representation `ir` containing device operations and 
-/// the hardware configuration `config` to simulate execution and determine 
+/// Takes an intermediate representation `ir` containing device operations and
+/// the hardware configuration `config` to simulate execution and determine
 /// the total number of cycles required for completion.
 pub fn compute_latency(ir: &IR<Doplang>, config: HpuConfig) -> Cycle {
     let mut simulator = Simulator::from_simulatable(config.freq, Hpu::new(&config));
-    let dops = ir.walk_ops_linear().map(|a| {
-        DOp{
+    let dops = ir
+        .walk_ops_linear()
+        .map(|a| DOp {
             raw: a.get_operation(),
             id: DOpId(a.get_id().into()),
-        }
-    }).collect();
+        })
+        .collect();
     let event = Events::IscPushDOps(dops);
     simulator.dispatch(event);
     simulator.play();
@@ -30,11 +34,19 @@ pub fn compute_latency(ir: &IR<Doplang>, config: HpuConfig) -> Cycle {
 
 #[cfg(test)]
 mod test {
+    use super::compute_latency;
+    use crate::{
+        allocator::allocate_registers,
+        scheduler::schedule,
+        test::{get_add_ir, get_cmp_ir, get_sub_ir},
+        translation::IoplangToHpulang,
+    };
     use hpuc_ir::{IR, translation::Translator};
     use hpuc_langs::ioplang::Ioplang;
-    use hpuc_sim::{hpu::{HpuConfig, PhysicalConfig}, Cycle, MHz};
-    use crate::{allocator::allocate_registers, scheduler::schedule, test::{get_add_ir, get_cmp_ir, get_sub_ir}, translation::IoplangToHpulang};
-    use super::compute_latency;
+    use hpuc_sim::{
+        Cycle, MHz,
+        hpu::{HpuConfig, PhysicalConfig},
+    };
 
     fn pipeline(ir: &IR<Ioplang>) -> Cycle {
         let ir = IoplangToHpulang.translate(&ir);

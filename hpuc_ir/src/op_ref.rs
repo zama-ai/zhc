@@ -32,7 +32,6 @@ impl<'s, D: Dialect> Display for OpRef<'s, D> {
             let printer = Printer::from_ir(self.ir, crate::PrintWalker::Topo, true, true);
             printer.format_opref(f, self.to_owned())
         }
-
     }
 }
 

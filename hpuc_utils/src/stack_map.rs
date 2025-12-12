@@ -255,45 +255,45 @@ mod tests {
     }
 
     #[test]
-        fn test_iter() {
-            let mut map = StackMap::new();
-            map.insert(1u8, 42u8);
-            map.insert(2, 24);
-            map.insert(3, 100);
+    fn test_iter() {
+        let mut map = StackMap::new();
+        map.insert(1u8, 42u8);
+        map.insert(2, 24);
+        map.insert(3, 100);
 
-            let mut collected: Vec<_> = map.iter().collect();
-            collected.sort_by_key(|(k, _)| *k);
+        let mut collected: Vec<_> = map.iter().collect();
+        collected.sort_by_key(|(k, _)| *k);
 
-            assert_eq!(collected, vec![(&1, &42), (&2, &24), (&3, &100)]);
+        assert_eq!(collected, vec![(&1, &42), (&2, &24), (&3, &100)]);
+    }
+
+    #[test]
+    fn test_iter_mut() {
+        let mut map = StackMap::new();
+        map.insert(1u8, 42u8);
+        map.insert(2, 24);
+        map.insert(3, 100);
+
+        // Modify values through mutable iterator
+        for (_, value) in map.iter_mut() {
+            *value *= 2;
         }
 
-        #[test]
-        fn test_iter_mut() {
-            let mut map = StackMap::new();
-            map.insert(1u8, 42u8);
-            map.insert(2, 24);
-            map.insert(3, 100);
+        assert_eq!(map.get(&1), Some(&84));
+        assert_eq!(map.get(&2), Some(&48));
+        assert_eq!(map.get(&3), Some(&200));
+    }
 
-            // Modify values through mutable iterator
-            for (_, value) in map.iter_mut() {
-                *value *= 2;
-            }
+    #[test]
+    fn test_into_iter() {
+        let mut map = StackMap::new();
+        map.insert(1u8, 42u8);
+        map.insert(2, 24);
+        map.insert(3, 100);
 
-            assert_eq!(map.get(&1), Some(&84));
-            assert_eq!(map.get(&2), Some(&48));
-            assert_eq!(map.get(&3), Some(&200));
-        }
+        let mut collected: Vec<_> = map.into_iter().collect();
+        collected.sort_by_key(|(k, _)| *k);
 
-        #[test]
-        fn test_into_iter() {
-            let mut map = StackMap::new();
-            map.insert(1u8, 42u8);
-            map.insert(2, 24);
-            map.insert(3, 100);
-
-            let mut collected: Vec<_> = map.into_iter().collect();
-            collected.sort_by_key(|(k, _)| *k);
-
-            assert_eq!(collected, vec![(1, 42), (2, 24), (3, 100)]);
-        }
+        assert_eq!(collected, vec![(1, 42), (2, 24), (3, 100)]);
+    }
 }

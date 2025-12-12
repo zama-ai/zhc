@@ -180,7 +180,7 @@ pub fn create_rhai_engine(context: BuilderContext) -> (Engine, IopBuilder) {
                     },
                     svec![],
                 ),
-                _ => panic!()
+                _ => panic!(),
             }
             .map_err(ToRhaiiError::to_rhaii_error)?;
             Ok(lut[0])

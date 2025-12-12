@@ -123,13 +123,15 @@ impl PhysicalConfig {
         toml::from_str(toml_string).unwrap()
     }
 
-    /// Returns a 64-bit ternary uniform configuration with 64-bit failure probability and 64-bit psi.
+    /// Returns a 64-bit ternary uniform configuration with 64-bit failure probability and 64-bit
+    /// psi.
     pub fn tuniform_64b_pfail64_psi64() -> Self {
         let toml_string = include_str!("tuniform_64b_pfail64_psi64.toml");
         toml::from_str(toml_string).unwrap()
     }
 
-    /// Returns a 64-bit ternary uniform configuration with 128-bit failure probability and 64-bit psi.
+    /// Returns a 64-bit ternary uniform configuration with 128-bit failure probability and 64-bit
+    /// psi.
     pub fn tuniform_64b_pfail128_psi64() -> Self {
         let toml_string = include_str!("tuniform_64b_pfail128_psi64.toml");
         toml::from_str(toml_string).unwrap()
@@ -197,7 +199,7 @@ impl From<PhysicalConfig> for HpuConfig {
             pbs_processing_latency_a: kspbs_pbs_cost,
             pbs_processing_latency_b: kspbs_cnst_cost,
             pbs_processing_latency_m: phy.ntt_params.min_pbs_nb,
-            regf_size: phy.regf_params.coef_nb
+            regf_size: phy.regf_params.coef_nb,
         }
     }
 }

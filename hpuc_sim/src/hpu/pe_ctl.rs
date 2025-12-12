@@ -1,5 +1,5 @@
-use hpuc_langs::doplang::Affinity;
 use crate::Dispatch;
+use hpuc_langs::doplang::Affinity;
 
 use super::*;
 
@@ -9,7 +9,11 @@ pub struct PeCtl;
 
 impl Simulatable for PeCtl {
     type Event = Events;
-    fn handle(&mut self, dispatcher: &mut impl Dispatch<Event = Self::Event>, trigger: Trigger<Self::Event>) {
+    fn handle(
+        &mut self,
+        dispatcher: &mut impl Dispatch<Event = Self::Event>,
+        trigger: Trigger<Self::Event>,
+    ) {
         match trigger.event {
             Events::IscIssueDOp(dop) if dop.raw.affinity() == Affinity::Ctl => {
                 dispatcher.dispatch_now(Events::IscUnlockIssue(dop.id));

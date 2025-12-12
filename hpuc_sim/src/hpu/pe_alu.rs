@@ -55,7 +55,11 @@ impl PeAlu {
 impl Simulatable for PeAlu {
     type Event = Events;
 
-    fn handle(&mut self, dispatcher: &mut impl Dispatch<Event = Self::Event>, trigger: Trigger<Self::Event>) {
+    fn handle(
+        &mut self,
+        dispatcher: &mut impl Dispatch<Event = Self::Event>,
+        trigger: Trigger<Self::Event>,
+    ) {
         match trigger.event {
             Events::IscIssueDOp(dop) if dop.raw.affinity() == Affinity::Alu => {
                 assert!(

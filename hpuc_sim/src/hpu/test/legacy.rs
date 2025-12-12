@@ -260,7 +260,9 @@ impl From<legacy::DOp> for RawDOp {
                     mask: MASK_NONE,
                     addr: dop.0.src_rid.0 as usize,
                 },
-                lut: Argument::LutId { id: dop.0.gid.0 as usize }
+                lut: Argument::LutId {
+                    id: dop.0.gid.0 as usize,
+                },
             },
             legacy::DOp::PBS_ML2(dop) => RawDOp::PBS_ML2 {
                 dst: Argument::CtReg {
@@ -271,7 +273,9 @@ impl From<legacy::DOp> for RawDOp {
                     mask: MASK_NONE,
                     addr: dop.0.src_rid.0 as usize,
                 },
-                lut: Argument::LutId { id: dop.0.gid.0 as usize }
+                lut: Argument::LutId {
+                    id: dop.0.gid.0 as usize,
+                },
             },
             legacy::DOp::PBS_ML4(dop) => RawDOp::PBS_ML4 {
                 dst: Argument::CtReg {
@@ -282,7 +286,9 @@ impl From<legacy::DOp> for RawDOp {
                     mask: MASK_NONE,
                     addr: dop.0.src_rid.0 as usize,
                 },
-                lut: Argument::LutId { id: dop.0.gid.0 as usize }
+                lut: Argument::LutId {
+                    id: dop.0.gid.0 as usize,
+                },
             },
             legacy::DOp::PBS_ML8(dop) => RawDOp::PBS_ML8 {
                 dst: Argument::CtReg {
@@ -293,7 +299,9 @@ impl From<legacy::DOp> for RawDOp {
                     mask: MASK_NONE,
                     addr: dop.0.src_rid.0 as usize,
                 },
-                lut: Argument::LutId { id: dop.0.gid.0 as usize }
+                lut: Argument::LutId {
+                    id: dop.0.gid.0 as usize,
+                },
             },
             legacy::DOp::PBS_F(dop) => RawDOp::PBS_F {
                 dst: Argument::CtReg {
@@ -304,8 +312,9 @@ impl From<legacy::DOp> for RawDOp {
                     mask: MASK_NONE,
                     addr: dop.0.src_rid.0 as usize,
                 },
-                lut: Argument::LutId { id: dop.0.gid.0 as usize }
-
+                lut: Argument::LutId {
+                    id: dop.0.gid.0 as usize,
+                },
             },
             legacy::DOp::PBS_ML2_F(dop) => RawDOp::PBS_ML2_F {
                 dst: Argument::CtReg {
@@ -316,7 +325,9 @@ impl From<legacy::DOp> for RawDOp {
                     mask: MASK_NONE,
                     addr: dop.0.src_rid.0 as usize,
                 },
-                lut: Argument::LutId { id: dop.0.gid.0 as usize }
+                lut: Argument::LutId {
+                    id: dop.0.gid.0 as usize,
+                },
             },
             legacy::DOp::PBS_ML4_F(dop) => RawDOp::PBS_ML4_F {
                 dst: Argument::CtReg {
@@ -327,7 +338,9 @@ impl From<legacy::DOp> for RawDOp {
                     mask: MASK_NONE,
                     addr: dop.0.src_rid.0 as usize,
                 },
-                lut: Argument::LutId { id: dop.0.gid.0 as usize }
+                lut: Argument::LutId {
+                    id: dop.0.gid.0 as usize,
+                },
             },
             legacy::DOp::PBS_ML8_F(dop) => RawDOp::PBS_ML8_F {
                 dst: Argument::CtReg {
@@ -338,7 +351,9 @@ impl From<legacy::DOp> for RawDOp {
                     mask: MASK_NONE,
                     addr: dop.0.src_rid.0 as usize,
                 },
-                lut: Argument::LutId { id: dop.0.gid.0 as usize }
+                lut: Argument::LutId {
+                    id: dop.0.gid.0 as usize,
+                },
             },
             legacy::DOp::SYNC(_) => RawDOp::SYNC,
         }

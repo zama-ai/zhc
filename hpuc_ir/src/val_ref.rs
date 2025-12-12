@@ -28,7 +28,6 @@ impl<'s, D: Dialect> Display for ValRef<'s, D> {
             let printer = Printer::from_ir(self.ir, crate::PrintWalker::Topo, true, true);
             printer.format_arg(f, self.to_owned())
         }
-
     }
 }
 

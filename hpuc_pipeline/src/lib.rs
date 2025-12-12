@@ -6,21 +6,21 @@
 //! operation scheduling, register allocation, and final code generation.
 
 use allocator::allocate_registers;
-use scheduler::schedule;
-use translation_table::{generate_translation_table, DOpRepr};
 use hpuc_builder::iops::cmp::{cmp_eq, cmp_gt, cmp_gte, cmp_lt, cmp_lte, cmp_neq};
 use hpuc_ir::translation::Translator;
+use scheduler::schedule;
 use translation::IoplangToHpulang;
+use translation_table::{DOpRepr, generate_translation_table};
 
-pub mod scheduler;
 pub mod allocator;
-pub mod translation;
 pub mod latency;
+pub mod scheduler;
+pub mod translation;
 pub mod translation_table;
 
 pub use hpuc_builder::builder::IntegerConfig;
 pub use hpuc_sim::hpu::HpuConfig;
-pub use hpuc_sim::{MHz, Cycle};
+pub use hpuc_sim::{Cycle, MHz};
 
 /// Iops supported by the pipeline.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
@@ -30,7 +30,7 @@ pub enum Iop {
     CmpLt,
     CmpLte,
     CmpEq,
-    CmpNeq
+    CmpNeq,
 }
 
 fn pipeline(hpu_config: &HpuConfig, integer_config: &IntegerConfig, iop: Iop) -> Vec<DOpRepr> {
@@ -53,7 +53,11 @@ fn pipeline(hpu_config: &HpuConfig, integer_config: &IntegerConfig, iop: Iop) ->
 /// Takes the HPU hardware configuration in `hpu_config`, integer arithmetic
 /// configuration in `integer_config`, and the desired operation `iop` to
 /// produce an hex stream.
-pub fn get_translation_table(hpu_config: &HpuConfig, integer_config: &IntegerConfig, iop: Iop) -> Vec<DOpRepr> {
+pub fn get_translation_table(
+    hpu_config: &HpuConfig,
+    integer_config: &IntegerConfig,
+    iop: Iop,
+) -> Vec<DOpRepr> {
     pipeline(hpu_config, integer_config, iop)
 }
 

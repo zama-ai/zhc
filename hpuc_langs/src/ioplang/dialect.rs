@@ -26,9 +26,7 @@ impl AllowCse for Ioplang {
                 args.sort_unstable();
                 (args, op)
             }
-            _ => {
-                (args, op)
-            }
+            _ => (args, op),
         };
         (0..arity).map(move |i| Expr {
             op: op.clone(),
