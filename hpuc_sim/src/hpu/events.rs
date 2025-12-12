@@ -6,44 +6,68 @@ use crate::Event;
 
 use super::{DOp, DOpId, IscCommand};
 
+/// Number of operations processed together in a batch.
 pub type BatchSize = usize;
 
+/// Simulation events representing state changes and operations within HPU components.
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub enum Events {
-    // Isc Events,
+    /// Instruction scheduler receives new operations to schedule.
     IscPushDOps(Vec<DOp>),
+    /// Instruction scheduler issues an operation to a processing element.
     IscIssueDOp(DOp),
+    /// Unlocks read access for the specified operation.
     IscUnlockRead(DOpId),
+    /// Unlocks write access for the specified operation.
     IscUnlockWrite(DOpId),
+    /// Unlocks issue capability for the specified operation.
     IscUnlockIssue(DOpId),
+    /// Retires a completed operation from the scheduler.
     IscRetireDOp(DOp),
+    /// Periodic scheduler query for available operations.
     IscQuery,
+    /// Refills an operation back into the scheduler queue.
     IscRefillDOp(DOp),
+    /// Signals completion of all scheduled operations.
     IscProcessOver,
-    // Used by external hook only
+    /// External notification of scheduler command execution.
     IscNotify(DOpId, IscCommand),
 
-    // PeAluAvents
+    /// ALU processing element begins operation execution.
     PeAluLaunchProcessing,
+    /// ALU processing element completes operation execution.
     PeAluLandProcessing,
+    /// ALU processing element becomes available for new operations.
     PeAluAvailable,
+    /// ALU processing element becomes unavailable for new operations.
     PeAluUnavailable,
 
-    // PeMemAvents
+    /// Memory processing element begins operation execution.
     PeMemLaunchProcessing,
+    /// Memory processing element completes operation execution.
     PeMemLandProcessing,
+    /// Memory processing element becomes available for new operations.
     PeMemAvailable,
+    /// Memory processing element becomes unavailable for new operations.
     PeMemUnavailable,
 
-    // PePbs Events
+    /// PBS processing element begins loading data into memory.
     PePbsLaunchLoadMemory,
+    /// PBS processing element completes loading operation data.
     PePbsLandLoadMemory(DOp),
+    /// PBS processing element begins unloading data from memory.
     PePbsLaunchUnloadMemory,
+    /// PBS processing element completes unloading operation data.
     PePbsLandUnloadMemory(DOpId),
+    /// PBS processing element begins batch processing with specified size.
     PePbsLaunchProcessing(BatchSize),
+    /// PBS processing element completes batch processing.
     PePbsLandProcessing(BatchSize),
+    /// PBS processing element timeout for the specified operation.
     PePbsTimeout(DOpId),
+    /// PBS processing element becomes available for new operations.
     PePbsAvailable,
+    /// PBS processing element becomes unavailable for new operations.
     PePbsUnavailable,
 }
 

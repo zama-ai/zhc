@@ -1,3 +1,10 @@
+//! Translation from IOP language to HPU language.
+//!
+//! This module provides translation capabilities that convert intermediate
+//! representations from the integer operation language (IOP) to the HPU
+//! hardware language. The translation maps high-level operations to
+//! low-level hardware primitives while preserving semantic correctness.
+
 use std::{collections::HashMap, sync::LazyLock};
 
 use hpuc_ir::{IR, OpId, ValId, translation::Translator};
@@ -91,6 +98,7 @@ static GIDS: LazyLock<FastMap<&'static str, LutId>> = LazyLock::new(|| {
     ])
 });
 
+/// Translator from IOP language to HPU language intermediate representations.
 pub struct IoplangToHpulang;
 
 impl Translator for IoplangToHpulang {

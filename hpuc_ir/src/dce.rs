@@ -12,10 +12,11 @@ pub enum Liveness {
     Dead,
 }
 
-/// A structure containing the result of the dead code analysis.
+/// Analysis result containing dead code elimination information.
 ///
-/// This analysis determines which operations in an IR are "live" (have observable effects
-/// or contribute to operations with observable effects) versus "dead" (can be safely removed).
+/// This analysis determines which operations are "live" (have observable effects
+/// or contribute to operations with observable effects) versus "dead" (can be
+/// safely removed without changing program behavior).
 pub struct DeadCodeAnalysis {
     states: OpMap<Liveness>,
 }
@@ -48,7 +49,7 @@ impl DeadCodeAnalysis {
             .iter()
     }
 
-    /// Returns whether the ir has dead nodes.
+    /// Returns `true` if the IR contains any dead operations.
     pub fn has_dead_code(&self) -> bool {
         self.states.iter().any(|(_, a)| matches!(a, Liveness::Dead))
     }
@@ -62,7 +63,11 @@ impl Index<OpId> for DeadCodeAnalysis {
     }
 }
 
-/// Eliminates dead code from the given IR.
+/// Eliminates dead code from the IR.
+///
+/// Performs dead code analysis to identify operations that don't contribute
+/// to any observable effects, then removes those operations from the IR.
+/// Operations are deleted in dependency-safe order.
 pub fn eliminate_dead_code<D: Dialect>(ir: &mut IR<D>) {
     let analysis = DeadCodeAnalysis::from_ir(ir);
     let deletions = analysis

@@ -1,6 +1,12 @@
 use crate::SmallVec;
 
+/// Splits an iterator into fixed-size chunks.
 pub trait ChunkIt where Self: Iterator + Sized {
+    /// Creates an iterator that yields chunks of elements from this iterator.
+    ///
+    /// Each chunk contains up to `chunks_size` elements. The last chunk may
+    /// contain fewer elements if the iterator length is not evenly divisible
+    /// by `chunks_size`.
     fn chunk(self, chunks_size: usize) -> Chunked<Self>;
 }
 
@@ -10,11 +16,18 @@ impl<A: Iterator> ChunkIt for A {
     }
 }
 
+/// A chunk of elements from an iterator.
+///
+/// Chunks can be either complete (containing the requested number of elements)
+/// or partial (containing fewer elements when the iterator is exhausted).
 pub enum Chunk<A> {
+    /// A complete chunk containing exactly the requested number of elements.
     Complete(SmallVec<A>),
+    /// A partial chunk containing the remaining elements when the iterator ends.
     Rest(SmallVec<A>)
 }
 
+/// An iterator that yields chunks of elements from another iterator.
 pub struct Chunked<A: Iterator>{
     original: A,
     chunks_size: usize

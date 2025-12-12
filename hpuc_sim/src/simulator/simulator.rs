@@ -7,6 +7,7 @@ use std::path::Path;
 static ACTIVATE_TRACING: bool = false;
 static S_IN_US: f64 = 1_000_000.;
 
+/// Represents a frequency in megahertz for simulation timing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Hash)]
 pub struct MHz(pub usize);
 
@@ -15,17 +16,23 @@ impl MHz {
         self.0 as f64 * 1_000_000.
     }
 
+    /// Calculates the period duration in microseconds for this frequency.
     pub fn period(&self) -> Microseconds {
         (1. / self.as_raw_hertz()) * S_IN_US
     }
 }
 
+/// Represents the current state of simulation execution.
 pub enum SimulationState {
+    /// Simulation can continue with more cycles to process.
     MayContinue,
+    /// Simulation has completed with no more events to process.
     SimulationOver,
+    /// A user-specified condition was encountered during execution.
     CondEncountered,
 }
 
+/// Discrete event simulator that drives simulatable components at a given frequency.
 pub struct Simulator<S>
 where
     S: Simulatable,
@@ -37,6 +44,7 @@ where
 }
 
 impl<S: Simulatable> Simulator<S> {
+    /// Creates a simulator from the given `freq` and `simulatable` component.
     pub fn from_simulatable(freq: MHz, simulatable: S) -> Self {
         Self::from_simulatable_and_dispatcher(freq, simulatable, Dispatcher::default())
     }
@@ -46,6 +54,7 @@ impl<S: Simulatable> Simulator<S>
 where
     S: Simulatable,
 {
+    /// Creates a new simulator at the given `freq` with a default simulatable component.
     pub fn new(freq: MHz) -> Self
     where
         S: Default,
@@ -55,6 +64,10 @@ where
         Self::from_simulatable_and_dispatcher(freq, simulatable, dispatcher)
     }
 
+    /// Creates a simulator from the given `freq`, `simulatable` component, and `dispatcher`.
+    ///
+    /// This constructor allows full control over the initial dispatcher state.
+    /// The simulatable component is powered up during construction.
     pub fn from_simulatable_and_dispatcher(
         freq: MHz,
         simulatable: S,
@@ -71,22 +84,27 @@ where
         }
     }
 
+    /// Dispatches an `event` for immediate processing.
     pub fn dispatch(&mut self, event: S::Event) {
         self.dispatcher.dispatch_now(event);
     }
 
+    /// Dispatches an `event` to be processed after `after_n_cycles` cycles.
     pub fn dispatch_later(&mut self, after_n_cycles: Cycle, event: S::Event) {
         self.dispatcher.dispatch_after(after_n_cycles, event);
     }
 
+    /// Returns the current simulation cycle.
     pub fn now(&self) -> Cycle {
         self.dispatcher.now()
     }
 
+    /// Returns the current simulation time in microseconds.
     pub fn now_us(&self) -> Microseconds {
         self.dispatcher.now().as_ts(self.quantum)
     }
 
+    /// Advances simulation by one cycle and processes all scheduled events.
     pub fn step(&mut self) -> SimulationState {
         fn nope<E: Event>(_: &Trigger<E>) -> bool {
             false
@@ -135,24 +153,29 @@ where
         }
     }
 
+    /// Runs the simulation until completion or no more events remain.
     pub fn play(&mut self) {
         while let SimulationState::MayContinue = self.step() {}
     }
 
+    /// Runs the simulation until the specified `event` is encountered.
     pub fn play_until_event(&mut self, event: S::Event) {
         let event_eq = |trig: &Trigger<S::Event>| -> bool { trig.event == event };
         while let SimulationState::MayContinue = self.step_cond(event_eq) {}
     }
 
+    /// Runs the simulation until the given condition function `f` returns true for an event.
     pub fn play_until(&mut self, f: impl Fn(&S::Event) -> bool) {
         let event_cond = |trig: &Trigger<S::Event>| -> bool { f(&trig.event) };
         while let SimulationState::MayContinue = self.step_cond(event_cond) {}
     }
 
+    /// Writes simulation trace data to the specified file `path`.
     pub fn dump_trace<P: AsRef<Path>>(&self, path: P) {
         self.tracer.dump(self.now(), path);
     }
 
+    /// Returns a reference to the simulatable component.
     pub fn simulatable(&self) -> &S {
         &self.simulatable
     }

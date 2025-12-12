@@ -3,6 +3,7 @@ use crate::Dispatch;
 
 use super::*;
 
+/// Virtual Control Processing Element.
 #[derive(Debug, Serialize)]
 pub struct PeCtl;
 

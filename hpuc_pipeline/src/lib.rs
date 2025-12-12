@@ -1,3 +1,10 @@
+//! Pipeline infrastructure for HPU compilation.
+//!
+//! This crate provides the core compilation pipeline that transforms high-level
+//! integer operations into executable device operations for HPU hardware. The
+//! pipeline consists of translation from IOP language to HPU language,
+//! operation scheduling, register allocation, and final code generation.
+
 use allocator::allocate_registers;
 use scheduler::schedule;
 use translation_table::{generate_translation_table, DOpRepr};
@@ -15,6 +22,7 @@ pub use hpuc_builder::builder::IntegerConfig;
 pub use hpuc_sim::hpu::HpuConfig;
 pub use hpuc_sim::{MHz, Cycle};
 
+/// Iops supported by the pipeline.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub enum Iop {
     CmpGt,
@@ -40,6 +48,11 @@ fn pipeline(hpu_config: &HpuConfig, integer_config: &IntegerConfig, iop: Iop) ->
     generate_translation_table(&allocated)
 }
 
+/// Generates a translation table for the specified operation configuration.
+///
+/// Takes the HPU hardware configuration in `hpu_config`, integer arithmetic
+/// configuration in `integer_config`, and the desired operation `iop` to
+/// produce an hex stream.
 pub fn get_translation_table(hpu_config: &HpuConfig, integer_config: &IntegerConfig, iop: Iop) -> Vec<DOpRepr> {
     pipeline(hpu_config, integer_config, iop)
 }

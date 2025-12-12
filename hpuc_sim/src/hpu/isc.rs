@@ -249,7 +249,7 @@ impl Serialize for Slot {
     }
 }
 
-/// Used externally to extract a view of the Slot content
+/// Provides a read-only view of instruction slot state for external analysis.
 #[derive(Debug)]
 pub struct SlotProperties {
     pub rd_lock: u32,
@@ -324,9 +324,7 @@ impl State {
     }
 }
 
-/// IscCommand
-/// Represent the edge between State
-/// Use in IscNotify for external Hook
+/// Commands issued by the instruction scheduler to manage operation state transitions.
 #[derive(Debug, Clone, Copy, Default, PartialEq, PartialOrd, Eq, Ord, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum IscCommand {
@@ -351,10 +349,12 @@ impl Display for IscCommand {
 }
 
 #[derive(Debug, Clone, Serialize)]
+/// Tracks the availability status of a processing element.
 pub struct PeTracker {
     available: bool,
 }
 
+/// Filters operations based on their processing element affinity requirements.
 pub struct AffinityFilter {
     mem: bool,
     alu: bool,
@@ -374,6 +374,7 @@ impl AffinityFilter {
 }
 
 #[derive(Debug, Clone, Serialize)]
+/// Manages instruction scheduling and dispatch across processing elements.
 pub struct InstructionScheduler {
     query_period: Cycle,
     front_buffer: VecDeque<DOp>,
@@ -388,6 +389,9 @@ pub struct InstructionScheduler {
 }
 
 impl InstructionScheduler {
+    /// Creates a new instruction scheduler with the given `query_period` and `pool_capacity`.
+    ///
+    /// The scheduler initializes with all processing elements available and empty buffers.
     pub fn new(query_period: Cycle, pool_capacity: usize) -> Self {
         InstructionScheduler {
             front_buffer: VecDeque::new(),
@@ -403,18 +407,22 @@ impl InstructionScheduler {
         }
     }
 
+    /// Checks if there are pending write unlock operations.
     pub fn has_write_unlocks(&self) -> bool {
         !self.write_unlock_buffer.is_empty()
     }
 
+    /// Checks if there are pending read unlock operations.
     pub fn has_read_unlocks(&self) -> bool {
         !self.read_unlock_buffer.is_empty()
     }
 
+    /// Checks if there are operations waiting to be scheduled.
     pub fn has_pending_dops(&self) -> bool {
         !self.front_buffer.is_empty()
     }
 
+    /// Checks if any processing element is available to accept new operations.
     pub fn may_issue(&self) -> bool {
         self.tracker_alu.available || self.tracker_mem.available || self.tracker_pbs.available
     }

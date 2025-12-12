@@ -12,6 +12,7 @@ static EVENTS_PID: usize = 0;
 static SIMULATABLES_PID: usize = 1;
 static COUNTERS_PID: usize = 2;
 
+/// Tracks simulation state changes for a specific simulatable component.
 pub struct SimulatableTracker {
     tid: usize,
     name: String,
@@ -19,16 +20,19 @@ pub struct SimulatableTracker {
     state: Option<Value>,
 }
 
+/// Tracks event occurrences for a specific event type.
 pub struct EventTracker {
     tid: usize,
     name: String,
 }
 
+/// Tracks numeric counter values over time.
 pub struct CounterTracker {
     tid: usize,
     state: Option<f64>,
 }
 
+/// Records simulation events, component states, and counters for analysis and visualization.
 pub struct Tracer<E: Event> {
     trace: Trace,
     // Events are added to the profile under pid 0
@@ -40,6 +44,7 @@ pub struct Tracer<E: Event> {
 }
 
 impl<E: Event> Tracer<E> {
+    /// Creates a new tracer for recording simulation data.
     pub fn new() -> Self {
         let mut trace = Trace::default();
         trace.display_time_unit = Some(hpuc_utils::tracing::Unit::Nanoseconds);
@@ -57,6 +62,7 @@ impl<E: Event> Tracer<E> {
         }
     }
 
+    /// Writes the complete trace data to a JSON file at the specified `path`.
     pub fn dump<P: AsRef<Path>>(&self, at: Cycle, path: P) {
         // We add the last states that were not flushed yet to the dumped trace
         let mut trace = self.trace.clone();
@@ -76,6 +82,7 @@ impl<E: Event> Tracer<E> {
             .expect("Failed to write to file");
     }
 
+    /// Records a numeric counter `value` with the given `name` at the specified cycle.
     pub fn add_counter<S: AsRef<str>>(&mut self, at: Cycle, name: S, value: f64) {
         if !self.counter_trackers.contains_key(name.as_ref()) {
             let tid = self.counter_trackers.len() + 1;
@@ -98,6 +105,7 @@ impl<E: Event> Tracer<E> {
         }
     }
 
+    /// Records an event occurrence at the specified cycle.
     pub fn add_event(&mut self, at: Cycle, event: &E) {
         if !self
             .event_trackers
@@ -124,6 +132,7 @@ impl<E: Event> Tracer<E> {
         );
     }
 
+    /// Records the state of a simulatable component at the specified cycle.
     pub fn add_simulatable<S: Simulatable>(&mut self, at: Cycle, simulatable: &S) {
         let address = simulatable as *const S as usize;
         if !self.simulatable_trackers.contains_key(&address) {

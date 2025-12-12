@@ -1,8 +1,10 @@
 use serde::Serialize;
 use std::fmt::Display;
 
+/// Raw operation type from the DOp language specification.
 pub type RawDOp = hpuc_langs::doplang::Operations;
 
+/// Unique identifier for a DOp operation within the simulation.
 #[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
 pub struct DOpId(pub usize);
 
@@ -21,9 +23,12 @@ impl Serialize for DOpId {
     }
 }
 
+/// Discrete operation combining raw operation data with a unique identifier.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DOp {
+    /// The underlying operation specification from the DOp language.
     pub raw: RawDOp,
+    /// Unique identifier for tracking this operation through the simulation.
     pub id: DOpId,
 }
 

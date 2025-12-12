@@ -1,8 +1,11 @@
 use super::*;
 
+/// Represents a scheduled event with its execution time.
 #[derive(Debug, Clone)]
 pub struct Trigger<E: Event> {
+    /// The cycle at which this event should be processed.
     pub at: Cycle,
+    /// The event to be triggered.
     pub event: E,
 }
 

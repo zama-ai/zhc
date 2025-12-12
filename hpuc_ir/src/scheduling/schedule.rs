@@ -15,6 +15,7 @@ impl Schedule {
         Self(Vec::new())
     }
 
+    /// Issues selected operations by adding them to the schedule.
     pub(crate) fn issue_selected(&mut self, selected: impl Iterator<Item = Selected>) {
         self.0.extend(selected.map(|a| a.0));
     }
@@ -24,7 +25,12 @@ impl Schedule {
         self.0.len()
     }
 
-    /// Returns a walker in schedule order.
+    /// Returns `true` if the schedule contains no operations.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Returns a walker that yields operations in scheduled order.
     pub fn get_walker(&self) -> impl OpWalker {
         self.0.iter().copied()
     }

@@ -1,3 +1,9 @@
+//! Utility data structures and algorithms for compiler infrastructure.
+//!
+//! This crate provides specialized collections and utilities optimized for
+//! compiler workloads, including stack-allocated containers for small data,
+//! type-safe indices, and iterator extensions.
+
 mod all_eq;
 mod collectors;
 mod erasable;

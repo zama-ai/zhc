@@ -81,6 +81,7 @@ impl<K: Eq + Hash, V> SmallMap<K, V> {
         }
     }
 
+    /// Returns an iterator over key-value pairs.
     pub fn iter(&self) -> SmallMapIter<'_, K, V> {
         match self {
             SmallMap::Heap(m) => SmallMapIter::Heap(m.iter()),
@@ -88,6 +89,7 @@ impl<K: Eq + Hash, V> SmallMap<K, V> {
         }
     }
 
+    /// Returns an iterator over mutable key-value pairs.
     pub fn iter_mut(&mut self) -> SmallMapMutIter<'_, K, V> {
         match self {
             SmallMap::Heap(m) => SmallMapMutIter::Heap(m.iter_mut()),
@@ -95,6 +97,7 @@ impl<K: Eq + Hash, V> SmallMap<K, V> {
         }
     }
 
+    /// Consumes the map and returns an iterator over owned key-value pairs.
     pub fn into_iter(self) -> SmallMapIntoIter<K, V> {
         match self {
             SmallMap::Heap(m) => SmallMapIntoIter::Heap(m.into_iter()),
@@ -103,6 +106,7 @@ impl<K: Eq + Hash, V> SmallMap<K, V> {
     }
 }
 
+/// An iterator over key-value pairs in a `SmallMap`.
 pub enum SmallMapIter<'a, K: Eq, V> {
     Heap(std::collections::hash_map::Iter<'a, K, V>),
     Stack(crate::stack_map::StackMapIter<'a, K, V>),
@@ -119,6 +123,7 @@ impl<'a, K: Eq, V> Iterator for SmallMapIter<'a, K, V> {
     }
 }
 
+/// An iterator over mutable key-value pairs in a `SmallMap`.
 pub enum SmallMapMutIter<'a, K: Eq, V> {
     Heap(std::collections::hash_map::IterMut<'a, K, V>),
     Stack(crate::stack_map::StackMapMutIter<'a, K, V>),
@@ -135,6 +140,7 @@ impl<'a, K: Eq, V> Iterator for SmallMapMutIter<'a, K, V> {
     }
 }
 
+/// An iterator that moves key-value pairs out of a `SmallMap`.
 pub enum SmallMapIntoIter<K: Eq, V> {
     Heap(std::collections::hash_map::IntoIter<K, V>),
     Stack(crate::stack_map::StackMapIntoIter<K, V>),

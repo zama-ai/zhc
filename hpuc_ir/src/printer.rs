@@ -4,8 +4,13 @@ use super::{Dialect, IR, OpIdRaw, OpRef, ValId, val_ref::ValRef};
 use std::{collections::HashMap, marker::PhantomData};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Name(pub(super) OpIdRaw);
+struct Name(pub(super) OpIdRaw);
 
+/// A utility for formatting IR structures into human-readable text.
+///
+/// The printer assigns unique names to values and formats operations
+/// according to configurable display options. Different traversal
+/// orders can be used to control the output organization.
 pub struct Printer<D: Dialect> {
     names: HashMap<ValId, Name>,
     show_erased_ops: bool,
@@ -14,12 +19,20 @@ pub struct Printer<D: Dialect> {
     phantom: PhantomData<D>,
 }
 
+/// Specifies the traversal order for printing operations.
 pub enum PrintWalker {
+    /// Print operations in the order they were added to the IR.
     Linear,
+    /// Print operations in topological order (dependencies before users).
     Topo
 }
 
 impl<D: Dialect> Printer<D> {
+    /// Creates a new printer configured for the specified IR.
+    ///
+    /// The `walker` determines traversal order, `show_types` controls whether
+    /// type annotations are included, and `show_erased_ops` determines whether
+    /// inactive operations are displayed.
     pub fn from_ir(store: &IR<D>, walker: PrintWalker, show_types: bool, show_erased_ops: bool) -> Printer<D> {
         let names = match walker {
             PrintWalker::Linear => {
@@ -48,6 +61,7 @@ impl<D: Dialect> Printer<D> {
         }
     }
 
+    /// Formats the entire IR as a string.
     pub fn ir_to_string(&self, store: &IR<D>) -> String {
         struct IRFormatter<'a, D: Dialect> {
             printer: &'a Printer<D>,
@@ -63,6 +77,7 @@ impl<D: Dialect> Printer<D> {
         format!("{}", IRFormatter { printer: self, store })
     }
 
+    /// Formats a value reference as an argument in an operation.
     pub fn format_arg(
         &self,
         f: &mut std::fmt::Formatter<'_>,
@@ -76,6 +91,7 @@ impl<D: Dialect> Printer<D> {
         }
     }
 
+    /// Formats a value reference as a return value with optional type annotation.
     pub fn format_ret(
         &self,
         f: &mut std::fmt::Formatter<'_>,
@@ -93,6 +109,7 @@ impl<D: Dialect> Printer<D> {
         Ok(())
     }
 
+    /// Formats a complete operation with its arguments and return values.
     pub fn format_opref(
         &self,
         f: &mut std::fmt::Formatter<'_>,
@@ -129,6 +146,7 @@ impl<D: Dialect> Printer<D> {
         writeln!(f, ");")
     }
 
+    /// Formats the entire IR.
     pub fn format_ir(&self, f: &mut std::fmt::Formatter<'_>, store: &IR<D>) -> std::fmt::Result {
         match self.walker {
             PrintWalker::Linear => {

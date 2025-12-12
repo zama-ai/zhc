@@ -1,7 +1,15 @@
+//! Translation table generation for device operations.
+//!
+//! This module provides functionality to generate binary instruction encodings
+//! from device operation intermediate representations. It defines the binary
+//! formats for different instruction types and converts the IR into executable
+//! machine code for the target HPU hardware.
+
 use bitfield_struct::bitfield;
 use hpuc_ir::IR;
 use hpuc_langs::doplang::Doplang;
 
+/// Binary representation of a device operation instruction.
 pub type DOpRepr = u32;
 
 #[allow(non_camel_case_types, dead_code)]
@@ -26,7 +34,7 @@ enum DOpCode {
     PBS_ML8_F = 0b11_1011,
 }
 
-/// DOp raw encoding used for Opcode extraction
+/// Raw device operation encoding for opcode extraction.
 #[bitfield(u32)]
 pub struct DOpRawHex {
     #[bits(26)]
@@ -116,6 +124,11 @@ pub struct PeSyncHex {
     opcode: u8,
 }
 
+/// Generates binary instruction encodings from device operation IR.
+///
+/// Converts the intermediate representation `ir` containing device operations 
+/// into a vector of binary instruction representations suitable for execution 
+/// on the target hardware.
 pub fn generate_translation_table(ir: &IR<Doplang>) -> Vec<DOpRepr> {
     let mut output = Vec::with_capacity(ir.n_ops() as usize);
     output.push(0); // reserve room for the length of the stream at the beginning of the stream.

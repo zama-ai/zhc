@@ -1,4 +1,10 @@
+/// Interleaves elements from this iterator with elements from a separator iterator.
 pub trait SeparateWith where Self: Iterator + Sized {
+    /// Creates an iterator that alternates between elements from `self` and `s`.
+    ///
+    /// The resulting iterator starts with an element from `self`, then takes one
+    /// from `s`, then back to `self`, and so on. If either iterator is exhausted,
+    /// the combined iterator terminates.
     fn separate_with<S: Iterator<Item = Self::Item>>(self, s: S) -> Separated<Self, S>;
 }
 
@@ -8,6 +14,11 @@ impl<I: Iterator> SeparateWith for I {
     }
 }
 
+/// An iterator that alternates between elements from two source iterators.
+///
+/// Created by the `separate_with` method. This iterator yields elements by
+/// alternating between the main iterator and the separator iterator until
+/// either one is exhausted.
 pub enum Separated<A: Iterator, S: Iterator<Item = A::Item>> {
     OnMain(A, S),
     OnSep(S, A),

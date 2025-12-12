@@ -1,3 +1,10 @@
+//! Operation scheduling for optimal HPU execution.
+//!
+//! This module provides scheduling algorithms that reorder operations in the
+//! intermediate representation to minimize execution time while preserving
+//! program semantics. The scheduler considers hardware constraints and
+//! operation dependencies to produce an optimized execution order.
+
 use hpuc_ir::{
     Depth, IR, OpId, OpMap, OpRef, ValId, ValMap,
     scheduling::{
@@ -16,6 +23,11 @@ use hpuc_sim::{
 };
 use hpuc_utils::{MultiZip, SmallSet, SmallVec, StoreIndex};
 
+/// Schedules operations in the IR for optimal execution on the target HPU.
+///
+/// Takes an intermediate representation `ir` containing HPU operations and the 
+/// hardware configuration `config` to produce a new IR with operations 
+/// reordered for better performance while preserving semantic correctness.
 pub fn schedule<'a, 'b>(ir: &'a IR<Hpulang>, config: &'b HpuConfig) -> IR<Hpulang> {
     let mut scheduler = Scheduler::init(ir, config);
     let schedule = scheduler.schedule(&ir);

@@ -7,8 +7,12 @@ use crate::OpRef;
 
 use super::{Dialect, IR, OpId, State};
 
-/// A map that associates values with operation IDs, preserving the active/inactive state structure
-/// from an IR.
+/// A map that associates values with operation IDs.
+///
+/// Maintains the same active/inactive structure as the source IR, allowing
+/// efficient mapping of operations to analysis results or other metadata.
+/// Only active operations can store values, and the map tracks how many
+/// values are currently stored.
 pub struct OpMap<T> {
     store: Store<OpId, State<Option<T>>>,
     n_stored: u16,
@@ -20,10 +24,10 @@ impl<T> OpMap<T> {
         k.0 < self.store.len() && self.store[k].is_active()
     }
 
-    /// Creates a new `OpMap` from the given `ir`, copying its operation state structure.
+    /// Creates an empty operation map with the same structure as the IR.
     ///
-    /// The resulting map will have the same active and inactive operations as the source IR,
-    /// but all values will be initialized to `None`.
+    /// The resulting map preserves the active/inactive state of operations
+    /// from the source IR but contains no stored values.
     pub fn new_empty<D: Dialect>(ir: &IR<D>) -> Self {
         OpMap {
             store: ir
@@ -39,10 +43,10 @@ impl<T> OpMap<T> {
         }
     }
 
-    /// Creates a new `OpMap` from the given `ir` with all active operations initialized to `v`.
+    /// Creates an operation map filled with the specified value for all active operations.
     ///
-    /// The resulting map will have the same active and inactive operations as the source IR.
-    /// All active operations will contain a clone of `v`, while inactive operations remain unset.
+    /// Every active operation in the source IR will be associated with a clone
+    /// of `v`. Inactive operations remain unmapped.
     pub fn new_filled<D: Dialect>(ir: &IR<D>, v: T) -> Self
     where
         T: Clone,
@@ -61,10 +65,11 @@ impl<T> OpMap<T> {
         }
     }
 
-    /// Creates a new `OpMap` from the given `ir` by applying `f` to each active operation.
+    /// Creates an operation map by selectively applying a function to active operations.
     ///
-    /// This method allows selective population of the map, where some active operations may
-    /// not receive values based on the logic in `f`.
+    /// The function returns `None` for operations that should not have entries
+    /// in the resulting map. Only operations for which the function returns
+    /// `Some(value)` will be stored.
     pub fn new_partially_mapped<D: Dialect>(
         ir: &IR<D>,
         mut f: impl FnMut(OpRef<D>) -> Option<T>,
@@ -85,10 +90,10 @@ impl<T> OpMap<T> {
         }
     }
 
-    /// Creates a new `OpMap` from the given `ir` by applying `f` to each active operation.
+    /// Creates an operation map by applying a function to all active operations.
     ///
-    /// Unlike `new_partially_mapped`, this method guarantees that all active operations will
-    /// have values in the resulting map, as `f` must return a `T` value rather than an `Option<T>`.
+    /// Every active operation will have an entry in the resulting map,
+    /// as the function must return a value rather than an option.
     pub fn new_totally_mapped<D: Dialect>(ir: &IR<D>, mut f: impl FnMut(OpRef<D>) -> T) -> Self {
         OpMap {
             store: ir
@@ -106,60 +111,62 @@ impl<T> OpMap<T> {
         }
     }
 
-    /// Returns the number of stored values in the map.
+    /// Returns the number of operations that have stored values.
     pub fn len(&self) -> u16 {
         self.n_stored
     }
 
-    /// Returns `true` if all possible operations in the map have values stored.
+    /// Returns `true` if all active operations have stored values.
     pub fn is_filled(&self) -> bool {
         self.n_stored + self.n_inactive == self.store.len()
     }
 
-    /// Returns `true` if the map contains no stored values.
+    /// Returns `true` if no operations have stored values.
     pub fn is_empty(&self) -> bool {
         self.n_stored == 0
     }
 
-    /// Returns `true` if the map contains a value for the specified `k`.
+    /// Returns `true` if the specified operation has a stored value.
     ///
     /// # Panics
     ///
-    /// Panics if `k` is out of bounds or refers to an inactive operation.
+    /// Panics if the operation ID is out of bounds or refers to an inactive operation.
     pub fn contains_key(&self, k: &OpId) -> bool {
         assert!(self.may_store(k));
         self.store[k].as_ref().unwrap_active().is_some()
     }
 
-    /// Returns a reference to the value corresponding to `k`.
+    /// Returns a reference to the value for the specified operation.
     ///
-    /// Returns `None` if no value is associated with `k`.
+    /// Returns `None` if no value is stored for the operation.
     ///
     /// # Panics
     ///
-    /// Panics if `k` is out of bounds or refers to an inactive operation.
+    /// Panics if the operation ID is out of bounds or refers to an inactive operation.
     pub fn get(&self, k: &OpId) -> Option<&T> {
         assert!(self.may_store(k));
         self.store[k].as_ref().unwrap_active().as_ref()
     }
 
-    /// Returns a mutable reference to the value corresponding to `k`.
+    /// Returns a mutable reference to the value for the specified operation.
     ///
-    /// Returns `None` if no value is associated with `k`.
+    /// Returns `None` if no value is stored for the operation.
     ///
     /// # Panics
     ///
-    /// Panics if `k` is out of bounds or refers to an inactive operation.
+    /// Panics if the operation ID is out of bounds or refers to an inactive operation.
     pub fn get_mut(&mut self, k: &OpId) -> Option<&mut T> {
         assert!(self.may_store(k));
         self.store[k].as_mut_ref().unwrap_active().as_mut()
     }
 
-    /// Inserts the value `v` at `k`, returning the previous value if one existed.
+    /// Stores a value for the specified operation.
+    ///
+    /// Returns the previous value if one existed, otherwise `None`.
     ///
     /// # Panics
     ///
-    /// Panics if `k` is out of bounds or refers to an inactive operation.
+    /// Panics if the operation ID is out of bounds or refers to an inactive operation.
     pub fn insert(&mut self, k: OpId, v: T) -> Option<T> {
         assert!(self.may_store(&k));
         let v = State::Active(Some(v));
@@ -170,11 +177,13 @@ impl<T> OpMap<T> {
         out
     }
 
-    /// Removes and returns the value at `k` if one exists.
+    /// Removes and returns the value for the specified operation.
+    ///
+    /// Returns `None` if no value was stored for the operation.
     ///
     /// # Panics
     ///
-    /// Panics if `k` is out of bounds or refers to an inactive operation.
+    /// Panics if the operation ID is out of bounds or refers to an inactive operation.
     pub fn remove(&mut self, k: &OpId) -> Option<T> {
         assert!(self.may_store(&k));
         let v = State::Active(None);
@@ -185,7 +194,7 @@ impl<T> OpMap<T> {
         out
     }
 
-    /// Returns an iterator over the stored key-value pairs.
+    /// Returns an iterator over operation IDs and their stored values.
     pub fn iter(&self) -> impl Iterator<Item = (OpId, &T)> {
         self.store.enumerate_iter().filter_map(|(i, a)| match a {
             State::Active(Some(v)) => Some((i, v)),
@@ -193,7 +202,7 @@ impl<T> OpMap<T> {
         })
     }
 
-    /// Returns an iterator over the stored key-value pairs with mutable references to values.
+    /// Returns an iterator over operation IDs and mutable references to their values.
     pub fn iter_mut(&mut self) -> impl Iterator<Item = (OpId, &mut T)> {
         self.store
             .enumerate_iter_mut()

@@ -2,7 +2,9 @@ use std::collections::VecDeque;
 
 use crate::SmallVec;
 
+/// Collects iterator elements into a `Vec`.
 pub trait CollectInVec<T> {
+    /// Consumes the iterator and collects elements into a `Vec`.
     fn covec(self) -> Vec<T>;
 }
 
@@ -15,7 +17,9 @@ where
     }
 }
 
+/// Collects iterator elements into a `SmallVec`.
 pub trait CollectInSmallVec<T> {
+    /// Consumes the iterator and collects elements into a `SmallVec`.
     fn cosvec(self) -> SmallVec<T>;
 }
 
@@ -28,7 +32,9 @@ where
     }
 }
 
+/// Collects iterator elements into a `VecDeque`.
 pub trait CollectInDeque<T> {
+    /// Consumes the iterator and collects elements into a `VecDeque`.
     fn codeque(self) -> VecDeque<T>;
 }
 

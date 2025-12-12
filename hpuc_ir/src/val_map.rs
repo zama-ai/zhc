@@ -9,8 +9,12 @@ use crate::val_ref::ValRef;
 
 use super::{Dialect, IR, State, ValId};
 
-/// A map that associates values with value IDs, preserving the active/inactive state structure from
-/// an IR.
+/// A map that associates values with value IDs.
+///
+/// Maintains the same active/inactive structure as the source IR, allowing
+/// efficient mapping of values to analysis results or other metadata.
+/// Only active values can store data, and the map tracks how many
+/// entries are currently stored.
 pub struct ValMap<T> {
     store: Store<ValId, State<Option<T>>>,
     n_stored: u16,
@@ -22,10 +26,10 @@ impl<T> ValMap<T> {
         k.0 < self.store.len() && self.store[k].is_active()
     }
 
-    /// Creates a new `ValMap` from the given `ir`, copying its value state structure.
+    /// Creates an empty value map with the same structure as the IR.
     ///
-    /// The resulting map will have the same active and inactive values as the source IR,
-    /// but all values will be initialized to `None`.
+    /// The resulting map preserves the active/inactive state of values
+    /// from the source IR but contains no stored data.
     pub fn new_empty<D: Dialect>(ir: &IR<D>) -> Self {
         ValMap {
             store: ir
@@ -41,10 +45,10 @@ impl<T> ValMap<T> {
         }
     }
 
-    /// Creates a new `ValMap` from the given `ir` with all active values initialized to `v`.
+    /// Creates a value map filled with the specified value for all active values.
     ///
-    /// The resulting map will have the same active and inactive values as the source IR.
-    /// All active values will contain a clone of `v`, while inactive values remain unset.
+    /// Every active value in the source IR will be associated with a clone
+    /// of `v`. Inactive values remain unmapped.
     pub fn new_filled<D: Dialect>(ir: &IR<D>, v: T) -> Self
     where
         T: Clone,
@@ -63,10 +67,11 @@ impl<T> ValMap<T> {
         }
     }
 
-    /// Creates a new `ValMap` from the given `ir` by applying `f` to each active value.
+    /// Creates a value map by selectively applying a function to active values.
     ///
-    /// This method allows selective population of the map, where some active values may
-    /// not receive values based on the logic in `f`.
+    /// The function returns `None` for values that should not have entries
+    /// in the resulting map. Only values for which the function returns
+    /// `Some(value)` will be stored.
     pub fn new_partially_mapped<D: Dialect>(
         ir: &IR<D>,
         mut f: impl FnMut(ValRef<D>) -> Option<T>,
@@ -87,10 +92,10 @@ impl<T> ValMap<T> {
         }
     }
 
-    /// Creates a new `ValMap` from the given `ir` by applying `f` to each active value.
+    /// Creates a value map by applying a function to all active values.
     ///
-    /// Unlike `new_partially_mapped`, this method guarantees that all active values will
-    /// have values in the resulting map, as `f` must return a `T` value rather than an `Option<T>`.
+    /// Every active value will have an entry in the resulting map,
+    /// as the function must return a value rather than an option.
     pub fn new_totally_mapped<D: Dialect>(ir: &IR<D>, mut f: impl FnMut(ValRef<D>) -> T) -> Self {
         ValMap {
             store: ir
@@ -108,60 +113,62 @@ impl<T> ValMap<T> {
         }
     }
 
-    /// Returns the number of stored values in the map.
+    /// Returns the number of values that have stored data.
     pub fn len(&self) -> u16 {
         self.n_stored
     }
 
-    /// Returns `true` if all possible values in the map have values stored.
+    /// Returns `true` if all active values have stored data.
     pub fn is_filled(&self) -> bool {
         self.n_stored + self.n_inactive == self.store.len()
     }
 
-    /// Returns `true` if the map contains no stored values.
+    /// Returns `true` if no values have stored data.
     pub fn is_empty(&self) -> bool {
         self.n_stored == 0
     }
 
-    /// Returns `true` if the map contains a value for the specified `k`.
+    /// Returns `true` if the specified value has stored data.
     ///
     /// # Panics
     ///
-    /// Panics if `k` is out of bounds or refers to an inactive value.
+    /// Panics if the value ID is out of bounds or refers to an inactive value.
     pub fn contains_key(&self, k: &ValId) -> bool {
         assert!(self.may_store(k));
         self.store[k].as_ref().unwrap_active().is_some()
     }
 
-    /// Returns a reference to the value corresponding to `k`.
+    /// Returns a reference to the data for the specified value.
     ///
-    /// Returns `None` if no value is associated with `k`.
+    /// Returns `None` if no data is stored for the value.
     ///
     /// # Panics
     ///
-    /// Panics if `k` is out of bounds or refers to an inactive value.
+    /// Panics if the value ID is out of bounds or refers to an inactive value.
     pub fn get(&self, k: &ValId) -> Option<&T> {
         assert!(self.may_store(k));
         self.store[k].as_ref().unwrap_active().as_ref()
     }
 
-    /// Returns a mutable reference to the value corresponding to `k`.
+    /// Returns a mutable reference to the data for the specified value.
     ///
-    /// Returns `None` if no value is associated with `k`.
+    /// Returns `None` if no data is stored for the value.
     ///
     /// # Panics
     ///
-    /// Panics if `k` is out of bounds or refers to an inactive value.
+    /// Panics if the value ID is out of bounds or refers to an inactive value.
     pub fn get_mut(&mut self, k: &ValId) -> Option<&mut T> {
         assert!(self.may_store(k));
         self.store[k].as_mut_ref().unwrap_active().as_mut()
     }
 
-    /// Inserts the value `v` at `k`, returning the previous value if one existed.
+    /// Stores data for the specified value.
+    ///
+    /// Returns the previous data if it existed, otherwise `None`.
     ///
     /// # Panics
     ///
-    /// Panics if `k` is out of bounds or refers to an inactive value.
+    /// Panics if the value ID is out of bounds or refers to an inactive value.
     pub fn insert(&mut self, k: ValId, v: T) -> Option<T> {
         assert!(self.may_store(&k));
         let v = State::Active(Some(v));
@@ -172,11 +179,13 @@ impl<T> ValMap<T> {
         out
     }
 
-    /// Removes and returns the value at `k` if one exists.
+    /// Removes and returns the data for the specified value.
+    ///
+    /// Returns `None` if no data was stored for the value.
     ///
     /// # Panics
     ///
-    /// Panics if `k` is out of bounds or refers to an inactive value.
+    /// Panics if the value ID is out of bounds or refers to an inactive value.
     pub fn remove(&mut self, k: &ValId) -> Option<T> {
         assert!(self.may_store(&k));
         let v = State::Active(None);
@@ -187,7 +196,7 @@ impl<T> ValMap<T> {
         out
     }
 
-    /// Returns an iterator over the stored key-value pairs.
+    /// Returns an iterator over value IDs and their stored data.
     pub fn iter(&self) -> impl Iterator<Item = (ValId, &T)> {
         self.store.enumerate_iter().filter_map(|(i, a)| match a {
             State::Active(Some(v)) => Some((i, v)),
@@ -195,7 +204,7 @@ impl<T> ValMap<T> {
         })
     }
 
-    /// Returns an iterator over the stored key-value pairs with mutable references to values.
+    /// Returns an iterator over value IDs and mutable references to their data.
     pub fn iter_mut(&mut self) -> impl Iterator<Item = (ValId, &mut T)> {
         self.store
             .enumerate_iter_mut()

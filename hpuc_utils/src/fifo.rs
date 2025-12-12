@@ -5,6 +5,11 @@ use std::{
     ops::{Index, IndexMut},
 };
 
+/// A fixed-capacity first-in-first-out queue with circular buffer implementation.
+///
+/// Elements are added to the back and removed from the front. The queue has a
+/// fixed capacity that must be specified at creation time and cannot be changed.
+/// When the queue reaches capacity, attempting to push more elements will panic.
 pub struct Fifo<T> {
     container: Vec<MaybeUninit<T>>,
     len: usize,
@@ -12,6 +17,10 @@ pub struct Fifo<T> {
 }
 
 impl<T> Fifo<T> {
+    /// Creates a new empty `Fifo` with the specified `capacity`.
+    ///
+    /// The queue will be able to hold exactly `capacity` elements. Memory is
+    /// allocated upfront for the entire capacity.
     pub fn with_capacity(capacity: usize) -> Self {
         let container = (0..capacity).map(|_| MaybeUninit::uninit()).collect();
         Self {
@@ -21,6 +30,11 @@ impl<T> Fifo<T> {
         }
     }
 
+    /// Removes and returns the first element from the queue.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the queue is empty.
     pub fn pop_front(&mut self) -> T {
         if self.len == 0 {
             panic!("Tried to pop from an empty fifo")
@@ -31,6 +45,11 @@ impl<T> Fifo<T> {
         output
     }
 
+    /// Adds an element to the back of the queue.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the queue is at full capacity.
     pub fn push_back(&mut self, val: T) {
         assert_ne!(
             self.len(),
@@ -42,26 +61,32 @@ impl<T> Fifo<T> {
         self.len += 1;
     }
 
+    /// Returns the maximum number of elements the queue can hold.
     pub fn capacity(&self) -> usize {
         self.container.len()
     }
 
+    /// Returns the current number of elements in the queue.
     pub fn len(&self) -> usize {
         self.len
     }
 
+    /// Returns `true` if the queue contains no elements.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
+    /// Returns `true` if the queue contains one or more elements.
     pub fn has_elements(&self) -> bool {
         self.len() > 0
     }
 
+    /// Returns `true` if the queue has reached its maximum capacity.
     pub fn is_full(&self) -> bool {
         self.len() == self.capacity()
     }
 
+    /// Returns an iterator over references to the elements in order.
     pub fn iter(&self) -> impl Iterator<Item = &T> {
         (0..self.len).map(move |i| {
             let actual_index = (self.ptr + i) % self.capacity();
@@ -69,6 +94,7 @@ impl<T> Fifo<T> {
         })
     }
 
+    /// Returns an iterator over mutable references to the elements in order.
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
         let ptr = self.ptr;
         let len = self.len;
@@ -79,6 +105,7 @@ impl<T> Fifo<T> {
         })
     }
 
+    /// Consumes the queue and returns an iterator over the elements by value.
     pub fn into_iter(mut self) -> impl Iterator<Item = T> {
         std::iter::from_fn(move || {
             if self.len > 0 {

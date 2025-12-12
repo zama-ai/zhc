@@ -4,26 +4,32 @@ use hpuc_utils::{svec, CollectInSmallVec, MultiZip};
 
 use crate::builder::{Builder, IntegerConfig};
 
+/// Creates an IR for greater-than comparison between two encrypted integers.
 pub fn cmp_gt(config: &IntegerConfig) -> IR<Ioplang> {
     cmp(config, Kind::Gt)
 }
 
+/// Creates an IR for greater-than-or-equal comparison between two encrypted integers.
 pub fn cmp_gte(config: &IntegerConfig) -> IR<Ioplang> {
     cmp(config, Kind::Gte)
 }
 
+/// Creates an IR for less-than comparison between two encrypted integers.
 pub fn cmp_lt(config: &IntegerConfig) -> IR<Ioplang> {
     cmp(config, Kind::Lt)
 }
 
+/// Creates an IR for less-than-or-equal comparison between two encrypted integers.
 pub fn cmp_lte(config: &IntegerConfig) -> IR<Ioplang> {
     cmp(config, Kind::Lte)
 }
 
+/// Creates an IR for equality comparison between two encrypted integers.
 pub fn cmp_eq(config: &IntegerConfig) -> IR<Ioplang> {
     cmp(config, Kind::Eq)
 }
 
+/// Creates an IR for inequality comparison between two encrypted integers.
 pub fn cmp_neq(config: &IntegerConfig) -> IR<Ioplang> {
     cmp(config, Kind::Neq)
 }

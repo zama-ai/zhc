@@ -4,30 +4,41 @@ use hpuc_utils::SmallVec;
 
 use super::DialectTypes;
 
+/// A function signature specifying argument and return types.
+///
+/// The signature describes the type interface of an operation, listing the
+/// types of input arguments and output values. This information is used for
+/// type checking during IR construction and optimization.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Signature<T: DialectTypes>(pub SmallVec<T>, pub SmallVec<T>);
 
 impl<T: DialectTypes> Signature<T> {
+    /// Returns the argument types as a slice.
     pub fn get_args(&self) -> &[T] {
         self.0.as_slice()
     }
 
+    /// Returns the return types as a slice.
     pub fn get_returns(&self) -> &[T] {
         self.1.as_slice()
     }
 
+    /// Consumes the signature and returns the argument types.
     pub fn into_args(self) -> SmallVec<T> {
         self.0
     }
 
+    /// Consumes the signature and returns the return types.
     pub fn into_returns(self) -> SmallVec<T> {
         self.1
     }
 
+    /// Returns the number of argument types.
     pub fn get_args_arity(&self) -> usize {
         self.0.len()
     }
 
+    /// Returns the number of return types.
     pub fn get_returns_arity(&self) -> usize {
         self.1.len()
     }
@@ -61,6 +72,10 @@ impl<T: DialectTypes> Display for Signature<T> {
     }
 }
 
+/// Creates a signature with the specified argument and return types.
+///
+/// This macro provides a convenient syntax for creating function signatures,
+/// using arrow notation to separate arguments from return values.
 #[macro_export]
 macro_rules! sig {
     (($($arg:expr),*) -> ($($ret:expr),*)) => {

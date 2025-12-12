@@ -41,23 +41,46 @@ pub trait AllowCse: Dialect {
     }
 }
 
+/// An expression representing a computed value in CSE analysis.
+///
+/// Captures the operation, its argument value numbers, and which return value
+/// position this expression represents. Two expressions are considered equivalent
+/// if they have the same operation and argument value numbers.
 #[derive(Hash, PartialEq, Eq)]
 pub struct Expr<D: Dialect> {
+    /// The operation that computes this expression.
     pub op: D::Operations,
+    /// The value numbers of the operation's arguments.
     pub args: SmallVec<ValueNumber>,
+    /// Which return value position (0-based) this expression represents.
     pub ret_pos: u8,
 }
 
+/// A replacement opportunity identified by CSE analysis.
+///
+/// Indicates that the `old` value can be replaced by the `new` value because
+/// they represent equivalent expressions.
 pub struct CanReplace {
+    /// The value ID that should be replaced.
     old: ValId,
+    /// The value ID that should replace the old value.
     new: ValId,
 }
 
+/// Analysis result containing common subexpression elimination opportunities.
+///
+/// This structure holds the results of CSE analysis, identifying which values
+/// can be replaced with equivalent previously computed values.
 pub struct CommonSubexpressionAnalysis {
     replacements: SmallVec<CanReplace>,
 }
 
 impl CommonSubexpressionAnalysis {
+    /// Performs common subexpression elimination analysis on the given IR.
+    ///
+    /// Uses local value numbering to identify expressions that compute the same
+    /// values. Operations are processed in topological order to ensure all
+    /// dependencies are analyzed before their users.
     pub fn from_ir<D: AllowCse>(ir: &IR<D>) -> Self {
         // We follow the classic Local Value Numbering approach to perform this analysis.
         let mut replacements = SmallVec::new();
@@ -106,11 +129,17 @@ impl CommonSubexpressionAnalysis {
         CommonSubexpressionAnalysis { replacements }
     }
 
+    /// Consumes the analysis and returns an iterator over replacement opportunities.
     pub fn into_iter(self) -> impl Iterator<Item = CanReplace> {
         self.replacements.into_iter()
     }
 }
 
+/// Eliminates common subexpressions from the IR.
+///
+/// Performs CSE analysis to identify redundant computations, replaces uses of
+/// redundant values with their equivalent predecessors, and runs dead code
+/// elimination to clean up unused operations.
 pub fn eliminate_common_subexpressions<D: AllowCse>(ir: &mut IR<D>) {
     let analysis = CommonSubexpressionAnalysis::from_ir(ir);
     for CanReplace { old, new } in analysis.into_iter() {

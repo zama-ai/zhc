@@ -1,3 +1,10 @@
+//! Register allocation for HPU operations.
+//!
+//! This module implements register allocation algorithms that assign physical
+//! registers to virtual values in the scheduled intermediate representation.
+//! The allocator handles register pressure, spilling to memory when necessary,
+//! and produces device operation code with concrete register assignments.
+
 use std::{
     fmt::{Debug, Display},
     ops::{Div, Rem},
@@ -11,6 +18,7 @@ use hpuc_langs::{
 use hpuc_sim::hpu::HpuConfig;
 use hpuc_utils::{CollectInSmallVec, CollectInVec, SmallMap, SmallVec, StoreIndex, svec};
 
+/// A register identifier used in the allocation process.
 #[derive(Clone, Debug, Copy)]
 pub struct Register(OpIdRaw);
 
@@ -670,6 +678,11 @@ impl<'ir> Allocator<'ir> {
     }
 }
 
+/// Allocates physical registers to values in the scheduled IR.
+///
+/// Takes a scheduled intermediate representation `ir` containing HPU operations 
+/// and the hardware configuration `config` to produce a new IR in the device 
+/// operation language with physical register assignments for all values.
 pub fn allocate_registers(ir: &IR<Hpulang>, config: &HpuConfig) -> IR<Doplang> {
     let allocator = Allocator::init(ir, config.regf_size);
     allocator.allocate_registers()

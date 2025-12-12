@@ -15,6 +15,7 @@ pub enum Hint {
     NoWaitings,
 }
 
+/// Manages staged memory for PBS operations with distinct processing phases.
 #[derive(Debug)]
 pub struct PePbsMemory {
     // push_back -> |                       FIFO                        | -> pop_front
@@ -222,6 +223,7 @@ impl PePbsMemory {
     }
 }
 
+/// Provides a read-only view into a specific range of PBS memory.
 pub struct PePbsMemoryView<'m> {
     memory: &'m PePbsMemory,
     range_bottom: usize,
@@ -275,6 +277,7 @@ impl Serialize for PePbsMemory {
     }
 }
 
+/// Tracks active timeout operations in the PBS processing element.
 #[derive(Debug)]
 pub struct ActiveTimeouts(SmallSet<DOpId>);
 
@@ -296,7 +299,7 @@ impl Serialize for ActiveTimeouts {
     }
 }
 
-/// The PBS Processing Element.
+/// Pbs Processing Element.
 ///
 /// The model mainly relies on two elements:
 /// + A fifo queue allowing to store upcoming dops.
@@ -313,6 +316,10 @@ pub struct PePbs {
 }
 
 impl PePbs {
+    /// Creates a new PBS processing element with the specified configuration.
+    ///
+    /// The PBS PE is initialized with queue capacity, memory capacity, batch sizing,
+    /// timeout behavior, and latency models for different operation phases.
     pub fn new(
         queue_capacity: usize,
         memory_capacity: usize,

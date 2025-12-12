@@ -24,6 +24,7 @@ pub use pe_pbs::*;
 pub use retirement::*;
 use serde::Serialize;
 
+/// HPU simulator containing all processing elements and scheduling logic.
 #[derive(Debug, Serialize)]
 pub struct Hpu {
     pub scheduler: InstructionScheduler,
@@ -71,6 +72,10 @@ impl Simulatable for Hpu {
 }
 
 impl Hpu {
+    /// Creates a new HPU instance configured with the given `config` parameters.
+    ///
+    /// All processing elements are initialized with their respective capacities,
+    /// latencies, and operational parameters as specified in the configuration.
     pub fn new(config: &HpuConfig) -> Self {
         Hpu {
             scheduler: InstructionScheduler::new(config.isc_query_period, config.isc_depth),

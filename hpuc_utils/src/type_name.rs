@@ -1,4 +1,9 @@
-/// An equivalent to `std::any::type_name_of_val`, which trims the beginning of the type path.
+/// Returns the type name of a value with module paths trimmed.
+///
+/// This function behaves like `std::any::type_name_of_val` but removes the
+/// module path prefix, returning only the type name itself. For generic types,
+/// the generic parameters are preserved. The trimming stops at the first `<`
+/// character to handle generic types correctly.
 pub fn type_name_of_val<T>(val: &T) -> &str {
     let output = std::any::type_name_of_val(val);
     let mut last_colon_seen = 0;

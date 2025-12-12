@@ -4,6 +4,11 @@ use crate::Printer;
 
 use super::{Dialect, IR, OpId, OpRef, State, ValId};
 
+/// A reference to a value within an IR graph.
+///
+/// Provides access to value metadata, type information, and graph
+/// relationships. The reference is tied to the lifetime of the IR it
+/// references and maintains cached pointers to value data for efficient access.
 #[derive(Debug, Clone)]
 pub struct ValRef<'s, D: Dialect> {
     pub(super) id: ValId,
@@ -45,26 +50,35 @@ impl<'s, D: Dialect> ValRef<'s, D> {
 }
 
 impl<'s, D: Dialect> ValRef<'s, D> {
+    /// Checks if the value is active.
     pub fn is_active(&self) -> bool {
         self.state.is_active()
     }
 
+    /// Checks if the value is inactive.
     pub fn is_inactive(&self) -> bool {
         self.state.is_inactive()
     }
 
+    /// Returns the unique identifier of the value.
     pub fn get_id(&self) -> ValId {
         self.id
     }
 
+    /// Returns the type of the value according to the dialect's type system.
     pub fn get_type(&self) -> D::Types {
         self.typ.clone()
     }
 
+    /// Returns a reference to the operation that produces this value.
     pub fn get_origin(&self) -> OpRef<'s, D> {
         self.ir.get_op(*self.origin)
     }
 
+    /// Returns an iterator over operations that use this value as an argument.
+    ///
+    /// Only active operations are included in the result, and operations are
+    /// deduplicated even if they use this value multiple times.
     pub fn get_users_iter(&self) -> impl Iterator<Item = OpRef<'s, D>> + use<'s, D> {
         let mut raw_users = self
             .raw_get_users_iter()
@@ -76,6 +90,7 @@ impl<'s, D: Dialect> ValRef<'s, D> {
         raw_users.into_iter().map(|a| self.ir.get_op(a))
     }
 
+    /// Returns `true` if any active operations use this value as an argument.
     pub fn has_users(&self) -> bool {
         self.get_users_iter().next().is_some()
     }

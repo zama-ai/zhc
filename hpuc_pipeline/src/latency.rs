@@ -1,7 +1,19 @@
+//! Latency computation for HPU operations.
+//!
+//! This module provides functionality to compute execution latency for device
+//! operations by simulating their execution on the target HPU hardware. The
+//! latency computation takes into account hardware characteristics, operation
+//! dependencies, and execution pipeline behavior.
+
 use hpuc_ir::IR;
 use hpuc_langs::doplang::Doplang;
 use hpuc_sim::{hpu::{DOp, DOpId, Events, Hpu, HpuConfig}, Cycle, Simulator};
 
+/// Computes the execution latency for the given device operation IR.
+///
+/// Takes an intermediate representation `ir` containing device operations and 
+/// the hardware configuration `config` to simulate execution and determine 
+/// the total number of cycles required for completion.
 pub fn compute_latency(ir: &IR<Doplang>, config: HpuConfig) -> Cycle {
     let mut simulator = Simulator::from_simulatable(config.freq, Hpu::new(&config));
     let dops = ir.walk_ops_linear().map(|a| {

@@ -24,6 +24,12 @@ fn op_active<'a, D: Dialect>(op: &OpRef<'a, D>) -> bool {
     op.is_active()
 }
 
+/// The main intermediate representation structure for a dataflow graph.
+///
+/// Maintains the complete graph of operations and values for a program, providing
+/// efficient access to operation metadata, value usage information, and graph
+/// traversal capabilities. The IR enforces type safety through the dialect system
+/// and maintains structural integrity through automatic bookkeeping.
 pub struct IR<D: Dialect> {
     pub(super) op_operations: Store<OpId, D::Operations>,
     pub(super) op_signatures: Store<OpId, Signature<D::Types>>,
@@ -226,6 +232,7 @@ impl<D: Dialect> IR<D> {
 
 // Public API
 impl<D: Dialect> IR<D> {
+    /// Creates a new empty IR with no operations or values.
     pub fn empty() -> Self {
         IR {
             op_operations: Store::empty(),
@@ -243,55 +250,88 @@ impl<D: Dialect> IR<D> {
         }
     }
 
+    /// Returns the total number of active operations in the IR.
     pub fn n_ops(&self) -> OpIdRaw {
         self.op_count
     }
 
+    /// Returns `true` if the specified operation ID exists and is active.
     pub fn has_opid(&self, opid: OpId) -> bool {
         self.raw_has_opid(opid) && self.raw_get_op(opid).is_active()
     }
 
+    /// Returns the total number of active values in the IR.
     pub fn n_vals(&self) -> ValIdRaw {
         self.val_count
     }
 
+    /// Returns `true` if the specified value ID exists and is active.
     pub fn has_valid(&self, valid: ValId) -> bool {
         self.raw_has_valid(valid) && self.raw_get_val(valid).is_active()
     }
 
+    /// Returns a reference to the specified active operation.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the operation ID does not exist or refers to an inactive operation.
     pub fn get_op(&self, opid: OpId) -> OpRef<'_, D> {
         let op = self.raw_get_op(opid);
         assert!(op.is_active(), "Tried to get a dead op");
         op
     }
 
+    /// Returns a reference to the specified active value.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the value ID does not exist or refers to an inactive value.
     pub fn get_val(&self, valid: ValId) -> ValRef<'_, D> {
         let val = self.raw_get_val(valid);
         assert!(val.is_active(), "Tried to get a dead val");
         val
     }
 
+    /// Returns an iterator over all active operations in linear order.
+    ///
+    /// Operations are yielded in the order they were added to the IR.
     pub fn walk_ops_linear(&self) -> impl OpWalk<D> {
         self.raw_walk_ops_linear().filter(op_active)
     }
 
+    /// Returns an iterator over all active operations in topological order.
+    ///
+    /// Operations are yielded such that all dependencies of an operation
+    /// are visited before the operation itself.
     pub fn walk_ops_topological(&self) -> impl OpWalk<D> {
         self.raw_walk_ops(self.raw_topological_opwalker())
             .filter(op_active)
     }
 
+    /// Returns an iterator over operations using a custom walker.
+    ///
+    /// The `walker` provides the order in which operation IDs are visited,
+    /// and this method maps those IDs to their corresponding operation references.
     pub fn walk_ops_with(&self, walker: impl OpWalker) -> impl OpWalk<D> {
         walker.map(|opid| self.get_op(opid))
     }
 
+    /// Returns an iterator over all active values in linear order.
+    ///
+    /// Values are yielded in the order they were added to the IR.
     pub fn walk_vals_linear(&self) -> impl ValWalk<D> {
         self.raw_walk_vals_linear().filter(val_active)
     }
 
+    /// Returns an iterator over values using a custom walker.
+    ///
+    /// The `walker` provides the order in which value IDs are visited,
+    /// and this method maps those IDs to their corresponding value references.
     pub fn walk_vals_with(&self, walker: impl ValWalker) -> impl ValWalk<D> {
         walker.map(|valid| self.get_val(valid))
     }
 
+    /// Applies a mutation function to all active operations in linear order.
     pub fn mutate_ops(&mut self, f: impl FnMut(&mut D::Operations)) {
         self.mutate_ops_with_walker(
             self.raw_linear_opwalker()
@@ -301,6 +341,9 @@ impl<D: Dialect> IR<D> {
         );
     }
 
+    /// Applies a mutation function to operations visited by the specified walker.
+    ///
+    /// Only active operations are mutated; inactive operations are skipped.
     pub fn mutate_ops_with_walker(
         &mut self,
         walker: impl OpWalker,
@@ -314,6 +357,16 @@ impl<D: Dialect> IR<D> {
         });
     }
 
+    /// Adds a new operation to the IR with the specified arguments.
+    ///
+    /// Returns the ID of the created operation and the IDs of its return values.
+    /// The operation's signature is validated against the argument types, and
+    /// use-def chains are automatically updated.
+    ///
+    /// # Panics
+    ///
+    /// Panics if any argument value ID is invalid or inactive, or if depth
+    /// computation overflows.
     pub fn add_op(
         &mut self,
         op: D::Operations,
@@ -453,6 +506,10 @@ impl<D: Dialect> IR<D> {
         new_mut.append(old_mut);
     }
 
+    /// Deletes multiple operations in dependency-safe order.
+    ///
+    /// Operations are deleted in reverse topological order to ensure that
+    /// dependencies are deleted before their users.
     pub fn batch_delete_op(&mut self, opids: impl OpWalker) {
         let mut batch: Vec<_> = opids
             .map(|opid| (opid, self.get_op(opid).get_depth()))
@@ -492,15 +549,26 @@ impl<D: Dialect> IR<D> {
     }
 
     /// Dump the IR and stop the program.
+    /// Prints the IR to stdout and panics.
+    ///
+    /// This is a debugging utility that displays the current IR state
+    /// before terminating the program.
     pub fn dump(&self) {
         println!("{}", self);
         panic!();
     }
 
+    /// Verifies that the IR matches the expected string representation.
+    ///
+    /// Uses topological ordering for comparison. Panics if the representations
+    /// don't match after normalizing whitespace.
     pub fn check_ir(&self, expected: &str) {
         self.check_ir_gen(PrintWalker::Topo, expected);
     }
 
+    /// Verifies that the IR matches the expected string representation using linear ordering.
+    ///
+    /// Similar to `check_ir` but uses linear ordering instead of topological.
     pub fn check_ir_linear(&self, expected: &str) {
         self.check_ir_gen(PrintWalker::Linear, expected);
     }
@@ -517,34 +585,50 @@ impl<D: Dialect> IR<D> {
         }
     }
 
+    /// Creates an empty operation map for this IR.
     pub fn empty_opmap<V>(&self) -> OpMap<V> {
         OpMap::new_empty(self)
     }
 
+    /// Creates an operation map filled with the specified value for all operations.
     pub fn filled_opmap<V: Clone>(&self, v: V) -> OpMap<V> {
         OpMap::new_filled(self, v)
     }
 
+    /// Creates an operation map by applying a function to each operation.
+    ///
+    /// The function returns `None` for operations that should not have entries.
     pub fn partially_mapped_opmap<V>(&self, f: impl FnMut(OpRef<D>) -> Option<V>) -> OpMap<V> {
         OpMap::new_partially_mapped(self, f)
     }
 
+    /// Creates an operation map by applying a function to each operation.
+    ///
+    /// All operations will have entries in the resulting map.
     pub fn totally_mapped_opmap<V>(&self, f: impl FnMut(OpRef<D>) -> V) -> OpMap<V> {
         OpMap::new_totally_mapped(self, f)
     }
 
+    /// Creates an empty value map for this IR.
     pub fn empty_valmap<V>(&self) -> ValMap<V> {
         ValMap::new_empty(self)
     }
 
+    /// Creates a value map filled with the specified value for all values.
     pub fn filled_valmap<V: Clone>(&self, v: V) -> ValMap<V> {
         ValMap::new_filled(self, v)
     }
 
+    /// Creates a value map by applying a function to each value.
+    ///
+    /// The function returns `None` for values that should not have entries.
     pub fn partially_mapped_valmap<V>(&self, f: impl FnMut(ValRef<D>) -> Option<V>) -> ValMap<V> {
         ValMap::new_partially_mapped(self, f)
     }
 
+    /// Creates a value map by applying a function to each value.
+    ///
+    /// All values will have entries in the resulting map.
     pub fn totally_mapped_valmap<V>(&self, f: impl FnMut(ValRef<D>) -> V) -> ValMap<V> {
         ValMap::new_totally_mapped(self, f)
     }

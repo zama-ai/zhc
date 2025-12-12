@@ -1,4 +1,6 @@
+/// Checks if all elements in an iterator are equal to each other.
 pub trait AllEq {
+    /// Returns `Some(true)` if all elements are equal, `Some(false)` if not, or `None` for empty iterators.
     fn all_eq(self) -> Option<bool>;
 }
 

@@ -5,6 +5,7 @@ use crate::Dispatch;
 
 use super::*;
 
+/// Alu Processing Element
 #[derive(Debug, Serialize)]
 pub struct PeAlu {
     queue: Fifo<DOp>,
@@ -14,6 +15,9 @@ pub struct PeAlu {
 }
 
 impl PeAlu {
+    /// Creates a new ALU processing element with the specified parameters.
+    ///
+    /// The ALU is initialized with the given `queue_capacity`, `read_latency`, and `write_latency`.
     pub fn new(
         fifo_capacity: usize,
         read_latency: ConstantLatency,

@@ -16,6 +16,7 @@ fn default_pbs_timeout() -> usize {
     100_000
 }
 
+/// Number Theoretic Transform parameters for cryptographic operations.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct NttParams {
     total_pbs_nb: usize,
@@ -26,6 +27,7 @@ pub struct NttParams {
     ct_width: usize,
 }
 
+/// Instruction scheduler configuration parameters.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct IscParams {
     depth: usize,
@@ -33,11 +35,13 @@ pub struct IscParams {
     query_period: usize,
 }
 
+/// Register file configuration parameters.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct RegfParams {
     coef_nb: usize,
 }
 
+/// Programmable bootstrapping configuration parameters.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct PbsParams {
     polynomial_size: usize,
@@ -48,17 +52,20 @@ pub struct PbsParams {
     timeout: usize,
 }
 
+/// Processing core memory interface parameters.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct PcParams {
     pem_pc: usize,
     pem_bytes_w: usize,
 }
 
+/// Key switching operation parameters.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct KsParams {
     lbx: usize,
 }
 
+/// High-level physical configuration containing all subsystem parameters.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct PhysicalConfig {
     #[serde(default = "default_freq")]
@@ -74,52 +81,62 @@ pub struct PhysicalConfig {
 }
 
 impl PhysicalConfig {
+    /// Returns a 44-bit Gaussian noise configuration preset.
     pub fn gaussian_44b() -> Self {
         let toml_string = include_str!("gaussian_44b.toml");
         toml::from_str(toml_string).unwrap()
     }
 
+    /// Returns a fast 44-bit Gaussian noise configuration preset.
     pub fn gaussian_44b_fast() -> Self {
         let toml_string = include_str!("gaussian_44b_fast.toml");
         toml::from_str(toml_string).unwrap()
     }
 
+    /// Returns a 64-bit Gaussian noise configuration preset.
     pub fn gaussian_64b() -> Self {
         let toml_string = include_str!("gaussian_64b.toml");
         toml::from_str(toml_string).unwrap()
     }
 
+    /// Returns a fast 64-bit Gaussian noise configuration preset.
     pub fn gaussian_64b_fast() -> Self {
         let toml_string = include_str!("gaussian_64b_fast.toml");
         toml::from_str(toml_string).unwrap()
     }
 
+    /// Returns a 64-bit Gaussian configuration with 64-bit failure probability.
     pub fn gaussian_64b_pfail64() -> Self {
         let toml_string = include_str!("gaussian_64b_pfail64.toml");
         toml::from_str(toml_string).unwrap()
     }
 
+    /// Returns a 64-bit Gaussian configuration with 64-bit failure probability and 64-bit psi.
     pub fn gaussian_64b_pfail64_psi64() -> Self {
         let toml_string = include_str!("gaussian_64b_pfail64_psi64.toml");
         toml::from_str(toml_string).unwrap()
     }
 
+    /// Returns a fast 64-bit ternary uniform configuration preset.
     pub fn tuniform_64b_fast() -> Self {
         let toml_string = include_str!("tuniform_64b_fast.toml");
         toml::from_str(toml_string).unwrap()
     }
 
+    /// Returns a 64-bit ternary uniform configuration with 64-bit failure probability and 64-bit psi.
     pub fn tuniform_64b_pfail64_psi64() -> Self {
         let toml_string = include_str!("tuniform_64b_pfail64_psi64.toml");
         toml::from_str(toml_string).unwrap()
     }
 
+    /// Returns a 64-bit ternary uniform configuration with 128-bit failure probability and 64-bit psi.
     pub fn tuniform_64b_pfail128_psi64() -> Self {
         let toml_string = include_str!("tuniform_64b_pfail128_psi64.toml");
         toml::from_str(toml_string).unwrap()
     }
 }
 
+/// Runtime HPU configuration with calculated timing and capacity parameters.
 #[derive(Clone, Debug, Serialize, PartialEq, Eq, Hash)]
 pub struct HpuConfig {
     pub freq: MHz,

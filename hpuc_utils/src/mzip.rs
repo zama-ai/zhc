@@ -1,6 +1,11 @@
+/// Zips multiple iterators together into a single iterator of tuples.
 pub trait MultiZip {
     type Zipped;
 
+    /// Combines multiple iterators into one that yields tuples of their items.
+    ///
+    /// The resulting iterator stops when the shortest input iterator is exhausted.
+    /// All remaining elements from longer iterators are discarded.
     fn mzip(self) -> Self::Zipped;
 }
 macro_rules! impl_multizip {

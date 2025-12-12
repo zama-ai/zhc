@@ -3,7 +3,11 @@ use crate::StackVecIntoIter;
 use std::{hash::Hash, usize};
 use std::fmt::Debug;
 
-/// Iterator that yields elements from a `SmallVec` by value.
+/// Iterator that moves elements out of a `SmallVec` by value.
+///
+/// This iterator is created by calling `into_iter()` on a `SmallVec` and yields
+/// owned elements. It handles both stack-allocated and heap-allocated variants
+/// transparently.
 pub enum SmallVecIntoIter<A> {
     Heap(std::vec::IntoIter<A>),
     Stack(StackVecIntoIter<'static, A>),

@@ -1,3 +1,10 @@
+//! Intermediate representation and optimization framework for compiler infrastructure.
+//!
+//! This crate provides a generic IR framework that supports multiple dialects,
+//! along with common compiler optimizations like dead code elimination and
+//! common subexpression elimination. The IR uses a graph-based representation
+//! with typed operations and values.
+
 pub mod cse;
 pub mod dce;
 pub mod scheduling;
@@ -33,15 +40,21 @@ pub(crate) use val::*;
 pub use val_map::*;
 pub(crate) use val_mut::*;
 
-/// Error use to report IR issue
+/// Errors that can occur during IR construction or manipulation.
 #[derive(Clone, Debug)]
 pub enum IRError<D: Dialect> {
+    /// Operation signature mismatch between expected and received argument types.
     OpSig {
+        /// The operation that caused the signature error.
         op: D::Operations,
+        /// The types that were actually received as arguments.
         recv: Vec<D::Types>,
+        /// The types that were expected as arguments.
         exp: Vec<D::Types>,
     },
+    /// Value cannot be represented with the specified type.
     Range {
+        /// The type that cannot represent the value.
         typ: D::Types,
     },
 }

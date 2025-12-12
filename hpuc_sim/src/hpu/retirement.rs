@@ -1,11 +1,13 @@
 use super::*;
 
+/// Tracks completed operations and manages resource cleanup after execution.
 #[derive(Debug, Default, Serialize)]
 pub struct Retirement {
     dops: Vec<DOp>,
 }
 
 impl Retirement {
+    /// Returns the most recently retired operation, if any.
     pub fn last_retired(&self) -> Option<&DOp> {
         self.dops.last()
     }
