@@ -43,6 +43,261 @@ pub struct Lut4(pub ValId);
 #[derive(Clone, Copy)]
 pub struct Lut8(pub ValId);
 
+/// Enumeration of all available LUT types with their names and arities.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum LutType {
+    None,
+    MsgOnly,
+    CarryOnly,
+    CarryInMsg,
+    MultCarryMsg,
+    MultCarryMsgLsb,
+    MultCarryMsgMsb,
+    BwAnd,
+    BwOr,
+    BwXor,
+    CmpSign,
+    CmpReduce,
+    CmpGt,
+    CmpGte,
+    CmpLt,
+    CmpLte,
+    CmpEq,
+    CmpNeq,
+    ManyGenProp,
+    ReduceCarry2,
+    ReduceCarry3,
+    ReduceCarryPad,
+    GenPropAdd,
+    IfTrueZeroed,
+    IfFalseZeroed,
+    Ripple2GenProp,
+    TestMany2,
+    TestMany4,
+    TestMany8,
+    ManyCarryMsg,
+    CmpGtMrg,
+    CmpGteMrg,
+    CmpLtMrg,
+    CmpLteMrg,
+    CmpEqMrg,
+    CmpNeqMrg,
+    IsSome,
+    CarryIsSome,
+    CarryIsNone,
+    MultCarryMsgIsSome,
+    MultCarryMsgMsbIsSome,
+    IsNull,
+    IsNullPos1,
+    NotNull,
+    MsgNotNull,
+    MsgNotNullPos1,
+    ManyMsgSplitShift1,
+    SolvePropGroupFinal0,
+    SolvePropGroupFinal1,
+    SolvePropGroupFinal2,
+    ExtractPropGroup0,
+    ExtractPropGroup1,
+    ExtractPropGroup2,
+    ExtractPropGroup3,
+    SolveProp,
+    SolvePropCarry,
+    SolveQuotient,
+    SolveQuotientPos1,
+    IfPos1FalseZeroed,
+    IfPos1FalseZeroedMsgCarry1,
+    ShiftLeftByCarryPos0Msg,
+    ShiftLeftByCarryPos0MsgNext,
+    ShiftRightByCarryPos0Msg,
+    ShiftRightByCarryPos0MsgNext,
+    IfPos0TrueZeroed,
+    IfPos0FalseZeroed,
+    IfPos1TrueZeroed,
+    ManyInv1CarryMsg,
+    ManyInv2CarryMsg,
+    ManyInv3CarryMsg,
+    ManyInv4CarryMsg,
+    ManyInv5CarryMsg,
+    ManyInv6CarryMsg,
+    ManyInv7CarryMsg,
+    ManyMsgSplit,
+    Manym2lPropBit1MsgSplit,
+    Manym2lPropBit0MsgSplit,
+    Manyl2mPropBit1MsgSplit,
+    Manyl2mPropBit0MsgSplit,
+}
+
+impl LutType {
+    /// Returns the string name associated with this LUT type.
+    pub fn name(&self) -> &'static str {
+        match self {
+            LutType::None => "None",
+            LutType::MsgOnly => "MsgOnly",
+            LutType::CarryOnly => "CarryOnly",
+            LutType::CarryInMsg => "CarryInMsg",
+            LutType::MultCarryMsg => "MultCarryMsg",
+            LutType::MultCarryMsgLsb => "MultCarryMsgLsb",
+            LutType::MultCarryMsgMsb => "MultCarryMsgMsb",
+            LutType::BwAnd => "BwAnd",
+            LutType::BwOr => "BwOr",
+            LutType::BwXor => "BwXor",
+            LutType::CmpSign => "CmpSign",
+            LutType::CmpReduce => "CmpReduce",
+            LutType::CmpGt => "CmpGt",
+            LutType::CmpGte => "CmpGte",
+            LutType::CmpLt => "CmpLt",
+            LutType::CmpLte => "CmpLte",
+            LutType::CmpEq => "CmpEq",
+            LutType::CmpNeq => "CmpNeq",
+            LutType::ManyGenProp => "ManyGenProp",
+            LutType::ReduceCarry2 => "ReduceCarry2",
+            LutType::ReduceCarry3 => "ReduceCarry3",
+            LutType::ReduceCarryPad => "ReduceCarryPad",
+            LutType::GenPropAdd => "GenPropAdd",
+            LutType::IfTrueZeroed => "IfTrueZeroed",
+            LutType::IfFalseZeroed => "IfFalseZeroed",
+            LutType::Ripple2GenProp => "Ripple2GenProp",
+            LutType::TestMany2 => "TestMany2",
+            LutType::TestMany4 => "TestMany4",
+            LutType::TestMany8 => "TestMany8",
+            LutType::ManyCarryMsg => "ManyCarryMsg",
+            LutType::CmpGtMrg => "CmpGtMrg",
+            LutType::CmpGteMrg => "CmpGteMrg",
+            LutType::CmpLtMrg => "CmpLtMrg",
+            LutType::CmpLteMrg => "CmpLteMrg",
+            LutType::CmpEqMrg => "CmpEqMrg",
+            LutType::CmpNeqMrg => "CmpNeqMrg",
+            LutType::IsSome => "IsSome",
+            LutType::CarryIsSome => "CarryIsSome",
+            LutType::CarryIsNone => "CarryIsNone",
+            LutType::MultCarryMsgIsSome => "MultCarryMsgIsSome",
+            LutType::MultCarryMsgMsbIsSome => "MultCarryMsgMsbIsSome",
+            LutType::IsNull => "IsNull",
+            LutType::IsNullPos1 => "IsNullPos1",
+            LutType::NotNull => "NotNull",
+            LutType::MsgNotNull => "MsgNotNull",
+            LutType::MsgNotNullPos1 => "MsgNotNullPos1",
+            LutType::ManyMsgSplitShift1 => "ManyMsgSplitShift1",
+            LutType::SolvePropGroupFinal0 => "SolvePropGroupFinal0",
+            LutType::SolvePropGroupFinal1 => "SolvePropGroupFinal1",
+            LutType::SolvePropGroupFinal2 => "SolvePropGroupFinal2",
+            LutType::ExtractPropGroup0 => "ExtractPropGroup0",
+            LutType::ExtractPropGroup1 => "ExtractPropGroup1",
+            LutType::ExtractPropGroup2 => "ExtractPropGroup2",
+            LutType::ExtractPropGroup3 => "ExtractPropGroup3",
+            LutType::SolveProp => "SolveProp",
+            LutType::SolvePropCarry => "SolvePropCarry",
+            LutType::SolveQuotient => "SolveQuotient",
+            LutType::SolveQuotientPos1 => "SolveQuotientPos1",
+            LutType::IfPos1FalseZeroed => "IfPos1FalseZeroed",
+            LutType::IfPos1FalseZeroedMsgCarry1 => "IfPos1FalseZeroedMsgCarry1",
+            LutType::ShiftLeftByCarryPos0Msg => "ShiftLeftByCarryPos0Msg",
+            LutType::ShiftLeftByCarryPos0MsgNext => "ShiftLeftByCarryPos0MsgNext",
+            LutType::ShiftRightByCarryPos0Msg => "ShiftRightByCarryPos0Msg",
+            LutType::ShiftRightByCarryPos0MsgNext => "ShiftRightByCarryPos0MsgNext",
+            LutType::IfPos0TrueZeroed => "IfPos0TrueZeroed",
+            LutType::IfPos0FalseZeroed => "IfPos0FalseZeroed",
+            LutType::IfPos1TrueZeroed => "IfPos1TrueZeroed",
+            LutType::ManyInv1CarryMsg => "ManyInv1CarryMsg",
+            LutType::ManyInv2CarryMsg => "ManyInv2CarryMsg",
+            LutType::ManyInv3CarryMsg => "ManyInv3CarryMsg",
+            LutType::ManyInv4CarryMsg => "ManyInv4CarryMsg",
+            LutType::ManyInv5CarryMsg => "ManyInv5CarryMsg",
+            LutType::ManyInv6CarryMsg => "ManyInv6CarryMsg",
+            LutType::ManyInv7CarryMsg => "ManyInv7CarryMsg",
+            LutType::ManyMsgSplit => "ManyMsgSplit",
+            LutType::Manym2lPropBit1MsgSplit => "Manym2lPropBit1MsgSplit",
+            LutType::Manym2lPropBit0MsgSplit => "Manym2lPropBit0MsgSplit",
+            LutType::Manyl2mPropBit1MsgSplit => "Manyl2mPropBit1MsgSplit",
+            LutType::Manyl2mPropBit0MsgSplit => "Manyl2mPropBit0MsgSplit",
+        }
+    }
+
+    /// Returns the arity for this LUT type.
+    pub fn arity(&self) -> usize {
+        match self {
+            LutType::None => 1,
+            LutType::MsgOnly => 1,
+            LutType::CarryOnly => 1,
+            LutType::CarryInMsg => 1,
+            LutType::MultCarryMsg => 1,
+            LutType::MultCarryMsgLsb => 1,
+            LutType::MultCarryMsgMsb => 1,
+            LutType::BwAnd => 1,
+            LutType::BwOr => 1,
+            LutType::BwXor => 1,
+            LutType::CmpSign => 1,
+            LutType::CmpReduce => 1,
+            LutType::CmpGt => 1,
+            LutType::CmpGte => 1,
+            LutType::CmpLt => 1,
+            LutType::CmpLte => 1,
+            LutType::CmpEq => 1,
+            LutType::CmpNeq => 1,
+            LutType::ManyGenProp => 2,
+            LutType::ReduceCarry2 => 1,
+            LutType::ReduceCarry3 => 1,
+            LutType::ReduceCarryPad => 1,
+            LutType::GenPropAdd => 1,
+            LutType::IfTrueZeroed => 1,
+            LutType::IfFalseZeroed => 1,
+            LutType::Ripple2GenProp => 1,
+            LutType::TestMany2 => 2,
+            LutType::TestMany4 => 4,
+            LutType::TestMany8 => 8,
+            LutType::ManyCarryMsg => 2,
+            LutType::CmpGtMrg => 1,
+            LutType::CmpGteMrg => 1,
+            LutType::CmpLtMrg => 1,
+            LutType::CmpLteMrg => 1,
+            LutType::CmpEqMrg => 1,
+            LutType::CmpNeqMrg => 1,
+            LutType::IsSome => 1,
+            LutType::CarryIsSome => 1,
+            LutType::CarryIsNone => 1,
+            LutType::MultCarryMsgIsSome => 1,
+            LutType::MultCarryMsgMsbIsSome => 1,
+            LutType::IsNull => 1,
+            LutType::IsNullPos1 => 1,
+            LutType::NotNull => 1,
+            LutType::MsgNotNull => 1,
+            LutType::MsgNotNullPos1 => 1,
+            LutType::ManyMsgSplitShift1 => 2,
+            LutType::SolvePropGroupFinal0 => 1,
+            LutType::SolvePropGroupFinal1 => 1,
+            LutType::SolvePropGroupFinal2 => 1,
+            LutType::ExtractPropGroup0 => 1,
+            LutType::ExtractPropGroup1 => 1,
+            LutType::ExtractPropGroup2 => 1,
+            LutType::ExtractPropGroup3 => 1,
+            LutType::SolveProp => 1,
+            LutType::SolvePropCarry => 1,
+            LutType::SolveQuotient => 1,
+            LutType::SolveQuotientPos1 => 1,
+            LutType::IfPos1FalseZeroed => 1,
+            LutType::IfPos1FalseZeroedMsgCarry1 => 1,
+            LutType::ShiftLeftByCarryPos0Msg => 1,
+            LutType::ShiftLeftByCarryPos0MsgNext => 1,
+            LutType::ShiftRightByCarryPos0Msg => 1,
+            LutType::ShiftRightByCarryPos0MsgNext => 1,
+            LutType::IfPos0TrueZeroed => 1,
+            LutType::IfPos0FalseZeroed => 1,
+            LutType::IfPos1TrueZeroed => 1,
+            LutType::ManyInv1CarryMsg => 2,
+            LutType::ManyInv2CarryMsg => 2,
+            LutType::ManyInv3CarryMsg => 2,
+            LutType::ManyInv4CarryMsg => 2,
+            LutType::ManyInv5CarryMsg => 2,
+            LutType::ManyInv6CarryMsg => 2,
+            LutType::ManyInv7CarryMsg => 2,
+            LutType::ManyMsgSplit => 2,
+            LutType::Manym2lPropBit1MsgSplit => 2,
+            LutType::Manym2lPropBit0MsgSplit => 2,
+            LutType::Manyl2mPropBit1MsgSplit => 2,
+            LutType::Manyl2mPropBit0MsgSplit => 2,
+        }
+    }
+}
 /// Builder for constructing homomorphic encryption circuits.
 pub struct Builder {
     config: IntegerConfig,
@@ -83,6 +338,11 @@ impl Builder {
         &self.ir
     }
 
+    /// Dumps the ir.
+    pub fn dump(&self) {
+        self.ir.dump();
+    }
+
     fn get_input_ctr(&mut self) -> usize {
         let new = self.input_ctr + 1;
         std::mem::replace(&mut self.input_ctr, new)
@@ -93,14 +353,19 @@ impl Builder {
         std::mem::replace(&mut self.output_ctr, new)
     }
 
-    /// Declares a 1-LUT with the given `name` and function `f`.
-    pub fn decl_lut(&mut self, name: &str, f: impl Fn(u8) -> u8 + 'static) -> Lut {
+    /// Returns a handle to the specified 1-LUT in the circuit.
+    pub fn get_lut(&mut self, lut: LutType) -> Lut {
+        assert_eq!(lut.arity(), 1);
+        self.decl_lut(lut.name())
+    }
+
+    fn decl_lut(&mut self, name: &str) -> Lut {
         let (_node, ret) = self
             .ir
             .add_op(
                 Operations::GenerateLut {
                     name: name.into(),
-                    gene: LutGenerator::new(f),
+                    gene: LutGenerator::new(|a| a),
                 },
                 svec![],
             )
@@ -108,19 +373,22 @@ impl Builder {
         Lut(ret[0])
     }
 
-    /// Declares a 2-LUT with the given `name` and functions `f1`, `f2`.
-    pub fn decl_lut2(
+    /// Returns a handle to the specified 2-LUT in the circuit.
+    pub fn get_lut2(&mut self, lut: LutType) -> Lut2 {
+        assert_eq!(lut.arity(), 2);
+        self.decl_lut2(lut.name())
+    }
+
+    fn decl_lut2(
         &mut self,
         name: &str,
-        f1: impl Fn(u8) -> u8 + 'static,
-        f2: impl Fn(u8) -> u8 + 'static,
     ) -> Lut2 {
         let (_node, ret) = self
             .ir
             .add_op(
                 Operations::GenerateLut2 {
                     name: name.into(),
-                    gene: [LutGenerator::new(f1), LutGenerator::new(f2)],
+                    gene: [LutGenerator::new(|a| a), LutGenerator::new(|a| a)],
                 },
                 svec![],
             )
@@ -128,14 +396,15 @@ impl Builder {
         Lut2(ret[0])
     }
 
-    /// Declares a 4-LUT with the given `name` and functions.
-    pub fn decl_lut4(
+    /// Returns a handle to the specified 4-LUT in the circuit.
+    pub fn get_lut4(&mut self, lut: LutType) -> Lut4 {
+        assert_eq!(lut.arity(), 4);
+        self.decl_lut4(lut.name())
+    }
+
+    fn decl_lut4(
         &mut self,
         name: &str,
-        f1: impl Fn(u8) -> u8 + 'static,
-        f2: impl Fn(u8) -> u8 + 'static,
-        f3: impl Fn(u8) -> u8 + 'static,
-        f4: impl Fn(u8) -> u8 + 'static,
     ) -> Lut4 {
         let (_node, ret) = self
             .ir
@@ -143,10 +412,10 @@ impl Builder {
                 Operations::GenerateLut4 {
                     name: name.into(),
                     gene: [
-                        LutGenerator::new(f1),
-                        LutGenerator::new(f2),
-                        LutGenerator::new(f3),
-                        LutGenerator::new(f4),
+                        LutGenerator::new(|a| a),
+                        LutGenerator::new(|a| a),
+                        LutGenerator::new(|a| a),
+                        LutGenerator::new(|a| a),
                     ],
                 },
                 svec![],
@@ -155,18 +424,15 @@ impl Builder {
         Lut4(ret[0])
     }
 
-    /// Declares an 8-LUT with the given `name` and functions.
-    pub fn decl_lut8(
+    /// Returns a handle to the specified 8-LUT in the circuit.
+    pub fn get_lut8(&mut self, lut: LutType) -> Lut8 {
+        assert_eq!(lut.arity(), 8);
+        self.decl_lut8(lut.name())
+    }
+
+    fn decl_lut8(
         &mut self,
         name: &str,
-        f1: impl Fn(u8) -> u8 + 'static,
-        f2: impl Fn(u8) -> u8 + 'static,
-        f3: impl Fn(u8) -> u8 + 'static,
-        f4: impl Fn(u8) -> u8 + 'static,
-        f5: impl Fn(u8) -> u8 + 'static,
-        f6: impl Fn(u8) -> u8 + 'static,
-        f7: impl Fn(u8) -> u8 + 'static,
-        f8: impl Fn(u8) -> u8 + 'static,
     ) -> Lut8 {
         let (_node, ret) = self
             .ir
@@ -174,14 +440,14 @@ impl Builder {
                 Operations::GenerateLut8 {
                     name: name.into(),
                     gene: [
-                        LutGenerator::new(f1),
-                        LutGenerator::new(f2),
-                        LutGenerator::new(f3),
-                        LutGenerator::new(f4),
-                        LutGenerator::new(f5),
-                        LutGenerator::new(f6),
-                        LutGenerator::new(f7),
-                        LutGenerator::new(f8),
+                        LutGenerator::new(|a| a),
+                        LutGenerator::new(|a| a),
+                        LutGenerator::new(|a| a),
+                        LutGenerator::new(|a| a),
+                        LutGenerator::new(|a| a),
+                        LutGenerator::new(|a| a),
+                        LutGenerator::new(|a| a),
+                        LutGenerator::new(|a| a),
                     ],
                 },
                 svec![],
@@ -316,7 +582,7 @@ impl Builder {
     /// consecutive blocks into one using multiply-accumulate and PBS operations.
     pub fn pack(&mut self, blocks: SmallVec<CiphertextBlock>) -> SmallVec<CiphertextBlock> {
         let shift = self.constant(2usize.pow(self.config.message_width as u32));
-        let lut_none = self.decl_lut("None", |a| a);
+        let lut_none = self.get_lut(LutType::None);
         blocks
             .into_iter()
             .chunk(2)
