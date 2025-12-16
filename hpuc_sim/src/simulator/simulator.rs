@@ -4,7 +4,7 @@ use super::*;
 use hpuc_utils::tracing::Microseconds;
 use std::path::Path;
 
-static ACTIVATE_TRACING: bool = false;
+static ACTIVATE_TRACING: bool = cfg!(debug_assertions);
 static S_IN_US: f64 = 1_000_000.;
 
 /// Represents a frequency in megahertz for simulation timing.
@@ -161,13 +161,35 @@ where
     /// Runs the simulation until the specified `event` is encountered.
     pub fn play_until_event(&mut self, event: S::Event) {
         let event_eq = |trig: &Trigger<S::Event>| -> bool { trig.event == event };
-        while let SimulationState::MayContinue = self.step_cond(event_eq) {}
+        loop {
+            match self.step_cond(event_eq) {
+                SimulationState::MayContinue => {},
+                SimulationState::CondEncountered => return,
+                SimulationState::SimulationOver => {
+                    if ACTIVATE_TRACING {
+                        self.dump_trace("test.json");
+                    }
+                    panic!("Simulation finished while waiting for an event.")
+                },
+            }
+        }
     }
 
     /// Runs the simulation until the given condition function `f` returns true for an event.
     pub fn play_until(&mut self, f: impl Fn(&S::Event) -> bool) {
         let event_cond = |trig: &Trigger<S::Event>| -> bool { f(&trig.event) };
-        while let SimulationState::MayContinue = self.step_cond(event_cond) {}
+        loop {
+            match self.step_cond(event_cond) {
+                SimulationState::MayContinue => {},
+                SimulationState::CondEncountered => return,
+                SimulationState::SimulationOver => {
+                    if ACTIVATE_TRACING {
+                        self.dump_trace("test.json");
+                    }
+                    panic!("Simulation finished while waiting for an event.")
+                },
+            }
+        }
     }
 
     /// Writes simulation trace data to the specified file `path`.
@@ -178,6 +200,11 @@ where
     /// Returns a reference to the simulatable component.
     pub fn simulatable(&self) -> &S {
         &self.simulatable
+    }
+
+    /// Returns a mutable reference to the simulatable component.
+    pub fn simulatable_mut(&mut self) -> &mut S {
+        &mut self.simulatable
     }
 }
 

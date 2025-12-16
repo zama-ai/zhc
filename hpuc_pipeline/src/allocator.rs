@@ -662,8 +662,11 @@ impl<'ir> Allocator<'ir> {
                 }
             }
 
-            // println!("{}", op);
-            // println!("{}: {}", self.point, self.register_file);
+            #[cfg(debug_assertions)]
+            {
+                println!("{}", op);
+                println!("{}: {}", self.point, self.register_file);
+            }
 
             self.register_file.use_fresh();
             self.register_file
@@ -955,14 +958,11 @@ mod test {
             %50 : Ctx = ADDS<R(1), R(0), PT_I(1)>(%49);
             %51 : Ctx = MAC<R(0), R(3), R(4), PT_I(4)>(%50);
             %52 : Ctx = MAC<R(3), R(1), R(2), PT_I(4)>(%51);
-            %53 : Ctx = PBS<R(1), R(0), LUT(0)>(%52);
-            %54 : Ctx = PBSF<R(0), R(3), LUT(0)>(%53);
-            %55 : Ctx = PBSF<R(2), R(1), LUT(11)>(%54);
-            %56 : Ctx = PBSF<R(1), R(0), LUT(11)>(%55);
-            %57 : Ctx = MAC<R(0), R(1), R(2), PT_I(4)>(%56);
-            %58 : Ctx = PBSF<R(1), R(0), LUT(0)>(%57);
-            %59 : Ctx = PBSF<R(0), R(1), LUT(27)>(%58);
-            %60 : Ctx = ST<TC(0, 0), R(0)>(%59);
+            %53 : Ctx = PBS<R(1), R(0), LUT(11)>(%52);
+            %54 : Ctx = PBSF<R(0), R(3), LUT(11)>(%53);
+            %55 : Ctx = MAC<R(2), R(0), R(1), PT_I(4)>(%54);
+            %56 : Ctx = PBSF<R(0), R(2), LUT(27)>(%55);
+            %57 : Ctx = ST<TC(0, 0), R(0)>(%56);
             ",
         );
     }

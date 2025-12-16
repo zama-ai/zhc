@@ -502,25 +502,25 @@ impl Simulatable for InstructionScheduler {
                 if self.has_read_unlocks() {
                     let opid = self.read_unlock_buffer.pop_front().unwrap();
                     self.pool.read_unlock(opid);
-                    dispatcher.dispatch_now(Events::IscNotify(opid, IscCommand::RdUnlock));
+                    dispatcher.dispatch_now(Events::NotifyIsc(opid, IscCommand::RdUnlock));
                     dispatcher.dispatch_after_if_no_there(self.query_period, Events::IscQuery);
                 } else if self.pool.slots_available() && self.has_pending_dops() {
                     let dop = self.front_buffer.pop_front().unwrap();
                     // Used ?
                     dispatcher.dispatch_now(Events::IscRefillDOp(dop.clone()));
-                    dispatcher.dispatch_now(Events::IscNotify(dop.id, IscCommand::Refill));
+                    dispatcher.dispatch_now(Events::NotifyIsc(dop.id, IscCommand::Refill));
                     self.pool.refill(dop);
                     dispatcher.dispatch_after_if_no_there(self.query_period, Events::IscQuery);
                 } else if self.has_write_unlocks() {
                     let opid = self.write_unlock_buffer.pop_front().unwrap();
                     self.pool.write_unlock(opid);
                     let dop = self.pool.retire(opid);
-                    dispatcher.dispatch_now(Events::IscNotify(opid, IscCommand::Retire));
+                    dispatcher.dispatch_now(Events::NotifyIsc(opid, IscCommand::Retire));
                     dispatcher.dispatch_now(Events::IscRetireDOp(dop));
                     dispatcher.dispatch_after_if_no_there(self.query_period, Events::IscQuery);
                 } else if self.may_issue() {
                     if let Some(dop) = self.pool.get_issuable(self.get_filter()) {
-                        dispatcher.dispatch_now(Events::IscNotify(dop.id, IscCommand::Issue));
+                        dispatcher.dispatch_now(Events::NotifyIsc(dop.id, IscCommand::Issue));
                         dispatcher.dispatch_now(Events::IscIssueDOp(dop));
                         dispatcher.dispatch_after_if_no_there(self.query_period, Events::IscQuery);
                     }
