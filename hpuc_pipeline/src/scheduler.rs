@@ -18,10 +18,11 @@ use hpuc_langs::{
     hpulang::Hpulang,
 };
 use hpuc_sim::{
-    Cycle, Simulator,
+    Cycle, Simulatable, Simulator,
     hpu::{DOp, DOpId, Events, Hpu, HpuConfig, RawDOp},
 };
 use hpuc_utils::{MultiZip, SmallSet, SmallVec, StoreIndex};
+use serde::Serialize;
 
 /// Schedules operations in the IR for optimal execution on the target HPU.
 ///
@@ -68,8 +69,46 @@ pub fn schedule<'a, 'b>(ir: &'a IR<Hpulang>, config: &'b HpuConfig) -> IR<Hpulan
     output
 }
 
+#[derive(Serialize)]
+struct Timeouter(Option<DOpId>);
+
+impl Timeouter {
+    pub fn new() -> Self {
+        Timeouter(None)
+    }
+
+    pub fn timeout(&mut self, dopid: DOpId) {
+        assert!(std::mem::replace(&mut self.0, Some(dopid)).is_none())
+    }
+
+    pub fn did_timeout(&self) -> bool {
+        self.0.is_some()
+    }
+
+    pub fn acknowledge(&mut self) -> DOpId {
+        std::mem::replace(&mut self.0, None).unwrap()
+    }
+}
+
+impl Simulatable for Timeouter {
+    type Event = Events;
+
+    fn handle(
+        &mut self,
+        _: &mut impl hpuc_sim::Dispatch<Event = Self::Event>,
+        trigger: hpuc_sim::Trigger<Self::Event>,
+    ) {
+        match trigger.event {
+            Events::NotifyStartOnTimeout { last_in } => {
+                self.timeout(last_in.id);
+            }
+            _ => {}
+        }
+    }
+}
+
 struct Scheduler<'ir> {
-    simulator: Simulator<Hpu>,
+    simulator: Simulator<(Hpu, Timeouter)>,
     ir: &'ir IR<Hpulang>,
     affinities: OpMap<Affinity>,
     priorities: OpMap<Depth>,
@@ -77,15 +116,15 @@ struct Scheduler<'ir> {
     alu_buffer: Vec<OpId>,
     pbs_buffer: Vec<OpId>,
     should_flush: SmallSet<OpId>,
-    last_pbs: Option<(OpId, Cycle)>,
+    last_pbs_submitted: Option<OpId>,
 }
 
 impl<'ir> Scheduler<'ir> {
     pub fn init(ir: &'ir IR<Hpulang>, config: &HpuConfig) -> Scheduler<'ir> {
         use hpuc_langs::hpulang::Operations::*;
-        let mut config = config.to_owned();
-        config.pbs_timeout = config.pbs_timeout * 10usize;
-        let simulator = Simulator::from_simulatable(config.freq, Hpu::new(&config));
+        let config = config.to_owned();
+        let simulator =
+            Simulator::from_simulatable(config.freq, (Hpu::new(&config), Timeouter::new()));
         let affinities = ir.totally_mapped_opmap(|op| match op.get_operation() {
             AddCt => Affinity::Alu,
             SubCt => Affinity::Alu,
@@ -120,12 +159,12 @@ impl<'ir> Scheduler<'ir> {
             alu_buffer: Vec::new(),
             pbs_buffer: Vec::new(),
             should_flush: SmallSet::new(),
-            last_pbs: None,
+            last_pbs_submitted: None,
         }
     }
 
     pub fn into_should_flush(mut self) -> SmallSet<OpId> {
-        if let Some((last_pbs_opid, _last_pbs_cycle)) = self.last_pbs {
+        if let Some(last_pbs_opid) = self.last_pbs_submitted {
             self.should_flush.insert(last_pbs_opid);
         }
         self.should_flush
@@ -139,7 +178,7 @@ impl<'ir> ForwardSimulator for Scheduler<'ir> {
         &mut self,
         ready: impl Iterator<Item = Ready>,
     ) -> impl Iterator<Item = Selected> + '_ {
-        let hpu = self.simulator.simulatable();
+        let (hpu, _) = self.simulator.simulatable();
 
         let mut output = SmallVec::new();
 
@@ -162,22 +201,22 @@ impl<'ir> ForwardSimulator for Scheduler<'ir> {
             .sort_unstable_by_key(|a| self.priorities[*a]);
 
         // PEA Scheduling
-        if let Some(val) = self.alu_buffer.first()
+        if let Some(op) = self.alu_buffer.first()
             && hpu.pe_alu.available()
         {
-            output.push(Selected(*val));
+            output.push(Selected(*op));
         }
         // PEM Scheduling
-        if let Some(val) = self.mem_buffer.first()
+        if let Some(op) = self.mem_buffer.first()
             && hpu.pe_mem.available()
         {
-            output.push(Selected(*val));
+            output.push(Selected(*op));
         }
         // PEP Scheduling
-        if let Some(val) = self.pbs_buffer.first()
+        if let Some(op) = self.pbs_buffer.first()
             && hpu.pe_pbs.available()
         {
-            output.push(Selected(*val));
+            output.push(Selected(*op));
 
             // Flush policy.
             let size_of_last_waiting_batch = hpu
@@ -187,19 +226,8 @@ impl<'ir> ForwardSimulator for Scheduler<'ir> {
                 .iter()
                 .fold(0, |acc, a| if a.raw.is_pbs_flush() { 0 } else { acc + 1 });
             if size_of_last_waiting_batch >= hpu.config.pbs_min_batch_size - 1 {
-                self.should_flush.insert(*val);
+                self.should_flush.insert(*op);
             }
-
-            if let Some((last_pbs_opid, last_pbs_cycle)) = self.last_pbs {
-                let span_since_last = self.simulator.now() - last_pbs_cycle;
-                if span_since_last > hpu.config.pbs_timeout
-                    && !self.should_flush.contains(&last_pbs_opid)
-                {
-                    // Timeout was reached, which means that last_pbs should have been a flush...
-                    self.should_flush.insert(last_pbs_opid);
-                }
-            }
-            self.last_pbs = Some((*val, self.simulator.now()));
         }
 
         // Dispatch the selected operations on the simulator .
@@ -220,13 +248,12 @@ impl<'ir> ForwardSimulator for Scheduler<'ir> {
     fn advance(&mut self) -> impl Iterator<Item = Retired> {
         self.simulator
             .play_until(|e| matches!(e, Events::IscRetireDOp(_)));
-        let retired_opid = self
-            .simulator
-            .simulatable()
-            .retirement
-            .last_retired()
-            .unwrap()
-            .id;
+        let (_, timeout) = self.simulator.simulatable_mut();
+        if timeout.did_timeout() {
+            self.should_flush.insert(OpId::from_usize(timeout.acknowledge().0));
+        }
+        let (hpu, _) = self.simulator.simulatable();
+        let retired_opid = hpu.retirement.last_retired().unwrap().id;
         std::iter::once(Retired(OpId::from_usize(retired_opid.0)))
     }
 }
@@ -343,7 +370,7 @@ mod test {
 
     fn pipeline(ir: &IR<Ioplang>) -> IR<Hpulang> {
         let ir = IoplangToHpulang.translate(&ir);
-        let config = HpuConfig::from(PhysicalConfig::gaussian_64b_fast());
+        let config = HpuConfig::from(PhysicalConfig::gaussian_64b());
         schedule(&ir, &config)
     }
 
@@ -447,7 +474,7 @@ mod test {
             %28 : CtRegister = pbs<Lut@0>(%25);
             %29 : CtRegister = mac<4_imm>(%22, %21);
             %30 : CtRegister = pbs<Lut@0>(%27);
-            %31 : CtRegister = pbs<Lut@0>(%29);
+            %31 : CtRegister = pbs_f<Lut@0>(%29);
             %32 : CtRegister = sub_ct(%8, %26);
             %33 : CtRegister = sub_ct(%14, %28);
             %34 : CtRegister = pbs<Lut@10>(%32);
@@ -462,14 +489,11 @@ mod test {
             %43 : CtRegister = add_cst<1_imm>(%39);
             %44 : CtRegister = mac<4_imm>(%41, %40);
             %45 : CtRegister = mac<4_imm>(%43, %42);
-            %46 : CtRegister = pbs<Lut@0>(%44);
-            %47 : CtRegister = pbs_f<Lut@0>(%45);
-            %48 : CtRegister = pbs_f<Lut@11>(%46);
-            %49 : CtRegister = pbs_f<Lut@11>(%47);
-            %50 : CtRegister = mac<4_imm>(%49, %48);
-            %51 : CtRegister = pbs_f<Lut@0>(%50);
-            %52 : CtRegister = pbs_f<Lut@27>(%51);
-            dst_st<0.0_tdst>(%52);
+            %46 : CtRegister = pbs<Lut@11>(%44);
+            %47 : CtRegister = pbs_f<Lut@11>(%45);
+            %48 : CtRegister = mac<4_imm>(%47, %46);
+            %49 : CtRegister = pbs_f<Lut@27>(%48);
+            dst_st<0.0_tdst>(%49);
             ",
         );
     }
@@ -513,7 +537,7 @@ mod test {
             %32 : CtRegister = pbs<Lut@47>(%29);
             %33 : CtRegister = add_ct(%6, %20);
             %34 : CtRegister = pbs<Lut@48>(%31);
-            %35 : CtRegister = pbs<Lut@49>(%33);
+            %35 : CtRegister = pbs_f<Lut@49>(%33);
             %36 : CtRegister = add_ct(%22, %24);
             %37 : CtRegister = pbs<Lut@1>(%23);
             %38 : CtRegister = add_ct(%26, %24);

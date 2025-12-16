@@ -580,7 +580,7 @@ impl Builder {
     ///
     /// This operation reduces the number of blocks by half by packing two
     /// consecutive blocks into one using multiply-accumulate and PBS operations.
-    pub fn pack(&mut self, blocks: SmallVec<CiphertextBlock>) -> SmallVec<CiphertextBlock> {
+    pub fn pack(&mut self, blocks: SmallVec<CiphertextBlock>, clean_noise: bool) -> SmallVec<CiphertextBlock> {
         let shift = self.constant(2usize.pow(self.config.message_width as u32));
         let lut_none = self.get_lut(LutType::None);
         blocks
@@ -589,7 +589,11 @@ impl Builder {
             .map(|a| match a {
                 hpuc_utils::Chunk::Complete(sv) => {
                     let maced = self.mac(shift, sv[1], sv[0]);
-                    self.pbs(maced, lut_none)
+                    if clean_noise {
+                        self.pbs(maced, lut_none)
+                    } else {
+                        maced
+                    }
                 }
                 hpuc_utils::Chunk::Rest(sv) => sv[0],
             })

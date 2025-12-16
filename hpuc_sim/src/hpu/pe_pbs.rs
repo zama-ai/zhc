@@ -1,7 +1,6 @@
-use std::{fmt::Display, ops::Index};
-
+use std::ops::Index;
 use hpuc_langs::doplang::Affinity;
-use hpuc_utils::{Fifo, SmallSet};
+use hpuc_utils::Fifo;
 
 use crate::{Cycle, Dispatch};
 
@@ -277,28 +276,6 @@ impl Serialize for PePbsMemory {
     }
 }
 
-/// Tracks active timeout operations in the PBS processing element.
-#[derive(Debug)]
-pub struct ActiveTimeouts(SmallSet<DOpId>);
-
-impl Display for ActiveTimeouts {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for i in self.0.iter() {
-            write!(f, "{}, ", i.0)?;
-        }
-        Ok(())
-    }
-}
-
-impl Serialize for ActiveTimeouts {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.serialize_str(&self.to_string())
-    }
-}
-
 /// Pbs Processing Element.
 ///
 /// The model mainly relies on two elements:
@@ -311,8 +288,8 @@ pub struct PePbs {
     timeout: Cycle,
     load_unload_latency: ConstantLatency,
     processing_latency: FlatLinLatency,
-    active_timeouts: ActiveTimeouts,
     max_batch_size: BatchSize,
+    timeout_running: bool,
 }
 
 impl PePbs {
@@ -335,8 +312,8 @@ impl PePbs {
             load_unload_latency,
             processing_latency,
             timeout,
-            active_timeouts: ActiveTimeouts(SmallSet::new()),
             max_batch_size,
+            timeout_running: false
         }
     }
 
@@ -368,6 +345,12 @@ impl Simulatable for PePbs {
                 // -------------------------------------------------------------
 
                 assert!(!self.queue.is_full(), "Dispatched on a filled PE");
+
+                if !self.timeout_running {
+                    // If no timeout was running (queue was empty), we arm the timeout.
+                    self.timeout_running = true;
+                    dispatcher.dispatch_after(self.timeout, Events::PePbsTimeout);
+                }
 
                 dispatcher.dispatch_now(Events::IscUnlockIssue(dop.id));
 
@@ -418,10 +401,6 @@ impl Simulatable for PePbs {
                 // Remove the instruction from the queue. Notify the ISC.
                 dispatcher.dispatch_now(Events::IscUnlockRead(dop.id));
 
-                // Schedule a timeout.
-                dispatcher.dispatch_after(self.timeout, Events::PePbsTimeout(dop.id));
-                self.active_timeouts.0.insert(dop.id);
-
                 // Land the load in memory.
                 self.memory.land_load();
 
@@ -431,48 +410,34 @@ impl Simulatable for PePbs {
                     dispatcher.dispatch_now(Events::PePbsLaunchLoadMemory);
                 }
 
-                if let Hint::MustLaunchBatch(batch_size) = self.memory.what_now() {
-                    // We just loaded the last ciphertext of a full batch.
-                    // We can start processing the batch.
-                    dispatcher.dispatch_now(Events::PePbsLaunchProcessing(batch_size));
+                match self.memory.what_now() {
+                    Hint::MustLaunchBatch(batch_size) => {
+                        // We just loaded the last ciphertext of a full batch.
+                        // We can start processing the batch.
+                        dispatcher.dispatch_now(Events::PePbsLaunchProcessing(batch_size));
+                    },
+                    Hint::NoWaitings => unreachable!(),
+                    _ => {}
                 }
             }
-            Events::PePbsTimeout(dopid) => {
-                if self.active_timeouts.0.contains(&dopid) {
-                    // We remove the timeout.
-                    self.active_timeouts.0.remove(&dopid);
-
-                    // The operation should still be waiting....
-                    assert!(
-                        self.memory
-                            .not_yet_workings()
-                            .iter()
-                            .find(|a| a.id == dopid)
-                            .is_some()
-                    );
-
-                    match self.memory.what_now() {
-                        Hint::CanLaunchIncompleteBatch(batch_size) => {
-                            // If the pe is not busy, we start the processing.
-                            dispatcher.dispatch_now(Events::PePbsLaunchProcessing(batch_size));
-                        }
-                        Hint::AlreadyWorking => {
-                            // If the pe is already working, we ensure that there is a flush after
-                            // the timeouted op.
-                            let is_flushed = self
-                                .memory
-                                .not_yet_workings()
-                                .iter()
-                                .skip_while(|a| a.id != dopid)
-                                .any(|a| a.raw.is_pbs_flush());
-                            if !is_flushed {
-                                self.memory.mutate_to_flush(dopid);
-                            }
-                        }
-                        _ => {
-                            // Other states should not be seen here ...
-                            panic!("Unexpected state encoutered during timeout");
-                        }
+            Events::PePbsTimeout => {
+                match self.memory.what_now() {
+                    Hint::CanLaunchIncompleteBatch(batch_size) => {
+                        assert!(self.timeout_running, "Timeout was not running ...");
+                        let last_in = self.memory().waitings().iter().last().unwrap().clone();
+                        dispatcher.dispatch_now(Events::NotifyStartOnTimeout { last_in });
+                        dispatcher.dispatch_now(Events::PePbsLaunchProcessing(batch_size));
+                    }
+                    Hint::NoWaitings => {
+                        // Nothing is waiting.
+                        // Timeout will be rearmed on the next push to the pe.
+                    }
+                    Hint::AlreadyWorking => {
+                        // The pe-pbs already started its work.
+                        // We don't rearm the timeout.
+                    }
+                    _ => {
+                        panic!("Unexpected state encoutered during timeout: {:?}", self.memory.what_now());
                     }
                 }
             }
@@ -483,12 +448,13 @@ impl Simulatable for PePbs {
                     "Launch Error: batch_size mismatch"
                 );
 
+                // We dearm the timeout.
+                self.timeout_running = false;
+
                 // We update the memory
                 self.memory.launch_work(batch_size);
-                // We can cancel the pending timeouts for the batch.
-                for op in self.memory.workings().iter() {
-                    self.active_timeouts.0.remove(&op.id);
-                }
+
+
                 // We schedule the land
                 dispatcher.dispatch_after(
                     self.processing_latency.compute_latency(batch_size),
@@ -508,9 +474,21 @@ impl Simulatable for PePbs {
                 // We launch the first unload immediately.
                 dispatcher.dispatch_now(Events::PePbsLaunchUnloadMemory);
 
-                // If necessary we immediately launch the next batch.
-                if let Hint::MustLaunchBatch(batch_size) = self.memory.what_now() {
-                    dispatcher.dispatch_now(Events::PePbsLaunchProcessing(batch_size));
+                match self.memory.what_now() {
+                    Hint::MustLaunchBatch(batch_size) => {
+                        // If necessary we immediately launch the next batch.
+                        dispatcher.dispatch_now(Events::PePbsLaunchProcessing(batch_size));
+                    },
+                    Hint::CanLaunchIncompleteBatch(_) => {
+                        // The pe has some pending operations.
+                        // We schedule a timeout.
+                        self.timeout_running = true;
+                        dispatcher.dispatch_after(self.timeout, Events::PePbsTimeout);
+                    },
+                    Hint::NoWaitings => {
+                        self.timeout_running = false;
+                    }
+                    Hint::AlreadyWorking => unreachable!(),
                 }
             }
             Events::PePbsLaunchUnloadMemory => {

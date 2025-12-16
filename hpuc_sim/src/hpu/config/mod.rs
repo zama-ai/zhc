@@ -38,6 +38,7 @@ pub struct IscParams {
 /// Register file configuration parameters.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct RegfParams {
+    reg_nb: usize,
     coef_nb: usize,
 }
 
@@ -199,7 +200,7 @@ impl From<PhysicalConfig> for HpuConfig {
             pbs_processing_latency_a: kspbs_pbs_cost,
             pbs_processing_latency_b: kspbs_cnst_cost,
             pbs_processing_latency_m: phy.ntt_params.min_pbs_nb,
-            regf_size: phy.regf_params.coef_nb,
+            regf_size: phy.regf_params.reg_nb,
         }
     }
 }

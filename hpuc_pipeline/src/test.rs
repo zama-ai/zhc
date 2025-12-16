@@ -250,8 +250,6 @@ fn test_cmp_ir() {
         %23 : Lut1 = gen_lut1<None>();
         %25 : Lut1 = gen_lut1<None>();
         %26 : PlaintextBlock = constant<1_pt_block>();
-        %31 : Lut1 = gen_lut1<None>();
-        %33 : Lut1 = gen_lut1<None>();
         %34 : Ciphertext = let<Ciphertext>();
         %36 : CiphertextBlock = extract_ct_block(%0, %1);
         %37 : CiphertextBlock = extract_ct_block(%0, %2);
@@ -299,15 +297,12 @@ fn test_cmp_ir() {
         %79 : CiphertextBlock = add_pt(%75, %26);
         %80 : CiphertextBlock = mac(%22, %77, %76);
         %81 : CiphertextBlock = mac(%22, %79, %78);
-        %82 : CiphertextBlock = pbs(%80, %31);
-        %83 : CiphertextBlock = pbs(%81, %31);
-        %84 : CiphertextBlock = pbs(%82, %19);
-        %85 : CiphertextBlock = pbs(%83, %19);
-        %86 : CiphertextBlock = mac(%22, %85, %84);
-        %87 : CiphertextBlock = pbs(%86, %33);
-        %88 : CiphertextBlock = pbs(%87, %20);
-        %89 : Ciphertext = store_ct_block(%88, %34, %1);
-        output<0, Ciphertext>(%89);
+        %82 : CiphertextBlock = pbs(%80, %19);
+        %83 : CiphertextBlock = pbs(%81, %19);
+        %84 : CiphertextBlock = mac(%22, %83, %82);
+        %85 : CiphertextBlock = pbs(%84, %20);
+        %86 : Ciphertext = store_ct_block(%85, %34, %1);
+        output<0, Ciphertext>(%86);
     ",
     );
 }

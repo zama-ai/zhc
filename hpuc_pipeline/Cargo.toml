@@ -10,4 +10,5 @@ hpuc_utils = { path = "../hpuc_utils" }
 hpuc_langs = { path = "../hpuc_langs" }
 hpuc_frontend = { path = "../hpuc_frontend" }
 hpuc_builder = { path = "../hpuc_builder" }
+serde = { workspace = true }
 bitfield-struct = "0.10.0"

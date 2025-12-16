@@ -28,7 +28,7 @@ pub fn compute_latency(ir: &IR<Doplang>, config: HpuConfig) -> Cycle {
         .collect();
     let event = Events::IscPushDOps(dops);
     simulator.dispatch(event);
-    simulator.play();
+    simulator.play_until_event(Events::IscProcessOver);
     simulator.now()
 }
 
@@ -50,7 +50,7 @@ mod test {
 
     fn pipeline(ir: &IR<Ioplang>) -> Cycle {
         let ir = IoplangToHpulang.translate(&ir);
-        let config = HpuConfig::from(PhysicalConfig::gaussian_64b_fast());
+        let config = HpuConfig::from(PhysicalConfig::gaussian_64b());
         let scheduled = schedule(&ir, &config);
         let allocated = allocate_registers(&scheduled, &config);
         compute_latency(&allocated, config)
@@ -59,21 +59,21 @@ mod test {
     #[test]
     fn test_latency_add_ir() {
         let lat = pipeline(&get_add_ir(16, 2, 2));
-        assert_eq!(lat, Cycle(176146));
-        println!("{}us", lat.as_ts(MHz(400).period()));
+        assert_eq!(lat, Cycle(1783904));
+        println!("{}us", lat.as_ts(MHz(300).period()));
     }
 
     #[test]
     fn test_latency_sub_ir() {
         let lat = pipeline(&get_sub_ir(16, 2, 2));
-        assert_eq!(lat, Cycle(295259));
-        println!("{}us", lat.as_ts(MHz(400).period()));
+        assert_eq!(lat, Cycle(1810274));
+        println!("{}us", lat.as_ts(MHz(300).period()));
     }
 
     #[test]
     fn test_latency_cmp_ir() {
-        let lat = pipeline(&get_cmp_ir(16, 2, 2));
-        assert_eq!(lat, Cycle(301796));
-        println!("{}us", lat.as_ts(MHz(400).period()));
+        let lat = pipeline(&get_cmp_ir(128, 2, 2));
+        assert_eq!(lat, Cycle(6142722));
+        println!("{}us", lat.as_ts(MHz(300).period()));
     }
 }

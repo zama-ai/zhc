@@ -682,14 +682,11 @@ mod test {
             %43 : CtRegister = add_cst<1_imm>(%39);
             %44 : CtRegister = mac<4_imm>(%41, %40);
             %45 : CtRegister = mac<4_imm>(%43, %42);
-            %46 : CtRegister = pbs<Lut@0>(%44);
-            %47 : CtRegister = pbs<Lut@0>(%45);
-            %48 : CtRegister = pbs<Lut@11>(%46);
-            %49 : CtRegister = pbs<Lut@11>(%47);
-            %50 : CtRegister = mac<4_imm>(%49, %48);
-            %51 : CtRegister = pbs<Lut@0>(%50);
-            %52 : CtRegister = pbs<Lut@27>(%51);
-            dst_st<0.0_tdst>(%52);
+            %46 : CtRegister = pbs<Lut@11>(%44);
+            %47 : CtRegister = pbs<Lut@11>(%45);
+            %48 : CtRegister = mac<4_imm>(%47, %46);
+            %49 : CtRegister = pbs<Lut@27>(%48);
+            dst_st<0.0_tdst>(%49);
         ",
         );
     }

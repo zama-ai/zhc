@@ -30,8 +30,6 @@ pub enum Events {
     IscRefillDOp(DOp),
     /// Signals completion of all scheduled operations.
     IscProcessOver,
-    /// External notification of scheduler command execution.
-    IscNotify(DOpId, IscCommand),
 
     /// ALU processing element begins operation execution.
     PeAluLaunchProcessing,
@@ -63,12 +61,18 @@ pub enum Events {
     PePbsLaunchProcessing(BatchSize),
     /// PBS processing element completes batch processing.
     PePbsLandProcessing(BatchSize),
-    /// PBS processing element timeout for the specified operation.
-    PePbsTimeout(DOpId),
+    /// PBS processing element timeout.
+    PePbsTimeout,
     /// PBS processing element becomes available for new operations.
     PePbsAvailable,
     /// PBS processing element becomes unavailable for new operations.
     PePbsUnavailable,
+
+
+    /// External notification of scheduler command execution.
+    NotifyIsc(DOpId, IscCommand),
+    /// External notification
+    NotifyStartOnTimeout{last_in: DOp},
 }
 
 impl Display for Events {
@@ -83,7 +87,6 @@ impl Display for Events {
             Events::IscQuery => write!(f, "IscQuery"),
             Events::IscRefillDOp(_) => write!(f, "IscQueryRefill"),
             Events::IscProcessOver => write!(f, "IscProcessOver"),
-            Events::IscNotify(_, _) => write!(f, "IscNotify"),
             Events::PeAluLandProcessing => write!(f, "PeAluLandProcessing"),
             Events::PeAluLaunchProcessing => write!(f, "PeAluLaunchProcessing"),
             Events::PeMemLandProcessing => write!(f, "PeMemLandProcessing"),
@@ -94,13 +97,15 @@ impl Display for Events {
             Events::PePbsLandProcessing(_) => write!(f, "PePbsLandProcessing"),
             Events::PePbsLaunchUnloadMemory => write!(f, "PePbsLaunchUnloadMemory"),
             Events::PePbsLandUnloadMemory(_) => write!(f, "PePbsLandUnloadMemory"),
-            Events::PePbsTimeout(_) => write!(f, "PePbsTimeout"),
+            Events::PePbsTimeout => write!(f, "PePbsTimeout"),
             Events::PePbsAvailable => write!(f, "PePbsAvailable"),
             Events::PePbsUnavailable => write!(f, "PePbsUnavailable"),
             Events::PeAluAvailable => write!(f, "PeAluAvailable"),
             Events::PeAluUnavailable => write!(f, "PeAluUnavailable"),
             Events::PeMemAvailable => write!(f, "PeMemAvailable"),
             Events::PeMemUnavailable => write!(f, "PeMemUnavailable"),
+            Events::NotifyIsc(_, _) => write!(f, "NotifyIsc"),
+            Events::NotifyStartOnTimeout { .. } => write!(f, "NotifyStartOnTimeout"),
         }
     }
 }
