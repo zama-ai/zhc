@@ -1,6 +1,6 @@
-use std::ops::Index;
 use hpuc_langs::doplang::Affinity;
 use hpuc_utils::Fifo;
+use std::ops::Index;
 
 use crate::{Cycle, Dispatch};
 
@@ -313,7 +313,7 @@ impl PePbs {
             processing_latency,
             timeout,
             max_batch_size,
-            timeout_running: false
+            timeout_running: false,
         }
     }
 
@@ -377,7 +377,9 @@ impl Simulatable for PePbs {
                 );
                 assert!(
                     self.memory.may_load(),
-                    "Launch Load Error: Memory may not load"
+                    "Launch Load Error: Memory may not load [full: {}, loading: {}]",
+                    self.memory.memory.is_full(),
+                    self.memory.is_loading()
                 );
 
                 if self.queue.is_full() {
@@ -415,7 +417,7 @@ impl Simulatable for PePbs {
                         // We just loaded the last ciphertext of a full batch.
                         // We can start processing the batch.
                         dispatcher.dispatch_now(Events::PePbsLaunchProcessing(batch_size));
-                    },
+                    }
                     Hint::NoWaitings => unreachable!(),
                     _ => {}
                 }
@@ -437,7 +439,10 @@ impl Simulatable for PePbs {
                         // We don't rearm the timeout.
                     }
                     _ => {
-                        panic!("Unexpected state encoutered during timeout: {:?}", self.memory.what_now());
+                        panic!(
+                            "Unexpected state encoutered during timeout: {:?}",
+                            self.memory.what_now()
+                        );
                     }
                 }
             }
@@ -453,7 +458,6 @@ impl Simulatable for PePbs {
 
                 // We update the memory
                 self.memory.launch_work(batch_size);
-
 
                 // We schedule the land
                 dispatcher.dispatch_after(
@@ -478,13 +482,13 @@ impl Simulatable for PePbs {
                     Hint::MustLaunchBatch(batch_size) => {
                         // If necessary we immediately launch the next batch.
                         dispatcher.dispatch_now(Events::PePbsLaunchProcessing(batch_size));
-                    },
+                    }
                     Hint::CanLaunchIncompleteBatch(_) => {
                         // The pe has some pending operations.
                         // We schedule a timeout.
                         self.timeout_running = true;
                         dispatcher.dispatch_after(self.timeout, Events::PePbsTimeout);
-                    },
+                    }
                     Hint::NoWaitings => {
                         self.timeout_running = false;
                     }
