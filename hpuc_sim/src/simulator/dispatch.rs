@@ -19,20 +19,29 @@ impl<E: Event> Default for Dispatcher<E> {
 
 impl<E: Event> Dispatch for Dispatcher<E> {
     type Event = E;
-    fn contains_event(&self, event: &Self::Event) -> bool {
-        self.triggers
-            .iter()
-            .map(|trigger| &trigger.event)
-            .find(|e| *e == event)
-            .is_some()
+    fn contains_event(&self, event: &Self::Event, filter: Option<Cycle>) -> bool {
+        if let Some(filter_at) = filter.as_ref() {
+            self.triggers
+                .iter()
+                .find(|Trigger { at, event: e }| (e == event) && (at == filter_at))
+                .is_some()
+        } else {
+            self.triggers
+                .iter()
+                .map(|trigger| &trigger.event)
+                .find(|e| *e == event)
+                .is_some()
+        }
     }
     fn dispatch(&mut self, event: Self::Event, delay: Option<Cycle>) {
-        let delay = delay.unwrap_or(Cycle::ZERO);
-
-        self.triggers.push(Trigger {
-            at: self.now + delay,
-            event,
-        });
+        let dispatch_cycle = self.now + delay.unwrap_or(Cycle::ZERO);
+        // NB: Discard event dispach in the current cycle if already present
+        if !self.contains_event(&event, Some(dispatch_cycle)) {
+            self.triggers.push(Trigger {
+                at: dispatch_cycle,
+                event,
+            });
+        }
     }
 }
 

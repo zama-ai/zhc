@@ -83,7 +83,7 @@ impl Simulatable for PeMem {
                 let mdop = self.queue.pop_front();
                 assert!(
                     self.current.replace(mdop.clone()).is_none(),
-                    "Start Error: Started op while still busy"
+                    "PeMem Start Error: Started op while still busy"
                 );
                 dispatcher.dispatch_after(
                     self.read_latency.compute_latency(),

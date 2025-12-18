@@ -13,7 +13,8 @@ pub trait Dispatch {
     type Event: Event;
 
     /// Checks if the given `event` is already scheduled for dispatch.
-    fn contains_event(&self, event: &Self::Event) -> bool;
+    /// Could filtered on a given cycle
+    fn contains_event(&self, event: &Self::Event, filter: Option<Cycle>) -> bool;
 
     /// Schedules an `event` for dispatch after the specified `delay` in cycles.
     ///
@@ -37,7 +38,7 @@ pub trait Dispatch {
 
     /// Schedules an `event` for dispatch after `after_n_cycles` cycles if not already scheduled.
     fn dispatch_after_if_no_there(&mut self, after_n_cycles: Cycle, event: Self::Event) {
-        if !self.contains_event(&event) {
+        if !self.contains_event(&event, None) {
             self.dispatch_after(after_n_cycles, event);
         }
     }
