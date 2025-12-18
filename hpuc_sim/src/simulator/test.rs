@@ -120,6 +120,7 @@ impl Simulatable for PingPong {
 #[derive(Debug, Default, Serialize)]
 struct Timer {
     ticks: usize,
+    tocks: usize,
     max_ticks: usize,
     interval: Cycle,
 }
@@ -127,12 +128,14 @@ struct Timer {
 #[derive(Debug, Clone, Copy, Serialize, PartialEq)]
 enum TimerEvent {
     Tick,
+    Tock,
 }
 
 impl std::fmt::Display for TimerEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             TimerEvent::Tick => write!(f, "Tick"),
+            TimerEvent::Tock => write!(f, "Tock"),
         }
     }
 }
@@ -143,6 +146,7 @@ impl Timer {
     fn new(max_ticks: usize, interval: Cycle) -> Self {
         Self {
             ticks: 0,
+            tocks: 0,
             max_ticks,
             interval,
         }
@@ -163,6 +167,9 @@ impl Simulatable for Timer {
                 if self.ticks < self.max_ticks {
                     dispatcher.dispatch_after(self.interval, TimerEvent::Tick)
                 }
+            }
+            TimerEvent::Tock => {
+                self.tocks += 1;
             }
         }
     }
@@ -328,10 +335,13 @@ fn test_simultaneous_events() {
     // Submit multiple events at same time
     sim.dispatch_later(Cycle(1), TimerEvent::Tick);
     sim.dispatch_later(Cycle(1), TimerEvent::Tick);
+    sim.dispatch_later(Cycle(1), TimerEvent::Tock);
+    sim.dispatch_later(Cycle(3), TimerEvent::Tock);
 
     sim.play();
 
-    assert_eq!(sim.simulatable.ticks, 11);
+    assert_eq!(sim.simulatable.ticks, 10);
+    assert_eq!(sim.simulatable.tocks, 2);
 }
 
 #[test]
