@@ -6,6 +6,7 @@
 //! operation scheduling, register allocation, and final code generation.
 
 use allocator::allocate_registers;
+use batcher::batch;
 use hpuc_builder::iops::cmp::{cmp_eq, cmp_gt, cmp_gte, cmp_lt, cmp_lte, cmp_neq};
 use hpuc_ir::translation::Translator;
 use scheduler::schedule;
@@ -15,6 +16,7 @@ use translation_table::{DOpRepr, generate_translation_table};
 pub mod allocator;
 pub mod latency;
 pub mod scheduler;
+pub mod batcher;
 pub mod translation;
 pub mod translation_table;
 
@@ -44,7 +46,8 @@ fn pipeline(hpu_config: &HpuConfig, integer_config: &IntegerConfig, iop: Iop) ->
     };
     let unscheduled = IoplangToHpulang.translate(&ir);
     let scheduled = schedule(&unscheduled, hpu_config);
-    let allocated = allocate_registers(&scheduled, &hpu_config);
+    let batched = batch(&scheduled);
+    let allocated = allocate_registers(&batched, &hpu_config);
     generate_translation_table(&allocated)
 }
 

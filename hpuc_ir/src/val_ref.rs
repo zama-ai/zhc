@@ -1,4 +1,5 @@
 use std::fmt::Display;
+use std::hash::Hash;
 
 use crate::Printer;
 
@@ -31,11 +32,20 @@ impl<'s, D: Dialect> Display for ValRef<'s, D> {
     }
 }
 
+impl<'s, D: Dialect> Hash for ValRef<'s, D> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.id.hash(state)
+    }
+}
+
 impl<'s, D: Dialect> PartialEq for ValRef<'s, D> {
     fn eq(&self, other: &Self) -> bool {
         std::ptr::eq(self.ir, other.ir) && self.id == other.id
     }
 }
+
+impl<'s, D: Dialect> Eq for ValRef<'s, D> {}
+
 
 #[allow(unused)]
 impl<'s, D: Dialect> ValRef<'s, D> {

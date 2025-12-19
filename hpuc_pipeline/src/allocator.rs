@@ -7,28 +7,29 @@
 
 use std::{
     fmt::{Debug, Display},
-    ops::{Div, Rem},
+    ops::{Div, Index, Rem},
 };
 
-use hpuc_ir::{IR, OpId, OpIdRaw, ValId, ValMap};
+use hpuc_ir::{IR, OpId, OpIdRaw, OpRef, ValId, ValMap};
 use hpuc_langs::{
     doplang::{Argument, Doplang, Operations as DopOp},
     hpulang::{Hpulang, Operations as HpuOp},
 };
 use hpuc_sim::hpu::HpuConfig;
-use hpuc_utils::{CollectInSmallVec, CollectInVec, SmallMap, SmallVec, StoreIndex, svec};
+use hpuc_utils::{CollectInSmallVec, CollectInVec, MultiZip, SmallMap, SmallVec, StoreIndex, svec};
 
 /// A register identifier used in the allocation process.
 #[derive(Clone, Debug, Copy)]
 pub struct Register(OpIdRaw);
 
+/// Represents the state of a register.
 #[derive(Clone, Copy, Debug)]
 enum RegisterState {
     /// The register does not hold any value
     Empty,
-    /// The register holds a freshly added value.
+    /// The register holds a freshly added scalar value.
     Fresh(ValId),
-    /// The register holds a value
+    /// The register holds a scalar value.
     Storing(ValId),
 }
 
@@ -334,6 +335,68 @@ impl Display for Heap {
     }
 }
 
+struct BatchMap(SmallMap<ValId, ValId>);
+
+impl BatchMap {
+    pub fn from_op(op: &OpRef<Hpulang>) -> Self {
+        let args = op.get_arg_valids();
+        let rets = op.get_return_valids();
+        let mut map = SmallMap::<ValId, ValId>::new();
+        let HpuOp::Batch { block } = op.get_operation() else {
+            unreachable!()
+        };
+        let mut ordered_batch_arg_valids = block
+            .walk_ops_linear()
+            .filter(|op| matches!(op.get_operation(), HpuOp::BatchArg { .. }))
+            .covec();
+        ordered_batch_arg_valids.sort_unstable_by_key(|op| {
+            let HpuOp::BatchArg { pos, .. } = op.get_operation() else {
+                unreachable!()
+            };
+            pos
+        });
+        let mut ordered_batch_ret_valids = block
+            .walk_ops_linear()
+            .filter(|op| matches!(op.get_operation(), HpuOp::BatchRet { .. }))
+            .covec();
+        ordered_batch_ret_valids.sort_unstable_by_key(|op| {
+            let HpuOp::BatchRet { pos, .. } = op.get_operation() else {
+                unreachable!()
+            };
+            pos
+        });
+        for (outer_valid, inner_valid) in (
+            args.iter(),
+            ordered_batch_arg_valids
+                .into_iter()
+                .map(|a| a.get_return_valids()[0]),
+        )
+            .mzip()
+        {
+            map.insert(inner_valid, *outer_valid);
+        }
+        for (outer_valid, inner_valid) in (
+            rets.iter(),
+            ordered_batch_ret_valids
+                .into_iter()
+                .map(|a| a.get_arg_valids()[0]),
+        )
+            .mzip()
+        {
+            map.insert(inner_valid, *outer_valid);
+        }
+        BatchMap(map)
+    }
+}
+
+impl Index<ValId> for BatchMap {
+    type Output = ValId;
+
+    fn index(&self, index: ValId) -> &Self::Output {
+        self.0.get(&index).unwrap()
+    }
+}
+
 /// # Note:
 ///
 /// The allocator directly emits an ir in the doplang dialect. This means that no further scheduling
@@ -451,14 +514,20 @@ impl<'ir> Allocator<'ir> {
                     let [r_dst] = self.get_dst_registers([rets[0]]);
                     self.add_dop(DopOp::LD {
                         dst: Argument::ct_reg(r_dst.0),
-                        src: Argument::ct_var(from.src_pos, from.block_pos),
+                        src: Argument::ct_var(
+                            from.src_pos.try_into().unwrap(),
+                            from.block_pos.try_into().unwrap(),
+                        ),
                     });
                 }
                 HpuOp::DstSt { to } => {
                     let r_src = self.get_src_register(args[0]);
                     self.add_dop(DopOp::ST {
                         src: Argument::ct_reg(r_src.0),
-                        dst: Argument::ct_var(to.dst_pos, to.block_pos),
+                        dst: Argument::ct_var(
+                            to.dst_pos.try_into().unwrap(),
+                            to.block_pos.try_into().unwrap(),
+                        ),
                     });
                 }
                 HpuOp::ImmLd { .. } => {
@@ -506,7 +575,10 @@ impl<'ir> Allocator<'ir> {
                     self.add_dop(DopOp::ADDS {
                         dst: Argument::ct_reg(r_dst.0),
                         src: Argument::ct_reg(r_src.0),
-                        cst: Argument::pt_var(from.imm_pos, from.block_pos),
+                        cst: Argument::pt_var(
+                            from.imm_pos.try_into().unwrap(),
+                            from.block_pos.try_into().unwrap(),
+                        ),
                     });
                 }
                 HpuOp::SubPt => {
@@ -519,7 +591,10 @@ impl<'ir> Allocator<'ir> {
                     self.add_dop(DopOp::SUBS {
                         dst: Argument::ct_reg(r_dst.0),
                         src: Argument::ct_reg(r_src.0),
-                        cst: Argument::pt_var(from.imm_pos, from.block_pos),
+                        cst: Argument::pt_var(
+                            from.imm_pos.try_into().unwrap(),
+                            from.block_pos.try_into().unwrap(),
+                        ),
                     });
                 }
                 HpuOp::PtSub => {
@@ -532,7 +607,10 @@ impl<'ir> Allocator<'ir> {
                     self.add_dop(DopOp::SSUB {
                         dst: Argument::ct_reg(r_dst.0),
                         src: Argument::ct_reg(r_src.0),
-                        cst: Argument::pt_var(from.imm_pos, from.block_pos),
+                        cst: Argument::pt_var(
+                            from.imm_pos.try_into().unwrap(),
+                            from.block_pos.try_into().unwrap(),
+                        ),
                     });
                 }
                 HpuOp::MulPt => {
@@ -545,7 +623,10 @@ impl<'ir> Allocator<'ir> {
                     self.add_dop(DopOp::MULS {
                         dst: Argument::ct_reg(r_dst.0),
                         src: Argument::ct_reg(r_src.0),
-                        cst: Argument::pt_var(from.imm_pos, from.block_pos),
+                        cst: Argument::pt_var(
+                            from.imm_pos.try_into().unwrap(),
+                            from.block_pos.try_into().unwrap(),
+                        ),
                     });
                 }
                 HpuOp::AddCst { cst } => {
@@ -584,82 +665,123 @@ impl<'ir> Allocator<'ir> {
                         cst: Argument::pt_const(cst.0),
                     });
                 }
-                HpuOp::Pbs { lut } => {
-                    let [r_dst] = self.get_dst_registers([rets[0]]);
-                    let r_src = self.get_src_register(args[0]);
-                    self.add_dop(DopOp::PBS {
-                        dst: Argument::ct_reg(r_dst.0),
-                        src: Argument::ct_reg(r_src.0),
-                        lut: Argument::lut_id(lut),
-                    });
+                HpuOp::Batch { block } => {
+                    let map = BatchMap::from_op(&op);
+                    for op in block.walk_ops_linear() {
+                        let rets = op.get_return_valids();
+                        let args = op.get_arg_valids();
+                        match op.get_operation() {
+                            HpuOp::Pbs { lut } => {
+                                let [r_dst] = self.get_dst_registers([map[rets[0]]]);
+                                let r_src = self.get_src_register(map[args[0]]);
+                                self.add_dop(DopOp::PBS {
+                                    dst: Argument::ct_reg(r_dst.0),
+                                    src: Argument::ct_reg(r_src.0),
+                                    lut: Argument::lut_id(lut),
+                                });
+                            }
+                            HpuOp::PbsF { lut } => {
+                                let [r_dst] = self.get_dst_registers([map[rets[0]]]);
+                                let r_src = self.get_src_register(map[args[0]]);
+                                self.add_dop(DopOp::PBS_F {
+                                    dst: Argument::ct_reg(r_dst.0),
+                                    src: Argument::ct_reg(r_src.0),
+                                    lut: Argument::lut_id(lut),
+                                });
+                            }
+                            HpuOp::Pbs2 { lut } => {
+                                let [r_dst, ..] =
+                                    self.get_dst_registers([map[rets[0]], map[rets[1]]]);
+                                let r_src = self.get_src_register(map[args[0]]);
+                                self.add_dop(DopOp::PBS_ML2 {
+                                    dst: Argument::ct_reg2(r_dst.0),
+                                    src: Argument::ct_reg(r_src.0),
+                                    lut: Argument::lut_id(lut),
+                                });
+                            }
+                            HpuOp::Pbs2F { lut } => {
+                                let [r_dst, ..] =
+                                    self.get_dst_registers([map[rets[0]], map[rets[1]]]);
+                                let r_src = self.get_src_register(map[args[0]]);
+                                self.add_dop(DopOp::PBS_ML2_F {
+                                    dst: Argument::ct_reg2(r_dst.0),
+                                    src: Argument::ct_reg(r_src.0),
+                                    lut: Argument::lut_id(lut),
+                                });
+                            }
+                            HpuOp::Pbs4 { lut } => {
+                                let [r_dst, ..] = self.get_dst_registers([
+                                    map[rets[0]],
+                                    map[rets[1]],
+                                    map[rets[2]],
+                                    map[rets[3]],
+                                ]);
+                                let r_src = self.get_src_register(map[args[0]]);
+                                self.add_dop(DopOp::PBS_ML4 {
+                                    dst: Argument::ct_reg4(r_dst.0),
+                                    src: Argument::ct_reg(r_src.0),
+                                    lut: Argument::lut_id(lut),
+                                });
+                            }
+                            HpuOp::Pbs4F { lut } => {
+                                let [r_dst, ..] = self.get_dst_registers([
+                                    map[rets[0]],
+                                    map[rets[1]],
+                                    map[rets[2]],
+                                    map[rets[3]],
+                                ]);
+                                let r_src = self.get_src_register(map[args[0]]);
+                                self.add_dop(DopOp::PBS_ML4_F {
+                                    dst: Argument::ct_reg4(r_dst.0),
+                                    src: Argument::ct_reg(r_src.0),
+                                    lut: Argument::lut_id(lut),
+                                });
+                            }
+                            HpuOp::Pbs8 { lut } => {
+                                let [r_dst, ..] = self.get_dst_registers([
+                                    map[rets[0]],
+                                    map[rets[1]],
+                                    map[rets[2]],
+                                    map[rets[3]],
+                                    map[rets[4]],
+                                    map[rets[5]],
+                                    map[rets[6]],
+                                    map[rets[7]],
+                                ]);
+                                let r_src = self.get_src_register(map[args[0]]);
+                                self.add_dop(DopOp::PBS_ML8 {
+                                    dst: Argument::ct_reg8(r_dst.0),
+                                    src: Argument::ct_reg(r_src.0),
+                                    lut: Argument::lut_id(lut),
+                                });
+                            }
+                            HpuOp::Pbs8F { lut } => {
+                                let [r_dst, ..] = self.get_dst_registers([
+                                    map[rets[0]],
+                                    map[rets[1]],
+                                    map[rets[2]],
+                                    map[rets[3]],
+                                    map[rets[4]],
+                                    map[rets[5]],
+                                    map[rets[6]],
+                                    map[rets[7]],
+                                ]);
+                                let r_src = self.get_src_register(map[args[0]]);
+                                self.add_dop(DopOp::PBS_ML8_F {
+                                    dst: Argument::ct_reg8(r_dst.0),
+                                    src: Argument::ct_reg(r_src.0),
+                                    lut: Argument::lut_id(lut),
+                                });
+                            }
+                            HpuOp::BatchArg { .. } | HpuOp::BatchRet { .. } => {}
+                            _ => unreachable!("Encountered unexpected operation while allocating: {}", op.get_operation())
+                        }
+                    }
                 }
-                HpuOp::PbsF { lut } => {
-                    let [r_dst] = self.get_dst_registers([rets[0]]);
-                    let r_src = self.get_src_register(args[0]);
-                    self.add_dop(DopOp::PBS_F {
-                        dst: Argument::ct_reg(r_dst.0),
-                        src: Argument::ct_reg(r_src.0),
-                        lut: Argument::lut_id(lut),
-                    });
-                }
-                HpuOp::Pbs2 { lut } => {
-                    let [r_dst, ..] = self.get_dst_registers([rets[0], rets[1]]);
-                    let r_src = self.get_src_register(args[0]);
-                    self.add_dop(DopOp::PBS_ML2 {
-                        dst: Argument::ct_reg2(r_dst.0),
-                        src: Argument::ct_reg(r_src.0),
-                        lut: Argument::lut_id(lut),
-                    });
-                }
-                HpuOp::Pbs2F { lut } => {
-                    let [r_dst, ..] = self.get_dst_registers([rets[0], rets[1]]);
-                    let r_src = self.get_src_register(args[0]);
-                    self.add_dop(DopOp::PBS_ML2_F {
-                        dst: Argument::ct_reg2(r_dst.0),
-                        src: Argument::ct_reg(r_src.0),
-                        lut: Argument::lut_id(lut),
-                    });
-                }
-                HpuOp::Pbs4 { lut } => {
-                    let [r_dst, ..] = self.get_dst_registers([rets[0], rets[1], rets[2], rets[3]]);
-                    let r_src = self.get_src_register(args[0]);
-                    self.add_dop(DopOp::PBS_ML4 {
-                        dst: Argument::ct_reg4(r_dst.0),
-                        src: Argument::ct_reg(r_src.0),
-                        lut: Argument::lut_id(lut),
-                    });
-                }
-                HpuOp::Pbs4F { lut } => {
-                    let [r_dst, ..] = self.get_dst_registers([rets[0], rets[1], rets[2], rets[3]]);
-                    let r_src = self.get_src_register(args[0]);
-                    self.add_dop(DopOp::PBS_ML4_F {
-                        dst: Argument::ct_reg4(r_dst.0),
-                        src: Argument::ct_reg(r_src.0),
-                        lut: Argument::lut_id(lut),
-                    });
-                }
-                HpuOp::Pbs8 { lut } => {
-                    let [r_dst, ..] = self.get_dst_registers([
-                        rets[0], rets[1], rets[2], rets[3], rets[4], rets[5], rets[6], rets[7],
-                    ]);
-                    let r_src = self.get_src_register(args[0]);
-                    self.add_dop(DopOp::PBS_ML8 {
-                        dst: Argument::ct_reg8(r_dst.0),
-                        src: Argument::ct_reg(r_src.0),
-                        lut: Argument::lut_id(lut),
-                    });
-                }
-                HpuOp::Pbs8F { lut } => {
-                    let [r_dst, ..] = self.get_dst_registers([
-                        rets[0], rets[1], rets[2], rets[3], rets[4], rets[5], rets[6], rets[7],
-                    ]);
-                    let r_src = self.get_src_register(args[0]);
-                    self.add_dop(DopOp::PBS_ML8_F {
-                        dst: Argument::ct_reg8(r_dst.0),
-                        src: Argument::ct_reg(r_src.0),
-                        lut: Argument::lut_id(lut),
-                    });
-                }
+                _ => unreachable!(
+                    "Encountered unexpected operation while allocating: {}",
+                    op.get_operation()
+                ),
             }
 
             #[cfg(debug_assertions)]
@@ -702,19 +824,17 @@ mod test {
     use hpuc_sim::hpu::{HpuConfig, PhysicalConfig};
 
     use crate::{
-        scheduler::schedule,
-        test::{get_add_ir, get_cmp_ir, get_sub_ir},
-        translation::IoplangToHpulang,
+        batcher::batch, scheduler::schedule, test::{get_add_ir, get_cmp_ir, get_sub_ir}, translation::IoplangToHpulang
     };
 
     use super::allocate_registers;
 
     fn pipeline(ir: &IR<Ioplang>) -> IR<Doplang> {
         let ir = IoplangToHpulang.translate(&ir);
-        let mut config = HpuConfig::from(PhysicalConfig::gaussian_64b());
-        config.regf_size = 10;
+        let config = HpuConfig::from(PhysicalConfig::gaussian_64b());
         let scheduled = schedule(&ir, &config);
-        let allocated = allocate_registers(&scheduled, &config);
+        let batched = batch(&scheduled);
+        let allocated = allocate_registers(&batched, &config);
         allocated
     }
 
@@ -736,65 +856,49 @@ mod test {
             %10 : Ctx = LD<R(0), TC(1, 1)>(%9);
             %11 : Ctx = LD<R(7), TC(1, 2)>(%10);
             %12 : Ctx = LD<R(9), TC(1, 3)>(%11);
-            %13 : Ctx = ST<CT_H(0), R(6)>(%12);
-            %14 : Ctx = LD<R(6), TC(1, 4)>(%13);
-            %15 : Ctx = ST<CT_H(1), R(5)>(%14);
-            %16 : Ctx = ADD<R(5), R(1), R(0)>(%15);
-            %17 : Ctx = PBS2<R(0, 2), R(8), LUT(26)>(%16);
-            %18 : Ctx = LD<R(8), TC(1, 5)>(%17);
-            %19 : Ctx = ST<CT_H(2), R(0)>(%18);
-            %20 : Ctx = LD<R(0), TC(1, 6)>(%19);
-            %21 : Ctx = ST<CT_H(3), R(1)>(%20);
-            %22 : Ctx = ADD<R(1), R(2), R(7)>(%21);
-            %23 : Ctx = PBS<R(2), R(5), LUT(47)>(%22);
-            %24 : Ctx = ADD<R(7), R(3), R(9)>(%23);
-            %25 : Ctx = PBS<R(3), R(1), LUT(48)>(%24);
-            %26 : Ctx = ADD<R(9), R(4), R(6)>(%25);
-            %27 : Ctx = PBS<R(4), R(7), LUT(49)>(%26);
-            %28 : Ctx = ST<CT_H(4), R(7)>(%27);
-            %29 : Ctx = LD<R(7), CT_H(1)>(%28);
-            %30 : Ctx = ADD<R(6), R(7), R(8)>(%29);
-            %31 : Ctx = PBS<R(7), R(9), LUT(47)>(%30);
-            %32 : Ctx = ST<CT_H(5), R(9)>(%31);
-            %33 : Ctx = LD<R(9), CT_H(0)>(%32);
-            %34 : Ctx = ADD<R(8), R(9), R(0)>(%33);
-            %35 : Ctx = PBS<R(0), R(6), LUT(48)>(%34);
-            %36 : Ctx = PBSF<R(9), R(8), LUT(49)>(%35);
-            %37 : Ctx = ST<CT_H(6), R(8)>(%36);
-            %38 : Ctx = ST<CT_H(7), R(6)>(%37);
-            %39 : Ctx = LD<R(6), CT_H(3)>(%38);
-            %40 : Ctx = ADD<R(8), R(5), R(6)>(%39);
-            %41 : Ctx = LD<R(5), CT_H(2)>(%40);
-            %42 : Ctx = ST<TC(0, 0), R(5)>(%41);
-            %43 : Ctx = ADD<R(5), R(2), R(6)>(%42);
-            %44 : Ctx = ST<TC(0, 1), R(8)>(%43);
-            %45 : Ctx = ADD<R(2), R(0), R(7)>(%44);
-            %46 : Ctx = PBSF<R(0), R(5), LUT(44)>(%45);
-            %47 : Ctx = ADD<R(6), R(3), R(5)>(%46);
-            %48 : Ctx = ADD<R(3), R(9), R(2)>(%47);
-            %49 : Ctx = PBSF<R(5), R(6), LUT(45)>(%48);
-            %50 : Ctx = ADD<R(8), R(4), R(6)>(%49);
-            %51 : Ctx = ADD<R(4), R(1), R(0)>(%50);
-            %52 : Ctx = PBSF<R(0), R(8), LUT(46)>(%51);
-            %53 : Ctx = LD<R(6), CT_H(4)>(%52);
-            %54 : Ctx = ADD<R(1), R(6), R(5)>(%53);
-            %55 : Ctx = ST<TC(0, 2), R(4)>(%54);
-            %56 : Ctx = ST<TC(0, 3), R(1)>(%55);
-            %57 : Ctx = ADD<R(1), R(7), R(0)>(%56);
-            %58 : Ctx = ADD<R(4), R(2), R(0)>(%57);
-            %59 : Ctx = PBS<R(2), R(1), LUT(46)>(%58);
-            %60 : Ctx = ADD<R(1), R(3), R(0)>(%59);
-            %61 : Ctx = PBS<R(0), R(4), LUT(44)>(%60);
-            %62 : Ctx = PBSF<R(3), R(1), LUT(45)>(%61);
-            %63 : Ctx = LD<R(4), CT_H(5)>(%62);
-            %64 : Ctx = ADD<R(1), R(4), R(2)>(%63);
-            %65 : Ctx = LD<R(4), CT_H(7)>(%64);
-            %66 : Ctx = ADD<R(2), R(4), R(0)>(%65);
-            %67 : Ctx = ST<TC(0, 4), R(1)>(%66);
-            %68 : Ctx = LD<R(1), CT_H(6)>(%67);
-            %69 : Ctx = ADD<R(0), R(1), R(3)>(%68);
-            %70 : Ctx = ST<TC(0, 5), R(2)>(%69);
-            %71 : Ctx = ST<TC(0, 6), R(0)>(%70);
+            %13 : Ctx = LD<R(10), TC(1, 4)>(%12);
+            %14 : Ctx = ADD<R(11), R(1), R(0)>(%13);
+            %15 : Ctx = LD<R(0), TC(1, 5)>(%14);
+            %16 : Ctx = LD<R(1), TC(1, 6)>(%15);
+            %17 : Ctx = ADD<R(12), R(2), R(7)>(%16);
+            %18 : Ctx = ADD<R(2), R(3), R(9)>(%17);
+            %19 : Ctx = ADD<R(3), R(4), R(10)>(%18);
+            %20 : Ctx = ADD<R(4), R(5), R(0)>(%19);
+            %21 : Ctx = ADD<R(0), R(6), R(1)>(%20);
+            %22 : Ctx = PBS2<R(6, 2), R(8), LUT(26)>(%21);
+            %23 : Ctx = PBS<R(1), R(11), LUT(47)>(%22);
+            %24 : Ctx = PBS<R(5), R(12), LUT(48)>(%23);
+            %25 : Ctx = PBS<R(9), R(2), LUT(49)>(%24);
+            %26 : Ctx = PBS<R(10), R(3), LUT(47)>(%25);
+            %27 : Ctx = PBS<R(13), R(4), LUT(48)>(%26);
+            %28 : Ctx = PBSF<R(14), R(0), LUT(49)>(%27);
+            %29 : Ctx = ADD<R(8), R(11), R(7)>(%28);
+            %30 : Ctx = ST<TC(0, 0), R(6)>(%29);
+            %31 : Ctx = ADD<R(6), R(1), R(7)>(%30);
+            %32 : Ctx = ST<TC(0, 1), R(8)>(%31);
+            %33 : Ctx = ADD<R(1), R(13), R(10)>(%32);
+            %34 : Ctx = PBSF<R(7), R(6), LUT(44)>(%33);
+            %35 : Ctx = ADD<R(8), R(5), R(6)>(%34);
+            %36 : Ctx = ADD<R(5), R(14), R(1)>(%35);
+            %37 : Ctx = PBSF<R(6), R(8), LUT(45)>(%36);
+            %38 : Ctx = ADD<R(11), R(9), R(8)>(%37);
+            %39 : Ctx = ADD<R(8), R(12), R(7)>(%38);
+            %40 : Ctx = PBSF<R(7), R(11), LUT(46)>(%39);
+            %41 : Ctx = ADD<R(9), R(2), R(6)>(%40);
+            %42 : Ctx = ST<TC(0, 2), R(8)>(%41);
+            %43 : Ctx = ST<TC(0, 3), R(9)>(%42);
+            %44 : Ctx = ADD<R(2), R(10), R(7)>(%43);
+            %45 : Ctx = ADD<R(6), R(1), R(7)>(%44);
+            %46 : Ctx = ADD<R(1), R(5), R(7)>(%45);
+            %47 : Ctx = PBS<R(5), R(2), LUT(46)>(%46);
+            %48 : Ctx = PBS<R(7), R(6), LUT(44)>(%47);
+            %49 : Ctx = PBSF<R(8), R(1), LUT(45)>(%48);
+            %50 : Ctx = ADD<R(1), R(3), R(5)>(%49);
+            %51 : Ctx = ADD<R(2), R(4), R(7)>(%50);
+            %52 : Ctx = ST<TC(0, 4), R(1)>(%51);
+            %53 : Ctx = ADD<R(1), R(0), R(8)>(%52);
+            %54 : Ctx = ST<TC(0, 5), R(2)>(%53);
+            %55 : Ctx = ST<TC(0, 6), R(1)>(%54);
             ",
         );
     }
@@ -816,86 +920,64 @@ mod test {
             %9 : Ctx = SSUB<R(8), R(7), PT_I(3)>(%8);
             %10 : Ctx = LD<R(7), TC(1, 1)>(%9);
             %11 : Ctx = LD<R(9), TC(1, 2)>(%10);
-            %12 : Ctx = ST<CT_H(0), R(6)>(%11);
-            %13 : Ctx = LD<R(6), TC(1, 3)>(%12);
-            %14 : Ctx = ST<CT_H(1), R(5)>(%13);
-            %15 : Ctx = LD<R(5), TC(1, 4)>(%14);
-            %16 : Ctx = ST<CT_H(2), R(4)>(%15);
-            %17 : Ctx = SSUB<R(4), R(7), PT_I(3)>(%16);
-            %18 : Ctx = LD<R(7), TC(1, 5)>(%17);
-            %19 : Ctx = ST<CT_H(3), R(3)>(%18);
-            %20 : Ctx = LD<R(3), TC(1, 6)>(%19);
-            %21 : Ctx = ST<CT_H(4), R(2)>(%20);
-            %22 : Ctx = SSUB<R(2), R(9), PT_I(3)>(%21);
-            %23 : Ctx = SSUB<R(9), R(6), PT_I(3)>(%22);
-            %24 : Ctx = SSUB<R(6), R(5), PT_I(3)>(%23);
-            %25 : Ctx = SSUB<R(5), R(7), PT_I(3)>(%24);
-            %26 : Ctx = SSUB<R(7), R(3), PT_I(3)>(%25);
-            %27 : Ctx = ADD<R(3), R(0), R(8)>(%26);
-            %28 : Ctx = ADD<R(0), R(1), R(4)>(%27);
-            %29 : Ctx = ST<CT_H(5), R(5)>(%28);
-            %30 : Ctx = PBS2<R(4, 2), R(3), LUT(26)>(%29);
-            %31 : Ctx = LD<R(3), CT_H(4)>(%30);
-            %32 : Ctx = ADD<R(1), R(3), R(2)>(%31);
-            %33 : Ctx = PBS<R(2), R(0), LUT(47)>(%32);
-            %34 : Ctx = LD<R(8), CT_H(3)>(%33);
-            %35 : Ctx = ADD<R(3), R(8), R(9)>(%34);
-            %36 : Ctx = PBS<R(8), R(1), LUT(48)>(%35);
-            %37 : Ctx = ST<CT_H(6), R(1)>(%36);
-            %38 : Ctx = LD<R(1), CT_H(2)>(%37);
-            %39 : Ctx = ADD<R(9), R(1), R(6)>(%38);
-            %40 : Ctx = PBS<R(1), R(3), LUT(49)>(%39);
-            %41 : Ctx = ST<CT_H(7), R(3)>(%40);
-            %42 : Ctx = LD<R(3), CT_H(1)>(%41);
-            %43 : Ctx = ST<CT_H(8), R(1)>(%42);
-            %44 : Ctx = LD<R(1), CT_H(5)>(%43);
-            %45 : Ctx = ADD<R(6), R(3), R(1)>(%44);
-            %46 : Ctx = PBS<R(1), R(9), LUT(47)>(%45);
-            %47 : Ctx = ST<CT_H(9), R(9)>(%46);
-            %48 : Ctx = LD<R(9), CT_H(0)>(%47);
-            %49 : Ctx = ADD<R(3), R(9), R(7)>(%48);
-            %50 : Ctx = PBS<R(7), R(6), LUT(48)>(%49);
-            %51 : Ctx = PBSF<R(9), R(3), LUT(49)>(%50);
-            %52 : Ctx = ST<CT_H(10), R(3)>(%51);
-            %53 : Ctx = ADD<R(3), R(0), R(5)>(%52);
-            %54 : Ctx = PBS<R(0), R(4), LUT(1)>(%53);
-            %55 : Ctx = ADD<R(4), R(2), R(5)>(%54);
-            %56 : Ctx = PBS<R(2), R(3), LUT(1)>(%55);
-            %57 : Ctx = ADD<R(3), R(7), R(1)>(%56);
-            %58 : Ctx = PBSF<R(5), R(4), LUT(44)>(%57);
-            %59 : Ctx = ADD<R(7), R(8), R(4)>(%58);
-            %60 : Ctx = ADD<R(4), R(9), R(3)>(%59);
-            %61 : Ctx = ST<TC(0, 0), R(0)>(%60);
-            %62 : Ctx = ST<TC(0, 1), R(2)>(%61);
-            %63 : Ctx = LD<R(2), CT_H(8)>(%62);
-            %64 : Ctx = ADD<R(0), R(2), R(7)>(%63);
-            %65 : Ctx = PBS<R(2), R(7), LUT(45)>(%64);
-            %66 : Ctx = LD<R(8), CT_H(6)>(%65);
-            %67 : Ctx = ADD<R(7), R(8), R(5)>(%66);
-            %68 : Ctx = PBS<R(5), R(0), LUT(46)>(%67);
-            %69 : Ctx = PBSF<R(0), R(7), LUT(1)>(%68);
-            %70 : Ctx = LD<R(8), CT_H(7)>(%69);
-            %71 : Ctx = ADD<R(7), R(8), R(2)>(%70);
-            %72 : Ctx = ST<TC(0, 2), R(0)>(%71);
-            %73 : Ctx = ADD<R(0), R(1), R(5)>(%72);
-            %74 : Ctx = PBS<R(1), R(7), LUT(1)>(%73);
-            %75 : Ctx = ADD<R(2), R(3), R(5)>(%74);
-            %76 : Ctx = PBS<R(3), R(0), LUT(46)>(%75);
-            %77 : Ctx = ADD<R(0), R(4), R(5)>(%76);
-            %78 : Ctx = PBS<R(4), R(2), LUT(44)>(%77);
-            %79 : Ctx = PBSF<R(2), R(0), LUT(45)>(%78);
-            %80 : Ctx = ST<TC(0, 3), R(1)>(%79);
-            %81 : Ctx = LD<R(1), CT_H(9)>(%80);
-            %82 : Ctx = ADD<R(0), R(1), R(3)>(%81);
-            %83 : Ctx = ADD<R(1), R(6), R(4)>(%82);
-            %84 : Ctx = PBS<R(3), R(0), LUT(1)>(%83);
-            %85 : Ctx = LD<R(4), CT_H(10)>(%84);
-            %86 : Ctx = ADD<R(0), R(4), R(2)>(%85);
-            %87 : Ctx = PBS<R(2), R(1), LUT(1)>(%86);
-            %88 : Ctx = PBSF<R(1), R(0), LUT(1)>(%87);
-            %89 : Ctx = ST<TC(0, 4), R(3)>(%88);
-            %90 : Ctx = ST<TC(0, 5), R(2)>(%89);
-            %91 : Ctx = ST<TC(0, 6), R(1)>(%90);
+            %12 : Ctx = LD<R(10), TC(1, 3)>(%11);
+            %13 : Ctx = LD<R(11), TC(1, 4)>(%12);
+            %14 : Ctx = SSUB<R(12), R(7), PT_I(3)>(%13);
+            %15 : Ctx = LD<R(7), TC(1, 5)>(%14);
+            %16 : Ctx = LD<R(13), TC(1, 6)>(%15);
+            %17 : Ctx = SSUB<R(14), R(9), PT_I(3)>(%16);
+            %18 : Ctx = SSUB<R(9), R(10), PT_I(3)>(%17);
+            %19 : Ctx = SSUB<R(10), R(11), PT_I(3)>(%18);
+            %20 : Ctx = SSUB<R(11), R(7), PT_I(3)>(%19);
+            %21 : Ctx = SSUB<R(7), R(13), PT_I(3)>(%20);
+            %22 : Ctx = ADD<R(13), R(0), R(8)>(%21);
+            %23 : Ctx = ADD<R(0), R(1), R(12)>(%22);
+            %24 : Ctx = ADD<R(1), R(2), R(14)>(%23);
+            %25 : Ctx = ADD<R(2), R(3), R(9)>(%24);
+            %26 : Ctx = ADD<R(3), R(4), R(10)>(%25);
+            %27 : Ctx = ADD<R(4), R(5), R(11)>(%26);
+            %28 : Ctx = ADD<R(5), R(6), R(7)>(%27);
+            %29 : Ctx = PBS2<R(6, 2), R(13), LUT(26)>(%28);
+            %30 : Ctx = PBS<R(8), R(0), LUT(47)>(%29);
+            %31 : Ctx = PBS<R(9), R(1), LUT(48)>(%30);
+            %32 : Ctx = PBS<R(10), R(2), LUT(49)>(%31);
+            %33 : Ctx = PBS<R(11), R(3), LUT(47)>(%32);
+            %34 : Ctx = PBS<R(12), R(4), LUT(48)>(%33);
+            %35 : Ctx = PBSF<R(14), R(5), LUT(49)>(%34);
+            %36 : Ctx = ADD<R(13), R(0), R(7)>(%35);
+            %37 : Ctx = ADD<R(0), R(8), R(7)>(%36);
+            %38 : Ctx = ADD<R(7), R(12), R(11)>(%37);
+            %39 : Ctx = PBS<R(8), R(6), LUT(1)>(%38);
+            %40 : Ctx = PBS<R(12), R(13), LUT(1)>(%39);
+            %41 : Ctx = PBSF<R(15), R(0), LUT(44)>(%40);
+            %42 : Ctx = ADD<R(6), R(9), R(0)>(%41);
+            %43 : Ctx = ADD<R(0), R(14), R(7)>(%42);
+            %44 : Ctx = ST<TC(0, 0), R(8)>(%43);
+            %45 : Ctx = ST<TC(0, 1), R(12)>(%44);
+            %46 : Ctx = ADD<R(8), R(10), R(6)>(%45);
+            %47 : Ctx = ADD<R(9), R(1), R(15)>(%46);
+            %48 : Ctx = PBS<R(1), R(6), LUT(45)>(%47);
+            %49 : Ctx = PBS<R(10), R(8), LUT(46)>(%48);
+            %50 : Ctx = PBSF<R(12), R(9), LUT(1)>(%49);
+            %51 : Ctx = ADD<R(6), R(2), R(1)>(%50);
+            %52 : Ctx = ST<TC(0, 2), R(12)>(%51);
+            %53 : Ctx = ADD<R(1), R(11), R(10)>(%52);
+            %54 : Ctx = ADD<R(2), R(7), R(10)>(%53);
+            %55 : Ctx = ADD<R(7), R(0), R(10)>(%54);
+            %56 : Ctx = PBS<R(0), R(6), LUT(1)>(%55);
+            %57 : Ctx = PBS<R(8), R(1), LUT(46)>(%56);
+            %58 : Ctx = PBS<R(9), R(2), LUT(44)>(%57);
+            %59 : Ctx = PBSF<R(10), R(7), LUT(45)>(%58);
+            %60 : Ctx = ST<TC(0, 3), R(0)>(%59);
+            %61 : Ctx = ADD<R(0), R(3), R(8)>(%60);
+            %62 : Ctx = ADD<R(1), R(4), R(9)>(%61);
+            %63 : Ctx = ADD<R(2), R(5), R(10)>(%62);
+            %64 : Ctx = PBS<R(3), R(0), LUT(1)>(%63);
+            %65 : Ctx = PBS<R(4), R(1), LUT(1)>(%64);
+            %66 : Ctx = PBSF<R(5), R(2), LUT(1)>(%65);
+            %67 : Ctx = ST<TC(0, 4), R(3)>(%66);
+            %68 : Ctx = ST<TC(0, 5), R(4)>(%67);
+            %69 : Ctx = ST<TC(0, 6), R(5)>(%68);
             ",
         );
     }
@@ -914,55 +996,49 @@ mod test {
             %6 : Ctx = LD<R(3), TC(0, 4)>(%5);
             %7 : Ctx = LD<R(4), TC(0, 5)>(%6);
             %8 : Ctx = MAC<R(5), R(1), R(0), PT_I(4)>(%7);
-            %9 : Ctx = PBS<R(0), R(2), LUT(0)>(%8);
-            %10 : Ctx = LD<R(1), TC(0, 6)>(%9);
-            %11 : Ctx = LD<R(2), TC(0, 7)>(%10);
-            %12 : Ctx = LD<R(6), TC(1, 0)>(%11);
-            %13 : Ctx = LD<R(7), TC(1, 1)>(%12);
-            %14 : Ctx = MAC<R(8), R(4), R(3), PT_I(4)>(%13);
-            %15 : Ctx = PBS<R(3), R(5), LUT(0)>(%14);
-            %16 : Ctx = LD<R(4), TC(1, 2)>(%15);
-            %17 : Ctx = LD<R(5), TC(1, 3)>(%16);
-            %18 : Ctx = LD<R(9), TC(1, 4)>(%17);
-            %19 : Ctx = ST<CT_H(0), R(3)>(%18);
-            %20 : Ctx = LD<R(3), TC(1, 5)>(%19);
-            %21 : Ctx = ST<CT_H(1), R(0)>(%20);
-            %22 : Ctx = MAC<R(0), R(2), R(1), PT_I(4)>(%21);
-            %23 : Ctx = PBS<R(1), R(8), LUT(0)>(%22);
-            %24 : Ctx = LD<R(2), TC(1, 6)>(%23);
-            %25 : Ctx = LD<R(8), TC(1, 7)>(%24);
-            %26 : Ctx = ST<CT_H(2), R(1)>(%25);
-            %27 : Ctx = MAC<R(1), R(7), R(6), PT_I(4)>(%26);
-            %28 : Ctx = PBS<R(6), R(0), LUT(0)>(%27);
-            %29 : Ctx = MAC<R(0), R(5), R(4), PT_I(4)>(%28);
-            %30 : Ctx = PBS<R(4), R(1), LUT(0)>(%29);
-            %31 : Ctx = MAC<R(1), R(3), R(9), PT_I(4)>(%30);
-            %32 : Ctx = PBS<R(3), R(0), LUT(0)>(%31);
-            %33 : Ctx = MAC<R(0), R(8), R(2), PT_I(4)>(%32);
-            %34 : Ctx = PBS<R(2), R(1), LUT(0)>(%33);
-            %35 : Ctx = PBSF<R(1), R(0), LUT(0)>(%34);
-            %36 : Ctx = LD<R(5), CT_H(1)>(%35);
-            %37 : Ctx = SUB<R(0), R(5), R(4)>(%36);
-            %38 : Ctx = LD<R(5), CT_H(0)>(%37);
-            %39 : Ctx = SUB<R(4), R(5), R(3)>(%38);
-            %40 : Ctx = PBS<R(3), R(0), LUT(10)>(%39);
-            %41 : Ctx = LD<R(5), CT_H(2)>(%40);
-            %42 : Ctx = SUB<R(0), R(5), R(2)>(%41);
-            %43 : Ctx = PBS<R(2), R(4), LUT(10)>(%42);
-            %44 : Ctx = SUB<R(4), R(6), R(1)>(%43);
-            %45 : Ctx = PBS<R(1), R(0), LUT(10)>(%44);
-            %46 : Ctx = PBSF<R(0), R(4), LUT(10)>(%45);
-            %47 : Ctx = ADDS<R(4), R(3), PT_I(1)>(%46);
-            %48 : Ctx = ADDS<R(3), R(2), PT_I(1)>(%47);
-            %49 : Ctx = ADDS<R(2), R(1), PT_I(1)>(%48);
-            %50 : Ctx = ADDS<R(1), R(0), PT_I(1)>(%49);
-            %51 : Ctx = MAC<R(0), R(3), R(4), PT_I(4)>(%50);
-            %52 : Ctx = MAC<R(3), R(1), R(2), PT_I(4)>(%51);
-            %53 : Ctx = PBS<R(1), R(0), LUT(11)>(%52);
-            %54 : Ctx = PBSF<R(0), R(3), LUT(11)>(%53);
-            %55 : Ctx = MAC<R(2), R(0), R(1), PT_I(4)>(%54);
-            %56 : Ctx = PBSF<R(0), R(2), LUT(27)>(%55);
-            %57 : Ctx = ST<TC(0, 0), R(0)>(%56);
+            %9 : Ctx = LD<R(0), TC(0, 6)>(%8);
+            %10 : Ctx = LD<R(1), TC(0, 7)>(%9);
+            %11 : Ctx = LD<R(6), TC(1, 0)>(%10);
+            %12 : Ctx = LD<R(7), TC(1, 1)>(%11);
+            %13 : Ctx = MAC<R(8), R(4), R(3), PT_I(4)>(%12);
+            %14 : Ctx = LD<R(3), TC(1, 2)>(%13);
+            %15 : Ctx = LD<R(4), TC(1, 3)>(%14);
+            %16 : Ctx = LD<R(9), TC(1, 4)>(%15);
+            %17 : Ctx = LD<R(10), TC(1, 5)>(%16);
+            %18 : Ctx = MAC<R(11), R(1), R(0), PT_I(4)>(%17);
+            %19 : Ctx = LD<R(0), TC(1, 6)>(%18);
+            %20 : Ctx = LD<R(1), TC(1, 7)>(%19);
+            %21 : Ctx = MAC<R(12), R(7), R(6), PT_I(4)>(%20);
+            %22 : Ctx = MAC<R(6), R(4), R(3), PT_I(4)>(%21);
+            %23 : Ctx = MAC<R(3), R(10), R(9), PT_I(4)>(%22);
+            %24 : Ctx = MAC<R(4), R(1), R(0), PT_I(4)>(%23);
+            %25 : Ctx = PBS<R(0), R(2), LUT(0)>(%24);
+            %26 : Ctx = PBS<R(1), R(5), LUT(0)>(%25);
+            %27 : Ctx = PBS<R(7), R(8), LUT(0)>(%26);
+            %28 : Ctx = PBS<R(9), R(11), LUT(0)>(%27);
+            %29 : Ctx = PBS<R(10), R(12), LUT(0)>(%28);
+            %30 : Ctx = PBS<R(13), R(6), LUT(0)>(%29);
+            %31 : Ctx = PBS<R(14), R(3), LUT(0)>(%30);
+            %32 : Ctx = PBSF<R(15), R(4), LUT(0)>(%31);
+            %33 : Ctx = SUB<R(2), R(0), R(10)>(%32);
+            %34 : Ctx = SUB<R(0), R(1), R(13)>(%33);
+            %35 : Ctx = SUB<R(1), R(7), R(14)>(%34);
+            %36 : Ctx = SUB<R(3), R(9), R(15)>(%35);
+            %37 : Ctx = PBS<R(4), R(2), LUT(10)>(%36);
+            %38 : Ctx = PBS<R(5), R(0), LUT(10)>(%37);
+            %39 : Ctx = PBS<R(6), R(1), LUT(10)>(%38);
+            %40 : Ctx = PBSF<R(7), R(3), LUT(10)>(%39);
+            %41 : Ctx = ADDS<R(0), R(4), PT_I(1)>(%40);
+            %42 : Ctx = ADDS<R(1), R(5), PT_I(1)>(%41);
+            %43 : Ctx = ADDS<R(2), R(6), PT_I(1)>(%42);
+            %44 : Ctx = ADDS<R(3), R(7), PT_I(1)>(%43);
+            %45 : Ctx = MAC<R(4), R(1), R(0), PT_I(4)>(%44);
+            %46 : Ctx = MAC<R(0), R(3), R(2), PT_I(4)>(%45);
+            %47 : Ctx = PBS<R(1), R(4), LUT(11)>(%46);
+            %48 : Ctx = PBSF<R(2), R(0), LUT(11)>(%47);
+            %49 : Ctx = MAC<R(0), R(2), R(1), PT_I(4)>(%48);
+            %50 : Ctx = PBSF<R(1), R(0), LUT(27)>(%49);
+            %51 : Ctx = ST<TC(0, 0), R(1)>(%50);
             ",
         );
     }

@@ -379,7 +379,10 @@ impl Translator for IoplangToHpulang {
                     let (_, valids) = output
                         .add_op(
                             HpuOp::SrcLd {
-                                from: TSrcId { src_pos, block_pos },
+                                from: TSrcId {
+                                    src_pos: src_pos.try_into().unwrap(),
+                                    block_pos: block_pos.try_into().unwrap(),
+                                },
                             },
                             svec![],
                         )
@@ -417,7 +420,10 @@ impl Translator for IoplangToHpulang {
                     let (_, valids) = output
                         .add_op(
                             HpuOp::ImmLd {
-                                from: TImmId { imm_pos, block_pos },
+                                from: TImmId {
+                                    imm_pos: imm_pos.try_into().unwrap(),
+                                    block_pos: block_pos.try_into().unwrap(),
+                                },
                             },
                             svec![],
                         )
@@ -454,7 +460,10 @@ impl Translator for IoplangToHpulang {
                     output
                         .add_op(
                             HpuOp::DstSt {
-                                to: TDstId { dst_pos, block_pos },
+                                to: TDstId {
+                                    dst_pos: dst_pos.try_into().unwrap(),
+                                    block_pos: block_pos.try_into().unwrap()
+                                },
                             },
                             svec![map[op.get_arg_valids()[0]]],
                         )
