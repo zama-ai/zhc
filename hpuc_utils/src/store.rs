@@ -9,6 +9,7 @@ use std::{
 /// The `Store` provides safe, typed access to elements using custom index types
 /// that implement `StoreIndex`. This prevents mixing up indices between different
 /// stores and provides better type safety than raw `usize` indices.
+#[derive(Clone)]
 pub struct Store<I: StoreIndex, V>(Vec<V>, PhantomData<I>);
 
 impl<I: StoreIndex, V> Store<I, V> {

@@ -181,6 +181,21 @@ impl<A> StackVec<A> {
         }
     }
 
+    /// Removes all elements from the vector.
+    ///
+    /// After calling this method, the vector will be empty (length 0).
+    /// All elements are properly dropped during the clearing process.
+    /// The vector's capacity remains unchanged.
+    pub fn clear(&mut self) {
+        unsafe {
+            let ptr = self.data.data.as_mut_ptr() as *mut A;
+            for i in 0..self.len {
+                std::ptr::drop_in_place(ptr.add(i));
+            }
+            self.len = 0;
+        }
+    }
+
     /// Searches for an element equal to `query` and returns its index.
     ///
     /// Returns `Some(index)` if an element equal to `query` is found,

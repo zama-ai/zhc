@@ -156,12 +156,25 @@ impl<A> SmallVec<A> {
         }
     }
 
+    pub fn clear(&mut self) {
+        match self {
+            SmallVec::Heap(items) => items.clear(),
+            SmallVec::Stack(stack_vec) => stack_vec.clear(),
+        }
+    }
+
     /// Sorts the vector in-place in ascending order.
     pub fn sort_unstable(&mut self)
     where
         A: Ord,
     {
         self.as_mut_slice().sort_unstable();
+    }
+
+    /// Sorts the vector in-place using a key extraction function.
+    pub fn sort_unstable_by_key<K: Ord>(&mut self, f: impl FnMut(&A)->K )
+    {
+        self.as_mut_slice().sort_unstable_by_key(f);
     }
 
     /// Returns an iterator over references to the elements.

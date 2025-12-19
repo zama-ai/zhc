@@ -36,10 +36,7 @@ pub fn compute_latency(ir: &IR<Doplang>, config: HpuConfig) -> Cycle {
 mod test {
     use super::compute_latency;
     use crate::{
-        allocator::allocate_registers,
-        scheduler::schedule,
-        test::{get_add_ir, get_cmp_ir, get_sub_ir},
-        translation::IoplangToHpulang,
+        allocator::allocate_registers, batcher::batch, scheduler::schedule, test::{get_add_ir, get_cmp_ir, get_sub_ir}, translation::IoplangToHpulang
     };
     use hpuc_ir::{IR, translation::Translator};
     use hpuc_langs::ioplang::Ioplang;
@@ -52,28 +49,29 @@ mod test {
         let ir = IoplangToHpulang.translate(&ir);
         let config = HpuConfig::from(PhysicalConfig::gaussian_64b());
         let scheduled = schedule(&ir, &config);
-        let allocated = allocate_registers(&scheduled, &config);
+        let batched = batch(&scheduled);
+        let allocated = allocate_registers(&batched, &config);
         compute_latency(&allocated, config)
     }
 
     #[test]
     fn test_latency_add_ir() {
         let lat = pipeline(&get_add_ir(16, 2, 2));
-        assert_eq!(lat, Cycle(1783904));
+        assert_eq!(lat, Cycle(1784087));
         println!("{}us", lat.as_ts(MHz(300).period()));
     }
 
     #[test]
     fn test_latency_sub_ir() {
         let lat = pipeline(&get_sub_ir(16, 2, 2));
-        assert_eq!(lat, Cycle(1810274));
+        assert_eq!(lat, Cycle(1808161));
         println!("{}us", lat.as_ts(MHz(300).period()));
     }
 
     #[test]
     fn test_latency_cmp_ir() {
         let lat = pipeline(&get_cmp_ir(128, 2, 2));
-        assert_eq!(lat, Cycle(6142722));
+        assert_eq!(lat, Cycle(5759543));
         println!("{}us", lat.as_ts(MHz(300).period()));
     }
 }
