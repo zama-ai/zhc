@@ -30,6 +30,7 @@ fn op_active<'a, D: Dialect>(op: &OpRef<'a, D>) -> bool {
 /// efficient access to operation metadata, value usage information, and graph
 /// traversal capabilities. The IR enforces type safety through the dialect system
 /// and maintains structural integrity through automatic bookkeeping.
+#[derive(Clone)]
 pub struct IR<D: Dialect> {
     pub(super) op_operations: Store<OpId, D::Operations>,
     pub(super) op_signatures: Store<OpId, Signature<D::Types>>,
@@ -55,6 +56,20 @@ impl<D: Dialect> Debug for IR<D> {
         } else {
             write!(f, "IR<{}>", std::any::type_name::<D>())
         }
+    }
+}
+
+impl<D: Dialect> PartialEq for IR<D> {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::eq(self, other)
+    }
+}
+
+impl<D: Dialect> Eq for IR<D> {}
+
+impl<D: Dialect> std::hash::Hash for IR<D> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::ptr::hash(self, state);
     }
 }
 

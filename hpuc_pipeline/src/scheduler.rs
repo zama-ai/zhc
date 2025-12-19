@@ -148,6 +148,7 @@ impl<'ir> Scheduler<'ir> {
             Pbs2F { .. } => Affinity::Pbs,
             Pbs4F { .. } => Affinity::Pbs,
             Pbs8F { .. } => Affinity::Pbs,
+            _ => unreachable!("Encountered unexpected operations at scheduler init: {}", op)
         });
         let priorities = ir.partially_mapped_opmap(|op| Some(op.get_depth()));
         Scheduler {
@@ -299,12 +300,12 @@ fn opref_to_dop<'a>(opref: OpRef<'a, Hpulang>, force_flush: bool) -> Option<DOp>
         }),
         ImmLd { .. } => None,
         DstSt { to } => Some(RawDOp::ST {
-            dst: Argument::ct_var(to.dst_pos, to.block_pos),
+            dst: Argument::ct_var(to.dst_pos.try_into().unwrap(), to.block_pos.try_into().unwrap()),
             src: Argument::ct_reg(opref.get_arg_valids()[0]),
         }),
         SrcLd { from } => Some(RawDOp::LD {
             dst: Argument::ct_reg(opref.get_return_valids()[0]),
-            src: Argument::ct_var(from.src_pos, from.block_pos),
+            src: Argument::ct_var(from.src_pos.try_into().unwrap(), from.block_pos.try_into().unwrap()),
         }),
         Pbs { lut } if !force_flush => Some(RawDOp::PBS {
             dst: Argument::ct_reg(opref.get_arg_valids()[0]),

@@ -1,8 +1,9 @@
 use std::fmt::{Debug, Display};
 
-use hpuc_ir::{DialectOperations, Signature, sig};
+use hpuc_ir::{DialectOperations, IR, Signature, sig};
+use hpuc_utils::CollectInSmallVec;
 
-use super::types::Types;
+use super::{Hpulang, types::Types};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Immediate(pub usize);
@@ -15,8 +16,8 @@ impl Display for Immediate {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TSrcId {
-    pub src_pos: usize,
-    pub block_pos: usize,
+    pub src_pos: u32,
+    pub block_pos: u32,
 }
 
 impl Display for TSrcId {
@@ -27,8 +28,8 @@ impl Display for TSrcId {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TDstId {
-    pub dst_pos: usize,
-    pub block_pos: usize,
+    pub dst_pos: u32,
+    pub block_pos: u32,
 }
 
 impl Display for TDstId {
@@ -48,8 +49,8 @@ impl Display for LutId {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TImmId {
-    pub imm_pos: usize,
-    pub block_pos: usize,
+    pub imm_pos: u32,
+    pub block_pos: u32,
 }
 
 impl Display for TImmId {
@@ -82,6 +83,9 @@ pub enum Operations {
     Pbs2F { lut: LutId },
     Pbs4F { lut: LutId },
     Pbs8F { lut: LutId },
+    Batch { block: Box<IR<Hpulang>> },
+    BatchArg { pos: u8, ty: Types },
+    BatchRet { pos: u8, ty: Types },
 }
 
 impl Display for Operations {
@@ -89,26 +93,29 @@ impl Display for Operations {
         match self {
             Operations::AddCt => write!(f, "add_ct"),
             Operations::SubCt => write!(f, "sub_ct"),
-            Operations::Mac { cst } => write!(f, "mac<{}>", cst),
+            Operations::Mac { cst } => write!(f, "mac<{cst}>"),
             Operations::AddPt => write!(f, "add_pt"),
             Operations::SubPt => write!(f, "sub_pt"),
             Operations::PtSub => write!(f, "pt_sub"),
             Operations::MulPt => write!(f, "mul_pt"),
-            Operations::AddCst { cst } => write!(f, "add_cst<{}>", cst),
-            Operations::SubCst { cst } => write!(f, "subs_cst<{}>", cst),
-            Operations::CstSub { cst } => write!(f, "cst_sub<{}>", cst),
-            Operations::MulCst { cst } => write!(f, "mul_cst<{}>", cst),
-            Operations::ImmLd { from } => write!(f, "imm_ld<{}>", from),
-            Operations::SrcLd { from } => write!(f, "src_ld<{}>", from),
-            Operations::DstSt { to } => write!(f, "dst_st<{}>", to),
-            Operations::Pbs { lut } => write!(f, "pbs<{}>", lut),
-            Operations::Pbs2 { lut } => write!(f, "pbs_2<{}>", lut),
-            Operations::Pbs4 { lut } => write!(f, "pbs_4<{}>", lut),
-            Operations::Pbs8 { lut } => write!(f, "pbs_8<{}>", lut),
-            Operations::PbsF { lut } => write!(f, "pbs_f<{}>", lut),
-            Operations::Pbs2F { lut } => write!(f, "pbs_2f<{}>", lut),
-            Operations::Pbs4F { lut } => write!(f, "pbs_4f<{}>", lut),
-            Operations::Pbs8F { lut } => write!(f, "pbs_8f<{}>", lut),
+            Operations::AddCst { cst } => write!(f, "add_cst<{cst}>"),
+            Operations::SubCst { cst } => write!(f, "subs_cst<{cst}>"),
+            Operations::CstSub { cst } => write!(f, "cst_sub<{cst}>"),
+            Operations::MulCst { cst } => write!(f, "mul_cst<{cst}>"),
+            Operations::ImmLd { from } => write!(f, "imm_ld<{from}>"),
+            Operations::SrcLd { from } => write!(f, "src_ld<{from}>"),
+            Operations::DstSt { to } => write!(f, "dst_st<{to}>"),
+            Operations::Pbs { lut } => write!(f, "pbs<{lut}>"),
+            Operations::Pbs2 { lut } => write!(f, "pbs_2<{lut}>"),
+            Operations::Pbs4 { lut } => write!(f, "pbs_4<{lut}>"),
+            Operations::Pbs8 { lut } => write!(f, "pbs_8<{lut}>"),
+            Operations::PbsF { lut } => write!(f, "pbs_f<{lut}>"),
+            Operations::Pbs2F { lut } => write!(f, "pbs_2f<{lut}>"),
+            Operations::Pbs4F { lut } => write!(f, "pbs_4f<{lut}>"),
+            Operations::Pbs8F { lut } => write!(f, "pbs_8f<{lut}>"),
+            Operations::Batch { block, .. } => write!(f, "batch {{\n        {}}}", block.to_string().replace("\n", "\n        ").strip_suffix("        ").unwrap()),
+            Operations::BatchArg { pos, ty } => write!(f, "batch_arg<{pos}, {ty}>"),
+            Operations::BatchRet { pos, ty } => write!(f, "batch_ret<{pos}, {ty}>"),
         }
     }
 }
@@ -132,7 +139,6 @@ impl DialectOperations for Operations {
             Operations::DstSt { .. } => sig![(CtRegister) -> ()],
             Operations::SrcLd { .. } => sig![() -> (CtRegister)],
             Operations::ImmLd { .. } => sig![() -> (PtImmediate)],
-
             Operations::Pbs { .. } => sig![(CtRegister) -> (CtRegister)],
             Operations::Pbs2 { .. } => sig![(CtRegister) -> (CtRegister, CtRegister)],
             Operations::Pbs4 { .. } => {
@@ -149,6 +155,29 @@ impl DialectOperations for Operations {
             Operations::Pbs8F { .. } => {
                 sig![(CtRegister) -> (CtRegister, CtRegister, CtRegister, CtRegister, CtRegister, CtRegister, CtRegister, CtRegister)]
             }
+            Operations::Batch { block } => {
+                let mut inputs = block
+                    .walk_ops_linear()
+                    .filter_map(|op| match op.get_operation() {
+                        Operations::BatchArg { pos, ty } => Some((pos, ty)),
+                        _ => None,
+                    })
+                    .cosvec();
+                inputs.sort_unstable_by_key(|a| a.0);
+                let inputs = inputs.into_iter().map(|a| a.1).cosvec();
+                let mut outputs = block
+                    .walk_ops_linear()
+                    .filter_map(|op| match op.get_operation() {
+                        Operations::BatchRet { pos, ty } => Some((pos, ty)),
+                        _ => None,
+                    })
+                    .cosvec();
+                outputs.sort_unstable_by_key(|a| a.0);
+                let outputs = outputs.into_iter().map(|a| a.1).cosvec();
+                Signature(inputs, outputs)
+            }
+            Operations::BatchArg { ty, .. } => sig![() -> (ty.clone())],
+            Operations::BatchRet { ty, .. } => sig![(ty.clone()) -> ()],
         }
     }
 }
