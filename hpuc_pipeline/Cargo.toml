@@ -12,3 +12,7 @@ hpuc_frontend = { path = "../hpuc_frontend" }
 hpuc_builder = { path = "../hpuc_builder" }
 serde = { workspace = true }
 bitfield-struct = "0.10.0"
+
+[[bin]]
+name = "bench"
+path = "bench/main.rs"

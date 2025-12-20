@@ -50,7 +50,7 @@ pub fn schedule<'a, 'b>(ir: &'a IR<Hpulang>, config: &'b HpuConfig) -> IR<Hpulan
             opref.get_operation()
         }
     };
-    let mut output = IR::empty();
+    let mut output = ir.derive_new();
     let mut valmap: ValMap<ValId> = ir.empty_valmap();
     for op in ir.walk_ops_with(schedule.get_walker()) {
         let (_, new_valids) = output

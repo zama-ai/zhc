@@ -7,7 +7,7 @@
 
 use std::{collections::HashMap, sync::LazyLock};
 
-use hpuc_ir::{IR, OpId, ValId, translation::Translator};
+use hpuc_ir::{OpId, ValId, translation::Translator};
 use hpuc_langs::{
     hpulang::{Hpulang, Immediate, LutId, TDstId, TImmId, TSrcId},
     ioplang::{Ioplang, Litteral},
@@ -116,7 +116,7 @@ impl Translator for IoplangToHpulang {
         // This translator performs a flow-following translation of an IR in Ioplang to an IR in
         // Hpulang. It is very simple, and as such pretty fast. Every operation is matched
         // against its optype, and translated to an equivalent operation in the Hpulang.
-        let mut output = IR::empty();
+        let mut output = input.derive_new();
         let mut map = input.empty_valmap::<ValId>();
 
         // Ioplang has a value semantics. This means that dst are defined by use, and as such, only

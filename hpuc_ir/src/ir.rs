@@ -154,15 +154,15 @@ impl<D: Dialect> IR<D> {
         depth_buckets.into_iter().flat_map(|b| b.into_iter())
     }
 
-    pub(crate) fn raw_walk_ops(&self, walker: impl OpWalker) -> impl OpWalk<D> {
+    pub(crate) fn raw_walk_ops(&self, walker: impl OpWalker) -> impl OpWalk<'_, D> {
         walker.map(|opid| self.raw_get_op(opid))
     }
 
-    pub(crate) fn raw_walk_ops_linear(&self) -> impl OpWalk<D> {
+    pub(crate) fn raw_walk_ops_linear(&self) -> impl OpWalk<'_, D> {
         self.raw_walk_ops(self.raw_linear_opwalker())
     }
 
-    pub(crate) fn raw_walk_ops_topo(&self) -> impl OpWalk<D> {
+    pub(crate) fn raw_walk_ops_topo(&self) -> impl OpWalk<'_, D> {
         self.raw_walk_ops(self.raw_topological_opwalker())
     }
 
@@ -170,11 +170,11 @@ impl<D: Dialect> IR<D> {
         ValId::range(0, self.raw_n_vals())
     }
 
-    pub(crate) fn raw_walk_vals(&self, walker: impl ValWalker) -> impl ValWalk<D> {
+    pub(crate) fn raw_walk_vals(&self, walker: impl ValWalker) -> impl ValWalk<'_, D> {
         walker.map(|valid| self.raw_get_val(valid))
     }
 
-    pub(crate) fn raw_walk_vals_linear(&self) -> impl ValWalk<D> {
+    pub(crate) fn raw_walk_vals_linear(&self) -> impl ValWalk<'_, D> {
         self.raw_walk_vals(self.raw_linear_valwalker())
     }
 
@@ -265,6 +265,29 @@ impl<D: Dialect> IR<D> {
         }
     }
 
+    /// Create a new empty IR with a given op and val capacity.
+    pub fn with_capacity(val_cap: ValIdRaw, op_cap: OpIdRaw) -> Self {
+        IR {
+            op_operations: Store::with_capacity(op_cap),
+            op_signatures: Store::with_capacity(op_cap),
+            op_arguments: Store::with_capacity(op_cap),
+            op_returns: Store::with_capacity(op_cap),
+            op_states: Store::with_capacity(op_cap),
+            op_depth: Store::with_capacity(op_cap),
+            op_count: 0,
+            val_users: Store::with_capacity(val_cap),
+            val_origins: Store::with_capacity(val_cap),
+            val_types: Store::with_capacity(val_cap),
+            val_states: Store::with_capacity(val_cap),
+            val_count: 0,
+        }
+    }
+
+    /// Creates a new empty IR with the same op and val capacity as the current one.
+    pub fn derive_new<DD: Dialect>(&self) -> IR<DD> {
+        IR::with_capacity(self.n_vals(), self.n_ops())
+    }
+
     /// Returns the total number of active operations in the IR.
     pub fn n_ops(&self) -> OpIdRaw {
         self.op_count
@@ -310,7 +333,7 @@ impl<D: Dialect> IR<D> {
     /// Returns an iterator over all active operations in linear order.
     ///
     /// Operations are yielded in the order they were added to the IR.
-    pub fn walk_ops_linear(&self) -> impl OpWalk<D> {
+    pub fn walk_ops_linear(&self) -> impl OpWalk<'_, D> {
         self.raw_walk_ops_linear().filter(op_active)
     }
 
@@ -318,7 +341,7 @@ impl<D: Dialect> IR<D> {
     ///
     /// Operations are yielded such that all dependencies of an operation
     /// are visited before the operation itself.
-    pub fn walk_ops_topological(&self) -> impl OpWalk<D> {
+    pub fn walk_ops_topological(&self) -> impl OpWalk<'_, D> {
         self.raw_walk_ops(self.raw_topological_opwalker())
             .filter(op_active)
     }
@@ -327,14 +350,14 @@ impl<D: Dialect> IR<D> {
     ///
     /// The `walker` provides the order in which operation IDs are visited,
     /// and this method maps those IDs to their corresponding operation references.
-    pub fn walk_ops_with(&self, walker: impl OpWalker) -> impl OpWalk<D> {
+    pub fn walk_ops_with(&self, walker: impl OpWalker) -> impl OpWalk<'_, D> {
         walker.map(|opid| self.get_op(opid))
     }
 
     /// Returns an iterator over all active values in linear order.
     ///
     /// Values are yielded in the order they were added to the IR.
-    pub fn walk_vals_linear(&self) -> impl ValWalk<D> {
+    pub fn walk_vals_linear(&self) -> impl ValWalk<'_, D> {
         self.raw_walk_vals_linear().filter(val_active)
     }
 
@@ -342,7 +365,7 @@ impl<D: Dialect> IR<D> {
     ///
     /// The `walker` provides the order in which value IDs are visited,
     /// and this method maps those IDs to their corresponding value references.
-    pub fn walk_vals_with(&self, walker: impl ValWalker) -> impl ValWalk<D> {
+    pub fn walk_vals_with(&self, walker: impl ValWalker) -> impl ValWalk<'_, D> {
         walker.map(|valid| self.get_val(valid))
     }
 

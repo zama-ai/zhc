@@ -19,8 +19,8 @@ impl<I: StoreIndex, V> Store<I, V> {
     }
 
     /// Creates an empty store with the specified capacity.
-    pub fn with_capacity(cap: usize) -> Self {
-        Store(Vec::with_capacity(cap), PhantomData)
+    pub fn with_capacity(cap: I::Raw) -> Self {
+        Store(Vec::with_capacity(I::from_raw(cap).as_usize()), PhantomData)
     }
 
     /// Creates a store with `len` copies of `value`.
@@ -134,4 +134,7 @@ pub trait StoreIndex: Copy {
 
     /// Creates an index from a `usize`.
     fn from_usize(val: usize) -> Self;
+
+    /// Creates an index from a raw.
+    fn from_raw(val: Self::Raw) -> Self;
 }

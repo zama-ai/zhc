@@ -108,7 +108,7 @@ impl<'a> Batcher<'a> {
 }
 
 pub fn batch(ir: &IR<Hpulang>) -> IR<Hpulang> {
-    let mut output = IR::empty();
+    let mut output = ir.derive_new();
     let mut map = ir.empty_valmap::<ValId>();
     let mut batcher = Batcher::new();
     for op in ir.walk_ops_linear() {

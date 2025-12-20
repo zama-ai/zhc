@@ -123,7 +123,7 @@ impl PePbsMemory {
         self.memory.pop_front()
     }
 
-    pub fn loadings(&self) -> PePbsMemoryView {
+    pub fn loadings(&self) -> PePbsMemoryView<'_> {
         PePbsMemoryView {
             memory: self,
             range_bottom: self.waiting_boundary,
@@ -131,7 +131,7 @@ impl PePbsMemory {
         }
     }
 
-    pub fn waitings(&self) -> PePbsMemoryView {
+    pub fn waitings(&self) -> PePbsMemoryView<'_> {
         PePbsMemoryView {
             memory: self,
             range_bottom: self.working_boundary,
@@ -139,7 +139,7 @@ impl PePbsMemory {
         }
     }
 
-    pub fn not_yet_workings(&self) -> PePbsMemoryView {
+    pub fn not_yet_workings(&self) -> PePbsMemoryView<'_> {
         PePbsMemoryView {
             memory: self,
             range_bottom: self.working_boundary,
@@ -147,7 +147,7 @@ impl PePbsMemory {
         }
     }
 
-    pub fn workings(&self) -> PePbsMemoryView {
+    pub fn workings(&self) -> PePbsMemoryView<'_> {
         PePbsMemoryView {
             memory: self,
             range_bottom: self.parking_boundary,
@@ -155,7 +155,7 @@ impl PePbsMemory {
         }
     }
 
-    pub fn parkings(&self) -> PePbsMemoryView {
+    pub fn parkings(&self) -> PePbsMemoryView<'_> {
         PePbsMemoryView {
             memory: self,
             range_bottom: self.unloading_boundary,
@@ -163,7 +163,7 @@ impl PePbsMemory {
         }
     }
 
-    pub fn unloadings(&self) -> PePbsMemoryView {
+    pub fn unloadings(&self) -> PePbsMemoryView<'_> {
         PePbsMemoryView {
             memory: self,
             range_bottom: 0,

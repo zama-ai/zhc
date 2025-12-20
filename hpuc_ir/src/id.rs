@@ -41,16 +41,19 @@ macro_rules! impl_index {
         impl StoreIndex for $name {
             type Raw = $raw;
             fn as_usize(&self) -> usize {
-                self.0 as usize
+                self.0.try_into().unwrap()
             }
             fn as_raw(&self) -> $raw {
                 self.0
             }
             fn raw_from_usize(val: usize) -> $raw {
-                val as $raw
+                val.try_into().unwrap()
             }
             fn from_usize(val: usize) -> $name {
-                $name(val as $raw)
+                $name(val.try_into().unwrap())
+            }
+            fn from_raw(val: $raw) -> $name {
+                $name(val)
             }
         }
 

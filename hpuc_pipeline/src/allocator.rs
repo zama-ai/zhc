@@ -415,12 +415,12 @@ struct Allocator<'ir> {
 }
 
 impl<'ir> Allocator<'ir> {
-    pub fn init(ir: &IR<Hpulang>, nregs: usize) -> Allocator {
+    pub fn init(ir: &IR<Hpulang>, nregs: usize) -> Allocator<'_> {
         let live_ranges = LiveRangeMap::from_scheduled_ir(ir);
         let register_file = RegisterFile::empty(nregs);
         let translation_map = ir.empty_valmap();
         let input = ir;
-        let mut output = IR::empty();
+        let mut output = ir.derive_new();
         let (_, rets) = output.add_op(DopOp::_INIT, svec![]).unwrap();
         let current_ctx = rets[0];
         let point = 0;
