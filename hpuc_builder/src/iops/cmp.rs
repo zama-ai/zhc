@@ -68,7 +68,6 @@ impl Kind {
 }
 
 fn cmp(config: &IntegerConfig, kind: Kind) -> IR<Ioplang> {
-
     // -> .cosvec() = .collect::<SmallVec>()
     // -> .covec() = .collect::<Vec>()
     // -> (a, b, c, ...).mzip() -> Multizip flattened. Can call `.map(|(a_i, b_i, c_i, ...)| ...)`
@@ -86,12 +85,10 @@ fn cmp(config: &IntegerConfig, kind: Kind) -> IR<Ioplang> {
     let lut_merge = builder.get_lut(kind.merge());
     let lut_compare = builder.get_lut(kind.compare());
 
-
     // pack a by pairs
     let packed_a = builder.pack(src_a, true);
     // pack b by pairs
     let packed_b = builder.pack(src_b, true);
-
 
     // merge a /b and get sign
     let mut merged = (packed_a.into_iter(), packed_b.into_iter())
@@ -137,12 +134,18 @@ mod test {
 
     use super::cmp_eq;
 
-
     #[test]
     fn test_cmp() {
-        let config = IntegerConfig{ integer_width: 16, message_width: 2, carry_width: 2, nu_msg: 0, nu_bool: 0 };
+        let config = IntegerConfig {
+            integer_width: 16,
+            message_width: 2,
+            carry_width: 2,
+            nu_msg: 0,
+            nu_bool: 0,
+        };
         let ir = cmp_eq(&config);
-        ir.check_ir("
+        ir.check_ir(
+            "
             %0 : Ciphertext = input<0, Ciphertext>();
             %1 : Index = constant<0_idx>();
             %2 : Index = constant<1_idx>();
@@ -213,6 +216,7 @@ mod test {
             %85 : CiphertextBlock = pbs(%84, %20);
             %86 : Ciphertext = store_ct_block(%85, %34, %1);
             output<0, Ciphertext>(%86);
-        ");
+        ",
+        );
     }
 }

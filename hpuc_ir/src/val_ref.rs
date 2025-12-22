@@ -46,7 +46,6 @@ impl<'s, D: Dialect> PartialEq for ValRef<'s, D> {
 
 impl<'s, D: Dialect> Eq for ValRef<'s, D> {}
 
-
 #[allow(unused)]
 impl<'s, D: Dialect> ValRef<'s, D> {
     pub(super) fn raw_get_users_iter(&self) -> impl Iterator<Item = OpRef<'s, D>> + use<'s, D> {

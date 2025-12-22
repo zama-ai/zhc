@@ -68,11 +68,10 @@ pub enum Events {
     /// PBS processing element becomes unavailable for new operations.
     PePbsUnavailable,
 
-
     /// External notification of scheduler command execution.
     NotifyIsc(DOpId, IscCommand),
     /// External notification
-    NotifyStartOnTimeout{last_in: DOp},
+    NotifyStartOnTimeout { last_in: DOp },
 }
 
 impl Display for Events {

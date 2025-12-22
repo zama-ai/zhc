@@ -36,7 +36,11 @@ pub fn compute_latency(ir: &IR<Doplang>, config: HpuConfig) -> Cycle {
 mod test {
     use super::compute_latency;
     use crate::{
-        allocator::allocate_registers, batcher::batch, scheduler::schedule, test::{get_add_ir, get_cmp_ir, get_sub_ir}, translation::IoplangToHpulang
+        allocator::allocate_registers,
+        batcher::batch,
+        scheduler::schedule,
+        test::{get_add_ir, get_cmp_ir, get_sub_ir},
+        translation::IoplangToHpulang,
     };
     use hpuc_ir::{IR, translation::Translator};
     use hpuc_langs::ioplang::Ioplang;

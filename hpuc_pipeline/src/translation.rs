@@ -462,7 +462,7 @@ impl Translator for IoplangToHpulang {
                             HpuOp::DstSt {
                                 to: TDstId {
                                     dst_pos: dst_pos.try_into().unwrap(),
-                                    block_pos: block_pos.try_into().unwrap()
+                                    block_pos: block_pos.try_into().unwrap(),
                                 },
                             },
                             svec![map[op.get_arg_valids()[0]]],

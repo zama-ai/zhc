@@ -415,7 +415,7 @@ struct Allocator<'ir> {
 }
 
 impl<'ir> Allocator<'ir> {
-    pub fn init(ir: &IR<Hpulang>, nregs: usize) -> Allocator {
+    pub fn init(ir: &IR<Hpulang>, nregs: usize) -> Allocator<'_> {
         let live_ranges = LiveRangeMap::from_scheduled_ir(ir);
         let register_file = RegisterFile::empty(nregs);
         let translation_map = ir.empty_valmap();
@@ -774,7 +774,10 @@ impl<'ir> Allocator<'ir> {
                                 });
                             }
                             HpuOp::BatchArg { .. } | HpuOp::BatchRet { .. } => {}
-                            _ => unreachable!("Encountered unexpected operation while allocating: {}", op.get_operation())
+                            _ => unreachable!(
+                                "Encountered unexpected operation while allocating: {}",
+                                op.get_operation()
+                            ),
                         }
                     }
                 }
@@ -824,7 +827,10 @@ mod test {
     use hpuc_sim::hpu::{HpuConfig, PhysicalConfig};
 
     use crate::{
-        batcher::batch, scheduler::schedule, test::{get_add_ir, get_cmp_ir, get_sub_ir}, translation::IoplangToHpulang
+        batcher::batch,
+        scheduler::schedule,
+        test::{get_add_ir, get_cmp_ir, get_sub_ir},
+        translation::IoplangToHpulang,
     };
 
     use super::allocate_registers;
