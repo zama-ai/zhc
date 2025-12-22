@@ -379,10 +379,7 @@ impl Builder {
         self.decl_lut2(lut.name())
     }
 
-    fn decl_lut2(
-        &mut self,
-        name: &str,
-    ) -> Lut2 {
+    fn decl_lut2(&mut self, name: &str) -> Lut2 {
         let (_node, ret) = self
             .ir
             .add_op(
@@ -402,10 +399,7 @@ impl Builder {
         self.decl_lut4(lut.name())
     }
 
-    fn decl_lut4(
-        &mut self,
-        name: &str,
-    ) -> Lut4 {
+    fn decl_lut4(&mut self, name: &str) -> Lut4 {
         let (_node, ret) = self
             .ir
             .add_op(
@@ -430,10 +424,7 @@ impl Builder {
         self.decl_lut8(lut.name())
     }
 
-    fn decl_lut8(
-        &mut self,
-        name: &str,
-    ) -> Lut8 {
+    fn decl_lut8(&mut self, name: &str) -> Lut8 {
         let (_node, ret) = self
             .ir
             .add_op(
@@ -580,7 +571,11 @@ impl Builder {
     ///
     /// This operation reduces the number of blocks by half by packing two
     /// consecutive blocks into one using multiply-accumulate and PBS operations.
-    pub fn pack(&mut self, blocks: SmallVec<CiphertextBlock>, clean_noise: bool) -> SmallVec<CiphertextBlock> {
+    pub fn pack(
+        &mut self,
+        blocks: SmallVec<CiphertextBlock>,
+        clean_noise: bool,
+    ) -> SmallVec<CiphertextBlock> {
         let shift = self.constant(2usize.pow(self.config.message_width as u32));
         let lut_none = self.get_lut(LutType::None);
         blocks

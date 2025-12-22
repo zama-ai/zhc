@@ -148,7 +148,10 @@ impl<'ir> Scheduler<'ir> {
             Pbs2F { .. } => Affinity::Pbs,
             Pbs4F { .. } => Affinity::Pbs,
             Pbs8F { .. } => Affinity::Pbs,
-            _ => unreachable!("Encountered unexpected operations at scheduler init: {}", op)
+            _ => unreachable!(
+                "Encountered unexpected operations at scheduler init: {}",
+                op
+            ),
         });
         let priorities = ir.partially_mapped_opmap(|op| Some(op.get_depth()));
         Scheduler {
@@ -251,7 +254,8 @@ impl<'ir> ForwardSimulator for Scheduler<'ir> {
             .play_until(|e| matches!(e, Events::IscRetireDOp(_)));
         let (_, timeout) = self.simulator.simulatable_mut();
         if timeout.did_timeout() {
-            self.should_flush.insert(OpId::from_usize(timeout.acknowledge().0));
+            self.should_flush
+                .insert(OpId::from_usize(timeout.acknowledge().0));
         }
         let (hpu, _) = self.simulator.simulatable();
         let retired_opid = hpu.retirement.last_retired().unwrap().id;
@@ -300,12 +304,18 @@ fn opref_to_dop<'a>(opref: OpRef<'a, Hpulang>, force_flush: bool) -> Option<DOp>
         }),
         ImmLd { .. } => None,
         DstSt { to } => Some(RawDOp::ST {
-            dst: Argument::ct_var(to.dst_pos.try_into().unwrap(), to.block_pos.try_into().unwrap()),
+            dst: Argument::ct_var(
+                to.dst_pos.try_into().unwrap(),
+                to.block_pos.try_into().unwrap(),
+            ),
             src: Argument::ct_reg(opref.get_arg_valids()[0]),
         }),
         SrcLd { from } => Some(RawDOp::LD {
             dst: Argument::ct_reg(opref.get_return_valids()[0]),
-            src: Argument::ct_var(from.src_pos.try_into().unwrap(), from.block_pos.try_into().unwrap()),
+            src: Argument::ct_var(
+                from.src_pos.try_into().unwrap(),
+                from.block_pos.try_into().unwrap(),
+            ),
         }),
         Pbs { lut } if !force_flush => Some(RawDOp::PBS {
             dst: Argument::ct_reg(opref.get_arg_valids()[0]),

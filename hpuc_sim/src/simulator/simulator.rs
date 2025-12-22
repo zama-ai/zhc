@@ -163,14 +163,14 @@ where
         let event_eq = |trig: &Trigger<S::Event>| -> bool { trig.event == event };
         loop {
             match self.step_cond(event_eq) {
-                SimulationState::MayContinue => {},
+                SimulationState::MayContinue => {}
                 SimulationState::CondEncountered => return,
                 SimulationState::SimulationOver => {
                     if ACTIVATE_TRACING {
                         self.dump_trace("test.json");
                     }
                     panic!("Simulation finished while waiting for an event.")
-                },
+                }
             }
         }
     }
@@ -180,14 +180,14 @@ where
         let event_cond = |trig: &Trigger<S::Event>| -> bool { f(&trig.event) };
         loop {
             match self.step_cond(event_cond) {
-                SimulationState::MayContinue => {},
+                SimulationState::MayContinue => {}
                 SimulationState::CondEncountered => return,
                 SimulationState::SimulationOver => {
                     if ACTIVATE_TRACING {
                         self.dump_trace("test.json");
                     }
                     panic!("Simulation finished while waiting for an event.")
-                },
+                }
             }
         }
     }

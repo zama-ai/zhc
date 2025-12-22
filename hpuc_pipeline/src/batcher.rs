@@ -1,6 +1,6 @@
 use hpuc_ir::{IR, OpRef, ValId, ValMap};
 use hpuc_langs::hpulang::{Hpulang, Operations};
-use hpuc_utils::{svec, MultiZip, SmallMap, SmallSet, SmallVec};
+use hpuc_utils::{MultiZip, SmallMap, SmallSet, SmallVec, svec};
 
 struct Batcher<'a>(Vec<OpRef<'a, Hpulang>>);
 
@@ -173,10 +173,19 @@ mod test {
         let scheduled = schedule(&ir, &config);
         let batch = batch(&scheduled);
         use hpuc_langs::hpulang::Operations::*;
-        batch.walk_ops_linear().for_each(|op| match op.get_operation() {
-            Pbs { .. } | Pbs2 { .. } | Pbs4 { .. } | Pbs8 { .. } | PbsF { .. } | Pbs2F { .. } | Pbs4F { .. } | Pbs8F { .. } => panic!(),
-            _ => {}
-        });
+        batch
+            .walk_ops_linear()
+            .for_each(|op| match op.get_operation() {
+                Pbs { .. }
+                | Pbs2 { .. }
+                | Pbs4 { .. }
+                | Pbs8 { .. }
+                | PbsF { .. }
+                | Pbs2F { .. }
+                | Pbs4F { .. }
+                | Pbs8F { .. } => panic!(),
+                _ => {}
+            });
         batch
     }
 

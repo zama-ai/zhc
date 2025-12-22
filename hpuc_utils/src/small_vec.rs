@@ -172,8 +172,7 @@ impl<A> SmallVec<A> {
     }
 
     /// Sorts the vector in-place using a key extraction function.
-    pub fn sort_unstable_by_key<K: Ord>(&mut self, f: impl FnMut(&A)->K )
-    {
+    pub fn sort_unstable_by_key<K: Ord>(&mut self, f: impl FnMut(&A) -> K) {
         self.as_mut_slice().sort_unstable_by_key(f);
     }
 

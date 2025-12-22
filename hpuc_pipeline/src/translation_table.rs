@@ -516,7 +516,11 @@ mod test {
     use hpuc_sim::hpu::{HpuConfig, PhysicalConfig};
 
     use crate::{
-        allocator::allocate_registers, batcher::batch, scheduler::schedule, test::{get_add_ir, get_cmp_ir, get_sub_ir}, translation::IoplangToHpulang
+        allocator::allocate_registers,
+        batcher::batch,
+        scheduler::schedule,
+        test::{get_add_ir, get_cmp_ir, get_sub_ir},
+        translation::IoplangToHpulang,
     };
 
     use super::generate_translation_table;
