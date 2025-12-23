@@ -11,6 +11,7 @@ pub mod scheduling;
 pub mod translation;
 pub mod traversal;
 
+pub mod visualization;
 mod dialect;
 mod id;
 mod ir;

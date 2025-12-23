@@ -6,6 +6,10 @@ mod few_mapped;
 mod mzip;
 mod window;
 mod intermediate;
+mod average;
+mod dedup;
+mod merger;
+mod separate;
 
 pub use all_eq::*;
 pub use chunk::*;
@@ -15,3 +19,7 @@ pub use few_mapped::*;
 pub use mzip::*;
 pub use window::*;
 pub use intermediate::*;
+pub use average::*;
+pub use dedup::*;
+pub use merger::*;
+pub use separate::*;

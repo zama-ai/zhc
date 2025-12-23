@@ -5,3 +5,4 @@ edition = "2024"
 
 [dependencies]
 hpuc_utils = { path = "../hpuc_utils" }
+hpuc_utils_macro = { path = "../hpuc_utils_macro"}

@@ -14,12 +14,12 @@ impl<A, const N: usize> Default for VArray<A, N> {
 }
 
 // Helper structure for the into_iter iterator
-struct IntoIter<A, const N: usize> {
+pub struct VArrayIntoIter<A, const N: usize> {
     array: VArray<A, N>,
     index: usize,
 }
 
-impl<A, const N: usize> Iterator for IntoIter<A, N> {
+impl<A, const N: usize> Iterator for VArrayIntoIter<A, N> {
     type Item = A;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -33,7 +33,7 @@ impl<A, const N: usize> Iterator for IntoIter<A, N> {
     }
 }
 
-impl<A, const N: usize> Drop for IntoIter<A, N> {
+impl<A, const N: usize> Drop for VArrayIntoIter<A, N> {
     fn drop(&mut self) {
         // Drop any remaining elements
         while self.index < self.array.len {
@@ -153,7 +153,7 @@ impl<A, const N: usize> VArray<A, N> {
         };
         self.len = 0;
 
-        IntoIter {
+        VArrayIntoIter {
             array: drained,
             index: 0,
         }
@@ -187,8 +187,8 @@ impl<A, const N: usize> VArray<A, N> {
     /// The vector is consumed and cannot be used after calling this method.
     /// The returned iterator will properly drop any remaining elements when
     /// it is dropped.
-    pub fn into_iter(self) -> impl Iterator<Item = A> {
-        IntoIter {
+    pub fn into_iter(self) -> VArrayIntoIter<A, N> {
+        VArrayIntoIter {
             array: self,
             index: 0,
         }

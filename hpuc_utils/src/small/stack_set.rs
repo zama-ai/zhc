@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::small::stack_vec::{StackVec, StackVecIntoIter};
+use crate::small::{VArray, VArrayIntoIter};
 
 /// A stack-allocated set that maintains unique elements.
 ///
@@ -8,12 +8,18 @@ use crate::small::stack_vec::{StackVec, StackVecIntoIter};
 /// are unique by checking for duplicates before insertion. Elements must
 /// implement `Eq` for equality comparison.
 #[derive(Clone)]
-pub struct StackSet<T: Eq>(pub(super) StackVec<T>);
+pub struct StackSet<T: Eq, const N: usize = 10>(pub(super) VArray<T, N>);
 
-impl<T: Eq> StackSet<T> {
+impl<T: Eq> StackSet<T, 10> {
     /// Creates a new empty `StackSet`.
     pub fn new() -> Self {
-        StackSet(StackVec::new())
+        StackSet(VArray::new())
+    }
+}
+impl<T: Eq, const N: usize> StackSet<T, N> {
+    /// Creates a new empty `StackSet`.
+    pub fn with_capacity() -> StackSet<T, N> {
+        StackSet(VArray::new())
     }
 
     /// Returns the capacity of the `StackSet`.
@@ -69,20 +75,20 @@ impl<T: Eq> StackSet<T> {
     }
 
     /// Consumes the set and returns an iterator over its elements.
-    pub fn into_iter(self) -> StackVecIntoIter<'static, T> {
+    pub fn into_iter(self) -> VArrayIntoIter<T, N> {
         self.0.into_iter()
     }
 }
 
-impl<T: Eq> std::iter::FromIterator<T> for StackSet<T> {
+impl<T: Eq, const N: usize> std::iter::FromIterator<T> for StackSet<T, N> {
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
-        let mut set = StackSet::new();
+        let mut set = StackSet::with_capacity();
         set.extend(iter);
         set
     }
 }
 
-impl<T: Eq> std::iter::Extend<T> for StackSet<T> {
+impl<T: Eq, const N: usize> std::iter::Extend<T> for StackSet<T, N> {
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
         for item in iter {
             self.insert(item);
@@ -90,7 +96,7 @@ impl<T: Eq> std::iter::Extend<T> for StackSet<T> {
     }
 }
 
-impl<T: Eq + Debug> Debug for StackSet<T> {
+impl<T: Eq + Debug, const N: usize> Debug for StackSet<T, N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.0
             .iter()
@@ -248,7 +254,7 @@ mod tests {
         let set: StackSet<LargeType> = StackSet::new();
         let capacity = set.0.capacity();
 
-        assert_eq!(capacity, 1);
+        assert_eq!(capacity, 10);
     }
 
     #[test]

@@ -11,6 +11,7 @@ mod store;
 pub mod tracing;
 pub mod iter;
 pub mod small;
+pub mod graphics;
 
 mod type_name;
 pub use erasable::*;
