@@ -1,15 +1,15 @@
 use std::hash::Hash;
 
-use crate::{FastSet, small::{stack_set::StackSet, stack_vec::StackVecIntoIter}};
+use crate::{FastSet, small::{VArrayIntoIter, stack_set::StackSet}};
 
 /// A set optimized for small collections with automatic storage strategy.
 ///
 /// Starts with stack-based storage for better performance with few elements,
 /// then transitions to heap-based storage when capacity is exceeded.
 #[derive(Clone, Debug)]
-pub enum SmallSet<T: Eq + Hash> {
+pub enum SmallSet<T: Eq + Hash, const N: usize = 10> {
     Heap(FastSet<T>),
-    Stack(StackSet<T>),
+    Stack(StackSet<T, N>),
 }
 
 /// Iterator over references to elements in a SmallSet.
@@ -30,12 +30,12 @@ impl<'a, T> Iterator for SmallSetIter<'a, T> {
 }
 
 /// Iterator that takes ownership of elements in a SmallSet.
-pub enum SmallSetIntoIter<T> {
+pub enum SmallSetIntoIter<T, const N: usize> {
     Heap(std::collections::hash_set::IntoIter<T>),
-    Stack(StackVecIntoIter<'static, T>),
+    Stack(VArrayIntoIter<T, N>),
 }
 
-impl<T> Iterator for SmallSetIntoIter<T> {
+impl<T, const N: usize> Iterator for SmallSetIntoIter<T, N> {
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -46,10 +46,18 @@ impl<T> Iterator for SmallSetIntoIter<T> {
     }
 }
 
+
 impl<T: Eq + Hash> SmallSet<T> {
     /// Creates a new empty set.
     pub fn new() -> Self {
-        SmallSet::Stack(StackSet::new())
+        SmallSet::Stack(StackSet::with_capacity())
+    }
+}
+
+impl<T: Eq + Hash, const N: usize> SmallSet<T, N> {
+    /// Creates a new empty set.
+    pub fn with_capacity() -> Self {
+        SmallSet::Stack(StackSet::with_capacity())
     }
 
     /// Adds a value to the set.
@@ -111,7 +119,7 @@ impl<T: Eq + Hash> SmallSet<T> {
     }
 
     /// Returns an iterator that takes ownership of the elements.
-    pub fn into_iter(self) -> SmallSetIntoIter<T> {
+    pub fn into_iter(self) -> SmallSetIntoIter<T, N> {
         match self {
             SmallSet::Heap(h) => SmallSetIntoIter::Heap(h.into_iter()),
             SmallSet::Stack(s) => SmallSetIntoIter::Stack(s.into_iter()),
@@ -135,9 +143,9 @@ impl<T: Eq + Hash> std::iter::Extend<T> for SmallSet<T> {
     }
 }
 
-impl<T: Eq + Hash> IntoIterator for SmallSet<T> {
+impl<T: Eq + Hash, const N: usize> IntoIterator for SmallSet<T, N> {
     type Item = T;
-    type IntoIter = SmallSetIntoIter<T>;
+    type IntoIter = SmallSetIntoIter<T, N>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.into_iter()

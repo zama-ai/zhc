@@ -8,6 +8,7 @@ members = [
     "hpuc_pipeline",
     "hpuc_sim",
     "hpuc_utils",
+    "hpuc_utils_macro",
     "hpuc_builder",
 ]
 resolver = "3"

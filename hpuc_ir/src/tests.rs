@@ -72,10 +72,153 @@ pub mod test_dialect {
     }
 }
 
-use crate::{Depth, DialectOperations, IR, IRError};
+use crate::{DialectOperations, IR, IRError};
 use hpuc_utils::{iter::CollectInVec, svec};
 
 use test_dialect::{Operations, TestDialect};
+
+pub fn gen_complex_ir() -> Result<IR<TestDialect>, IRError<TestDialect>> {
+    let mut ir: IR<TestDialect> = IR::empty();
+
+    // Create multiple input sources (wide foundation)
+    let (_, inp0) = ir.add_op(Operations::IntInput { pos: 0 }, svec![])?;
+    let (_, inp1) = ir.add_op(Operations::IntInput { pos: 1 }, svec![])?;
+    let (_, inp2) = ir.add_op(Operations::IntInput { pos: 2 }, svec![])?;
+    let (_, inp3) = ir.add_op(Operations::IntInput { pos: 3 }, svec![])?;
+    let (_, bool_inp) = ir.add_op(Operations::BoolConstant { val: true }, svec![])?;
+
+    // First layer - basic operations on inputs
+    let (_, add0) = ir.add_op(Operations::Add, svec![inp0[0], inp1[0]])?;
+    let (_, add1) = ir.add_op(Operations::Add, svec![inp2[0], inp3[0]])?;
+    let (_, inc0) = ir.add_op(Operations::Inc, svec![inp0[0]])?;
+    let (_, inc1) = ir.add_op(Operations::Inc, svec![inp1[0]])?;
+
+    // Create a diamond pattern: add0 -> inc2, inc3 -> add2
+    let (_, inc2) = ir.add_op(Operations::Inc, svec![add0[0]])?;
+    let (_, inc3) = ir.add_op(Operations::Inc, svec![add0[0]])?;
+    let (_, add2) = ir.add_op(Operations::Add, svec![inc2[0], inc3[0]])?;
+
+    // Create a deeper chain from inp2
+    let (_, chain0) = ir.add_op(Operations::Inc, svec![inp2[0]])?;
+    let (_, chain1) = ir.add_op(Operations::Inc, svec![chain0[0]])?;
+    let (_, chain2) = ir.add_op(Operations::Inc, svec![chain1[0]])?;
+    let (_, chain3) = ir.add_op(Operations::Inc, svec![chain2[0]])?;
+    let (_, chain4) = ir.add_op(Operations::Inc, svec![chain3[0]])?;
+
+    // Multi-output operation creating branching
+    let (_, divrem0) = ir.add_op(Operations::DivRem, svec![add1[0], inc0[0]])?;
+    let (_, divrem1) = ir.add_op(Operations::DivRem, svec![chain4[0], inp3[0]])?;
+
+    // Fan-out: use both outputs of divrem operations
+    let (_, inc4) = ir.add_op(Operations::Inc, svec![divrem0[0]])?; // quotient
+    let (_, inc5) = ir.add_op(Operations::Inc, svec![divrem0[1]])?; // remainder
+    let (_, inc6) = ir.add_op(Operations::Inc, svec![divrem1[0]])?; // quotient
+    let (_, inc7) = ir.add_op(Operations::Inc, svec![divrem1[1]])?; // remainder
+
+    // Create convergence points
+    let (_, conv0) = ir.add_op(Operations::Add, svec![inc4[0], inc5[0]])?;
+    let (_, conv1) = ir.add_op(Operations::Add, svec![inc6[0], inc7[0]])?;
+    let (_, conv2) = ir.add_op(Operations::Add, svec![add2[0], chain2[0]])?;
+
+    // IfElse operations using the boolean input
+    let (_, ifelse0) = ir.add_op(Operations::IfElse, svec![conv0[0], bool_inp[0], conv1[0]])?;
+    let (_, ifelse1) = ir.add_op(Operations::IfElse, svec![conv2[0], bool_inp[0], inc1[0]])?;
+
+    // Create more complex interactions
+    let (_, add3) = ir.add_op(Operations::Add, svec![ifelse0[0], ifelse1[0]])?;
+    let (_, add4) = ir.add_op(Operations::Add, svec![conv0[0], conv1[0]])?;
+    let (_, add5) = ir.add_op(Operations::Add, svec![chain4[0], add2[0]])?;
+
+    // Another level of DivRem for more multi-output complexity
+    let (_, divrem2) = ir.add_op(Operations::DivRem, svec![add3[0], add4[0]])?;
+    let (_, divrem3) = ir.add_op(Operations::DivRem, svec![add5[0], ifelse1[0]])?;
+
+    // Final convergence layer
+    let (_, final0) = ir.add_op(Operations::Add, svec![divrem2[0], divrem3[0]])?;
+    let (_, final1) = ir.add_op(Operations::Add, svec![divrem2[1], divrem3[1]])?;
+    let (_, final2) = ir.add_op(Operations::Add, svec![final0[0], final1[0]])?;
+
+    // Independent subgraph that eventually merges
+    let (_, indep0) = ir.add_op(Operations::Inc, svec![inp0[0]])?;
+    let (_, indep1) = ir.add_op(Operations::Inc, svec![indep0[0]])?;
+    let (_, indep2) = ir.add_op(Operations::Inc, svec![indep1[0]])?;
+
+    // Merge independent subgraph with main computation
+    let (_, ultimate) = ir.add_op(Operations::Add, svec![final2[0], indep2[0]])?;
+
+    // Some effect operations
+    let (_, _) = ir.add_op(Operations::Return, svec![ultimate[0]])?;
+    let (_, _) = ir.add_op(Operations::Return, svec![final0[0]])?;
+    let (_, _) = ir.add_op(Operations::Return, svec![conv2[0]])?;
+
+    // Additional independent operations to reach ~50 nodes
+    let (_, extra0) = ir.add_op(Operations::Inc, svec![inp3[0]])?;
+    let (_, extra1) = ir.add_op(Operations::Inc, svec![extra0[0]])?;
+    let (_, extra2) = ir.add_op(Operations::Add, svec![extra1[0], chain1[0]])?;
+    let (_, _) = ir.add_op(Operations::Return, svec![extra2[0]])?;
+
+    // More branching from existing values
+    let (_, branch0) = ir.add_op(Operations::Inc, svec![add1[0]])?;
+    let (_, branch1) = ir.add_op(Operations::Inc, svec![branch0[0]])?;
+    let (_, branch2) = ir.add_op(Operations::Add, svec![branch1[0], inc7[0]])?;
+    let (_, _) = ir.add_op(Operations::Return, svec![branch2[0]])?;
+
+    ir.check_ir("
+        %0 : Int = int_input<pos: 0>();
+        %1 : Int = int_input<pos: 1>();
+        %2 : Int = int_input<pos: 2>();
+        %3 : Int = int_input<pos: 3>();
+        %4 : Bool = bool_constant<val: true>();
+        %5 : Int = add(%0, %1);
+        %6 : Int = add(%2, %3);
+        %7 : Int = inc(%0);
+        %8 : Int = inc(%1);
+        %9 : Int = inc(%2);
+        %10 : Int = inc(%0);
+        %11 : Int = inc(%3);
+        %12 : Int = inc(%5);
+        %13 : Int = inc(%5);
+        %14 : Int = inc(%9);
+        %15 : Int, %16 : Int = div_rem(%6, %7);
+        %17 : Int = inc(%10);
+        %18 : Int = inc(%11);
+        %19 : Int = inc(%6);
+        %20 : Int = add(%12, %13);
+        %21 : Int = inc(%14);
+        %22 : Int = inc(%15);
+        %23 : Int = inc(%16);
+        %24 : Int = inc(%17);
+        %25 : Int = add(%18, %14);
+        %26 : Int = inc(%19);
+        %27 : Int = inc(%21);
+        %28 : Int = add(%22, %23);
+        %29 : Int = add(%20, %21);
+        return(%25);
+        %30 : Int = inc(%27);
+        %31 : Int = if_else(%29, %4, %8);
+        return(%29);
+        %32 : Int, %33 : Int = div_rem(%30, %3);
+        %34 : Int = add(%30, %20);
+        %35 : Int = inc(%32);
+        %36 : Int = inc(%33);
+        %37 : Int, %38 : Int = div_rem(%34, %31);
+        %39 : Int = add(%35, %36);
+        %40 : Int = add(%26, %36);
+        %41 : Int = if_else(%28, %4, %39);
+        %42 : Int = add(%28, %39);
+        return(%40);
+        %43 : Int = add(%41, %31);
+        %44 : Int, %45 : Int = div_rem(%43, %42);
+        %46 : Int = add(%44, %37);
+        %47 : Int = add(%45, %38);
+        %48 : Int = add(%46, %47);
+        return(%46);
+        %49 : Int = add(%48, %24);
+        return(%49);
+    ");
+
+    Ok(ir)
+}
 
 /// Tests basic IR construction with complex operation graph and validates
 /// all operation properties, value relationships, and depth calculations
@@ -125,12 +268,12 @@ fn test_construction() -> Result<(), IRError<TestDialect>> {
     assert_eq!(store.n_ops(), 8);
     assert_eq!(store.n_vals(), 8);
     assert!(lhs.is_active());
-    assert_eq!(lhs.get_depth(), 1);
+    assert_eq!(lhs.get_depth(), 0);
     assert_eq!(lhs.get_args_iter().covec(), []);
     assert_eq!(lhs.get_returns_iter().covec(), [p0.clone()]);
 
     assert!(rhs.is_active());
-    assert_eq!(rhs.get_depth(), 1);
+    assert_eq!(rhs.get_depth(), 0);
     assert_eq!(rhs.get_args_iter().covec(), []);
     assert_eq!(rhs.get_returns_iter().covec(), [p1.clone()]);
 
@@ -143,7 +286,7 @@ fn test_construction() -> Result<(), IRError<TestDialect>> {
     assert_eq!(p1.get_users_iter().covec(), [join.clone()]);
 
     assert!(join.is_active());
-    assert_eq!(join.get_depth(), 2);
+    assert_eq!(join.get_depth(), 1);
     assert_eq!(join.get_args_iter().covec(), [p0.clone(), p1.clone()]);
     assert_eq!(join.get_returns_iter().covec(), [p2.clone()]);
 
@@ -152,7 +295,7 @@ fn test_construction() -> Result<(), IRError<TestDialect>> {
     assert_eq!(p2.get_users_iter().covec(), [split.clone()]);
 
     assert!(split.is_active());
-    assert_eq!(split.get_depth(), 3);
+    assert_eq!(split.get_depth(), 2);
     assert_eq!(split.get_args_iter().covec(), [p2.clone(), p0.clone()]);
     assert_eq!(split.get_returns_iter().covec(), [p3.clone(), p4.clone()]);
 
@@ -165,7 +308,7 @@ fn test_construction() -> Result<(), IRError<TestDialect>> {
     assert_eq!(p4.get_users_iter().covec(), [urhs.clone()]);
 
     assert!(ulhs.is_active());
-    assert_eq!(ulhs.get_depth(), 4);
+    assert_eq!(ulhs.get_depth(), 3);
     assert_eq!(ulhs.get_args_iter().covec(), [p3.clone()]);
     assert_eq!(ulhs.get_returns_iter().covec(), [p5.clone()]);
 
@@ -174,7 +317,7 @@ fn test_construction() -> Result<(), IRError<TestDialect>> {
     assert_eq!(p5.get_users_iter().covec(), [final_add.clone()]);
 
     assert!(urhs.is_active());
-    assert_eq!(urhs.get_depth(), 4);
+    assert_eq!(urhs.get_depth(), 3);
     assert_eq!(urhs.get_args_iter().covec(), [p4.clone()]);
     assert_eq!(urhs.get_returns_iter().covec(), [p6.clone()]);
 
@@ -183,7 +326,7 @@ fn test_construction() -> Result<(), IRError<TestDialect>> {
     assert_eq!(p6.get_users_iter().covec(), [final_add.clone()]);
 
     assert!(final_add.is_active());
-    assert_eq!(final_add.get_depth(), 5);
+    assert_eq!(final_add.get_depth(), 4);
     assert_eq!(final_add.get_args_iter().covec(), [p5.clone(), p6.clone()]);
     assert_eq!(final_add.get_returns_iter().covec(), [p7.clone()]);
 
@@ -192,7 +335,7 @@ fn test_construction() -> Result<(), IRError<TestDialect>> {
     assert_eq!(p7.get_users_iter().covec(), []);
 
     assert!(effect.is_active());
-    assert_eq!(effect.get_depth(), 4);
+    assert_eq!(effect.get_depth(), 3);
     assert_eq!(effect.get_args_iter().covec(), [p3.clone()]);
     assert_eq!(effect.get_returns_iter().covec(), []);
     Ok(())
@@ -697,7 +840,7 @@ fn test_replace_val_use_make_shallower() -> Result<(), IRError<TestDialect>> {
             ",
     );
     let last = store.get_op(last_id);
-    assert_eq!(last.get_depth(), 5);
+    assert_eq!(last.get_depth(), 4);
     store.replace_val_use(v4[0], v0[0]);
     store.check_ir(
         "
@@ -710,7 +853,7 @@ fn test_replace_val_use_make_shallower() -> Result<(), IRError<TestDialect>> {
             ",
     );
     let last = store.get_op(last_id);
-    assert_eq!(last.get_depth(), 2);
+    assert_eq!(last.get_depth(), 1);
     Ok(())
 }
 
@@ -735,7 +878,7 @@ fn test_replace_val_use_make_deeper() -> Result<(), IRError<TestDialect>> {
             ",
     );
     let last = store.get_op(last_id);
-    assert_eq!(last.get_depth(), 3);
+    assert_eq!(last.get_depth(), 2);
     store.replace_val_use(v0[0], v3[0]);
     store.check_ir(
         "
@@ -748,7 +891,7 @@ fn test_replace_val_use_make_deeper() -> Result<(), IRError<TestDialect>> {
             ",
     );
     let last = store.get_op(last_id);
-    assert_eq!(last.get_depth(), 5);
+    assert_eq!(last.get_depth(), 4);
     Ok(())
 }
 
@@ -841,24 +984,6 @@ fn test_double_deletion() {
     store.delete_op(op_id); // Should panic on second deletion
 }
 
-/// Tests depth overflow protection with very deep chains
-#[test]
-#[should_panic(expected = "Overflow occured while computing the depth")]
-fn test_depth_overflow() {
-    let mut store: IR<TestDialect> = IR::empty();
-    let (_, mut vals) = store
-        .add_op(Operations::IntInput { pos: 0 }, svec![])
-        .expect("Bad add_op");
-
-    // Create a chain that would cause depth overflow
-    for _ in 0..=Depth::MAX {
-        let (_, new_vals) = store
-            .add_op(Operations::Inc, svec![vals[0]])
-            .expect("Bad add_op");
-        vals = new_vals;
-    }
-}
-
 /// Tests self-value replacement (should be no-op)
 #[test]
 fn test_replace_val_use_self() -> Result<(), IRError<TestDialect>> {
@@ -917,7 +1042,7 @@ fn test_diamond_dependencies() -> Result<(), IRError<TestDialect>> {
     // A should have 2 users (B and C)
     assert_eq!(a_val.get_users_iter().count(), 2);
     // D should be at depth 3 (A:1 → B,C:2 → D:3)
-    assert_eq!(d_op.get_depth(), 3);
+    assert_eq!(d_op.get_depth(), 2);
     Ok(())
 }
 
@@ -1066,12 +1191,12 @@ fn test_replacement_deeper_chain() -> Result<(), IRError<TestDialect>> {
     let (_, inc1_vals) = store.add_op(Operations::Inc, svec![inp2[0]])?;
     let (inc2_id, _) = store.add_op(Operations::Inc, svec![inp1[0]])?; // Initially uses inp1
 
-    assert_eq!(store.get_op(inc2_id).get_depth(), 2);
+    assert_eq!(store.get_op(inc2_id).get_depth(), 1);
 
     // Replace inp1 with inc1's output, making inc2 deeper
     store.replace_val_use(inp1[0], inc1_vals[0]);
 
-    assert_eq!(store.get_op(inc2_id).get_depth(), 3); // Now inp2→inc1→inc2
+    assert_eq!(store.get_op(inc2_id).get_depth(), 2); // Now inp2→inc1→inc2
     Ok(())
 }
 

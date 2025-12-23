@@ -1,5 +1,5 @@
 use hpuc_utils::svec;
-use hpuc_utils::{small::SmallVec, Store};
+use hpuc_utils::{Store, small::SmallVec};
 
 use crate::traversal::{OpWalk, OpWalker, ValWalk, ValWalker};
 use crate::val_ref::ValRef;
@@ -139,6 +139,10 @@ impl<D: Dialect> IR<D> {
             typ: &mut self.val_types[valid],
             state: &mut self.val_states[valid],
         }
+    }
+
+    pub(crate) fn depth(&self) -> Depth {
+        *self.op_depth.iter().max().unwrap_or(&0)
     }
 
     pub(crate) fn raw_linear_opwalker(&self) -> impl OpWalker {
@@ -409,12 +413,16 @@ impl<D: Dialect> IR<D> {
         let arg_depth = args
             .iter()
             .map(|a| self.get_val(*a).get_origin().get_depth())
-            .max()
-            .unwrap_or(0);
-        let (depth, overflow) = arg_depth.overflowing_add(1);
-        if overflow {
-            panic!("Overflow occured while computing the depth of a new operation.");
-        }
+            .max();
+        let depth = if arg_depth.is_none() {
+            0
+        } else {
+            let (d, overflow) = arg_depth.unwrap().overflowing_add(1);
+            if overflow {
+                panic!("Overflow occured while computing the depth of a new operation.");
+            }
+            d
+        };
 
         // Now we are ready to mutate the various stores.
 
