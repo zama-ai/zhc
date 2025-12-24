@@ -5,7 +5,7 @@ use std::fmt::Display;
 pub type RawDOp = hpuc_langs::doplang::Operations;
 
 /// Unique identifier for a DOp operation within the simulation.
-#[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Copy, Hash, serde::Deserialize)]
 pub struct DOpId(pub usize);
 
 impl Display for DOpId {
