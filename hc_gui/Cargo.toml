@@ -1,11 +1,14 @@
 [package]
 name = "hc_gui"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
-hc_ir = { path = "../hc_ir"}
-hc_langs = { path = "../hc_langs"}
+# Local dependencies
+hc_ir.workspace = true
+hc_langs.workspace = true
+# External dependencies
 petgraph = "0.8.3"
 eframe = "0.32"
 egui_graphs = "0.28"

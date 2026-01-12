@@ -13,7 +13,26 @@ members = [
 ]
 resolver = "3"
 
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "BSD-3-Clause-Clear"
+rust-version="1.94"
+
 [workspace.dependencies]
+# Local publishable crates
+hc_frontend = {version = "0.1.0", path = "hc_frontend"}
+hc_gui = {version = "0.1.0", path = "hc_gui"}
+hc_ir = {version = "0.1.0", path = "hc_ir"}
+hc_langs = {version = "0.1.0", path = "hc_langs"}
+hc_bin = {version = "0.1.0", path = "hc_bin"}
+hc_pipeline = {version = "0.1.0", path = "hc_pipeline"}
+hc_sim = {version = "0.1.0", path = "hc_sim"}
+hc_utils_macro = {version = "0.1.0", path = "hc_utils_macro"}
+hc_utils = {version = "0.1.0", path = "hc_utils"}
+hc_builder = {version = "0.1.0", path = "hc_builder"}
+
+# External dependencies shared across local subcrate
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 toml = "0.9"
