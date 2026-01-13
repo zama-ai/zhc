@@ -2,36 +2,36 @@ use hpuc_ir::IR;
 use hpuc_langs::ioplang::Ioplang;
 use hpuc_utils::{iter::{CollectInSmallVec, MultiZip}, svec};
 
-use crate::builder::{Builder, IntegerConfig, LutType};
+use crate::builder::{BlockConfig, Builder, EncryptedInteger, Lut1Type};
 
 /// Creates an IR for greater-than comparison between two encrypted integers.
-pub fn cmp_gt(config: &IntegerConfig) -> IR<Ioplang> {
-    cmp(config, Kind::Gt)
+pub fn cmp_gt(width: u8, config: &BlockConfig) -> IR<Ioplang> {
+    cmp(width, config, Kind::Gt)
 }
 
 /// Creates an IR for greater-than-or-equal comparison between two encrypted integers.
-pub fn cmp_gte(config: &IntegerConfig) -> IR<Ioplang> {
-    cmp(config, Kind::Gte)
+pub fn cmp_gte(width: u8, config: &BlockConfig) -> IR<Ioplang> {
+    cmp(width, config, Kind::Gte)
 }
 
 /// Creates an IR for less-than comparison between two encrypted integers.
-pub fn cmp_lt(config: &IntegerConfig) -> IR<Ioplang> {
-    cmp(config, Kind::Lt)
+pub fn cmp_lt(width: u8, config: &BlockConfig) -> IR<Ioplang> {
+    cmp(width, config, Kind::Lt)
 }
 
 /// Creates an IR for less-than-or-equal comparison between two encrypted integers.
-pub fn cmp_lte(config: &IntegerConfig) -> IR<Ioplang> {
-    cmp(config, Kind::Lte)
+pub fn cmp_lte(width: u8, config: &BlockConfig) -> IR<Ioplang> {
+    cmp(width, config, Kind::Lte)
 }
 
 /// Creates an IR for equality comparison between two encrypted integers.
-pub fn cmp_eq(config: &IntegerConfig) -> IR<Ioplang> {
-    cmp(config, Kind::Eq)
+pub fn cmp_eq(width: u8, config: &BlockConfig) -> IR<Ioplang> {
+    cmp(width, config, Kind::Eq)
 }
 
 /// Creates an IR for inequality comparison between two encrypted integers.
-pub fn cmp_neq(config: &IntegerConfig) -> IR<Ioplang> {
-    cmp(config, Kind::Neq)
+pub fn cmp_neq(width: u8, config: &BlockConfig) -> IR<Ioplang> {
+    cmp(width, config, Kind::Neq)
 }
 
 enum Kind {
@@ -44,69 +44,64 @@ enum Kind {
 }
 
 impl Kind {
-    fn merge(&self) -> LutType {
+    fn merge(&self) -> Lut1Type {
         match self {
-            Kind::Gt => LutType::CmpGtMrg,
-            Kind::Gte => LutType::CmpGteMrg,
-            Kind::Lt => LutType::CmpLtMrg,
-            Kind::Lte => LutType::CmpLteMrg,
-            Kind::Eq => LutType::CmpEqMrg,
-            Kind::Neq => LutType::CmpNeqMrg,
+            Kind::Gt => Lut1Type::CmpGtMrg,
+            Kind::Gte => Lut1Type::CmpGteMrg,
+            Kind::Lt => Lut1Type::CmpLtMrg,
+            Kind::Lte => Lut1Type::CmpLteMrg,
+            Kind::Eq => Lut1Type::CmpEqMrg,
+            Kind::Neq => Lut1Type::CmpNeqMrg,
         }
     }
 
-    fn compare(&self) -> LutType {
+    fn compare(&self) -> Lut1Type {
         match self {
-            Kind::Gt => LutType::CmpGt,
-            Kind::Gte => LutType::CmpGte,
-            Kind::Lt => LutType::CmpLt,
-            Kind::Lte => LutType::CmpLte,
-            Kind::Eq => LutType::CmpEq,
-            Kind::Neq => LutType::CmpNeq,
+            Kind::Gt => Lut1Type::CmpGt,
+            Kind::Gte => Lut1Type::CmpGte,
+            Kind::Lt => Lut1Type::CmpLt,
+            Kind::Lte => Lut1Type::CmpLte,
+            Kind::Eq => Lut1Type::CmpEq,
+            Kind::Neq => Lut1Type::CmpNeq,
         }
     }
 }
 
-fn cmp(config: &IntegerConfig, kind: Kind) -> IR<Ioplang> {
-    // -> .cosvec() = .collect::<SmallVec>()
-    // -> .covec() = .collect::<Vec>()
-    // -> (a, b, c, ...).mzip() -> Multizip flattened. Can call `.map(|(a_i, b_i, c_i, ...)| ...)`
-    // -> some_iterator.chunk(n) -> chunks on iterators (no need to allocate an intermediate).
-
+fn cmp(width: u8, config: &BlockConfig, kind: Kind) -> IR<Ioplang> {
     let mut builder = Builder::new(config);
 
     // get input as array of blk
-    let src_a = builder.input_ct();
-    let src_b = builder.input_ct();
+    let src_a = builder.eint_input(width);
+    let src_b = builder.eint_input(width);
 
     // create required luts
-    let lut_cmp_sign = builder.get_lut(LutType::CmpSign);
-    let lut_cmp_reduce = builder.get_lut(LutType::CmpReduce);
-    let lut_merge = builder.get_lut(kind.merge());
-    let lut_compare = builder.get_lut(kind.compare());
+    let lut_cmp_sign = builder.lut(Lut1Type::CmpSign);
+    let lut_cmp_reduce = builder.lut(Lut1Type::CmpReduce);
+    let lut_merge = builder.lut(kind.merge());
+    let lut_compare = builder.lut(kind.compare());
 
     // pack a by pairs
-    let packed_a = builder.pack(src_a, true);
+    let packed_a = builder.vector_pack_one_clean(src_a.blocks());
     // pack b by pairs
-    let packed_b = builder.pack(src_b, true);
+    let packed_b = builder.vector_pack_one_clean(src_b.blocks());
 
     // merge a /b and get sign
-    let mut merged = (packed_a.into_iter(), packed_b.into_iter())
+    let mut merged = (packed_a.iter(), packed_b.iter())
         .mzip()
         .map(|(l, r)| {
-            let sub_lr = builder.sub(l, r);
-            let pbsed = builder.pbs(sub_lr, lut_cmp_sign);
-            let cst = builder.constant(1);
-            builder.adds(pbsed, cst)
+            let sub_lr = builder.block_sub(l, r);
+            let pbsed = builder.block_pbs(&sub_lr, &lut_cmp_sign);
+            let cst = builder.block_constant(1);
+            builder.block_adds(&pbsed, &cst)
         })
         .cosvec();
 
     // reduce (tree-based reduce)
     while merged.len() > 2 {
-        let packed = builder.pack(merged, false);
+        let packed = builder.vector_pack_one(merged.as_slice());
         let reduced = packed
-            .into_iter()
-            .map(|x| builder.pbs(x, lut_cmp_reduce))
+            .iter()
+            .map(|x| builder.block_pbs(x, &lut_cmp_reduce))
             .cosvec();
         // prepare next iter
         merged = reduced;
@@ -115,35 +110,33 @@ fn cmp(config: &IntegerConfig, kind: Kind) -> IR<Ioplang> {
     // last reduce and cast based on user required cmp
     let cmp_res = match merged.len() {
         2 => {
-            let p = builder.pack(merged, false);
-            builder.pbs(p[0], lut_merge)
+            let p = builder.vector_pack_one(merged.as_slice());
+            builder.block_pbs(&p[0], &lut_merge)
         }
-        1 => builder.pbs(merged[0], lut_compare),
+        1 => builder.block_pbs(&merged[0], &lut_compare),
         _ => unreachable!(),
     };
 
-    // store result (boolean) in slot 0 of output 0
-    builder.output_ct(svec![cmp_res]);
+    // store result in slot 0 of output 0
+    let output = EncryptedInteger::from_blocks(1, svec![cmp_res]);
+    builder.eint_output(output);
 
     builder.into_ir()
 }
 
 #[cfg(test)]
 mod test {
-    use crate::builder::IntegerConfig;
+    use crate::builder::BlockConfig;
 
     use super::cmp_eq;
 
     #[test]
     fn test_cmp() {
-        let config = IntegerConfig {
-            integer_width: 16,
+        let config = BlockConfig {
             message_width: 2,
             carry_width: 2,
-            nu_msg: 0,
-            nu_bool: 0,
         };
-        let ir = cmp_eq(&config);
+        let ir = cmp_eq(16, &config);
         ir.check_ir(
             "
             %0 : Ciphertext = input<0, Ciphertext>();
@@ -159,63 +152,63 @@ mod test {
             %18 : Lut1 = gen_lut1<CmpSign>();
             %19 : Lut1 = gen_lut1<CmpReduce>();
             %20 : Lut1 = gen_lut1<CmpEqMrg>();
-            %22 : PlaintextBlock = constant<4_pt_block>();
-            %23 : Lut1 = gen_lut1<None>();
-            %25 : Lut1 = gen_lut1<None>();
+            %22 : Lut1 = gen_lut1<None>();
+            %23 : PlaintextBlock = constant<4_pt_block>();
+            %24 : Lut1 = gen_lut1<None>();
             %26 : PlaintextBlock = constant<1_pt_block>();
-            %34 : Ciphertext = let<Ciphertext>();
-            %36 : CiphertextBlock = extract_ct_block(%0, %1);
-            %37 : CiphertextBlock = extract_ct_block(%0, %2);
-            %38 : CiphertextBlock = extract_ct_block(%0, %3);
-            %39 : CiphertextBlock = extract_ct_block(%0, %4);
-            %40 : CiphertextBlock = extract_ct_block(%0, %5);
-            %41 : CiphertextBlock = extract_ct_block(%0, %6);
-            %42 : CiphertextBlock = extract_ct_block(%0, %7);
-            %43 : CiphertextBlock = extract_ct_block(%0, %8);
-            %44 : CiphertextBlock = extract_ct_block(%9, %1);
-            %45 : CiphertextBlock = extract_ct_block(%9, %2);
-            %46 : CiphertextBlock = extract_ct_block(%9, %3);
-            %47 : CiphertextBlock = extract_ct_block(%9, %4);
-            %48 : CiphertextBlock = extract_ct_block(%9, %5);
-            %49 : CiphertextBlock = extract_ct_block(%9, %6);
-            %50 : CiphertextBlock = extract_ct_block(%9, %7);
-            %51 : CiphertextBlock = extract_ct_block(%9, %8);
-            %52 : CiphertextBlock = mac(%22, %37, %36);
-            %53 : CiphertextBlock = mac(%22, %39, %38);
-            %54 : CiphertextBlock = mac(%22, %41, %40);
-            %55 : CiphertextBlock = mac(%22, %43, %42);
-            %56 : CiphertextBlock = mac(%22, %45, %44);
-            %57 : CiphertextBlock = mac(%22, %47, %46);
-            %58 : CiphertextBlock = mac(%22, %49, %48);
-            %59 : CiphertextBlock = mac(%22, %51, %50);
-            %60 : CiphertextBlock = pbs(%52, %23);
-            %61 : CiphertextBlock = pbs(%53, %23);
-            %62 : CiphertextBlock = pbs(%54, %23);
-            %63 : CiphertextBlock = pbs(%55, %23);
-            %64 : CiphertextBlock = pbs(%56, %25);
-            %65 : CiphertextBlock = pbs(%57, %25);
-            %66 : CiphertextBlock = pbs(%58, %25);
-            %67 : CiphertextBlock = pbs(%59, %25);
+            %32 : Ciphertext = let<Ciphertext>();
+            %34 : CiphertextBlock = extract_ct_block(%0, %1);
+            %35 : CiphertextBlock = extract_ct_block(%0, %2);
+            %36 : CiphertextBlock = extract_ct_block(%0, %3);
+            %37 : CiphertextBlock = extract_ct_block(%0, %4);
+            %38 : CiphertextBlock = extract_ct_block(%0, %5);
+            %39 : CiphertextBlock = extract_ct_block(%0, %6);
+            %40 : CiphertextBlock = extract_ct_block(%0, %7);
+            %41 : CiphertextBlock = extract_ct_block(%0, %8);
+            %42 : CiphertextBlock = extract_ct_block(%9, %1);
+            %43 : CiphertextBlock = extract_ct_block(%9, %2);
+            %44 : CiphertextBlock = extract_ct_block(%9, %3);
+            %45 : CiphertextBlock = extract_ct_block(%9, %4);
+            %46 : CiphertextBlock = extract_ct_block(%9, %5);
+            %47 : CiphertextBlock = extract_ct_block(%9, %6);
+            %48 : CiphertextBlock = extract_ct_block(%9, %7);
+            %49 : CiphertextBlock = extract_ct_block(%9, %8);
+            %50 : CiphertextBlock = mac(%23, %35, %34);
+            %51 : CiphertextBlock = mac(%23, %37, %36);
+            %52 : CiphertextBlock = mac(%23, %39, %38);
+            %53 : CiphertextBlock = mac(%23, %41, %40);
+            %54 : CiphertextBlock = mac(%23, %43, %42);
+            %55 : CiphertextBlock = mac(%23, %45, %44);
+            %56 : CiphertextBlock = mac(%23, %47, %46);
+            %57 : CiphertextBlock = mac(%23, %49, %48);
+            %58 : CiphertextBlock = pbs(%50, %22);
+            %59 : CiphertextBlock = pbs(%51, %22);
+            %60 : CiphertextBlock = pbs(%52, %22);
+            %61 : CiphertextBlock = pbs(%53, %22);
+            %62 : CiphertextBlock = pbs(%54, %24);
+            %63 : CiphertextBlock = pbs(%55, %24);
+            %64 : CiphertextBlock = pbs(%56, %24);
+            %65 : CiphertextBlock = pbs(%57, %24);
+            %66 : CiphertextBlock = sub_ct(%58, %62);
+            %67 : CiphertextBlock = sub_ct(%59, %63);
             %68 : CiphertextBlock = sub_ct(%60, %64);
             %69 : CiphertextBlock = sub_ct(%61, %65);
-            %70 : CiphertextBlock = sub_ct(%62, %66);
-            %71 : CiphertextBlock = sub_ct(%63, %67);
+            %70 : CiphertextBlock = pbs(%66, %18);
+            %71 : CiphertextBlock = pbs(%67, %18);
             %72 : CiphertextBlock = pbs(%68, %18);
             %73 : CiphertextBlock = pbs(%69, %18);
-            %74 : CiphertextBlock = pbs(%70, %18);
-            %75 : CiphertextBlock = pbs(%71, %18);
+            %74 : CiphertextBlock = add_pt(%70, %26);
+            %75 : CiphertextBlock = add_pt(%71, %26);
             %76 : CiphertextBlock = add_pt(%72, %26);
             %77 : CiphertextBlock = add_pt(%73, %26);
-            %78 : CiphertextBlock = add_pt(%74, %26);
-            %79 : CiphertextBlock = add_pt(%75, %26);
-            %80 : CiphertextBlock = mac(%22, %77, %76);
-            %81 : CiphertextBlock = mac(%22, %79, %78);
-            %82 : CiphertextBlock = pbs(%80, %19);
-            %83 : CiphertextBlock = pbs(%81, %19);
-            %84 : CiphertextBlock = mac(%22, %83, %82);
-            %85 : CiphertextBlock = pbs(%84, %20);
-            %86 : Ciphertext = store_ct_block(%85, %34, %1);
-            output<0, Ciphertext>(%86);
+            %78 : CiphertextBlock = mac(%23, %75, %74);
+            %79 : CiphertextBlock = mac(%23, %77, %76);
+            %80 : CiphertextBlock = pbs(%78, %19);
+            %81 : CiphertextBlock = pbs(%79, %19);
+            %82 : CiphertextBlock = mac(%23, %81, %80);
+            %83 : CiphertextBlock = pbs(%82, %20);
+            %84 : Ciphertext = store_ct_block(%83, %32, %1);
+            output<0, Ciphertext>(%84);
         ",
         );
     }

@@ -3,7 +3,10 @@
 //! This module provides specialized implementations of common integer operations
 //! like comparisons that work efficiently with encrypted data blocks.
 
+pub mod add;
 pub mod cmp;
+pub mod if_then_else;
+pub mod if_then_zero;
 
 // ADD
 // SUB
@@ -40,9 +43,6 @@ pub mod cmp;
 // BW_AND
 // BW_OR
 // BW_XOR
-//
-// IF_THEN_ZERO
-// IF_THEN_ELSE
 //
 // ERC_20
 // MEMCPY

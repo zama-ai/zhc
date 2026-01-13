@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use hpuc_builder::{builder::IntegerConfig, iops::cmp::cmp_gt};
+use hpuc_builder::{builder::BlockConfig, iops::cmp::cmp_gt};
 use hpuc_frontend::{BuilderContext, create_rhai_engine};
 use hpuc_ir::{IR, cse::eliminate_common_subexpressions, dce::eliminate_dead_code};
 use hpuc_langs::ioplang::Ioplang;
@@ -36,13 +36,13 @@ pub fn get_sub_ir(integer_w: i64, msg_w: i64, carry_w: i64) -> IR<Ioplang> {
 }
 
 pub fn get_cmp_ir(integer_w: i64, msg_w: i64, carry_w: i64) -> IR<Ioplang> {
-    let mut ir = cmp_gt(&IntegerConfig {
-        integer_width: integer_w as usize,
-        message_width: msg_w as usize,
-        carry_width: carry_w as usize,
-        nu_msg: 1,
-        nu_bool: 1,
-    });
+    let mut ir = cmp_gt(
+        integer_w as u8,
+        &BlockConfig {
+            message_width: msg_w as u8,
+            carry_width: carry_w as u8,
+        },
+    );
     eliminate_dead_code(&mut ir);
     eliminate_common_subexpressions(&mut ir);
     ir
@@ -246,63 +246,63 @@ fn test_cmp_ir() {
         %18 : Lut1 = gen_lut1<CmpSign>();
         %19 : Lut1 = gen_lut1<CmpReduce>();
         %20 : Lut1 = gen_lut1<CmpGtMrg>();
-        %22 : PlaintextBlock = constant<4_pt_block>();
-        %23 : Lut1 = gen_lut1<None>();
-        %25 : Lut1 = gen_lut1<None>();
+        %22 : Lut1 = gen_lut1<None>();
+        %23 : PlaintextBlock = constant<4_pt_block>();
+        %24 : Lut1 = gen_lut1<None>();
         %26 : PlaintextBlock = constant<1_pt_block>();
-        %34 : Ciphertext = let<Ciphertext>();
-        %36 : CiphertextBlock = extract_ct_block(%0, %1);
-        %37 : CiphertextBlock = extract_ct_block(%0, %2);
-        %38 : CiphertextBlock = extract_ct_block(%0, %3);
-        %39 : CiphertextBlock = extract_ct_block(%0, %4);
-        %40 : CiphertextBlock = extract_ct_block(%0, %5);
-        %41 : CiphertextBlock = extract_ct_block(%0, %6);
-        %42 : CiphertextBlock = extract_ct_block(%0, %7);
-        %43 : CiphertextBlock = extract_ct_block(%0, %8);
-        %44 : CiphertextBlock = extract_ct_block(%9, %1);
-        %45 : CiphertextBlock = extract_ct_block(%9, %2);
-        %46 : CiphertextBlock = extract_ct_block(%9, %3);
-        %47 : CiphertextBlock = extract_ct_block(%9, %4);
-        %48 : CiphertextBlock = extract_ct_block(%9, %5);
-        %49 : CiphertextBlock = extract_ct_block(%9, %6);
-        %50 : CiphertextBlock = extract_ct_block(%9, %7);
-        %51 : CiphertextBlock = extract_ct_block(%9, %8);
-        %52 : CiphertextBlock = mac(%22, %37, %36);
-        %53 : CiphertextBlock = mac(%22, %39, %38);
-        %54 : CiphertextBlock = mac(%22, %41, %40);
-        %55 : CiphertextBlock = mac(%22, %43, %42);
-        %56 : CiphertextBlock = mac(%22, %45, %44);
-        %57 : CiphertextBlock = mac(%22, %47, %46);
-        %58 : CiphertextBlock = mac(%22, %49, %48);
-        %59 : CiphertextBlock = mac(%22, %51, %50);
-        %60 : CiphertextBlock = pbs(%52, %23);
-        %61 : CiphertextBlock = pbs(%53, %23);
-        %62 : CiphertextBlock = pbs(%54, %23);
-        %63 : CiphertextBlock = pbs(%55, %23);
-        %64 : CiphertextBlock = pbs(%56, %25);
-        %65 : CiphertextBlock = pbs(%57, %25);
-        %66 : CiphertextBlock = pbs(%58, %25);
-        %67 : CiphertextBlock = pbs(%59, %25);
+        %32 : Ciphertext = let<Ciphertext>();
+        %34 : CiphertextBlock = extract_ct_block(%0, %1);
+        %35 : CiphertextBlock = extract_ct_block(%0, %2);
+        %36 : CiphertextBlock = extract_ct_block(%0, %3);
+        %37 : CiphertextBlock = extract_ct_block(%0, %4);
+        %38 : CiphertextBlock = extract_ct_block(%0, %5);
+        %39 : CiphertextBlock = extract_ct_block(%0, %6);
+        %40 : CiphertextBlock = extract_ct_block(%0, %7);
+        %41 : CiphertextBlock = extract_ct_block(%0, %8);
+        %42 : CiphertextBlock = extract_ct_block(%9, %1);
+        %43 : CiphertextBlock = extract_ct_block(%9, %2);
+        %44 : CiphertextBlock = extract_ct_block(%9, %3);
+        %45 : CiphertextBlock = extract_ct_block(%9, %4);
+        %46 : CiphertextBlock = extract_ct_block(%9, %5);
+        %47 : CiphertextBlock = extract_ct_block(%9, %6);
+        %48 : CiphertextBlock = extract_ct_block(%9, %7);
+        %49 : CiphertextBlock = extract_ct_block(%9, %8);
+        %50 : CiphertextBlock = mac(%23, %35, %34);
+        %51 : CiphertextBlock = mac(%23, %37, %36);
+        %52 : CiphertextBlock = mac(%23, %39, %38);
+        %53 : CiphertextBlock = mac(%23, %41, %40);
+        %54 : CiphertextBlock = mac(%23, %43, %42);
+        %55 : CiphertextBlock = mac(%23, %45, %44);
+        %56 : CiphertextBlock = mac(%23, %47, %46);
+        %57 : CiphertextBlock = mac(%23, %49, %48);
+        %58 : CiphertextBlock = pbs(%50, %22);
+        %59 : CiphertextBlock = pbs(%51, %22);
+        %60 : CiphertextBlock = pbs(%52, %22);
+        %61 : CiphertextBlock = pbs(%53, %22);
+        %62 : CiphertextBlock = pbs(%54, %24);
+        %63 : CiphertextBlock = pbs(%55, %24);
+        %64 : CiphertextBlock = pbs(%56, %24);
+        %65 : CiphertextBlock = pbs(%57, %24);
+        %66 : CiphertextBlock = sub_ct(%58, %62);
+        %67 : CiphertextBlock = sub_ct(%59, %63);
         %68 : CiphertextBlock = sub_ct(%60, %64);
         %69 : CiphertextBlock = sub_ct(%61, %65);
-        %70 : CiphertextBlock = sub_ct(%62, %66);
-        %71 : CiphertextBlock = sub_ct(%63, %67);
+        %70 : CiphertextBlock = pbs(%66, %18);
+        %71 : CiphertextBlock = pbs(%67, %18);
         %72 : CiphertextBlock = pbs(%68, %18);
         %73 : CiphertextBlock = pbs(%69, %18);
-        %74 : CiphertextBlock = pbs(%70, %18);
-        %75 : CiphertextBlock = pbs(%71, %18);
+        %74 : CiphertextBlock = add_pt(%70, %26);
+        %75 : CiphertextBlock = add_pt(%71, %26);
         %76 : CiphertextBlock = add_pt(%72, %26);
         %77 : CiphertextBlock = add_pt(%73, %26);
-        %78 : CiphertextBlock = add_pt(%74, %26);
-        %79 : CiphertextBlock = add_pt(%75, %26);
-        %80 : CiphertextBlock = mac(%22, %77, %76);
-        %81 : CiphertextBlock = mac(%22, %79, %78);
-        %82 : CiphertextBlock = pbs(%80, %19);
-        %83 : CiphertextBlock = pbs(%81, %19);
-        %84 : CiphertextBlock = mac(%22, %83, %82);
-        %85 : CiphertextBlock = pbs(%84, %20);
-        %86 : Ciphertext = store_ct_block(%85, %34, %1);
-        output<0, Ciphertext>(%86);
+        %78 : CiphertextBlock = mac(%23, %75, %74);
+        %79 : CiphertextBlock = mac(%23, %77, %76);
+        %80 : CiphertextBlock = pbs(%78, %19);
+        %81 : CiphertextBlock = pbs(%79, %19);
+        %82 : CiphertextBlock = mac(%23, %81, %80);
+        %83 : CiphertextBlock = pbs(%82, %20);
+        %84 : Ciphertext = store_ct_block(%83, %32, %1);
+        output<0, Ciphertext>(%84);
     ",
     );
 }
