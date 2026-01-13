@@ -1,0 +1,9 @@
+[package]
+name = "hc_langs"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+hc_ir = { path = "../hc_ir" }
+hc_utils = { path = "../hc_utils" }
+serde = { workspace = true }

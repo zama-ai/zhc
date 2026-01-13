@@ -1,15 +1,15 @@
 [workspace]
 members = [
-    "hpuc_frontend",
-    "hpuc_gui",
-    "hpuc_ir",
-    "hpuc_langs",
-    "hpuc_bin",
-    "hpuc_pipeline",
-    "hpuc_sim",
-    "hpuc_utils",
-    "hpuc_utils_macro",
-    "hpuc_builder",
+    "hc_frontend",
+    "hc_gui",
+    "hc_ir",
+    "hc_langs",
+    "hc_bin",
+    "hc_pipeline",
+    "hc_sim",
+    "hc_utils",
+    "hc_utils_macro",
+    "hc_builder",
 ]
 resolver = "3"
 
