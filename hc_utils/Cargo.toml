@@ -1,0 +1,10 @@
+[package]
+name = "hc_utils"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+hc_utils_macro = { path = "../hc_utils_macro" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+paste = { workspace = true }
