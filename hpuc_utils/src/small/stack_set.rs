@@ -1,5 +1,6 @@
-use crate::{StackVec, StackVecIntoIter};
 use std::fmt::Debug;
+
+use crate::small::stack_vec::{StackVec, StackVecIntoIter};
 
 /// A stack-allocated set that maintains unique elements.
 ///

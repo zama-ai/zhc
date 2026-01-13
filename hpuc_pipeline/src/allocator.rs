@@ -16,7 +16,7 @@ use hpuc_langs::{
     hpulang::{Hpulang, Operations as HpuOp},
 };
 use hpuc_sim::hpu::HpuConfig;
-use hpuc_utils::{CollectInSmallVec, CollectInVec, MultiZip, SmallMap, SmallVec, StoreIndex, svec};
+use hpuc_utils::{iter::{CollectInSmallVec, CollectInVec, MultiZip}, small::{SmallMap, SmallVec}, StoreIndex, svec};
 
 /// A register identifier used in the allocation process.
 #[derive(Clone, Debug, Copy)]

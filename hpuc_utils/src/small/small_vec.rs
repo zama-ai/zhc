@@ -1,7 +1,7 @@
-use super::StackVec;
-use crate::StackVecIntoIter;
 use std::fmt::Debug;
 use std::{hash::Hash, usize};
+
+use crate::small::stack_vec::{STACK_BYTES, StackVec, StackVecIntoIter};
 
 /// Iterator that moves elements out of a `SmallVec` by value.
 ///
@@ -48,7 +48,17 @@ impl<A: Debug> Debug for SmallVec<A> {
 impl<A> SmallVec<A> {
     /// Creates an empty `SmallVec`.
     pub fn new() -> Self {
-        SmallVec::Stack(StackVec::new())
+        let size = std::mem::size_of::<A>();
+        if size > STACK_BYTES {
+            #[cfg(debug_assertions)]
+            eprintln!(
+                "Warning: Element size ({} bytes) exceeds stack_vec capacity ({} bytes), using heap_vec",
+                size, STACK_BYTES
+            );
+            SmallVec::Heap(Vec::new())
+        } else {
+            SmallVec::Stack(StackVec::new())
+        }
     }
 
     /// Creates an empty `SmallVec` with at least the specified `cap`.
@@ -57,6 +67,14 @@ impl<A> SmallVec<A> {
     /// Otherwise, it will be allocated on the heap. The vector will be able to
     /// hold at least `cap` elements without reallocating.
     pub fn with_capacity(cap: usize) -> Self {
+        #[cfg(debug_assertions)]
+        if StackVec::<A>::static_capacity() == 0 {
+            eprintln!(
+                "Warning: Element size ({} bytes) exceeds stack_vec capacity ({} bytes), using heap_vec",
+                std::mem::size_of::<A>(),
+                STACK_BYTES
+            );
+        }
         if cap <= StackVec::<A>::static_capacity() {
             SmallVec::Stack(StackVec::new())
         } else {
@@ -237,6 +255,14 @@ impl<A> std::ops::IndexMut<usize> for SmallVec<A> {
 impl<A> std::iter::FromIterator<A> for SmallVec<A> {
     fn from_iter<I: IntoIterator<Item = A>>(iter: I) -> Self {
         let iter = iter.into_iter();
+        #[cfg(debug_assertions)]
+        if StackVec::<A>::static_capacity() == 0 {
+            eprintln!(
+                "Warning: Element size ({} bytes) exceeds stack_vec capacity ({} bytes), using heap_vec",
+                std::mem::size_of::<A>(),
+                STACK_BYTES
+            );
+        }
         if let (_, Some(max)) = iter.size_hint()
             && max <= StackVec::<A>::static_capacity()
         {
@@ -288,6 +314,27 @@ impl<A: Hash> Hash for SmallVec<A> {
 
 impl<A: Eq> Eq for SmallVec<A> {}
 
+impl<A> AsRef<[A]> for SmallVec<A> {
+    fn as_ref(&self) -> &[A] {
+        self.as_slice()
+    }
+}
+
+impl<A, const N: usize> TryInto<[A; N]> for SmallVec<A> {
+    type Error = SmallVec<A>;
+
+    fn try_into(self) -> Result<[A; N], Self::Error> {
+        if self.len() != N {
+            return Err(self);
+        }
+
+        match self {
+            SmallVec::Heap(vec) => vec.try_into().map_err(SmallVec::Heap),
+            SmallVec::Stack(stack_vec) => stack_vec.try_into().map_err(SmallVec::Stack),
+        }
+    }
+}
+
 /// Creates a `SmallVec` containing the provided elements.
 ///
 /// This macro provides a convenient way to create `SmallVec` instances with
@@ -295,13 +342,13 @@ impl<A: Eq> Eq for SmallVec<A> {}
 #[macro_export]
 macro_rules! svec {
     () => {
-        $crate::SmallVec::from_iter(std::iter::empty())
+        $crate::small::SmallVec::from_iter(std::iter::empty())
     };
     ($elem:expr; $n:expr) => {
-        $crate::SmallVec::from_iter(std::iter::repeat($elem).take($n))
+        $crate::small::SmallVec::from_iter(std::iter::repeat($elem).take($n))
     };
     ($($x:expr),+ $(,)?) => {
-        $crate::SmallVec::from_iter([$($x),+])
+        $crate::small::SmallVec::from_iter([$($x),+])
     };
 }
 

@@ -2,7 +2,7 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::mem::{ManuallyDrop, MaybeUninit};
 
-const STACK_BYTES: usize = 64;
+pub const STACK_BYTES: usize = 64;
 
 #[repr(C)]
 union AlignedStorage<A> {
@@ -12,12 +12,12 @@ union AlignedStorage<A> {
     _align: ManuallyDrop<[A; 0]>,
 }
 
-/// A stack-allocated vector with a fixed capacity.
+/// A stack-allocated vector with a fixed memory footprint.
 ///
-/// `StackVec` stores elements in a fixed-size buffer allocated on the stack,
-/// providing vector-like functionality without heap allocation. The capacity
-/// is determined by the size of the element type and cannot exceed the
-/// stack buffer size.
+/// `StackVec` stores elements in a fixed-size byte-buffer allocated on the stack.
+/// It provides vector-like functionality without heap allocation. Since the memory
+/// footprint is statically fixed, its capacity varies depending on the size of the
+/// objects to store.
 pub struct StackVec<A> {
     data: AlignedStorage<A>,
     len: usize,
@@ -227,7 +227,7 @@ impl<A> StackVec<A> {
         let size = std::mem::size_of::<A>();
         let align = std::mem::align_of::<A>();
         if size > STACK_BYTES {
-            panic!("Type is too big to fit in a stack vec.");
+            return 0;
         }
         if size == 0 {
             panic!("ZSTs are not supported.");
@@ -439,6 +439,41 @@ impl<A: Clone> Clone for StackVec<A> {
     }
 }
 
+impl<A> AsRef<[A]> for StackVec<A> {
+    fn as_ref(&self) -> &[A] {
+        self.as_slice()
+    }
+}
+
+impl<A, const N: usize> TryInto<[A; N]> for StackVec<A> {
+    type Error = StackVec<A>;
+
+    fn try_into(mut self) -> Result<[A; N], Self::Error> {
+        if self.len() != N {
+            return Err(self);
+        }
+
+        // Create an uninitialized array
+        let mut result: [MaybeUninit<A>; N] = unsafe { MaybeUninit::uninit().assume_init() };
+
+        // Move elements from the StackVec into the array
+        unsafe {
+            let src_ptr = self.data.data.as_ptr() as *const A;
+            for i in 0..N {
+                result[i] = MaybeUninit::new(std::ptr::read(src_ptr.add(i)));
+            }
+
+            // Prevent StackVec from dropping the elements we just moved
+            self.len = 0;
+        }
+
+        // Transmute the MaybeUninit array to the final array type
+        let result = unsafe { std::mem::transmute_copy::<[MaybeUninit<A>; N], [A; N]>(&result) };
+        std::mem::forget(self);
+
+        Ok(result)
+    }
+}
 #[cfg(test)]
 mod test {
     use super::*;

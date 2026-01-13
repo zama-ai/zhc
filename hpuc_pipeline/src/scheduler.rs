@@ -21,7 +21,7 @@ use hpuc_sim::{
     Cycle, Simulatable, Simulator,
     hpu::{DOp, DOpId, Events, Hpu, HpuConfig, RawDOp},
 };
-use hpuc_utils::{MultiZip, SmallSet, SmallVec, StoreIndex};
+use hpuc_utils::{iter::MultiZip, small::SmallSet, small::SmallVec, StoreIndex};
 use serde::Serialize;
 
 /// Schedules operations in the IR for optimal execution on the target HPU.

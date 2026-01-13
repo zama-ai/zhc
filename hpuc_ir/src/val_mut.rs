@@ -1,4 +1,4 @@
-use hpuc_utils::SmallVec;
+use hpuc_utils::small::SmallVec;
 
 use super::{Dialect, OpId, State, ValId};
 

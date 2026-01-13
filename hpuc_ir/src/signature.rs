@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use hpuc_utils::SmallVec;
+use hpuc_utils::small::SmallVec;
 
 use super::DialectTypes;
 

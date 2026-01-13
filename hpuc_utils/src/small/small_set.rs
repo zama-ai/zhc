@@ -1,6 +1,6 @@
 use std::hash::Hash;
 
-use crate::{FastSet, StackSet, StackVecIntoIter};
+use crate::{FastSet, small::{stack_set::StackSet, stack_vec::StackVecIntoIter}};
 
 /// A set optimized for small collections with automatic storage strategy.
 ///

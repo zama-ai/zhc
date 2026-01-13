@@ -1,6 +1,6 @@
 use hpuc_ir::{IR, ValId, cse::eliminate_common_subexpressions, dce::eliminate_dead_code};
 use hpuc_langs::ioplang::{Ioplang, Litteral, LutGenerator, Operations, Types};
-use hpuc_utils::{ChunkIt, SmallVec, svec};
+use hpuc_utils::{iter::{Chunk, ChunkIt}, small::SmallVec, svec};
 
 /// Configuration parameters for homomorphic integer operations.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -582,7 +582,7 @@ impl Builder {
             .into_iter()
             .chunk(2)
             .map(|a| match a {
-                hpuc_utils::Chunk::Complete(sv) => {
+                Chunk::Complete(sv) => {
                     let maced = self.mac(shift, sv[1], sv[0]);
                     if clean_noise {
                         self.pbs(maced, lut_none)
@@ -590,7 +590,7 @@ impl Builder {
                         maced
                     }
                 }
-                hpuc_utils::Chunk::Rest(sv) => sv[0],
+                Chunk::Rest(sv) => sv[0],
             })
             .collect()
     }

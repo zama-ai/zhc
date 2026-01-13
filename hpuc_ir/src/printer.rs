@@ -1,4 +1,4 @@
-use hpuc_utils::CollectInSmallVec;
+use hpuc_utils::iter::CollectInSmallVec;
 
 use super::{Dialect, IR, OpIdRaw, OpRef, ValId, val_ref::ValRef};
 use std::{collections::HashMap, marker::PhantomData};

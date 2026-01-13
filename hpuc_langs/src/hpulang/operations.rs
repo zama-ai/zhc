@@ -1,7 +1,7 @@
 use std::fmt::{Debug, Display};
 
 use hpuc_ir::{DialectOperations, IR, Signature, sig};
-use hpuc_utils::CollectInSmallVec;
+use hpuc_utils::iter::CollectInSmallVec;
 
 use super::{Hpulang, types::Types};
 

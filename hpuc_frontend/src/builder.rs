@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use hpuc_ir::{IR, IRError, ValId};
 use hpuc_langs::ioplang::{Ioplang, Operations, Types};
-use hpuc_utils::SmallVec;
+use hpuc_utils::small::SmallVec;
 use hpuc_utils::svec;
 
 /// Context structure use to spread constant in the builder environnement
