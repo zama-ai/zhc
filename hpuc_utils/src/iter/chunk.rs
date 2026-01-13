@@ -1,4 +1,4 @@
-use crate::SmallVec;
+use crate::small::SmallVec;
 
 /// Splits an iterator into fixed-size chunks.
 pub trait ChunkIt
@@ -26,11 +26,21 @@ impl<A: Iterator> ChunkIt for A {
 ///
 /// Chunks can be either complete (containing the requested number of elements)
 /// or partial (containing fewer elements when the iterator is exhausted).
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Chunk<A> {
     /// A complete chunk containing exactly the requested number of elements.
     Complete(SmallVec<A>),
     /// A partial chunk containing the remaining elements when the iterator ends.
     Rest(SmallVec<A>),
+}
+
+impl<A> Chunk<A> {
+    pub fn unwrap_complete(self) -> SmallVec<A> {
+        match self {
+            Chunk::Complete(small_vec) => small_vec,
+            Chunk::Rest(_) => panic!(),
+        }
+    }
 }
 
 /// An iterator that yields chunks of elements from another iterator.

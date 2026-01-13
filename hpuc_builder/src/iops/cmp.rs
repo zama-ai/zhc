@@ -1,6 +1,6 @@
 use hpuc_ir::IR;
 use hpuc_langs::ioplang::Ioplang;
-use hpuc_utils::{CollectInSmallVec, MultiZip, svec};
+use hpuc_utils::{iter::{CollectInSmallVec, MultiZip}, svec};
 
 use crate::builder::{Builder, IntegerConfig, LutType};
 

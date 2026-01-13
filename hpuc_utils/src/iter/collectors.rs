@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use crate::SmallVec;
+use crate::small::SmallVec;
 
 /// Collects iterator elements into a `Vec`.
 pub trait CollectInVec<T> {

@@ -1,4 +1,4 @@
-use hpuc_utils::{FastMap, SmallVec, Store};
+use hpuc_utils::{FastMap, Store, small::SmallVec};
 
 use super::{Dialect, DialectOperations, IR, ValId, ValueNumber, dce::eliminate_dead_code};
 

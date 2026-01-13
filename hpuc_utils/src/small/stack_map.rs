@@ -1,5 +1,6 @@
-use crate::{StackVec, StackVecIntoIter};
 use std::fmt::Debug;
+
+use crate::small::stack_vec::{StackVec, StackVecIntoIter};
 
 /// A map backed by a stack-allocated vector for small key-value collections.
 #[derive(Clone)]

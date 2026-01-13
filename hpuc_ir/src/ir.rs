@@ -1,5 +1,5 @@
 use hpuc_utils::svec;
-use hpuc_utils::{SmallVec, Store};
+use hpuc_utils::{small::SmallVec, Store};
 
 use crate::traversal::{OpWalk, OpWalker, ValWalk, ValWalker};
 use crate::val_ref::ValRef;

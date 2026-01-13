@@ -2,7 +2,7 @@ use hpuc_ir::{
     Dialect, DialectOperations,
     cse::{AllowCse, Expr},
 };
-use hpuc_utils::CollectInSmallVec;
+use hpuc_utils::iter::CollectInSmallVec;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Ioplang;

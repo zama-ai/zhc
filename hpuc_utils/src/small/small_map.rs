@@ -1,6 +1,7 @@
 use std::hash::Hash;
 
-use crate::{FastMap, StackMap};
+use crate::{FastMap, small::stack_map::{StackMapIntoIter, StackMapIter, StackMapMutIter}};
+use super::stack_map::StackMap;
 
 /// A map that starts stack-allocated and spills to heap when capacity is exceeded.
 #[derive(Clone, Debug)]
@@ -109,7 +110,7 @@ impl<K: Eq + Hash, V> SmallMap<K, V> {
 /// An iterator over key-value pairs in a `SmallMap`.
 pub enum SmallMapIter<'a, K: Eq, V> {
     Heap(std::collections::hash_map::Iter<'a, K, V>),
-    Stack(crate::stack_map::StackMapIter<'a, K, V>),
+    Stack(StackMapIter<'a, K, V>),
 }
 
 impl<'a, K: Eq, V> Iterator for SmallMapIter<'a, K, V> {
@@ -126,7 +127,7 @@ impl<'a, K: Eq, V> Iterator for SmallMapIter<'a, K, V> {
 /// An iterator over mutable key-value pairs in a `SmallMap`.
 pub enum SmallMapMutIter<'a, K: Eq, V> {
     Heap(std::collections::hash_map::IterMut<'a, K, V>),
-    Stack(crate::stack_map::StackMapMutIter<'a, K, V>),
+    Stack(StackMapMutIter<'a, K, V>),
 }
 
 impl<'a, K: Eq, V> Iterator for SmallMapMutIter<'a, K, V> {
@@ -143,7 +144,7 @@ impl<'a, K: Eq, V> Iterator for SmallMapMutIter<'a, K, V> {
 /// An iterator that moves key-value pairs out of a `SmallMap`.
 pub enum SmallMapIntoIter<K: Eq, V> {
     Heap(std::collections::hash_map::IntoIter<K, V>),
-    Stack(crate::stack_map::StackMapIntoIter<K, V>),
+    Stack(StackMapIntoIter<K, V>),
 }
 
 impl<K: Eq, V> Iterator for SmallMapIntoIter<K, V> {

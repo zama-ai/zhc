@@ -1,6 +1,6 @@
 use hpuc_ir::{IR, OpRef, ValId, ValMap};
 use hpuc_langs::hpulang::{Hpulang, Operations};
-use hpuc_utils::{MultiZip, SmallMap, SmallSet, SmallVec, svec};
+use hpuc_utils::{iter::MultiZip, small::{SmallMap, SmallSet, SmallVec}, svec};
 
 struct Batcher<'a>(Vec<OpRef<'a, Hpulang>>);
 
