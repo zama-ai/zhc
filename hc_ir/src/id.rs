@@ -33,7 +33,7 @@ macro_rules! impl_index {
 
         impl $name {
             /// Creates an iterator over a range of identifiers from `start` to `end`.
-            pub fn range(start: $raw, end: $raw) -> impl Iterator<Item = $name> {
+            pub fn range(start: $raw, end: $raw) -> impl DoubleEndedIterator<Item = $name> {
                 (start..end).map(|a| $name(a))
             }
         }

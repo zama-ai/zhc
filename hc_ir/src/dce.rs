@@ -1,3 +1,5 @@
+use hc_utils::iter::CollectInSmallVec;
+
 use crate::OpMap;
 
 use super::{Dialect, IR, OpId};
@@ -43,8 +45,8 @@ impl DeadCodeAnalysis {
     }
 
     /// Returns an iterator over all active operations and their liveness status.
-    pub fn get_statuses_iter(&self) -> impl Iterator<Item = (OpId, &Liveness)> {
-        self.states.iter()
+    pub fn get_statuses_iter(&self) -> impl DoubleEndedIterator<Item = (OpId, &Liveness)> {
+        self.states.iter().cosvec().into_iter()
     }
 
     /// Returns `true` if the IR contains any dead operations.

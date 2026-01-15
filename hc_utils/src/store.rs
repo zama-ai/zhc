@@ -54,7 +54,7 @@ impl<I: StoreIndex, V> Store<I, V> {
     }
 
     /// Returns an iterator over typed indices and element references.
-    pub fn enumerate_iter(&self) -> impl Iterator<Item = (I, &V)> {
+    pub fn enumerate_iter(&self) -> impl DoubleEndedIterator<Item = (I, &V)> {
         self.0
             .iter()
             .enumerate()

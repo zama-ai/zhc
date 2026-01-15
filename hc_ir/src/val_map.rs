@@ -15,6 +15,7 @@ use super::{Dialect, IR, State, ValId};
 /// efficient mapping of values to analysis results or other metadata.
 /// Only active values can store data, and the map tracks how many
 /// entries are currently stored.
+#[derive(Clone)]
 pub struct ValMap<T> {
     store: Store<ValId, State<Option<T>>>,
     n_stored: u16,
@@ -197,7 +198,7 @@ impl<T> ValMap<T> {
     }
 
     /// Returns an iterator over value IDs and their stored data.
-    pub fn iter(&self) -> impl Iterator<Item = (ValId, &T)> {
+    pub fn iter(&self) -> impl DoubleEndedIterator<Item = (ValId, &T)> {
         self.store.enumerate_iter().filter_map(|(i, a)| match a {
             State::Active(Some(v)) => Some((i, v)),
             _ => None,

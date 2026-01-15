@@ -13,6 +13,7 @@ use super::{Dialect, IR, OpId, State};
 /// efficient mapping of operations to analysis results or other metadata.
 /// Only active operations can store values, and the map tracks how many
 /// values are currently stored.
+#[derive(Clone)]
 pub struct OpMap<T> {
     store: Store<OpId, State<Option<T>>>,
     n_stored: u16,
@@ -195,7 +196,7 @@ impl<T> OpMap<T> {
     }
 
     /// Returns an iterator over operation IDs and their stored values.
-    pub fn iter(&self) -> impl Iterator<Item = (OpId, &T)> {
+    pub fn iter(&self) -> impl DoubleEndedIterator<Item = (OpId, &T)> {
         self.store.enumerate_iter().filter_map(|(i, a)| match a {
             State::Active(Some(v)) => Some((i, v)),
             _ => None,

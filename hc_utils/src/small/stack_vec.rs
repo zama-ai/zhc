@@ -57,6 +57,21 @@ impl<'a, A> Iterator for StackVecIntoIter<'a, A> {
     }
 }
 
+impl<'a, A> DoubleEndedIterator for StackVecIntoIter<'a, A> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.start >= self.end {
+            None
+        } else {
+            self.end -= 1;
+            unsafe {
+                let ptr = self.data.data.as_ptr() as *const A;
+                let value = std::ptr::read(ptr.add(self.end));
+                Some(value)
+            }
+        }
+    }
+}
+
 impl<'a, A> ExactSizeIterator for StackVecIntoIter<'a, A> {}
 
 impl<'a, A> Drop for StackVecIntoIter<'a, A> {
@@ -1072,6 +1087,122 @@ mod test {
 
         let into_collected: Vec<_> = vec.into_iter().collect();
         assert_eq!(into_collected, vec![2, 4, 6]);
+    }
+
+    #[test]
+    fn test_double_ended_iterator() {
+        let mut vec = StackVec::new();
+        vec.push(1u32);
+        vec.push(2);
+        vec.push(3);
+        vec.push(4);
+        vec.push(5);
+
+        let mut iter = vec.into_iter();
+
+        // Test alternating next() and next_back()
+        assert_eq!(iter.next(), Some(1));
+        assert_eq!(iter.next_back(), Some(5));
+        assert_eq!(iter.next(), Some(2));
+        assert_eq!(iter.next_back(), Some(4));
+        assert_eq!(iter.next(), Some(3));
+
+        // Iterator should be exhausted
+        assert_eq!(iter.next(), None);
+        assert_eq!(iter.next_back(), None);
+    }
+
+    #[test]
+    fn test_double_ended_iterator_drain_all() {
+        let mut vec = StackVec::new();
+        vec.push(10u32);
+        vec.push(20);
+        vec.push(30);
+
+        let mut iter = vec.drain_all();
+
+        // Test next_back() with drain_all
+        assert_eq!(iter.next_back(), Some(30));
+        assert_eq!(iter.next(), Some(10));
+        assert_eq!(iter.next_back(), Some(20));
+
+        assert_eq!(iter.next(), None);
+        assert_eq!(iter.next_back(), None);
+    }
+
+    #[test]
+    fn test_double_ended_iterator_ownership() {
+        let counter = Arc::new(AtomicUsize::new(0));
+
+        let mut vec = StackVec::new();
+        vec.push(DropTracker::new(1, counter.clone()));
+        vec.push(DropTracker::new(2, counter.clone()));
+        vec.push(DropTracker::new(3, counter.clone()));
+        vec.push(DropTracker::new(4, counter.clone()));
+
+        assert_eq!(counter.load(Ordering::Relaxed), 4);
+
+        {
+            let mut iter = vec.into_iter();
+
+            // Consume from both ends
+            let first = iter.next().unwrap();
+            assert_eq!(first.id, 1);
+            let last = iter.next_back().unwrap();
+            assert_eq!(last.id, 4);
+
+            drop(first);
+            drop(last);
+            assert_eq!(counter.load(Ordering::Relaxed), 2);
+
+            // Iterator drops remaining elements
+        }
+
+        assert_eq!(counter.load(Ordering::Relaxed), 0);
+    }
+
+    #[test]
+    fn test_double_ended_iterator_single_element() {
+        let mut vec = StackVec::new();
+        vec.push(42u32);
+
+        let mut iter = vec.into_iter();
+
+        // Single element should be returned by either next() or next_back()
+        assert_eq!(iter.next_back(), Some(42));
+        assert_eq!(iter.next(), None);
+        assert_eq!(iter.next_back(), None);
+    }
+
+    #[test]
+    fn test_double_ended_iterator_empty() {
+        let vec: StackVec<u32> = StackVec::new();
+        let mut iter = vec.into_iter();
+
+        assert_eq!(iter.next(), None);
+        assert_eq!(iter.next_back(), None);
+    }
+
+    #[test]
+    fn test_double_ended_iterator_size_hint() {
+        let mut vec = StackVec::new();
+        vec.push(1u32);
+        vec.push(2);
+        vec.push(3);
+        vec.push(4);
+
+        let mut iter = vec.into_iter();
+        assert_eq!(iter.size_hint(), (4, Some(4)));
+
+        iter.next();
+        assert_eq!(iter.size_hint(), (3, Some(3)));
+
+        iter.next_back();
+        assert_eq!(iter.size_hint(), (2, Some(2)));
+
+        iter.next();
+        iter.next();
+        assert_eq!(iter.size_hint(), (0, Some(0)));
     }
 
     #[test]
