@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, ops::Deref};
 use std::hash::Hash;
 
 use crate::Printer;
@@ -45,6 +45,15 @@ impl<'s, D: Dialect> PartialEq for ValRef<'s, D> {
 }
 
 impl<'s, D: Dialect> Eq for ValRef<'s, D> {}
+
+impl<'s, D: Dialect> Deref for ValRef<'s, D> {
+    type Target = ValId;
+
+    fn deref(&self) -> &Self::Target {
+        &self.id
+    }
+}
+
 
 #[allow(unused)]
 impl<'s, D: Dialect> ValRef<'s, D> {
