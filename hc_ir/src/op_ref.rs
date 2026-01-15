@@ -1,4 +1,4 @@
-use std::{fmt::Display, hash::Hash};
+use std::{fmt::Display, hash::Hash, ops::Deref};
 
 use hc_utils::FastSet;
 
@@ -48,6 +48,14 @@ impl<'s, D: Dialect> PartialEq for OpRef<'s, D> {
 }
 
 impl<'s, D: Dialect> Eq for OpRef<'s, D> {}
+
+impl<'s, D: Dialect> Deref for OpRef<'s, D> {
+    type Target = OpId;
+
+    fn deref(&self) -> &Self::Target {
+        &self.id
+    }
+}
 
 impl<'s, D: Dialect> OpRef<'s, D> {
     /// Returns an iterator over the operation's argument values without state checking.
