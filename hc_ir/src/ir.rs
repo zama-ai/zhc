@@ -1,7 +1,5 @@
 use hc_utils::svec;
 use hc_utils::{Store, small::SmallVec};
-
-use crate::traversal::{OpWalk, OpWalker, ValWalk, ValWalker};
 use crate::val_ref::ValRef;
 use crate::{PrintWalker, ValMap};
 use std::{
@@ -145,11 +143,11 @@ impl<D: Dialect> IR<D> {
         *self.op_depth.iter().max().unwrap_or(&0)
     }
 
-    pub(crate) fn raw_linear_opwalker(&self) -> impl OpWalker {
+    pub(crate) fn raw_linear_opwalker(&self) -> impl DoubleEndedIterator<Item=OpId> {
         OpId::range(0, self.raw_n_ops())
     }
 
-    pub(crate) fn raw_topological_opwalker(&self) -> impl OpWalker {
+    pub(crate) fn raw_topological_opwalker(&self) -> impl DoubleEndedIterator<Item=OpId> {
         let max_depth = *self.op_depth.iter().max().unwrap_or(&0);
         let mut depth_buckets = vec![svec![]; (max_depth + 1) as usize];
         for op in self.raw_walk_ops_linear() {
@@ -158,28 +156,28 @@ impl<D: Dialect> IR<D> {
         depth_buckets.into_iter().flat_map(|b| b.into_iter())
     }
 
-    pub(crate) fn raw_walk_ops(&self, walker: impl OpWalker) -> impl OpWalk<'_, D> {
+    pub(crate) fn raw_walk_ops(&self, walker: impl Iterator<Item=OpId>) -> impl Iterator<Item=OpRef<'_, D>> {
         walker.map(|opid| self.raw_get_op(opid))
     }
 
-    pub(crate) fn raw_walk_ops_linear(&self) -> impl OpWalk<'_, D> {
-        self.raw_walk_ops(self.raw_linear_opwalker())
+    pub(crate) fn raw_walk_ops_linear(&self) -> impl DoubleEndedIterator<Item=OpRef<'_, D>> {
+        self.raw_linear_opwalker().map(|opid| self.raw_get_op(opid))
     }
 
-    pub(crate) fn raw_walk_ops_topo(&self) -> impl OpWalk<'_, D> {
-        self.raw_walk_ops(self.raw_topological_opwalker())
+    pub(crate) fn raw_walk_ops_topo(&self) -> impl DoubleEndedIterator<Item=OpRef<'_, D>> {
+        self.raw_topological_opwalker().map(|opid| self.raw_get_op(opid))
     }
 
-    pub(crate) fn raw_linear_valwalker(&self) -> impl ValWalker {
+    pub(crate) fn raw_linear_valwalker(&self) -> impl DoubleEndedIterator<Item=ValId> {
         ValId::range(0, self.raw_n_vals())
     }
 
-    pub(crate) fn raw_walk_vals(&self, walker: impl ValWalker) -> impl ValWalk<'_, D> {
+    pub(crate) fn raw_walk_vals(&self, walker: impl Iterator<Item=ValId>) -> impl Iterator<Item=ValRef<'_, D>> {
         walker.map(|valid| self.raw_get_val(valid))
     }
 
-    pub(crate) fn raw_walk_vals_linear(&self) -> impl ValWalk<'_, D> {
-        self.raw_walk_vals(self.raw_linear_valwalker())
+    pub(crate) fn raw_walk_vals_linear(&self) -> impl DoubleEndedIterator<Item=ValRef<'_, D>> {
+        self.raw_linear_valwalker().map(|valid| self.raw_get_val(valid))
     }
 
     pub(crate) fn raw_insert_op(&mut self, op: Op<D>) -> OpId {
@@ -314,7 +312,7 @@ impl<D: Dialect> IR<D> {
     /// Returns an iterator over all active operations in linear order.
     ///
     /// Operations are yielded in the order they were added to the IR.
-    pub fn walk_ops_linear(&self) -> impl OpWalk<'_, D> {
+    pub fn walk_ops_linear(&self) -> impl DoubleEndedIterator<Item=OpRef<'_, D>> {
         self.raw_walk_ops_linear().filter(op_active)
     }
 
@@ -322,8 +320,8 @@ impl<D: Dialect> IR<D> {
     ///
     /// Operations are yielded such that all dependencies of an operation
     /// are visited before the operation itself.
-    pub fn walk_ops_topological(&self) -> impl OpWalk<'_, D> {
-        self.raw_walk_ops(self.raw_topological_opwalker())
+    pub fn walk_ops_topological(&self) -> impl DoubleEndedIterator<Item=OpRef<'_, D>> {
+        self.raw_walk_ops_topo()
             .filter(op_active)
     }
 
@@ -331,14 +329,14 @@ impl<D: Dialect> IR<D> {
     ///
     /// The `walker` provides the order in which operation IDs are visited,
     /// and this method maps those IDs to their corresponding operation references.
-    pub fn walk_ops_with(&self, walker: impl OpWalker) -> impl OpWalk<'_, D> {
+    pub fn walk_ops_with(&self, walker: impl Iterator<Item=OpId>) -> impl Iterator<Item=OpRef<'_, D>> {
         walker.map(|opid| self.get_op(opid))
     }
 
     /// Returns an iterator over all active values in linear order.
     ///
     /// Values are yielded in the order they were added to the IR.
-    pub fn walk_vals_linear(&self) -> impl ValWalk<'_, D> {
+    pub fn walk_vals_linear(&self) -> impl DoubleEndedIterator<Item=ValRef<'_, D>> {
         self.raw_walk_vals_linear().filter(val_active)
     }
 
@@ -346,7 +344,7 @@ impl<D: Dialect> IR<D> {
     ///
     /// The `walker` provides the order in which value IDs are visited,
     /// and this method maps those IDs to their corresponding value references.
-    pub fn walk_vals_with(&self, walker: impl ValWalker) -> impl ValWalk<'_, D> {
+    pub fn walk_vals_with(&self, walker: impl Iterator<Item=ValId>) -> impl Iterator<Item=ValRef<'_, D>> {
         walker.map(|valid| self.get_val(valid))
     }
 
@@ -365,7 +363,7 @@ impl<D: Dialect> IR<D> {
     /// Only active operations are mutated; inactive operations are skipped.
     pub fn mutate_ops_with_walker(
         &mut self,
-        walker: impl OpWalker,
+        walker: impl Iterator<Item=OpId>,
         mut f: impl FnMut(&mut D::Operations),
     ) {
         walker.for_each(|opid| {
@@ -533,7 +531,7 @@ impl<D: Dialect> IR<D> {
     ///
     /// Operations are deleted in reverse topological order to ensure that
     /// dependencies are deleted before their users.
-    pub fn batch_delete_op(&mut self, opids: impl OpWalker) {
+    pub fn batch_delete_op(&mut self, opids: impl Iterator<Item=OpId>) {
         let mut batch: Vec<_> = opids
             .map(|opid| (opid, self.get_op(opid).get_depth()))
             .collect();

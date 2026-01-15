@@ -1,4 +1,4 @@
-use crate::{OpId, traversal::OpWalker};
+use crate::OpId;
 
 use super::Selected;
 
@@ -31,7 +31,7 @@ impl Schedule {
     }
 
     /// Returns a walker that yields operations in scheduled order.
-    pub fn get_walker(&self) -> impl OpWalker {
+    pub fn get_walker(&self) -> impl Iterator<Item=OpId> {
         self.0.iter().copied()
     }
 }

@@ -24,6 +24,15 @@ impl<A> Iterator for SmallVecIntoIter<A> {
     }
 }
 
+impl<A> DoubleEndedIterator for SmallVecIntoIter<A> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        match self {
+            SmallVecIntoIter::Heap(h) => h.next_back(),
+            SmallVecIntoIter::Stack(s) => s.next_back(),
+        }
+    }
+}
+
 /// A vector that can store elements either on the stack or heap for optimal performance.
 ///
 /// Small collections are stored inline on the stack to avoid heap allocation overhead.
