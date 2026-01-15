@@ -150,7 +150,7 @@ impl<D: Dialect> Printer<D> {
             write!(f, ", ")?;
             self.format_arg(f, arg)?;
         }
-        write!(f, ");")
+        writeln!(f, ");")
     }
 
     /// Formats the entire IR.
@@ -159,13 +159,11 @@ impl<D: Dialect> Printer<D> {
             PrintWalker::Linear => {
                 for opref in store.raw_walk_ops_linear() {
                     self.format_opref(f, opref)?;
-                    writeln!(f)?;
                 }
             }
             PrintWalker::Topo => {
                 for opref in store.raw_walk_ops_topo() {
                     self.format_opref(f, opref)?;
-                    writeln!(f)?;
                 }
             }
         }
