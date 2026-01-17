@@ -6,7 +6,7 @@ use hc_utils::{
 use crate::visualization::{
     spatial::{self, Diagram, Element},
     stylesheet::{
-        BodyClass, InputPortClass, InputsClass, LinkClass, OperationClass, OutputPortClass, OutputsClass, StyleSheet
+        BodyClass, EffectOperationClass, InputOperationClass, InputPortClass, InputsClass, LinkClass, OperationClass, OutputPortClass, OutputsClass, StyleSheet
     },
 };
 
@@ -318,7 +318,7 @@ impl std::fmt::Display for DominantBaseline {
 pub fn diagram_to_svg(diagram: &Diagram, stylesheet: &StyleSheet) -> Svg {
     let frame = diagram.vertices.get_frame();
     let vertices = gen_vertices(&diagram.vertices, stylesheet);
-    let links = gen_links(&diagram.links, stylesheet);
+    let links = gen_links(&diagram.paths, stylesheet);
     let css = Some(include_str!("style.css").into());
     let javascript = Some(include_str!("script.js").into());
 
@@ -331,7 +331,7 @@ pub fn diagram_to_svg(diagram: &Diagram, stylesheet: &StyleSheet) -> Svg {
     }
 }
 
-fn gen_links(links: &[spatial::Link], stylesheet: &StyleSheet) -> SvgElement {
+fn gen_links(links: &[spatial::Path], stylesheet: &StyleSheet) -> SvgElement {
     let mut elements = Vec::new();
     for link in links.iter() {
         elements.push(gen_link(link, stylesheet));
@@ -344,8 +344,8 @@ fn gen_links(links: &[spatial::Link], stylesheet: &StyleSheet) -> SvgElement {
     }
 }
 
-fn gen_link(link: &spatial::Link, stylesheet: &StyleSheet) -> SvgElement {
-    let magnitude = Delta(150.);
+fn gen_link(link: &spatial::Path, stylesheet: &StyleSheet) -> SvgElement {
+    let magnitude = Delta(200.);
     let style = stylesheet.get::<LinkClass>();
     let path_commands = link
         .control_points
@@ -372,6 +372,7 @@ fn gen_link(link: &spatial::Link, stylesheet: &StyleSheet) -> SvgElement {
         title: Some(link.value.clone()),
     }
 }
+
 fn gen_vertices(diagram: &spatial::Vertices, stylesheet: &StyleSheet) -> SvgElement {
     let mut elements = Vec::new();
     for layer in &diagram.content {
@@ -400,14 +401,41 @@ fn gen_layer(layer: &spatial::Layer, stylesheet: &StyleSheet) -> SvgElement {
 
 fn gen_node(node: &spatial::Node, stylesheet: &StyleSheet) -> SvgElement {
     match node {
-        spatial::Node::E1(operation) => gen_operation(operation, stylesheet),
-        spatial::Node::E2(hole) => gen_hole(hole, stylesheet),
+        spatial::Node::E1(input_operation) => gen_input_operation(input_operation, stylesheet),
+        spatial::Node::E2(operation) => gen_operation(operation, stylesheet),
+        spatial::Node::E3(effect_operation) => gen_effect_operation(effect_operation, stylesheet),
+        spatial::Node::E4(hole) => gen_hole(hole, stylesheet),
     }
 }
 
 fn gen_hole(_hole: &spatial::Hole, _stylesheet: &StyleSheet) -> SvgElement {
     SvgElement::Group {
         elements: vec![],
+        transform: None,
+        id: None,
+        class: None,
+    }
+}
+
+fn gen_input_operation(operation: &spatial::InputOperation, stylesheet: &StyleSheet) -> SvgElement {
+    let frame = operation.get_frame();
+    let mut elements = Vec::new();
+    let style = stylesheet.get::<InputOperationClass>();
+    elements.push(SvgElement::Rect {
+        x: frame.position.x.0,
+        y: frame.position.y.0,
+        width: frame.size.width.0.0,
+        height: frame.size.height.0.0,
+        fill: Some(style.fill_color.to_string()),
+        stroke: Some(style.border_color.to_string()),
+        stroke_width: Some(style.border_width.0),
+        class: None,
+        id: None,
+    });
+    elements.push(gen_body(&operation.e1, stylesheet));
+    elements.push(gen_outputs(&operation.e2, stylesheet));
+    SvgElement::Group {
+        elements,
         transform: None,
         id: None,
         class: None,
@@ -432,6 +460,31 @@ fn gen_operation(operation: &spatial::Operation, stylesheet: &StyleSheet) -> Svg
     elements.push(gen_inputs(&operation.e1, stylesheet));
     elements.push(gen_body(&operation.e2, stylesheet));
     elements.push(gen_outputs(&operation.e3, stylesheet));
+    SvgElement::Group {
+        elements,
+        transform: None,
+        id: None,
+        class: None,
+    }
+}
+
+fn gen_effect_operation(operation: &spatial::EffectOperation, stylesheet: &StyleSheet) -> SvgElement {
+    let frame = operation.get_frame();
+    let mut elements = Vec::new();
+    let style = stylesheet.get::<EffectOperationClass>();
+    elements.push(SvgElement::Rect {
+        x: frame.position.x.0,
+        y: frame.position.y.0,
+        width: frame.size.width.0.0,
+        height: frame.size.height.0.0,
+        fill: Some(style.fill_color.to_string()),
+        stroke: Some(style.border_color.to_string()),
+        stroke_width: Some(style.border_width.0),
+        class: None,
+        id: None,
+    });
+    elements.push(gen_inputs(&operation.e1, stylesheet));
+    elements.push(gen_body(&operation.e2, stylesheet));
     SvgElement::Group {
         elements,
         transform: None,
@@ -569,32 +622,39 @@ fn gen_input_port(input_port: &spatial::InputPort, stylesheet: &StyleSheet) -> S
 fn gen_body(body: &spatial::Body, stylesheet: &StyleSheet) -> SvgElement {
     let frame = body.get_frame();
     let style = stylesheet.get::<BodyClass>();
+
+    let mut elements = vec![
+        SvgElement::Rect {
+            x: frame.position.x.0,
+            y: frame.position.y.0,
+            width: frame.size.width.0.0,
+            height: frame.size.height.0.0,
+            fill: Some(style.fill_color.to_string()),
+            stroke: Some(style.border_color.to_string()),
+            stroke_width: Some(style.border_width.0),
+            class: None,
+            id: None,
+        },
+    ];
+
+    // Split content into lines and create a text element for each line
+    for (line_index, line) in body.content.lines().enumerate() {
+        elements.push(SvgElement::Text {
+            x: frame.position.x.0 + style.padding.0,
+            y: frame.position.y.0 + style.padding.0 + (line_index as f64 * style.font_size.0 * 1.2),
+            content: line.to_string(),
+            font_size: style.font_size.0,
+            font_family: Some(style.font.0.into()),
+            fill: Some(style.font_color.to_string()),
+            text_anchor: style.font_halign.into(),
+            dominant_baseline: style.font_valign.into(),
+            class: None,
+            id: None,
+        });
+    }
+
     SvgElement::Group {
-        elements: vec![
-            SvgElement::Rect {
-                x: frame.position.x.0,
-                y: frame.position.y.0,
-                width: frame.size.width.0.0,
-                height: frame.size.height.0.0,
-                fill: Some(style.fill_color.to_string()),
-                stroke: Some(style.border_color.to_string()),
-                stroke_width: Some(style.border_width.0),
-                class: None,
-                id: None,
-            },
-            SvgElement::Text {
-                x: frame.position.x.0 + style.padding.0,
-                y: frame.position.y.0 + style.padding.0,
-                content: body.content.clone(),
-                font_size: style.font_size.0,
-                font_family: Some(style.font.0.into()),
-                fill: Some(style.font_color.to_string()),
-                text_anchor: style.font_halign.into(),
-                dominant_baseline: style.font_valign.into(),
-                class: None,
-                id: None,
-            },
-        ],
+        elements,
         transform: None,
         id: None,
         class: None,

@@ -26,14 +26,18 @@
 //! create the overall hierarchical structure.
 
 use crate::{
-    Dialect,
-    visualization::{layout::CoordinatesSpec, stylesheet::{
-        BodyClass, HoleClass, InputPortClass, InputsClass, LayerClass, OperationClass, OutputPortClass, OutputsClass, VerticesClass
-    }},
+    Dialect, IR,
+    visualization::{
+        layout::{CoordinatesSpec, Link, Vertex},
+        stylesheet::{
+            BodyClass, EffectOperationClass, HoleClass, InputOperationClass, InputPortClass,
+            InputsClass, LayerClass, OperationClass, OutputPortClass, OutputsClass, VerticesClass,
+        },
+    },
 };
 use hc_utils::{graphics::*, iter::Separate, small::SmallVec};
 use hc_utils_macro::fsm;
-use std::marker::PhantomData;
+use std::{marker::PhantomData};
 
 use super::layout;
 use super::stylesheet::{Class, NoClass, StyleSheet};
@@ -329,109 +333,119 @@ impl<E: Element, C: Class> Element for HStack<E, C> {
     }
 }
 
-/// Fixed vertical stack of exactly three elements with spacing.
-pub struct V3<E1: Element, E2: Element, E3: Element, C: Class = NoClass> {
-    pub e1: E1,
-    pub e2: E2,
-    pub e3: E3,
-    class: PhantomData<C>,
-    solution: Solution,
+macro_rules! vstack_fixed {
+    ($name:ident, $n:literal, [$($etype:ident, $efield:ident),*]) => {
+        /// Fixed vertical stack of exactly $n elements with spacing.
+        pub struct $name<$($etype: Element),*, C: Class = NoClass> {
+            $(pub $efield: $etype,)*
+            class: PhantomData<C>,
+            solution: Solution,
+        }
+
+        impl<$($etype: Element),*, C: Class> $name<$($etype),*, C> {
+            /// Creates a new vertical stack.
+            pub fn new($($efield: $etype),*) -> Self {
+                Self {
+                    $($efield,)*
+                    class: PhantomData,
+                    solution: Solution::Fresh,
+                }
+            }
+        }
+
+        impl<$($etype: Element),*, C: Class> Element for $name<$($etype),*, C> {
+            fn solve_size(&mut self, stylesheet: &StyleSheet) {
+                let style = stylesheet.get::<C>();
+                $(self.$efield.solve_size(stylesheet);)*
+
+                let mut size = Size::ZERO.pad_top(style.padding);
+                let mut first = true;
+                $(
+                    if !first {
+                        size = size.pad_bottom(style.spacing);
+                    }
+                    size = size.stack_vertical(self.$efield.get_size());
+                    first = false;
+                )*
+                size = size.pad_bottom(style.padding);
+                self.solution.set_size(size);
+            }
+
+            fn solve_frame(&mut self, stylesheet: &StyleSheet, available: Frame) {
+                let style = stylesheet.get::<C>();
+                let size = self.get_size();
+                let frame = available.resize(&size, style.halign, style.valign);
+                self.solution.set_frame(frame.clone());
+
+                let mut remaining = frame.crop_top(Height(style.padding));
+                let mut first = true;
+                $(
+                    if !first {
+                        remaining = remaining.crop_top(Height(style.spacing));
+                    }
+                    let (Taken(available), Remaining(new_remaining)) =
+                        remaining.take_top(self.$efield.get_size().height);
+                    self.$efield.solve_frame(stylesheet, available);
+                    remaining = new_remaining;
+                    #[allow(unused_assignments)]
+                    {
+                        first = false;
+                    }
+                )*
+                let remaining = remaining.crop_top(Height(style.padding));
+                assert!(remaining.is_collapsed());
+            }
+
+            fn get_size(&self) -> Size {
+                self.solution.get_size()
+            }
+
+            fn get_frame(&self) -> Frame {
+                self.solution.get_frame()
+            }
+        }
+    };
 }
 
-impl<E1: Element, E2: Element, E3: Element, C: Class> V3<E1, E2, E3, C> {
-    /// Creates a new three-element vertical stack.
-    pub fn new(e1: E1, e2: E2, e3: E3) -> Self {
-        Self {
-            e1,
-            e2,
-            e3,
-            class: PhantomData,
-            solution: Solution::Fresh,
+vstack_fixed!(V2, 2, [E1, e1, E2, e2]);
+vstack_fixed!(V3, 3, [E1, e1, E2, e2, E3, e3]);
+
+macro_rules! discriminated_union {
+    ($name:ident, [$($etype:ident),*]) => {
+        /// Discriminated union for runtime polymorphism.
+        pub enum $name<$($etype: Element),*> {
+            $($etype($etype),)*
         }
-    }
+
+        impl<$($etype: Element),*> Element for $name<$($etype),*> {
+            fn solve_size(&mut self, stylesheet: &StyleSheet) {
+                match self {
+                    $($name::$etype(e) => e.solve_size(stylesheet),)*
+                }
+            }
+
+            fn solve_frame(&mut self, stylesheet: &StyleSheet, available: Frame) {
+                match self {
+                    $($name::$etype(e) => e.solve_frame(stylesheet, available),)*
+                }
+            }
+
+            fn get_size(&self) -> Size {
+                match self {
+                    $($name::$etype(e) => e.get_size(),)*
+                }
+            }
+
+            fn get_frame(&self) -> Frame {
+                match self {
+                    $($name::$etype(e) => e.get_frame(),)*
+                }
+            }
+        }
+    };
 }
 
-impl<E1: Element, E2: Element, E3: Element, C: Class> Element for V3<E1, E2, E3, C> {
-    fn solve_size(&mut self, stylesheet: &StyleSheet) {
-        let style = stylesheet.get::<C>();
-        self.e1.solve_size(stylesheet);
-        self.e2.solve_size(stylesheet);
-        self.e3.solve_size(stylesheet);
-        let size = Size::ZERO
-            .pad_top(style.padding)
-            .stack_vertical(self.e1.get_size())
-            .pad_bottom(style.spacing)
-            .stack_vertical(self.e2.get_size())
-            .pad_bottom(style.spacing)
-            .stack_vertical(self.e3.get_size())
-            .pad_bottom(style.padding);
-        self.solution.set_size(size);
-    }
-
-    fn solve_frame(&mut self, stylesheet: &StyleSheet, available: Frame) {
-        let style = stylesheet.get::<C>();
-        let size = self.get_size();
-        let frame = available.resize(&size, style.halign, style.valign);
-        self.solution.set_frame(frame.clone());
-
-        let remaining = frame.crop_top(Height(style.padding));
-        let (Taken(e1_available), Remaining(remaining)) = remaining.take_top(self.e1.get_size().height);
-        self.e1.solve_frame(stylesheet, e1_available);
-        let remaining = remaining.crop_top(Height(style.spacing));
-        let (Taken(e2_available), Remaining(remaining)) = remaining.take_top(self.e2.get_size().height);
-        self.e2.solve_frame(stylesheet, e2_available);
-        let remaining = remaining.crop_top(Height(style.spacing));
-        let (Taken(e3_available), Remaining(remaining)) = remaining.take_top(self.e3.get_size().height);
-        self.e3.solve_frame(stylesheet, e3_available);
-        let remaining = remaining.crop_top(Height(style.padding));
-
-        assert!(remaining.is_collapsed());
-    }
-
-    fn get_size(&self) -> Size {
-        self.solution.get_size()
-    }
-
-    fn get_frame(&self) -> Frame {
-        self.solution.get_frame()
-    }
-}
-
-/// Discriminated union of two element types for runtime polymorphism.
-pub enum D2<E1: Element, E2: Element> {
-    E1(E1),
-    E2(E2),
-}
-
-impl<E1: Element, E2: Element> Element for D2<E1, E2> {
-    fn solve_size(&mut self, stylesheet: &StyleSheet) {
-        match self {
-            D2::E1(e) => e.solve_size(stylesheet),
-            D2::E2(e) => e.solve_size(stylesheet),
-        }
-    }
-
-    fn solve_frame(&mut self, stylesheet: &StyleSheet, available: Frame) {
-        match self {
-            D2::E1(e) => e.solve_frame(stylesheet, available),
-            D2::E2(e) => e.solve_frame(stylesheet, available),
-        }
-    }
-
-    fn get_size(&self) -> Size {
-        match self {
-            D2::E1(e) => e.get_size(),
-            D2::E2(e) => e.get_size(),
-        }
-    }
-
-    fn get_frame(&self) -> Frame {
-        match self {
-            D2::E1(e) => e.get_frame(),
-            D2::E2(e) => e.get_frame(),
-        }
-    }
-}
+discriminated_union!(D4, [E1, E2, E3, E4]);
 
 /// Text element representing an operation input port.
 pub type InputPort = TextBox<InputPortClass>;
@@ -448,36 +462,40 @@ pub type OutputPort = TextBox<OutputPortClass>;
 /// Horizontal collection of output ports.
 pub type Outputs = HStack<OutputPort, OutputsClass>;
 
+pub type InputOperation = V2<Body, Outputs, InputOperationClass>;
+
 /// Complete operation node with inputs, body, and outputs arranged vertically.
 pub type Operation = V3<Inputs, Body, Outputs, OperationClass>;
+
+pub type EffectOperation = V2<Inputs, Body, EffectOperationClass>;
 
 /// Empty placeholder element for missing nodes.
 pub type Hole = Empty<HoleClass>;
 
-/// Either an operation or a placeholder hole.
-pub type Node = D2<Operation, Hole>;
+pub type Node = D4<InputOperation, Operation, EffectOperation, Hole>;
 
 /// Horizontal row of nodes forming a diagram layer.
 pub type Layer = HStack<Node, LayerClass>;
 
 pub type Vertices = VStack<Layer, VerticesClass>;
 
-pub struct Link {
+pub struct Path {
     pub control_points: SmallVec<Position>,
-    pub value: String
+    pub value: String,
 }
 
 pub struct Diagram {
     pub vertices: Vertices,
-    pub links: Vec<Link>
+    pub paths: Vec<Path>,
 }
 
 /// Converts a layout specification into a fully positioned diagram element.
-pub fn layout_to_diagram<'ir, D: Dialect>(
-    layout: &layout::Layout<'ir, D>,
+pub fn layout_to_diagram<D: Dialect>(
+    ir: &IR<D>,
+    layout: &layout::Layout,
     stylesheet: &StyleSheet,
 ) -> Diagram {
-    let mut vertices = gen_vertices(layout.iter_vertices());
+    let mut vertices = gen_vertices(ir, layout.iter_vertices());
     vertices.solve_size(stylesheet);
     let size = vertices.get_size();
     vertices.solve_frame(
@@ -488,74 +506,110 @@ pub fn layout_to_diagram<'ir, D: Dialect>(
         },
     );
 
-    let links = layout.iter_links()
-        .map(|(link, value)| {
-            let control_points = link.into_iter().map(|coord| {
-                match coord.spec {
+    let links = layout
+        .iter_links()
+        .map(|Link { value, path, .. }| {
+            let control_points = path
+                .iter()
+                .map(|coord| match coord.spec {
                     CoordinatesSpec::OpArg(arg_i) => {
                         let layer = &vertices.content[coord.layer as usize];
                         let node = &layer.content[coord.node as usize];
-                        let D2::E1(op) = node else {unreachable!()};
-                        let arg = &op.e1.content[arg_i as usize];
+                        let arg = match node {
+                            D4::E2(op) => &op.e1.content[arg_i as usize],
+                            D4::E3(eff) => &eff.e1.content[arg_i as usize],
+                            _ => unreachable!()
+                        };
                         arg.get_frame().center()
-                    },
+                    }
                     CoordinatesSpec::OpRet(ret_i) => {
                         let layer = &vertices.content[coord.layer as usize];
                         let node = &layer.content[coord.node as usize];
-                        let D2::E1(op) = node else {unreachable!()};
-                        let ret = &op.e3.content[ret_i as usize];
+                        let ret = match node {
+                            D4::E1(inp) => &inp.e2.content[ret_i as usize],
+                            D4::E2(op) => &op.e3.content[ret_i as usize],
+                            _ => unreachable!()
+                        };
                         ret.get_frame().center()
-                    },
+                    }
                     CoordinatesSpec::Val => {
                         let layer = &vertices.content[coord.layer as usize];
                         let node = &layer.content[coord.node as usize];
-                        let D2::E2(val) = node else {unreachable!()};
+                        let D4::E4(val) = node else { unreachable!() };
                         val.get_frame().center()
-                    },
-                }
-            })
-            .collect();
-            Link{
+                    }
+                })
+                .collect();
+            Path {
                 control_points,
-                value,
+                value: format!("{:?}", value),
             }
         })
         .collect();
 
-
     Diagram {
         vertices,
-        links
+        paths: links,
     }
 }
 
-fn gen_vertices<'a, 'ir: 'a, D: Dialect>(diag: impl Iterator<Item = impl Iterator<Item = &'a layout::Node<'ir, D>>>) -> Vertices {
-    Vertices::new(diag.map(gen_layer).collect())
+fn gen_vertices<'a, D: Dialect>(
+    ir: &IR<D>,
+    diag: impl Iterator<Item = impl Iterator<Item = &'a Vertex>>,
+) -> Vertices {
+    Vertices::new(diag.map(|l| gen_layer(ir, l)).collect())
 }
 
-fn gen_layer<'a, 'ir: 'a, D: Dialect>(lay: impl Iterator<Item = &'a layout::Node<'ir, D>>) -> Layer {
-    Layer::new(lay.map(gen_node).collect())
+fn gen_layer<'a, D: Dialect>(ir: &IR<D>, lay: impl Iterator<Item = &'a Vertex>) -> Layer {
+    Layer::new(lay.map(|v| gen_node(ir, v)).collect())
 }
 
-fn gen_node<'ir, D: Dialect>(inp: &layout::Node<'ir, D>) -> Node {
+fn gen_node<D: Dialect>(ir: &IR<D>, inp: &Vertex) -> Node {
     match inp {
-        layout::Node::Operation(op_ref) => Node::E1(Operation::new(
-            Inputs::new(
-                op_ref
-                    .get_args_iter()
-                    .map(|arg| format!("{}: {}", arg.to_string(), arg.get_type()))
-                    .map(TextBox::new)
-                    .collect(),
-            ),
-            Body::new(op_ref.to_string()),
-            Outputs::new(
-                op_ref
-                    .get_returns_iter()
-                    .map(|ret| format!("{}: {}", ret.to_string(), ret.get_type()))
-                    .map(TextBox::new)
-                    .collect(),
-            ),
-        )),
-        layout::Node::Value(..) => Node::E2(Hole::new()),
+        layout::Vertex::Operation(opid) => {
+            let op_ref = ir.get_op(*opid);
+            if op_ref.is_input() {
+                Node::E1(InputOperation::new(
+                    Body::new(op_ref.operation.to_string()),
+                    Outputs::new(
+                        op_ref
+                            .get_returns_iter()
+                            .map(|ret| format!("{}: {}", ret.to_string(), ret.get_type()))
+                            .map(TextBox::new)
+                            .collect(),
+                    ),
+                ))
+            } else if op_ref.is_effect() {
+                Node::E3(EffectOperation::new(
+                    Inputs::new(
+                        op_ref
+                            .get_args_iter()
+                            .map(|arg| format!("{}: {}", arg.to_string(), arg.get_type()))
+                            .map(TextBox::new)
+                            .collect(),
+                    ),
+                    Body::new(op_ref.operation.to_string()),
+                ))
+            } else {
+                Node::E2(Operation::new(
+                    Inputs::new(
+                        op_ref
+                            .get_args_iter()
+                            .map(|arg| format!("{}: {}", arg.to_string(), arg.get_type()))
+                            .map(TextBox::new)
+                            .collect(),
+                    ),
+                    Body::new(op_ref.operation.to_string()),
+                    Outputs::new(
+                        op_ref
+                            .get_returns_iter()
+                            .map(|ret| format!("{}: {}", ret.to_string(), ret.get_type()))
+                            .map(TextBox::new)
+                            .collect(),
+                    ),
+                ))
+            }
+        }
+        layout::Vertex::Value(..) => Node::E4(Hole::new()),
     }
 }

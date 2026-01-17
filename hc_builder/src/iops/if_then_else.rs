@@ -5,7 +5,7 @@ use hc_utils::iter::{CollectInSmallVec, MultiZip};
 use crate::builder::{BlockConfig, Builder, EncryptedInteger, Lut1Type};
 
 pub fn if_then_else(width: u8, config: &BlockConfig) -> IR<Ioplang> {
-    let mut builder = Builder::new(config);
+    let builder = Builder::new(config);
 
     let src_a = builder.eint_input(width);
     let src_b = builder.eint_input(width);

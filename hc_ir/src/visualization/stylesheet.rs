@@ -72,10 +72,12 @@ impl StyleSheet {
         output.insert::<NoClass>(Style::DEFAULT);
 
         output.insert::<InputPortClass>(Style {
+            fill_color: Color::AQUAMARINE,
             padding: Thickness::new(2.),
             ..Default::default()
         });
         output.insert::<InputsClass>(Style {
+            fill_color: Color::AQUA,
             spacing: Thickness::new(10.),
             ..Default::default()
         });
@@ -93,8 +95,18 @@ impl StyleSheet {
             padding: Thickness::new(2.),
             ..Default::default()
         });
+        output.insert::<InputOperationClass>(Style {
+            fill_color: Color::SEASHELL,
+            valign: VAlign::Top,
+            ..Default::default()
+        });
         output.insert::<OperationClass>(Style {
             fill_color: Color::ALICEBLUE,
+            valign: VAlign::Top,
+            ..Default::default()
+        });
+        output.insert::<EffectOperationClass>(Style {
+            fill_color: Color::HONEYDEW,
             valign: VAlign::Top,
             ..Default::default()
         });
@@ -150,8 +162,14 @@ impl Class for OutputPortClass {}
 pub struct OutputsClass;
 impl Class for OutputsClass {}
 
+pub struct InputOperationClass;
+impl Class for InputOperationClass {}
+
 pub struct OperationClass;
 impl Class for OperationClass {}
+
+pub struct EffectOperationClass;
+impl Class for EffectOperationClass {}
 
 pub struct HoleClass;
 impl Class for HoleClass {}
