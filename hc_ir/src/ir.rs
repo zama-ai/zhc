@@ -1,7 +1,8 @@
+use hc_utils::iter::MultiZip;
 use hc_utils::svec;
 use hc_utils::{Store, small::SmallVec};
 use crate::val_ref::ValRef;
-use crate::{PrintWalker, ValMap};
+use crate::{AnnIR, PrintWalker, ValMap};
 use std::{
     cmp::max,
     fmt::{Debug, Display},
@@ -652,6 +653,44 @@ impl<D: Dialect> IR<D> {
     /// All values will have entries in the resulting map.
     pub fn totally_mapped_valmap<V>(&self, f: impl FnMut(ValRef<D>) -> V) -> ValMap<V> {
         ValMap::new_totally_mapped(self, f)
+    }
+
+    /// Performs backward dataflow analysis on the IR operations.
+    pub fn backward_dataflow_analysis<OpAnn, ValAnn>(
+        &self,
+        mut f: impl FnMut(&OpMap<OpAnn>, &ValMap<ValAnn>, &OpRef<D>) -> (OpAnn, SmallVec<ValAnn>),
+    ) -> AnnIR<'_, D, OpAnn, ValAnn> {
+        let mut opmap = self.empty_opmap();
+        let mut valmap = self.empty_valmap();
+        for opref in self.walk_ops_topological().rev() {
+            assert!(opref.get_users_iter().all(|k| opmap.contains_key(&k)));
+            let (opann, valanns) = f(&opmap, &valmap, &opref);
+            assert_eq!(valanns.len(), opref.get_return_valids().len());
+            assert!(opmap.insert(*opref, opann).is_none());
+            for (valann, valref) in (valanns.into_iter(), opref.get_return_valids().iter()).mzip() {
+                assert!(valmap.insert(*valref, valann).is_none());
+            }
+        }
+        AnnIR::new(self, opmap, valmap)
+    }
+
+    /// Performs forward dataflow analysis on the IR operations.
+    pub fn forward_dataflow_analysis<OpAnn, ValAnn>(
+        &self,
+        mut f: impl FnMut(&OpMap<OpAnn>, &ValMap<ValAnn>, &OpRef<D>) -> (OpAnn, SmallVec<ValAnn>)
+    ) -> AnnIR<'_, D, OpAnn, ValAnn> {
+        let mut opmap = self.empty_opmap();
+        let mut valmap = self.empty_valmap();
+        for opref in self.walk_ops_topological() {
+            assert!(opref.get_predecessors_iter().all(|k| opmap.contains_key(&k)));
+            let (opann, valanns) = f(&opmap, &valmap, &opref);
+            assert_eq!(valanns.len(), opref.get_return_valids().len());
+            assert!(opmap.insert(*opref, opann).is_none());
+            for (valann, valref) in (valanns.into_iter(), opref.get_return_valids().iter()).mzip() {
+                assert!(valmap.insert(*valref, valann).is_none());
+            }
+        }
+        AnnIR::new(self, opmap, valmap)
     }
 }
 
