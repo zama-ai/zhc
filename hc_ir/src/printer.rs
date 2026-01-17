@@ -1,4 +1,4 @@
-use hc_utils::iter::CollectInSmallVec;
+use hc_utils::iter::{CollectInSmallVec, Separate};
 
 use super::{Dialect, IR, OpIdRaw, OpRef, ValId, val_ref::ValRef};
 use std::{collections::HashMap, marker::PhantomData};
@@ -25,6 +25,11 @@ pub enum PrintWalker {
     Linear,
     /// Print operations in topological order (dependencies before users).
     Topo,
+}
+
+enum NewLined<T> {
+    Line(T),
+    NewLine,
 }
 
 impl<D: Dialect> Printer<D> {
@@ -88,7 +93,7 @@ impl<D: Dialect> Printer<D> {
     pub fn format_arg(
         &self,
         f: &mut std::fmt::Formatter<'_>,
-        valref: ValRef<'_, D>,
+        valref: &ValRef<'_, D>,
     ) -> std::fmt::Result {
         let name = self.names.get(&valref.get_id()).unwrap();
         if valref.is_inactive() {
@@ -102,7 +107,7 @@ impl<D: Dialect> Printer<D> {
     pub fn format_ret(
         &self,
         f: &mut std::fmt::Formatter<'_>,
-        valref: ValRef<'_, D>,
+        valref: &ValRef<'_, D>,
     ) -> std::fmt::Result {
         let name = self.names.get(&valref.get_id()).unwrap();
         if valref.is_inactive() {
@@ -120,7 +125,7 @@ impl<D: Dialect> Printer<D> {
     pub fn format_opref(
         &self,
         f: &mut std::fmt::Formatter<'_>,
-        opref: OpRef<'_, D>,
+        opref: &OpRef<'_, D>,
     ) -> std::fmt::Result {
         if opref.is_inactive() && !self.show_erased_ops {
             return Ok(());
@@ -130,11 +135,11 @@ impl<D: Dialect> Printer<D> {
         }
         let mut rets = opref.raw_get_returns_iter();
         if let Some(ret) = rets.next() {
-            self.format_ret(f, ret)?;
+            self.format_ret(f, &ret)?;
         }
         for ret in rets {
             write!(f, ", ")?;
-            self.format_ret(f, ret)?;
+            self.format_ret(f, &ret)?;
         }
         if opref.raw_get_returns_iter().next().is_some() {
             write!(f, " = ")?;
@@ -144,27 +149,45 @@ impl<D: Dialect> Printer<D> {
 
         let mut args = opref.raw_get_args_iter();
         if let Some(arg) = args.next() {
-            self.format_arg(f, arg)?;
+            self.format_arg(f, &arg)?;
         }
         for arg in args {
             write!(f, ", ")?;
-            self.format_arg(f, arg)?;
+            self.format_arg(f, &arg)?;
         }
-        writeln!(f, ");")
+        write!(f, ");")
     }
 
     /// Formats the entire IR.
     pub fn format_ir(&self, f: &mut std::fmt::Formatter<'_>, store: &IR<D>) -> std::fmt::Result {
         match self.walker {
             PrintWalker::Linear => {
-                for opref in store.raw_walk_ops_linear() {
-                    self.format_opref(f, opref)?;
-                }
+                store
+                    .raw_walk_ops_linear()
+                    .map(|opref| NewLined::Line(opref))
+                    .separate_with(|| NewLined::NewLine)
+                    .for_each(|a| match a {
+                        NewLined::Line(opref) => {
+                            self.format_opref(f, &opref).unwrap();
+                        }
+                        NewLined::NewLine => {
+                            writeln!(f).unwrap();
+                        }
+                    });
             }
             PrintWalker::Topo => {
-                for opref in store.raw_walk_ops_topo() {
-                    self.format_opref(f, opref)?;
-                }
+                store
+                    .raw_walk_ops_topo()
+                    .map(|opref| NewLined::Line(opref))
+                    .separate_with(|| NewLined::NewLine)
+                    .for_each(|a| match a {
+                        NewLined::Line(opref) => {
+                            self.format_opref(f, &opref).unwrap();
+                        }
+                        NewLined::NewLine => {
+                            writeln!(f).unwrap();
+                        }
+                    });
             }
         }
 
