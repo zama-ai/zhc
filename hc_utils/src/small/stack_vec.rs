@@ -23,68 +23,6 @@ pub struct StackVec<A> {
     len: usize,
 }
 
-/// An iterator that moves elements out of a `StackVec`.
-///
-/// This iterator is created by calling `drain_all` or `into_iter` on a `StackVec`.
-/// It yields owned elements and properly handles cleanup of any remaining
-/// elements when dropped.
-pub struct StackVecIntoIter<'a, A> {
-    data: AlignedStorage<A>,
-    start: usize,
-    end: usize,
-    lifetime: PhantomData<&'a u8>,
-}
-
-impl<'a, A> Iterator for StackVecIntoIter<'a, A> {
-    type Item = A;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.start >= self.end {
-            None
-        } else {
-            unsafe {
-                let ptr = self.data.data.as_ptr() as *const A;
-                let value = std::ptr::read(ptr.add(self.start));
-                self.start += 1;
-                Some(value)
-            }
-        }
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        let remaining = self.end - self.start;
-        (remaining, Some(remaining))
-    }
-}
-
-impl<'a, A> DoubleEndedIterator for StackVecIntoIter<'a, A> {
-    fn next_back(&mut self) -> Option<Self::Item> {
-        if self.start >= self.end {
-            None
-        } else {
-            self.end -= 1;
-            unsafe {
-                let ptr = self.data.data.as_ptr() as *const A;
-                let value = std::ptr::read(ptr.add(self.end));
-                Some(value)
-            }
-        }
-    }
-}
-
-impl<'a, A> ExactSizeIterator for StackVecIntoIter<'a, A> {}
-
-impl<'a, A> Drop for StackVecIntoIter<'a, A> {
-    fn drop(&mut self) {
-        while self.start < self.end {
-            unsafe {
-                let ptr = self.data.data.as_ptr() as *const A;
-                std::ptr::drop_in_place(ptr.add(self.start) as *mut A);
-                self.start += 1;
-            }
-        }
-    }
-}
 
 impl<A> Default for StackVec<A> {
     fn default() -> Self {
@@ -93,29 +31,41 @@ impl<A> Default for StackVec<A> {
 }
 
 impl<A> StackVec<A> {
-    /// Creates a new empty `StackVec`.
+    /// Returns the maximum number of elements the vector can hold for type `A`.
     ///
-    /// The vector will have a capacity determined by the size of type `A`
-    /// and the available stack buffer space.
+    /// This is a compile-time constant that depends only on the size of type `A`
+    /// and the stack buffer size.
     ///
     /// # Panics
     ///
     /// Panics if the type `A` is too large to fit in the stack buffer,
     /// if `A` is a zero-sized type, or if `A` has alignment requirements
     /// larger than its size.
+    pub const fn static_capacity() -> usize {
+        let size = std::mem::size_of::<A>();
+        if size > STACK_BYTES {
+            return 0;
+        } else if  size == 0 {
+            return usize::MAX;
+        } else {
+            STACK_BYTES / size
+        }
+    }
+
+    /// Returns the maximum number of elements this vector can hold.
+    pub fn capacity(&self) -> usize {
+        Self::static_capacity()
+    }
+
+    /// Creates a new empty `StackVec`.
+    ///
+    /// The vector will have a capacity determined by the size of type `A`
+    /// and the available stack buffer space.
     pub fn new() -> Self {
         let size = std::mem::size_of::<A>();
-        let align = std::mem::align_of::<A>();
         if size > STACK_BYTES {
             panic!("Type is too big to fit in a stack vec.");
         }
-        if size == 0 {
-            panic!("ZSTs are not supported.");
-        }
-        if align > size {
-            panic!("Types with alignment larger than their size are not supported.");
-        }
-
         StackVec {
             data: AlignedStorage {
                 data: [MaybeUninit::uninit(); STACK_BYTES],
@@ -228,35 +178,6 @@ impl<A> StackVec<A> {
         None
     }
 
-    /// Returns the maximum number of elements the vector can hold for type `A`.
-    ///
-    /// This is a compile-time constant that depends only on the size of type `A`
-    /// and the stack buffer size.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the type `A` is too large to fit in the stack buffer,
-    /// if `A` is a zero-sized type, or if `A` has alignment requirements
-    /// larger than its size.
-    pub const fn static_capacity() -> usize {
-        let size = std::mem::size_of::<A>();
-        let align = std::mem::align_of::<A>();
-        if size > STACK_BYTES {
-            return 0;
-        }
-        if size == 0 {
-            panic!("ZSTs are not supported.");
-        }
-        if align > size {
-            panic!("Types with alignment larger than their size are not supported.");
-        }
-        STACK_BYTES / size
-    }
-
-    /// Returns the maximum number of elements this vector can hold.
-    pub fn capacity(&self) -> usize {
-        STACK_BYTES / std::mem::size_of::<A>()
-    }
 
     /// Returns `true` if the vector can accommodate one more element.
     pub fn may_push(&self) -> bool {
@@ -489,6 +410,71 @@ impl<A, const N: usize> TryInto<[A; N]> for StackVec<A> {
         Ok(result)
     }
 }
+
+/// An iterator that moves elements out of a `StackVec`.
+///
+/// This iterator is created by calling `drain_all` or `into_iter` on a `StackVec`.
+/// It yields owned elements and properly handles cleanup of any remaining
+/// elements when dropped.
+pub struct StackVecIntoIter<'a, A> {
+    data: AlignedStorage<A>,
+    start: usize,
+    end: usize,
+    lifetime: PhantomData<&'a u8>,
+}
+
+impl<'a, A> Iterator for StackVecIntoIter<'a, A> {
+    type Item = A;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.start >= self.end {
+            None
+        } else {
+            unsafe {
+                let ptr = self.data.data.as_ptr() as *const A;
+                let value = std::ptr::read(ptr.add(self.start));
+                self.start += 1;
+                Some(value)
+            }
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let remaining = self.end - self.start;
+        (remaining, Some(remaining))
+    }
+}
+
+impl<'a, A> DoubleEndedIterator for StackVecIntoIter<'a, A> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.start >= self.end {
+            None
+        } else {
+            self.end -= 1;
+            unsafe {
+                let ptr = self.data.data.as_ptr() as *const A;
+                let value = std::ptr::read(ptr.add(self.end));
+                Some(value)
+            }
+        }
+    }
+}
+
+impl<'a, A> ExactSizeIterator for StackVecIntoIter<'a, A> {}
+
+impl<'a, A> Drop for StackVecIntoIter<'a, A> {
+    fn drop(&mut self) {
+        while self.start < self.end {
+            unsafe {
+                let ptr = self.data.data.as_ptr() as *const A;
+                std::ptr::drop_in_place(ptr.add(self.start) as *mut A);
+                self.start += 1;
+            }
+        }
+    }
+}
+
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -948,11 +934,7 @@ mod test {
         assert_eq!(drained, vec![1, 3]);
         assert_eq!(vec.len(), 0);
     }
-    #[test]
-    #[should_panic(expected = "ZSTs are not supported")]
-    fn test_zst_panic() {
-        let _: StackVec<()> = StackVec::new();
-    }
+
 
     #[test]
     fn test_ownership_and_drops() {
@@ -1291,5 +1273,156 @@ mod test {
     #[should_panic(expected = "Type is too big to fit in a stack vec.")]
     fn test_large_type_capacity() {
         let _vec: StackVec<Large> = StackVec::new();
+    }
+
+    #[test]
+    fn test_zst_support() {
+        // ZSTs should now be supported without panic
+        let mut vec: StackVec<()> = StackVec::new();
+        assert_eq!(vec.len(), 0);
+        assert_eq!(vec.capacity(), usize::MAX);
+        assert_eq!(StackVec::<()>::static_capacity(), usize::MAX);
+
+        // Should be able to push many ZST elements
+        for _ in 0..1000 {
+            vec.push(());
+        }
+        assert_eq!(vec.len(), 1000);
+
+        // Test other operations with ZSTs
+        vec.pop();
+        assert_eq!(vec.len(), 999);
+
+        vec.clear();
+        assert_eq!(vec.len(), 0);
+    }
+
+    #[test]
+    fn test_zst_operations() {
+        let mut vec: StackVec<()> = StackVec::new();
+
+        // Fill with some elements
+        for _ in 0..10 {
+            vec.push(());
+        }
+
+        // Test iteration
+        assert_eq!(vec.iter().count(), 10);
+        assert_eq!(vec.into_iter().count(), 10);
+
+        // Test from_iter
+        let vec2: StackVec<()> = (0..5).map(|_| ()).collect();
+        assert_eq!(vec2.len(), 5);
+    }
+
+    #[repr(align(16))]
+    struct HighlyAligned {
+        data: u8,
+    }
+
+    #[test]
+    fn test_alignment_support() {
+        // Types with alignment larger than size should now be supported
+        let mut vec: StackVec<HighlyAligned> = StackVec::new();
+        assert_eq!(vec.len(), 0);
+
+        vec.push(HighlyAligned { data: 42 });
+        assert_eq!(vec.len(), 1);
+        assert_eq!(vec[0].data, 42);
+
+        let popped = vec.pop().unwrap();
+        assert_eq!(popped.data, 42);
+    }
+
+    #[test]
+    fn test_static_capacity_edge_cases() {
+        // Test capacity for different type sizes
+        assert_eq!(StackVec::<u8>::static_capacity(), STACK_BYTES);
+        assert_eq!(StackVec::<u16>::static_capacity(), STACK_BYTES / 2);
+        assert_eq!(StackVec::<u32>::static_capacity(), STACK_BYTES / 4);
+        assert_eq!(StackVec::<u64>::static_capacity(), STACK_BYTES / 8);
+
+        // ZSTs should have unlimited capacity
+        assert_eq!(StackVec::<()>::static_capacity(), usize::MAX);
+
+        // Oversized types should have zero capacity
+        assert_eq!(StackVec::<Large>::static_capacity(), 0);
+    }
+
+    #[test]
+    fn test_capacity_consistency() {
+        let vec: StackVec<u32> = StackVec::new();
+        assert_eq!(vec.capacity(), StackVec::<u32>::static_capacity());
+
+        let vec_zst: StackVec<()> = StackVec::new();
+        assert_eq!(vec_zst.capacity(), StackVec::<()>::static_capacity());
+        assert_eq!(vec_zst.capacity(), usize::MAX);
+    }
+
+    #[test]
+    fn test_zst_drain_operations() {
+        let mut vec: StackVec<()> = StackVec::new();
+
+        // Add some ZST elements
+        for _ in 0..5 {
+            vec.push(());
+        }
+
+        // Test drain_all
+        let drained: Vec<()> = vec.drain_all().collect();
+        assert_eq!(drained.len(), 5);
+        assert_eq!(vec.len(), 0);
+
+        // Test drain_to_vec
+        for _ in 0..3 {
+            vec.push(());
+        }
+
+        let mut vec_result = Vec::new();
+        vec.drain_to_vec(&mut vec_result);
+        assert_eq!(vec_result.len(), 3);
+        assert_eq!(vec.len(), 0);
+    }
+
+    #[test]
+    fn test_zst_clone_and_equality() {
+        let mut vec1: StackVec<()> = StackVec::new();
+        let mut vec2: StackVec<()> = StackVec::new();
+
+        for _ in 0..3 {
+            vec1.push(());
+            vec2.push(());
+        }
+
+        assert_eq!(vec1, vec2);
+
+        let vec3 = vec1.clone();
+        assert_eq!(vec1, vec3);
+        assert_eq!(vec3.len(), 3);
+    }
+
+    #[test]
+    fn test_highly_aligned_operations() {
+        let mut vec: StackVec<HighlyAligned> = StackVec::new();
+
+        // Test basic operations
+        vec.push(HighlyAligned { data: 1 });
+        vec.push(HighlyAligned { data: 2 });
+        vec.push(HighlyAligned { data: 3 });
+
+        assert_eq!(vec.len(), 3);
+        assert_eq!(vec[0].data, 1);
+        assert_eq!(vec[1].data, 2);
+        assert_eq!(vec[2].data, 3);
+
+        // Test remove
+        let removed = vec.remove(1);
+        assert_eq!(removed.data, 2);
+        assert_eq!(vec.len(), 2);
+        assert_eq!(vec[1].data, 3);
+
+        // Test iteration
+        let values: Vec<u8> = vec.iter().map(|x| x.data).collect();
+        assert_eq!(values, vec![1, 3]);
     }
 }
