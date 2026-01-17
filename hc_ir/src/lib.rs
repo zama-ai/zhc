@@ -26,6 +26,7 @@ mod val;
 mod val_map;
 mod val_mut;
 mod val_ref;
+mod annotation;
 
 pub use dialect::*;
 pub use id::*;
@@ -40,6 +41,8 @@ pub(crate) use state::*;
 pub(crate) use val::*;
 pub use val_map::*;
 pub(crate) use val_mut::*;
+pub(crate) use annotation::*;
+
 
 /// Errors that can occur during IR construction or manipulation.
 #[derive(Clone, Debug)]

@@ -1,7 +1,13 @@
 use hc_utils::iter::{CollectInSmallVec, Separate};
 
-use super::{Dialect, IR, OpIdRaw, OpRef, ValId, val_ref::ValRef};
-use std::{collections::HashMap, marker::PhantomData};
+use crate::AnnValRef;
+
+use super::{
+    Dialect, IR, OpIdRaw, OpRef, ValId,
+    annotation::{AnnIR, AnnOpRef},
+    val_ref::ValRef,
+};
+use std::{collections::HashMap, fmt::Debug, marker::PhantomData};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct Name(pub(super) OpIdRaw);
@@ -15,6 +21,8 @@ pub struct Printer<D: Dialect> {
     names: HashMap<ValId, Name>,
     show_erased_ops: bool,
     show_types: bool,
+    show_op_ann: bool,
+    show_val_ann: bool,
     walker: PrintWalker,
     phantom: PhantomData<D>,
 }
@@ -62,6 +70,46 @@ impl<D: Dialect> Printer<D> {
             names,
             show_erased_ops,
             show_types,
+            show_op_ann: false,
+            show_val_ann: false,
+            walker,
+            phantom: PhantomData,
+        }
+    }
+
+    /// Creates a new printer configured for the specified annotated IR.
+    ///
+    /// The `walker` determines traversal order, `show_types` controls whether
+    /// type annotations are included, and `show_erased_ops` determines whether
+    /// inactive operations are displayed.
+    pub fn from_ann_ir<OpAnn, ValAnn>(
+        ann_ir: &AnnIR<D, OpAnn, ValAnn>,
+        walker: PrintWalker,
+        show_types: bool,
+        show_erased_ops: bool,
+        show_op_ann: bool,
+        show_val_ann: bool,
+    ) -> Printer<D> {
+        let names = match walker {
+            PrintWalker::Linear => ann_ir
+                .raw_walk_ops_linear()
+                .flat_map(|op| op.get_return_valids().iter().cloned().cosvec().into_iter())
+                .enumerate()
+                .map(|(name_id, valid)| (valid, Name(name_id as u16)))
+                .collect(),
+            PrintWalker::Topo => ann_ir
+                .raw_walk_ops_topo()
+                .flat_map(|op| op.get_return_valids().iter().cloned().cosvec().into_iter())
+                .enumerate()
+                .map(|(name_id, valid)| (valid, Name(name_id as u16)))
+                .collect(),
+        };
+        Printer {
+            names,
+            show_erased_ops,
+            show_types,
+            show_op_ann,
+            show_val_ann,
             walker,
             phantom: PhantomData,
         }
@@ -192,5 +240,110 @@ impl<D: Dialect> Printer<D> {
         }
 
         Ok(())
+    }
+
+    /// Formats the entire annotated IR as a string.
+    pub fn ann_ir_to_string<'ir, OpAnn: Debug, ValAnn: Debug>(
+        &self,
+        ann_ir: &AnnIR<'ir, D, OpAnn, ValAnn>,
+    ) -> String {
+        struct AnnIRFormatter<'ir, 'a, D: Dialect, OpAnn: Debug, ValAnn: Debug> {
+            printer: &'a Printer<D>,
+            ann_ir: &'a AnnIR<'ir, D, OpAnn, ValAnn>,
+        }
+
+        impl<'ir, D: Dialect, OpAnn: Debug, ValAnn: Debug> std::fmt::Display
+            for AnnIRFormatter<'ir, '_, D, OpAnn, ValAnn>
+        {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                self.printer.format_ann_ir(f, self.ann_ir)
+            }
+        }
+
+        format!(
+            "{}",
+            AnnIRFormatter {
+                printer: self,
+                ann_ir
+            }
+        )
+    }
+
+    /// Formats a complete annotated operation with its arguments, return values, and annotations.
+    pub fn format_ann_valref<OpAnn, ValAnn: Debug>(
+        &self,
+        f: &mut std::fmt::Formatter<'_>,
+        valref: &AnnValRef<'_, '_, D, OpAnn, ValAnn>,
+    ) -> std::fmt::Result {
+
+        let name = self.names.get(&valref.get_id()).unwrap();
+        if valref.is_inactive() {
+            write!(f, "%_{} -> {:?}", name.0, valref.get_annotation())
+        } else {
+            write!(f, "%{} -> {:?}", name.0, valref.get_annotation())
+        }
+
+
+    }
+
+    /// Formats a complete annotated operation with its arguments, return values, and annotations.
+    pub fn format_ann_opref<OpAnn: Debug, ValAnn: Debug>(
+        &self,
+        f: &mut std::fmt::Formatter<'_>,
+        opref: &AnnOpRef<'_, '_, D, OpAnn, ValAnn>,
+    ) -> std::fmt::Result {
+
+        self.format_opref(f, opref)?;
+
+        // Add operation annotation
+        if self.show_op_ann {
+            writeln!(f)?;
+            write!(f, "    operation -> {:?}", opref.get_annotation())?;
+        }
+
+        // Add value annotations for return values
+        if self.show_val_ann {
+            for ret in opref.get_returns_iter() {
+                writeln!(f)?;
+                let name = self.names.get(&ret.get_id()).unwrap();
+                if ret.is_inactive() {
+                    write!(f, "    %_{} -> {:?}", name.0, ret.get_annotation())?;
+                } else {
+                    write!(f, "    %{} -> {:?}", name.0, ret.get_annotation())?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Formats the entire annotated IR.
+    pub fn format_ann_ir<OpAnn: Debug, ValAnn: Debug>(
+        &self,
+        f: &mut std::fmt::Formatter<'_>,
+        ann_ir: &AnnIR<D, OpAnn, ValAnn>,
+    ) -> std::fmt::Result {
+
+        match self.walker {
+            PrintWalker::Linear => {
+                ann_ir.walk_ops_linear().cosvec().into_iter()
+            }
+            PrintWalker::Topo => {
+                ann_ir.walk_ops_topological().cosvec().into_iter()
+            }
+        }
+        .map(|opref| NewLined::Line(opref))
+        .separate_with(|| NewLined::NewLine)
+        .for_each(|a| match a {
+            NewLined::Line(opref) => {
+                self.format_ann_opref(f, &opref).unwrap();
+            }
+            NewLined::NewLine => {
+                writeln!(f).unwrap();
+            }
+        });
+
+        Ok(())
+
     }
 }
