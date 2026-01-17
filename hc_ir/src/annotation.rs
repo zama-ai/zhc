@@ -19,6 +19,8 @@ use std::{
     ops::Deref,
 };
 
+use hc_utils::{iter::MultiZip, small::SmallVec};
+
 use crate::{
     Dialect, IR, OpId, OpMap, OpRef, PrintWalker, Printer, ValId, ValMap, val_ref::ValRef,
 };
@@ -146,7 +148,14 @@ where
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if f.alternate() {
-            let printer = Printer::from_ann_ir(self.ann_ir, crate::PrintWalker::Linear, true, true, true, true);
+            let printer = Printer::from_ann_ir(
+                self.ann_ir,
+                crate::PrintWalker::Linear,
+                true,
+                true,
+                true,
+                true,
+            );
             printer.format_ann_opref(f, self)
         } else {
             let printer = Printer::from_ir(self.ir, crate::PrintWalker::Topo, true, true);
@@ -413,17 +422,30 @@ impl<'ir, D: Dialect, OpAnn, ValAnn> AnnIR<'ir, D, OpAnn, ValAnn> {
         })
     }
 
-    pub fn check_ir(&self, expected: &str) where OpAnn: Debug, ValAnn: Debug{
+    pub fn check_ir(&self, expected: &str)
+    where
+        OpAnn: Debug,
+        ValAnn: Debug,
+    {
         self.check_ir_gen(PrintWalker::Topo, expected);
     }
 
-    pub fn check_ir_linear(&self, expected: &str) where OpAnn: Debug, ValAnn: Debug {
+    pub fn check_ir_linear(&self, expected: &str)
+    where
+        OpAnn: Debug,
+        ValAnn: Debug,
+    {
         self.check_ir_gen(PrintWalker::Linear, expected);
     }
 
-    fn check_ir_gen(&self, walker: PrintWalker, expected: &str) where OpAnn: Debug, ValAnn: Debug{
+    fn check_ir_gen(&self, walker: PrintWalker, expected: &str)
+    where
+        OpAnn: Debug,
+        ValAnn: Debug,
+    {
         let clean = |inp: &str| inp.replace(' ', "").replace('\n', "");
-        let repr = Printer::from_ann_ir(self, walker, true, false, true, false).ann_ir_to_string(self);
+        let repr =
+            Printer::from_ann_ir(self, walker, true, false, true, false).ann_ir_to_string(self);
         if clean(&repr) != clean(expected) {
             println!(
                 "Failed to check ir.\nExpected:\n{}\nActual:\n{}",
@@ -431,6 +453,52 @@ impl<'ir, D: Dialect, OpAnn, ValAnn> AnnIR<'ir, D, OpAnn, ValAnn> {
             );
             panic!("Failed to check ir");
         }
+    }
+
+    /// Performs backward dataflow analysis on the IR operations.
+    pub fn backward_dataflow_analysis<OpAnnNew, ValAnnNew>(
+        &self,
+        mut f: impl FnMut(
+            &OpMap<OpAnnNew>,
+            &ValMap<ValAnnNew>,
+            &AnnOpRef<D, OpAnn, ValAnn>,
+        ) -> (OpAnnNew, SmallVec<ValAnnNew>),
+    ) -> AnnIR<'_, D, OpAnnNew, ValAnnNew> {
+        let mut opmap = self.empty_opmap();
+        let mut valmap = self.empty_valmap();
+        for opref in self.walk_ops_topological().rev() {
+            assert!(opref.get_users_iter().all(|k| opmap.contains_key(&k)));
+            let (opann, valanns) = f(&opmap, &valmap, &opref);
+            assert_eq!(valanns.len(), opref.get_return_valids().len());
+            assert!(opmap.insert(**opref, opann).is_none());
+            for (valann, valref) in (valanns.into_iter(), opref.get_return_valids().iter()).mzip() {
+                assert!(valmap.insert(*valref, valann).is_none());
+            }
+        }
+        AnnIR::new(self, opmap, valmap)
+    }
+
+    /// Performs forward dataflow analysis on the IR operations.
+    pub fn forward_dataflow_analysis<OpAnnNew, ValAnnNew>(
+        &self,
+        mut f: impl FnMut(&OpMap<OpAnnNew>, &ValMap<ValAnnNew>, &AnnOpRef<D, OpAnn, ValAnn>) -> (OpAnnNew, SmallVec<ValAnnNew>),
+    ) -> AnnIR<'_, D, OpAnnNew, ValAnnNew> {
+        let mut opmap = self.empty_opmap();
+        let mut valmap = self.empty_valmap();
+        for opref in self.walk_ops_topological() {
+            assert!(
+                opref
+                    .get_predecessors_iter()
+                    .all(|k| opmap.contains_key(&k))
+            );
+            let (opann, valanns) = f(&opmap, &valmap, &opref);
+            assert_eq!(valanns.len(), opref.get_return_valids().len());
+            assert!(opmap.insert(**opref, opann).is_none());
+            for (valann, valref) in (valanns.into_iter(), opref.get_return_valids().iter()).mzip() {
+                assert!(valmap.insert(*valref, valann).is_none());
+            }
+        }
+        AnnIR::new(self, opmap, valmap)
     }
 }
 
