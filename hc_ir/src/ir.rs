@@ -2,7 +2,9 @@ use hc_utils::iter::MultiZip;
 use hc_utils::svec;
 use hc_utils::{Store, small::SmallVec};
 use crate::val_ref::ValRef;
+use crate::visualization::draw_ir;
 use crate::{AnnIR, PrintWalker, ValMap};
+use std::path::Path;
 use std::{
     cmp::max,
     fmt::{Debug, Display},
@@ -73,6 +75,7 @@ impl<D: Dialect> std::hash::Hash for IR<D> {
 }
 
 // This impl block contains the private implementations
+#[allow(unused)]
 impl<D: Dialect> IR<D> {
     pub(crate) fn raw_n_ops(&self) -> OpIdRaw {
         self.op_states.len()
@@ -605,6 +608,11 @@ impl<D: Dialect> IR<D> {
             );
             panic!("Failed to check ir");
         }
+    }
+
+    /// Draws the IR as an SVG at the path.
+    pub fn draw(&self, path: impl AsRef<Path>) {
+        draw_ir(self, path);
     }
 
     /// Creates an empty operation map for this IR.

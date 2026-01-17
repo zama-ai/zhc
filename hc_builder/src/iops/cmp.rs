@@ -68,7 +68,7 @@ impl Kind {
 }
 
 fn cmp(width: u8, config: &BlockConfig, kind: Kind) -> IR<Ioplang> {
-    let mut builder = Builder::new(config);
+    let builder = Builder::new(config);
 
     // get input as array of blk
     let src_a = builder.eint_input(width);
