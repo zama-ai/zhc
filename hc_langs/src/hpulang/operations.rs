@@ -116,11 +116,7 @@ impl Display for Operations {
             Operations::Batch { block, .. } => write!(
                 f,
                 "batch {{\n        {}}}",
-                block
-                    .to_string()
-                    .replace("\n", "\n        ")
-                    .strip_suffix("        ")
-                    .unwrap()
+                block.to_string()
             ),
             Operations::BatchArg { pos, ty } => write!(f, "batch_arg<{pos}, {ty}>"),
             Operations::BatchRet { pos, ty } => write!(f, "batch_ret<{pos}, {ty}>"),

@@ -24,10 +24,10 @@ impl<'s, D: Dialect> Display for ValRef<'s, D> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if f.alternate() {
             let printer = Printer::from_ir(self.ir, crate::PrintWalker::Linear, true, true);
-            printer.format_arg(f, self.to_owned())
+            printer.format_arg(f, self)
         } else {
             let printer = Printer::from_ir(self.ir, crate::PrintWalker::Topo, true, true);
-            printer.format_arg(f, self.to_owned())
+            printer.format_arg(f, self)
         }
     }
 }
