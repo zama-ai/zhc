@@ -2,7 +2,7 @@ use std::cmp::max;
 
 use hc_ir::IR;
 use hc_langs::ioplang::Ioplang;
-use hc_utils::iter::{ChunkIt, CollectInSmallVec, Intermediate, MapFew, MultiZip, Slide, filter_out_postludes};
+use hc_utils::iter::{ChunkIt, CollectInSmallVec, Intermediate, IterMapFirst, MultiZip, Slide, filter_out_postludes};
 
 use crate::builder::{
     BlockConfig, Builder, EncryptedInteger, ExtensionBehavior, Lut1Type, Lut2Type,
@@ -134,7 +134,7 @@ impl Builder {
                     sv[0].clone().into_iter()
                 })
                 // The next chunk combines two chunks of the previous stage with the carry lut.
-                .map_next(|slider| {
+                .map_first(|slider| {
                     let sv = slider.unwrap_complete();
                     assert_eq!(sv[0].len(), sv[1].len());
                     (sv[0].iter(), sv[1].iter())
