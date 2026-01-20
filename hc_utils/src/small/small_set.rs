@@ -161,6 +161,23 @@ impl<'a, T: Eq + Hash> IntoIterator for &'a SmallSet<T> {
     }
 }
 
+impl<T: Eq + Hash, const N: usize> PartialEq for SmallSet<T, N> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (SmallSet::Stack(s1), SmallSet::Stack(s2)) => s1 == s2,
+            (SmallSet::Heap(h1), SmallSet::Heap(h2)) => h1 == h2,
+            (SmallSet::Stack(s), SmallSet::Heap(h)) | (SmallSet::Heap(h), SmallSet::Stack(s)) => {
+                if s.len() != h.len() {
+                    return false;
+                }
+                s.iter().all(|item| h.contains(item))
+            }
+        }
+    }
+}
+
+impl<T: Eq + Hash, const N: usize> Eq for SmallSet<T, N> {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
