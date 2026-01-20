@@ -78,6 +78,11 @@ impl<T: Eq, const N: usize> StackSet<T, N> {
     pub fn into_iter(self) -> VArrayIntoIter<T, N> {
         self.0.into_iter()
     }
+
+    /// Returns the number of elements in the set.
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
 }
 
 impl<T: Eq, const N: usize> std::iter::FromIterator<T> for StackSet<T, N> {
@@ -104,6 +109,17 @@ impl<T: Eq + Debug, const N: usize> Debug for StackSet<T, N> {
             .finish()
     }
 }
+
+impl<T: Eq, const N: usize> PartialEq for StackSet<T, N> {
+    fn eq(&self, other: &Self) -> bool {
+        if self.0.len() != other.0.len() {
+            return false;
+        }
+        self.0.iter().all(|item| other.contains(item))
+    }
+}
+
+impl<T: Eq, const N: usize> Eq for StackSet<T, N> {}
 
 #[cfg(test)]
 mod tests {
