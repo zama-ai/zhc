@@ -173,7 +173,7 @@ impl<'s, D: Dialect> OpRef<'s, D> {
         let mut output = FastSet::new();
         let mut worklist = vec![self.clone()];
         while let Some(val) = worklist.pop() {
-            for op in val.get_args_iter().map(|a| a.get_origin()) {
+            for op in val.get_args_iter().map(|a| a.get_origin().opref) {
                 output.insert(op.clone());
                 worklist.push(op);
             }

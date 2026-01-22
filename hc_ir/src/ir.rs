@@ -3,7 +3,7 @@ use hc_utils::svec;
 use hc_utils::{Store, small::SmallVec};
 use crate::val_ref::ValRef;
 use crate::visualization::draw_ir;
-use crate::{AnnIR, PrintWalker, ValMap};
+use crate::{AnnIR, PrintWalker, ValMap, ValOrigin, ValUse};
 use std::path::Path;
 use std::{
     cmp::max,
@@ -40,8 +40,8 @@ pub struct IR<D: Dialect> {
     pub(super) op_states: Store<OpId, State>,
     pub(super) op_depth: Store<OpId, Depth>,
     pub(super) op_count: OpIdRaw,
-    pub(super) val_users: Store<ValId, SmallVec<OpId>>,
-    pub(super) val_origins: Store<ValId, OpId>,
+    pub(super) val_users: Store<ValId, SmallVec<ValUse>>,
+    pub(super) val_origins: Store<ValId, ValOrigin>,
     pub(super) val_types: Store<ValId, D::Types>,
     pub(super) val_states: Store<ValId, State>,
     pub(super) val_count: ValIdRaw,
@@ -229,21 +229,21 @@ impl<D: Dialect> IR<D> {
         op_depth: &mut Store<OpId, Depth>,
         op_args: &Store<OpId, SmallVec<ValId>>,
         op_returns: &Store<OpId, SmallVec<ValId>>,
-        val_origin: &Store<ValId, OpId>,
-        val_users: &Store<ValId, SmallVec<OpId>>,
+        val_origin: &Store<ValId, ValOrigin>,
+        val_users: &Store<ValId, SmallVec<ValUse>>,
         opid: OpId,
     ) {
         let current_depth = op_depth[opid];
         let mut new_depth = 1;
         for arg in op_args[opid].iter() {
-            new_depth = max(op_depth[val_origin[arg]] + 1, new_depth);
+            new_depth = max(op_depth[val_origin[arg].opid] + 1, new_depth);
         }
         if current_depth != new_depth {
             op_depth[opid] = new_depth;
             for valid in op_returns[opid].iter() {
                 for user in val_users[valid].iter() {
                     Self::raw_update_depths(
-                        op_depth, op_args, op_returns, val_origin, val_users, *user,
+                        op_depth, op_args, op_returns, val_origin, val_users, user.opid,
                     );
                 }
             }
@@ -441,19 +441,20 @@ impl<D: Dialect> IR<D> {
         let opid = self.raw_insert_op(op);
 
         // We update the arg users list to add the newly created operation
-        for arg in args.iter() {
+        for (i, arg) in args.iter().enumerate() {
             let arg = self.raw_get_val_mut(*arg);
-            arg.users.push(opid);
+            arg.users.push(ValUse{opid, position: i as u8});
         }
 
         // Now we can add new values for each return value of the operation.
         let valids = sig
             .into_returns()
             .into_iter()
-            .map(|ty| {
+            .enumerate()
+            .map(|(i, ty)| {
                 let ret = Val {
                     users: svec![],
-                    origin: opid,
+                    origin: ValOrigin { opid, position: i as u8 },
                     typ: ty,
                     state: State::Active(()),
                 };
@@ -507,7 +508,7 @@ impl<D: Dialect> IR<D> {
 
         // Update the arguments of the users of old, with new instead.
         for user in self.val_users[old].iter() {
-            self.op_arguments[user].iter_mut().for_each(|a| {
+            self.op_arguments[user.opid].iter_mut().for_each(|a| {
                 if *a == old {
                     *a = new
                 }
@@ -522,7 +523,7 @@ impl<D: Dialect> IR<D> {
                 &self.op_returns,
                 &self.val_origins,
                 &self.val_users,
-                *user,
+                user.opid,
             );
         }
 
