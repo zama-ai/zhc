@@ -1,6 +1,7 @@
 use hc_utils::small::SmallVec;
+use crate::{ValOrigin, val_use::ValUse};
 
-use super::{Dialect, OpId, State};
+use super::{Dialect, State};
 
 /// Represents a value within the intermediate representation.
 ///
@@ -10,9 +11,9 @@ use super::{Dialect, OpId, State};
 #[derive(Debug)]
 pub struct Val<D: Dialect> {
     /// Operations that consume this value as an argument.
-    pub users: SmallVec<OpId>,
+    pub users: SmallVec<ValUse>,
     /// Operation that produced this value.
-    pub origin: OpId,
+    pub origin: ValOrigin,
     /// Type of this value within the dialect's type system.
     pub typ: D::Types,
     /// Current state of the value.

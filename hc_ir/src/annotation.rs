@@ -22,7 +22,8 @@ use std::{
 use hc_utils::{iter::MultiZip, small::SmallVec};
 
 use crate::{
-    Dialect, IR, OpId, OpMap, OpRef, PrintWalker, Printer, ValId, ValMap, val_ref::ValRef,
+    AnnValOriginRef, AnnValUseRef, Dialect, IR, OpId, OpMap, OpRef, PrintWalker, Printer, ValId,
+    ValMap, val_ref::ValRef,
 };
 
 /// Operation reference with attached annotation data.
@@ -199,14 +200,34 @@ impl<'ir, 'ann, D: Dialect, OpAnn, ValAnn> AnnValRef<'ir, 'ann, D, OpAnn, ValAnn
     }
 
     /// Returns the operation that produces this value with its annotation.
-    pub fn get_origin(&self) -> AnnOpRef<'ir, 'ann, D, OpAnn, ValAnn> {
-        let origin_opref = self.valref.get_origin();
-        let ann = &self.ann_ir.op_annotations[*origin_opref];
-        AnnOpRef {
-            ann_ir: self.ann_ir,
-            opref: origin_opref,
-            ann,
+    pub fn get_origin(&self) -> AnnValOriginRef<'ir, 'ann, D, OpAnn, ValAnn> {
+        let origin = self.valref.get_origin();
+        let ann = &self.ann_ir.op_annotations[**origin];
+        AnnValOriginRef {
+            opref: AnnOpRef {
+                ann_ir: self.ann_ir,
+                opref: (*origin).clone(),
+                ann,
+            },
+            position: origin.position,
         }
+    }
+
+    pub fn get_uses_iter(
+        &self,
+    ) -> impl Iterator<Item = AnnValUseRef<'ir, 'ann, D, OpAnn, ValAnn>> + use<'ir, 'ann, D, OpAnn, ValAnn>
+    {
+        self.valref.get_uses_iter().map(|user| {
+            let ann = &self.ann_ir.op_annotations[**user];
+            AnnValUseRef {
+                opref: AnnOpRef {
+                    ann_ir: self.ann_ir,
+                    opref: user.opref,
+                    ann,
+                },
+                position: user.position,
+            }
+        })
     }
 
     /// Returns an iterator over operations that use this value with their annotations.
@@ -214,11 +235,11 @@ impl<'ir, 'ann, D: Dialect, OpAnn, ValAnn> AnnValRef<'ir, 'ann, D, OpAnn, ValAnn
         &self,
     ) -> impl Iterator<Item = AnnOpRef<'ir, 'ann, D, OpAnn, ValAnn>> + use<'ir, 'ann, D, OpAnn, ValAnn>
     {
-        self.valref.get_users_iter().map(|opref| {
-            let ann = &self.ann_ir.op_annotations[*opref];
+        self.valref.get_users_iter().map(|user| {
+            let ann = &self.ann_ir.op_annotations[*user];
             AnnOpRef {
                 ann_ir: self.ann_ir,
-                opref,
+                opref: user,
                 ann,
             }
         })
@@ -463,7 +484,7 @@ impl<'ir, D: Dialect, OpAnn, ValAnn> AnnIR<'ir, D, OpAnn, ValAnn> {
             &ValMap<ValAnnNew>,
             &AnnOpRef<D, OpAnn, ValAnn>,
         ) -> (OpAnnNew, SmallVec<ValAnnNew>),
-    ) -> AnnIR<'_, D, OpAnnNew, ValAnnNew> {
+    ) -> AnnIR<'ir, D, OpAnnNew, ValAnnNew> {
         let mut opmap = self.empty_opmap();
         let mut valmap = self.empty_valmap();
         for opref in self.walk_ops_topological().rev() {
@@ -475,14 +496,18 @@ impl<'ir, D: Dialect, OpAnn, ValAnn> AnnIR<'ir, D, OpAnn, ValAnn> {
                 assert!(valmap.insert(*valref, valann).is_none());
             }
         }
-        AnnIR::new(self, opmap, valmap)
+        AnnIR::new(self.ir, opmap, valmap)
     }
 
     /// Performs forward dataflow analysis on the IR operations.
     pub fn forward_dataflow_analysis<OpAnnNew, ValAnnNew>(
         &self,
-        mut f: impl FnMut(&OpMap<OpAnnNew>, &ValMap<ValAnnNew>, &AnnOpRef<D, OpAnn, ValAnn>) -> (OpAnnNew, SmallVec<ValAnnNew>),
-    ) -> AnnIR<'_, D, OpAnnNew, ValAnnNew> {
+        mut f: impl FnMut(
+            &OpMap<OpAnnNew>,
+            &ValMap<ValAnnNew>,
+            &AnnOpRef<D, OpAnn, ValAnn>,
+        ) -> (OpAnnNew, SmallVec<ValAnnNew>),
+    ) -> AnnIR<'ir, D, OpAnnNew, ValAnnNew> {
         let mut opmap = self.empty_opmap();
         let mut valmap = self.empty_valmap();
         for opref in self.walk_ops_topological() {
@@ -498,7 +523,7 @@ impl<'ir, D: Dialect, OpAnn, ValAnn> AnnIR<'ir, D, OpAnn, ValAnn> {
                 assert!(valmap.insert(*valref, valann).is_none());
             }
         }
-        AnnIR::new(self, opmap, valmap)
+        AnnIR::new(self.ir, opmap, valmap)
     }
 }
 

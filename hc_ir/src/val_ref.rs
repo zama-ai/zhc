@@ -1,9 +1,10 @@
-use std::{fmt::Display, ops::Deref};
 use std::hash::Hash;
+use std::{fmt::Display, ops::Deref};
 
-use crate::Printer;
-
-use super::{Dialect, IR, OpId, OpRef, State, ValId};
+use crate::val_use::ValUse;
+use crate::{OpRef, Printer, ValOrigin, ValOriginRef, ValUseRef};
+use hc_utils::iter::Deduped;
+use super::{Dialect, IR, State, ValId};
 
 /// A reference to a value within an IR graph.
 ///
@@ -14,8 +15,8 @@ use super::{Dialect, IR, OpId, OpRef, State, ValId};
 pub struct ValRef<'s, D: Dialect> {
     pub(super) id: ValId,
     pub(super) ir: &'s IR<D>,
-    pub(super) users: &'s [OpId],
-    pub(super) origin: &'s OpId,
+    pub(super) users: &'s [ValUse],
+    pub(super) origin: &'s ValOrigin,
     pub(super) typ: &'s D::Types,
     pub(super) state: &'s State,
 }
@@ -54,15 +55,20 @@ impl<'s, D: Dialect> Deref for ValRef<'s, D> {
     }
 }
 
-
 #[allow(unused)]
 impl<'s, D: Dialect> ValRef<'s, D> {
-    pub(super) fn raw_get_users_iter(&self) -> impl Iterator<Item = OpRef<'s, D>> + use<'s, D> {
-        self.users.iter().map(|opid| self.ir.raw_get_op(*opid))
+    pub(super) fn raw_get_uses_iter(&self) -> impl Iterator<Item = ValUseRef<'s, D>> + use<'s, D> {
+        self.users.iter().map(|uze| ValUseRef {
+            opref: self.ir.raw_get_op(uze.opid),
+            position: uze.position,
+        })
     }
 
-    pub(super) fn raw_get_origin(&self) -> OpRef<'s, D> {
-        self.ir.raw_get_op(*self.origin)
+    pub(super) fn raw_get_origin(&self) -> ValOriginRef<'s, D> {
+        ValOriginRef {
+            opref: self.ir.raw_get_op(self.origin.opid),
+            position: self.origin.position,
+        }
     }
 }
 
@@ -88,8 +94,17 @@ impl<'s, D: Dialect> ValRef<'s, D> {
     }
 
     /// Returns a reference to the operation that produces this value.
-    pub fn get_origin(&self) -> OpRef<'s, D> {
-        self.ir.get_op(*self.origin)
+    pub fn get_origin(&self) -> ValOriginRef<'s, D> {
+        let output = self.raw_get_origin();
+        assert!(output.is_active());
+        output
+    }
+
+
+    pub fn get_uses_iter(&self) -> impl Iterator<Item = ValUseRef<'s, D>> + use<'s, D> {
+        self
+            .raw_get_uses_iter()
+            .filter(|u| u.is_active())
     }
 
     /// Returns an iterator over operations that use this value as an argument.
@@ -97,14 +112,11 @@ impl<'s, D: Dialect> ValRef<'s, D> {
     /// Only active operations are included in the result, and operations are
     /// deduplicated even if they use this value multiple times.
     pub fn get_users_iter(&self) -> impl Iterator<Item = OpRef<'s, D>> + use<'s, D> {
-        let mut raw_users = self
-            .raw_get_users_iter()
+        self
+            .raw_get_uses_iter()
+            .map(|uze| uze.opref)
             .filter(|u| u.is_active())
-            .map(|o| o.get_id())
-            .collect::<Vec<OpId>>();
-        raw_users.sort_unstable();
-        raw_users.dedup();
-        raw_users.into_iter().map(|a| self.ir.get_op(a))
+            .dedup()
     }
 
     /// Returns `true` if any active operations use this value as an argument.
