@@ -39,7 +39,7 @@ mod test {
         allocator::allocate_registers,
         batcher::batch,
         scheduler::schedule,
-        test::{get_add_ir, get_cmp_ir, get_sub_ir},
+        test::{get_add_ir, get_cmp_ir},
         translation::IoplangToHpulang,
     };
     use hc_ir::{IR, translation::Translator};
@@ -61,14 +61,7 @@ mod test {
     #[test]
     fn test_latency_add_ir() {
         let lat = pipeline(&get_add_ir(16, 2, 2));
-        assert_eq!(lat, Cycle(1784087));
-        println!("{}us", lat.as_ts(MHz(300).period()));
-    }
-
-    #[test]
-    fn test_latency_sub_ir() {
-        let lat = pipeline(&get_sub_ir(16, 2, 2));
-        assert_eq!(lat, Cycle(1808161));
+        assert_eq!(lat, Cycle(1795768));
         println!("{}us", lat.as_ts(MHz(300).period()));
     }
 

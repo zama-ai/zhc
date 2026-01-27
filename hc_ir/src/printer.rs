@@ -226,6 +226,7 @@ impl<D: Dialect> Printer<D> {
             PrintWalker::Topo => {
                 store
                     .raw_walk_ops_topo()
+                    .filter(|opref|opref.is_active() || self.show_erased_ops )
                     .map(|opref| NewLined::Line(opref))
                     .separate_with(|| NewLined::NewLine)
                     .for_each(|a| match a {

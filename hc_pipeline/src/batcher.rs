@@ -161,7 +161,7 @@ mod test {
 
     use crate::{
         scheduler::schedule,
-        test::{get_add_ir, get_cmp_ir, get_sub_ir},
+        test::{get_add_ir, get_cmp_ir},
         translation::IoplangToHpulang,
     };
 
@@ -201,91 +201,104 @@ mod test {
             %4 : CtRegister = src_ld<0.4_tsrc>();
             %5 : CtRegister = src_ld<0.5_tsrc>();
             %6 : CtRegister = src_ld<0.6_tsrc>();
-            %7 : CtRegister = src_ld<1.0_tsrc>();
-            %8 : CtRegister = add_ct(%0, %7);
-            %9 : CtRegister = src_ld<1.1_tsrc>();
-            %10 : CtRegister = src_ld<1.2_tsrc>();
-            %11 : CtRegister = src_ld<1.3_tsrc>();
-            %12 : CtRegister = src_ld<1.4_tsrc>();
-            %13 : CtRegister = add_ct(%1, %9);
-            %14 : CtRegister = src_ld<1.5_tsrc>();
-            %15 : CtRegister = src_ld<1.6_tsrc>();
-            %16 : CtRegister = add_ct(%2, %10);
-            %17 : CtRegister = add_ct(%3, %11);
-            %18 : CtRegister = add_ct(%4, %12);
-            %19 : CtRegister = add_ct(%5, %14);
-            %20 : CtRegister = add_ct(%6, %15);
-            %21 : CtRegister, %22 : CtRegister, %23 : CtRegister, %24 : CtRegister, %25 : CtRegister, %26 : CtRegister, %27 : CtRegister, %28 : CtRegister = batch {
+            %7 : CtRegister = src_ld<0.7_tsrc>();
+            %8 : CtRegister = src_ld<1.0_tsrc>();
+            %9 : CtRegister = add_ct(%0, %8);
+            %10 : CtRegister = src_ld<1.1_tsrc>();
+            %11 : CtRegister = src_ld<1.2_tsrc>();
+            %12 : CtRegister = src_ld<1.3_tsrc>();
+            %13 : CtRegister = src_ld<1.4_tsrc>();
+            %14 : CtRegister = add_ct(%1, %10);
+            %15 : CtRegister = src_ld<1.5_tsrc>();
+            %16 : CtRegister = src_ld<1.6_tsrc>();
+            %17 : CtRegister = src_ld<1.7_tsrc>();
+            %18 : CtRegister = add_ct(%2, %11);
+            %19 : CtRegister = add_ct(%3, %12);
+            %20 : CtRegister = add_ct(%4, %13);
+            %21 : CtRegister = add_ct(%5, %15);
+            %22 : CtRegister = add_ct(%6, %16);
+            %23 : CtRegister = add_ct(%7, %17);
+            %24 : CtRegister, %25 : CtRegister, %26 : CtRegister, %27 : CtRegister, %28 : CtRegister, %29 : CtRegister, %30 : CtRegister, %31 : CtRegister, %32 : CtRegister = batch {
                     %0 : CtRegister = batch_arg<0, CtRegister>();
-                    %1 : CtRegister = batch_arg<1, CtRegister>();
-                    %2 : CtRegister = batch_arg<2, CtRegister>();
-                    %3 : CtRegister = batch_arg<3, CtRegister>();
-                    %4 : CtRegister = batch_arg<4, CtRegister>();
-                    %5 : CtRegister = batch_arg<5, CtRegister>();
-                    %6 : CtRegister = batch_arg<6, CtRegister>();
-                    %7 : CtRegister, %8 : CtRegister = pbs_2<Lut@26>(%0);
-                    %9 : CtRegister = pbs<Lut@47>(%1);
-                    %10 : CtRegister = pbs<Lut@48>(%2);
-                    %11 : CtRegister = pbs<Lut@49>(%3);
-                    %12 : CtRegister = pbs<Lut@47>(%4);
-                    %13 : CtRegister = pbs<Lut@48>(%5);
-                    %14 : CtRegister = pbs_f<Lut@49>(%6);
-                    batch_ret<0, CtRegister>(%7);
-                    batch_ret<1, CtRegister>(%8);
-                    batch_ret<2, CtRegister>(%9);
-                    batch_ret<3, CtRegister>(%10);
-                    batch_ret<4, CtRegister>(%11);
-                    batch_ret<5, CtRegister>(%12);
-                    batch_ret<6, CtRegister>(%13);
-                    batch_ret<7, CtRegister>(%14);
-            }(%8, %13, %16, %17, %18, %19, %20);
-            %29 : CtRegister = add_ct(%13, %22);
-            dst_st<0.0_tdst>(%21);
-            %30 : CtRegister = add_ct(%23, %22);
-            dst_st<0.1_tdst>(%29);
-            %31 : CtRegister = add_ct(%27, %26);
-            %32 : CtRegister = batch {
-                    %0 : CtRegister = batch_arg<0, CtRegister>();
-                    %1 : CtRegister = pbs_f<Lut@44>(%0);
-                    batch_ret<0, CtRegister>(%1);
-            }(%30);
-            %33 : CtRegister = add_ct(%24, %30);
-            %34 : CtRegister = add_ct(%28, %31);
+            %1 : CtRegister = batch_arg<1, CtRegister>();
+            %2 : CtRegister = batch_arg<2, CtRegister>();
+            %3 : CtRegister = batch_arg<3, CtRegister>();
+            %4 : CtRegister = batch_arg<4, CtRegister>();
+            %5 : CtRegister = batch_arg<5, CtRegister>();
+            %6 : CtRegister = batch_arg<6, CtRegister>();
+            %7 : CtRegister = batch_arg<7, CtRegister>();
+            %8 : CtRegister, %9 : CtRegister = pbs_2<Lut@26>(%0);
+            %10 : CtRegister = pbs<Lut@47>(%1);
+            %11 : CtRegister = pbs<Lut@48>(%2);
+            %12 : CtRegister = pbs<Lut@49>(%3);
+            %13 : CtRegister = pbs<Lut@47>(%4);
+            %14 : CtRegister = pbs<Lut@48>(%5);
+            %15 : CtRegister = pbs<Lut@49>(%6);
+            %16 : CtRegister = pbs_f<Lut@50>(%7);
+            batch_ret<0, CtRegister>(%8);
+            batch_ret<1, CtRegister>(%9);
+            batch_ret<2, CtRegister>(%10);
+            batch_ret<3, CtRegister>(%11);
+            batch_ret<4, CtRegister>(%12);
+            batch_ret<5, CtRegister>(%13);
+            batch_ret<6, CtRegister>(%14);
+            batch_ret<7, CtRegister>(%15);
+            batch_ret<8, CtRegister>(%16);}(%9, %14, %18, %19, %20, %21, %22, %23);
+            %33 : CtRegister = add_ct(%23, %24);
+            %34 : CtRegister = add_ct(%25, %26);
             %35 : CtRegister = batch {
                     %0 : CtRegister = batch_arg<0, CtRegister>();
-                    %1 : CtRegister = pbs_f<Lut@45>(%0);
-                    batch_ret<0, CtRegister>(%1);
-            }(%33);
-            %36 : CtRegister = add_ct(%25, %33);
-            %37 : CtRegister = add_ct(%16, %32);
-            %38 : CtRegister = batch {
+            %1 : CtRegister = pbs_f<Lut@44>(%0);
+            batch_ret<0, CtRegister>(%1);}(%34);
+            %36 : CtRegister = add_ct(%29, %30);
+            dst_st<0.7_tdst>(%33);
+            %37 : CtRegister = add_ct(%34, %27);
+            %38 : CtRegister = add_ct(%36, %31);
+            %39 : CtRegister = batch {
                     %0 : CtRegister = batch_arg<0, CtRegister>();
-                    %1 : CtRegister = pbs_f<Lut@46>(%0);
-                    batch_ret<0, CtRegister>(%1);
-            }(%36);
-            %39 : CtRegister = add_ct(%17, %35);
-            dst_st<0.2_tdst>(%37);
-            dst_st<0.3_tdst>(%39);
-            %40 : CtRegister = add_ct(%26, %38);
-            %41 : CtRegister = add_ct(%31, %38);
-            %42 : CtRegister = add_ct(%34, %38);
-            %43 : CtRegister, %44 : CtRegister, %45 : CtRegister = batch {
+            %1 : CtRegister = pbs_f<Lut@45>(%0);
+            batch_ret<0, CtRegister>(%1);}(%37);
+            %40 : CtRegister = add_ct(%37, %28);
+            %41 : CtRegister = add_ct(%38, %32);
+            %42 : CtRegister = add_ct(%9, %35);
+            %43 : CtRegister, %44 : CtRegister = batch {
                     %0 : CtRegister = batch_arg<0, CtRegister>();
-                    %1 : CtRegister = batch_arg<1, CtRegister>();
-                    %2 : CtRegister = batch_arg<2, CtRegister>();
-                    %3 : CtRegister = pbs<Lut@46>(%0);
-                    %4 : CtRegister = pbs<Lut@44>(%1);
-                    %5 : CtRegister = pbs_f<Lut@45>(%2);
-                    batch_ret<0, CtRegister>(%3);
-                    batch_ret<1, CtRegister>(%4);
-                    batch_ret<2, CtRegister>(%5);
-            }(%40, %41, %42);
-            %46 : CtRegister = add_ct(%18, %43);
-            %47 : CtRegister = add_ct(%19, %44);
-            dst_st<0.4_tdst>(%46);
-            %48 : CtRegister = add_ct(%20, %45);
-            dst_st<0.5_tdst>(%47);
-            dst_st<0.6_tdst>(%48);
+            %1 : CtRegister = batch_arg<1, CtRegister>();
+            %2 : CtRegister = pbs<Lut@46>(%0);
+            %3 : CtRegister = pbs_f<Lut@21>(%1);
+            batch_ret<0, CtRegister>(%2);
+            batch_ret<1, CtRegister>(%3);}(%40, %41);
+            %45 : CtRegister = add_ct(%14, %39);
+            dst_st<0.0_tdst>(%42);
+            dst_st<0.1_tdst>(%45);
+            %46 : CtRegister = add_ct(%29, %43);
+            %47 : CtRegister = add_cst<1_imm>(%44);
+            %48 : CtRegister = add_ct(%36, %43);
+            %49 : CtRegister = add_ct(%38, %43);
+            %50 : CtRegister = add_ct(%18, %43);
+            %51 : CtRegister = mac<4_imm>(%47, %43);
+            dst_st<0.2_tdst>(%50);
+            %52 : CtRegister, %53 : CtRegister, %54 : CtRegister, %55 : CtRegister = batch {
+                    %0 : CtRegister = batch_arg<0, CtRegister>();
+            %1 : CtRegister = batch_arg<1, CtRegister>();
+            %2 : CtRegister = batch_arg<2, CtRegister>();
+            %3 : CtRegister = batch_arg<3, CtRegister>();
+            %4 : CtRegister = pbs<Lut@44>(%0);
+            %5 : CtRegister = pbs<Lut@45>(%1);
+            %6 : CtRegister = pbs<Lut@46>(%2);
+            %7 : CtRegister = pbs_f<Lut@52>(%3);
+            batch_ret<0, CtRegister>(%4);
+            batch_ret<1, CtRegister>(%5);
+            batch_ret<2, CtRegister>(%6);
+            batch_ret<3, CtRegister>(%7);}(%46, %48, %49, %51);
+            %56 : CtRegister = add_ct(%19, %52);
+            %57 : CtRegister = add_ct(%20, %53);
+            dst_st<0.3_tdst>(%56);
+            %58 : CtRegister = add_ct(%21, %54);
+            dst_st<0.4_tdst>(%57);
+            %59 : CtRegister = add_ct(%22, %55);
+            dst_st<0.5_tdst>(%58);
+            dst_st<0.6_tdst>(%59);
             ",
         );
     }
@@ -384,135 +397,6 @@ mod test {
                     batch_ret<0, CtRegister>(%1);
             }(%48);
             dst_st<0.0_tdst>(%49);
-            ",
-        );
-    }
-
-    #[test]
-    fn test_batch_sub_ir() {
-        let ir = pipeline(&get_sub_ir(16, 2, 2));
-        ir.check_ir_linear(
-            "
-            %0 : CtRegister = src_ld<0.0_tsrc>();
-            %1 : CtRegister = src_ld<0.1_tsrc>();
-            %2 : CtRegister = src_ld<0.2_tsrc>();
-            %3 : CtRegister = src_ld<0.3_tsrc>();
-            %4 : CtRegister = src_ld<0.4_tsrc>();
-            %5 : CtRegister = src_ld<0.5_tsrc>();
-            %6 : CtRegister = src_ld<0.6_tsrc>();
-            %7 : CtRegister = src_ld<1.0_tsrc>();
-            %8 : CtRegister = cst_sub<3_imm>(%7);
-            %9 : CtRegister = src_ld<1.1_tsrc>();
-            %10 : CtRegister = src_ld<1.2_tsrc>();
-            %11 : CtRegister = src_ld<1.3_tsrc>();
-            %12 : CtRegister = src_ld<1.4_tsrc>();
-            %13 : CtRegister = cst_sub<3_imm>(%9);
-            %14 : CtRegister = src_ld<1.5_tsrc>();
-            %15 : CtRegister = src_ld<1.6_tsrc>();
-            %16 : CtRegister = cst_sub<3_imm>(%10);
-            %17 : CtRegister = cst_sub<3_imm>(%11);
-            %18 : CtRegister = cst_sub<3_imm>(%12);
-            %19 : CtRegister = cst_sub<3_imm>(%14);
-            %20 : CtRegister = cst_sub<3_imm>(%15);
-            %21 : CtRegister = add_ct(%0, %8);
-            %22 : CtRegister = add_ct(%1, %13);
-            %23 : CtRegister = add_ct(%2, %16);
-            %24 : CtRegister = add_ct(%3, %17);
-            %25 : CtRegister = add_ct(%4, %18);
-            %26 : CtRegister = add_ct(%5, %19);
-            %27 : CtRegister = add_ct(%6, %20);
-            %28 : CtRegister, %29 : CtRegister, %30 : CtRegister, %31 : CtRegister, %32 : CtRegister, %33 : CtRegister, %34 : CtRegister, %35 : CtRegister = batch {
-                    %0 : CtRegister = batch_arg<0, CtRegister>();
-                    %1 : CtRegister = batch_arg<1, CtRegister>();
-                    %2 : CtRegister = batch_arg<2, CtRegister>();
-                    %3 : CtRegister = batch_arg<3, CtRegister>();
-                    %4 : CtRegister = batch_arg<4, CtRegister>();
-                    %5 : CtRegister = batch_arg<5, CtRegister>();
-                    %6 : CtRegister = batch_arg<6, CtRegister>();
-                    %7 : CtRegister, %8 : CtRegister = pbs_2<Lut@26>(%0);
-                    %9 : CtRegister = pbs<Lut@47>(%1);
-                    %10 : CtRegister = pbs<Lut@48>(%2);
-                    %11 : CtRegister = pbs<Lut@49>(%3);
-                    %12 : CtRegister = pbs<Lut@47>(%4);
-                    %13 : CtRegister = pbs<Lut@48>(%5);
-                    %14 : CtRegister = pbs_f<Lut@49>(%6);
-                    batch_ret<0, CtRegister>(%7);
-                    batch_ret<1, CtRegister>(%8);
-                    batch_ret<2, CtRegister>(%9);
-                    batch_ret<3, CtRegister>(%10);
-                    batch_ret<4, CtRegister>(%11);
-                    batch_ret<5, CtRegister>(%12);
-                    batch_ret<6, CtRegister>(%13);
-                    batch_ret<7, CtRegister>(%14);
-            }(%21, %22, %23, %24, %25, %26, %27);
-            %36 : CtRegister = add_ct(%22, %29);
-            %37 : CtRegister = add_ct(%30, %29);
-            %38 : CtRegister = add_ct(%34, %33);
-            %39 : CtRegister, %40 : CtRegister, %41 : CtRegister = batch {
-                    %0 : CtRegister = batch_arg<0, CtRegister>();
-                    %1 : CtRegister = batch_arg<1, CtRegister>();
-                    %2 : CtRegister = batch_arg<2, CtRegister>();
-                    %3 : CtRegister = pbs<Lut@1>(%0);
-                    %4 : CtRegister = pbs<Lut@1>(%1);
-                    %5 : CtRegister = pbs_f<Lut@44>(%2);
-                    batch_ret<0, CtRegister>(%3);
-                    batch_ret<1, CtRegister>(%4);
-                    batch_ret<2, CtRegister>(%5);
-            }(%28, %36, %37);
-            %42 : CtRegister = add_ct(%31, %37);
-            %43 : CtRegister = add_ct(%35, %38);
-            dst_st<0.0_tdst>(%39);
-            dst_st<0.1_tdst>(%40);
-            %44 : CtRegister = add_ct(%32, %42);
-            %45 : CtRegister = add_ct(%23, %41);
-            %46 : CtRegister, %47 : CtRegister, %48 : CtRegister = batch {
-                    %0 : CtRegister = batch_arg<0, CtRegister>();
-                    %1 : CtRegister = batch_arg<1, CtRegister>();
-                    %2 : CtRegister = batch_arg<2, CtRegister>();
-                    %3 : CtRegister = pbs<Lut@45>(%0);
-                    %4 : CtRegister = pbs<Lut@46>(%1);
-                    %5 : CtRegister = pbs_f<Lut@1>(%2);
-                    batch_ret<0, CtRegister>(%3);
-                    batch_ret<1, CtRegister>(%4);
-                    batch_ret<2, CtRegister>(%5);
-            }(%42, %44, %45);
-            %49 : CtRegister = add_ct(%24, %46);
-            dst_st<0.2_tdst>(%48);
-            %50 : CtRegister = add_ct(%33, %47);
-            %51 : CtRegister = add_ct(%38, %47);
-            %52 : CtRegister = add_ct(%43, %47);
-            %53 : CtRegister, %54 : CtRegister, %55 : CtRegister, %56 : CtRegister = batch {
-                    %0 : CtRegister = batch_arg<0, CtRegister>();
-                    %1 : CtRegister = batch_arg<1, CtRegister>();
-                    %2 : CtRegister = batch_arg<2, CtRegister>();
-                    %3 : CtRegister = batch_arg<3, CtRegister>();
-                    %4 : CtRegister = pbs<Lut@1>(%0);
-                    %5 : CtRegister = pbs<Lut@46>(%1);
-                    %6 : CtRegister = pbs<Lut@44>(%2);
-                    %7 : CtRegister = pbs_f<Lut@45>(%3);
-                    batch_ret<0, CtRegister>(%4);
-                    batch_ret<1, CtRegister>(%5);
-                    batch_ret<2, CtRegister>(%6);
-                    batch_ret<3, CtRegister>(%7);
-            }(%49, %50, %51, %52);
-            dst_st<0.3_tdst>(%53);
-            %57 : CtRegister = add_ct(%25, %54);
-            %58 : CtRegister = add_ct(%26, %55);
-            %59 : CtRegister = add_ct(%27, %56);
-            %60 : CtRegister, %61 : CtRegister, %62 : CtRegister = batch {
-                    %0 : CtRegister = batch_arg<0, CtRegister>();
-                    %1 : CtRegister = batch_arg<1, CtRegister>();
-                    %2 : CtRegister = batch_arg<2, CtRegister>();
-                    %3 : CtRegister = pbs<Lut@1>(%0);
-                    %4 : CtRegister = pbs<Lut@1>(%1);
-                    %5 : CtRegister = pbs_f<Lut@1>(%2);
-                    batch_ret<0, CtRegister>(%3);
-                    batch_ret<1, CtRegister>(%4);
-                    batch_ret<2, CtRegister>(%5);
-            }(%57, %58, %59);
-            dst_st<0.4_tdst>(%60);
-            dst_st<0.5_tdst>(%61);
-            dst_st<0.6_tdst>(%62);
             ",
         );
     }

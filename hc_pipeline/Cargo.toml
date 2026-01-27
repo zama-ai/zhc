@@ -8,7 +8,6 @@ hc_ir = { path = "../hc_ir" }
 hc_sim = { path = "../hc_sim" }
 hc_utils = { path = "../hc_utils" }
 hc_langs = { path = "../hc_langs" }
-hc_frontend = { path = "../hc_frontend" }
 hc_builder = { path = "../hc_builder" }
 serde = { workspace = true }
 bitfield-struct = "0.10.0"
