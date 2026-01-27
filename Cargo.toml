@@ -1,10 +1,7 @@
 [workspace]
 members = [
-    "hc_frontend",
-    "hc_gui",
     "hc_ir",
     "hc_langs",
-    "hc_bin",
     "hc_pipeline",
     "hc_sim",
     "hc_utils",
