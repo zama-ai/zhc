@@ -20,98 +20,50 @@ use std::fmt::Debug;
 
 use hc_utils::{
     FastMap,
-    iter::{CollectInSmallVec, Deduped, Median, MergerOf2, MultiZip},
-    small::{SmallSet, SmallVec},
+    iter::{Deduped, Median, MergerOf2, MultiZip},
+    small::SmallVec,
     svec,
 };
 
-use crate::{AnnIR, AnnOpRef, AnnValRef, Dialect, IR, OpId, OpRef, ValId, val_ref::ValRef};
-
-/// The height of an op is the largest distance between this op and an output/effect operation.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-struct Height(pub(super) u16);
-
-impl Height {
-    pub fn inc(self) -> Self {
-        Height(self.0 + 1)
-    }
-
-    pub fn dec(self) -> Self {
-        Height(self.0 - 1)
-    }
-
-    pub fn to_top_distance(self, ir_depth: u16) -> u16 {
-        ir_depth - self.0 - 1
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct Children(pub(super) SmallSet<OpId>);
-
-impl std::hash::Hash for Children {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        let mut sorted_ops = self.0.iter().cosvec();
-        sorted_ops.sort_unstable();
-        sorted_ops.hash(state);
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct Analysis {
-    height: Height,
-    children: Children
-}
-
-fn analyze<D: Dialect>(ir: &IR<D>) -> AnnIR<'_, D, Analysis, ()> {
-    ir.backward_dataflow_analysis::<Analysis, ()>(|opmap, _, opref| {
-        let height = opref
-            .get_users_iter()
-            .map(|user| opmap.get(&user).unwrap().height.0)
-            .max()
-            .map(|a| Height(a).inc())
-            .unwrap_or(Height(0));
-        let children = opref.get_users_iter().fold(Children(SmallSet::new()), |mut acc, user| {
-            acc.0.insert(user.get_id());
-            acc.0.extend(opmap.get(&user).unwrap().children.0.iter().cloned());
-            acc
-        });
-        (Analysis{height, children}, svec![(); opref.get_return_valids().len()])
-    })
-}
+use crate::{
+    AnnIR, AnnOpRef, AnnValRef, Dialect, IR, OpId, OpRef, ValId,
+    val_ref::ValRef,
+    visualization::analysis::{Layer, analyze},
+};
 
 #[derive(Clone, PartialEq, Eq, Hash)]
-enum HeightedNode<'ir, 'ann, D: Dialect> {
-    Operation(AnnOpRef<'ir, 'ann, D, Analysis, ()>),
-    Value(AnnValRef<'ir, 'ann, D, Analysis, ()>, Height),
+enum LayeredNode<'ir, 'ann, D: Dialect> {
+    Operation(AnnOpRef<'ir, 'ann, D, Layer, ()>),
+    Value(AnnValRef<'ir, 'ann, D, Layer, ()>, Layer),
 }
 
-impl<'ir, 'ann, D: Dialect> std::fmt::Debug for HeightedNode<'ir, 'ann, D> {
+impl<'ir, 'ann, D: Dialect> std::fmt::Debug for LayeredNode<'ir, 'ann, D> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            HeightedNode::Operation(op_ref) => write!(f, "Op(\"{}\")", op_ref),
-            HeightedNode::Value(val_ref, height) => write!(f, "Val(\"{}\", {:?})", val_ref, height),
+            LayeredNode::Operation(op_ref) => write!(f, "Op(\"{}\")", op_ref),
+            LayeredNode::Value(val_ref, layer) => write!(f, "Val(\"{}\", {:?})", val_ref, layer),
         }
     }
 }
 
-impl<'ir, 'ann, D: Dialect> HeightedNode<'ir, 'ann, D> {
-    fn above(&self) -> impl Iterator<Item = HeightedNode<'ir, 'ann, D>> {
+impl<'ir, 'ann, D: Dialect> LayeredNode<'ir, 'ann, D> {
+    fn above(&self) -> impl Iterator<Item = LayeredNode<'ir, 'ann, D>> {
         match self {
-            HeightedNode::Operation(op_ref) => op_ref
+            LayeredNode::Operation(op_ref) => op_ref
                 .get_args_iter()
                 .map(|v| {
-                    if v.get_origin().get_annotation().height == op_ref.get_annotation().height.inc() {
-                        HeightedNode::Operation(v.get_origin())
+                    if *v.get_origin().get_annotation() == op_ref.get_annotation().above() {
+                        LayeredNode::Operation(v.get_origin().opref)
                     } else {
-                        HeightedNode::Value(v, op_ref.get_annotation().height.inc())
+                        LayeredNode::Value(v, op_ref.get_annotation().above())
                     }
                 })
                 .merge_1_of_2(),
-            HeightedNode::Value(val_ref, height) => {
-                if val_ref.get_origin().get_annotation().height == height.inc() {
-                    std::iter::once(HeightedNode::Operation(val_ref.get_origin()))
+            LayeredNode::Value(val_ref, layer) => {
+                if *val_ref.get_origin().get_annotation() == layer.above() {
+                    std::iter::once(LayeredNode::Operation(val_ref.get_origin().opref))
                 } else {
-                    std::iter::once(HeightedNode::Value(val_ref.clone(), height.inc()))
+                    std::iter::once(LayeredNode::Value(val_ref.clone(), layer.above()))
                 }
                 .merge_2_of_2()
             }
@@ -119,27 +71,27 @@ impl<'ir, 'ann, D: Dialect> HeightedNode<'ir, 'ann, D> {
         .dedup()
     }
 
-    fn below(&self) -> impl Iterator<Item = HeightedNode<'ir, 'ann, D>> {
+    fn below(&self) -> impl Iterator<Item = LayeredNode<'ir, 'ann, D>> {
         match self {
-            HeightedNode::Operation(op_ref) => op_ref
+            LayeredNode::Operation(op_ref) => op_ref
                 .get_returns_iter()
                 .flat_map(|r| (std::iter::repeat(r.clone()), r.get_users_iter()).mzip())
                 .map(|(r, u)| {
-                    if u.get_annotation().height == op_ref.get_annotation().height.dec() {
-                        HeightedNode::Operation(u)
+                    if *u.get_annotation() == op_ref.get_annotation().below() {
+                        LayeredNode::Operation(u)
                     } else {
-                        HeightedNode::Value(r, op_ref.get_annotation().height.dec())
+                        LayeredNode::Value(r, op_ref.get_annotation().below())
                     }
                 })
                 .merge_1_of_2(),
-            HeightedNode::Value(val_ref, height) => val_ref
+            LayeredNode::Value(val_ref, layer) => val_ref
                 .get_users_iter()
-                .filter(|u| u.get_annotation().height < *height)
+                .filter(|u| *u.get_annotation() > *layer)
                 .map(move |u| {
-                    if u.get_annotation().height == height.dec() {
-                        HeightedNode::Operation(u)
+                    if *u.get_annotation() == layer.below() {
+                        LayeredNode::Operation(u)
                     } else {
-                        HeightedNode::Value(val_ref.clone(), height.dec())
+                        LayeredNode::Value(val_ref.clone(), layer.below())
                     }
                 })
                 .merge_2_of_2(),
@@ -184,49 +136,41 @@ type HStack<T> = Vec<T>;
 #[derive(Debug)]
 struct LayoutBuilder<'ir, 'ann, D: Dialect> {
     // Layout is a vertical stack (top-to-bottom ordered) of horizontal stacks (left-to-right ordered) of nodes.
-    layout: VStack<HStack<HeightedNode<'ir, 'ann, D>>>,
-    position_buffer: FastMap<HeightedNode<'ir, 'ann, D>, Position>,
+    layout: VStack<HStack<LayeredNode<'ir, 'ann, D>>>,
+    position_buffer: FastMap<LayeredNode<'ir, 'ann, D>, Position>,
 }
 
 impl<'ir, 'ann, D: Dialect> LayoutBuilder<'ir, 'ann, D> {
-    fn from_analyzed_ir(ann_ir: &'ann AnnIR<'ir, D, Analysis, ()>) -> Self {
+    fn from_analyzed_ir(ann_ir: &'ann AnnIR<'ir, D, Layer, ()>) -> Self {
         let depth = ann_ir.depth() + 1;
         let mut layout = vec![vec![]; depth as usize];
         let mut position_buffer = FastMap::new();
 
-        // We require annotation of op height because it puts the operation closer to their
-        // user than the depth (which puts all input nodes at the top even though they are
-        // used way later). But that said, the layout is still from top to bottom. So we
-        // need to convert the height into a top-rooted index.
-        // panic!("{}", depth + 1);
-        let h2i = |h: &Height| h.to_top_distance(depth) as usize;
-
         // We add a node for each operation. Nothing fancy.
         for op in ann_ir.walk_ops_linear() {
-            let node = HeightedNode::Operation(op.clone());
-            position_buffer.insert(
-                node.clone(),
-                Position::Index(layout[h2i(&op.get_annotation().height)].len()),
-            );
-            layout[h2i(&op.get_annotation().height)].push(HeightedNode::Operation(op.clone()));
+            let layer = op.get_annotation().to_usize();
+            let node = LayeredNode::Operation(op);
+            position_buffer.insert(node.clone(), Position::Index(layout[layer].len()));
+            layout[layer].push(node);
         }
 
         // Now, for every value that is not used only in the layer below its origin, we need
         // to add intermediate val nodes.
         for val in ann_ir.walk_vals_linear() {
-            let from_height = val.get_origin().get_annotation().height;
-            let to_height = val
+            let from_layer = val.get_origin().get_annotation().clone();
+            let to_layer = val
                 .get_users_iter()
-                .map(|to| to.get_annotation().height)
-                .min()
-                .unwrap_or(from_height)
-                .inc();
-            // Range is reverse ordered, because from is higher than to.
-            for i in to_height.0..from_height.0 {
-                let height = Height(i);
-                let node = HeightedNode::Value(val.clone(), height);
-                position_buffer.insert(node.clone(), Position::Index(layout[h2i(&height)].len()));
-                layout[h2i(&height)].push(node)
+                .map(|to| *to.get_annotation())
+                .max()
+                .unwrap_or(from_layer)
+                .above();
+            for layer in Layer::range_inclusive(from_layer.below(), to_layer) {
+                let node = LayeredNode::Value(val.clone(), layer);
+                position_buffer.insert(
+                    node.clone(),
+                    Position::Index(layout[layer.to_usize()].len()),
+                );
+                layout[layer.to_usize()].push(node)
             }
         }
         // We create the builder object
@@ -260,10 +204,10 @@ impl<'ir, 'ann, D: Dialect> LayoutBuilder<'ir, 'ann, D> {
                 match maybe_median {
                     Some(median) => {
                         *pos = Position::Approximate(median);
-                    },
+                    }
                     None => {
                         *pos = Position::Approximate(pos.unwrap_index() as f64);
-                    },
+                    }
                 }
             }
             self.layout[layer].as_mut_slice().sort_unstable_by(|a, b| {
@@ -295,10 +239,10 @@ impl<'ir, 'ann, D: Dialect> LayoutBuilder<'ir, 'ann, D> {
                 match maybe_median {
                     Some(median) => {
                         *pos = Position::Approximate(median);
-                    },
+                    }
                     None => {
                         *pos = Position::Approximate(pos.unwrap_index() as f64);
-                    },
+                    }
                 }
             }
             self.layout[layer].as_mut_slice().sort_unstable_by(|a, b| {
@@ -324,10 +268,10 @@ impl<'ir, 'ann, D: Dialect> LayoutBuilder<'ir, 'ann, D> {
                 layer
                     .into_iter()
                     .map(|n| match n {
-                        HeightedNode::Operation(ann_op_ref) => {
+                        LayeredNode::Operation(ann_op_ref) => {
                             Vertex::Operation(ann_op_ref.get_id())
                         }
-                        HeightedNode::Value(ann_val_ref, _) => Vertex::Value(ann_val_ref.get_id()),
+                        LayeredNode::Value(ann_val_ref, _) => Vertex::Value(ann_val_ref.get_id()),
                     })
                     .collect()
             })

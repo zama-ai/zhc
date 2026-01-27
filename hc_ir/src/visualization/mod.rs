@@ -5,7 +5,7 @@ mod layout;
 mod spatial;
 mod svg;
 mod stylesheet;
-
+mod analysis;
 
 pub fn draw_ir<D: Dialect>(ir: &IR<D>, path: impl AsRef<Path>) {
     let stylesheet = stylesheet::StyleSheet::new();
