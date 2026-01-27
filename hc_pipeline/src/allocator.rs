@@ -19,7 +19,7 @@ use hc_sim::hpu::HpuConfig;
 use hc_utils::{iter::{CollectInSmallVec, CollectInVec, MultiZip}, small::{SmallMap, SmallVec}, StoreIndex, svec};
 
 /// A register identifier used in the allocation process.
-#[derive(Clone, Debug, Copy)]
+#[derive(Clone, Debug, Copy, PartialEq, Eq)]
 pub struct Register(OpIdRaw);
 
 /// Represents the state of a register.
@@ -225,7 +225,7 @@ impl Display for RegisterFile {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 struct LiveRange {
     init: OpIdRaw,
     uses: SmallVec<OpIdRaw>,
@@ -283,7 +283,7 @@ impl LiveRangeMap {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 enum ValState {
     Registered { reg: Register },
     Spilled { slot: HeapSlot },

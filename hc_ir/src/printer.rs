@@ -1,6 +1,6 @@
 use hc_utils::iter::{CollectInSmallVec, Separate};
 
-use crate::AnnValRef;
+use crate::{AnnValRef, Annotation};
 
 use super::{
     Dialect, IR, OpIdRaw, OpRef, ValId,
@@ -82,7 +82,7 @@ impl<D: Dialect> Printer<D> {
     /// The `walker` determines traversal order, `show_types` controls whether
     /// type annotations are included, and `show_erased_ops` determines whether
     /// inactive operations are displayed.
-    pub fn from_ann_ir<OpAnn, ValAnn>(
+    pub fn from_ann_ir<OpAnn: Annotation, ValAnn: Annotation>(
         ann_ir: &AnnIR<D, OpAnn, ValAnn>,
         walker: PrintWalker,
         show_types: bool,
@@ -243,16 +243,16 @@ impl<D: Dialect> Printer<D> {
     }
 
     /// Formats the entire annotated IR as a string.
-    pub fn ann_ir_to_string<'ir, OpAnn: Debug, ValAnn: Debug>(
+    pub fn ann_ir_to_string<'ir, OpAnn: Annotation, ValAnn: Annotation>(
         &self,
         ann_ir: &AnnIR<'ir, D, OpAnn, ValAnn>,
     ) -> String {
-        struct AnnIRFormatter<'ir, 'a, D: Dialect, OpAnn: Debug, ValAnn: Debug> {
+        struct AnnIRFormatter<'ir, 'a, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> {
             printer: &'a Printer<D>,
             ann_ir: &'a AnnIR<'ir, D, OpAnn, ValAnn>,
         }
 
-        impl<'ir, D: Dialect, OpAnn: Debug, ValAnn: Debug> std::fmt::Display
+        impl<'ir, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> std::fmt::Display
             for AnnIRFormatter<'ir, '_, D, OpAnn, ValAnn>
         {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -270,7 +270,7 @@ impl<D: Dialect> Printer<D> {
     }
 
     /// Formats a complete annotated operation with its arguments, return values, and annotations.
-    pub fn format_ann_valref<OpAnn, ValAnn: Debug>(
+    pub fn format_ann_valref<OpAnn: Annotation, ValAnn: Annotation>(
         &self,
         f: &mut std::fmt::Formatter<'_>,
         valref: &AnnValRef<'_, '_, D, OpAnn, ValAnn>,
@@ -287,7 +287,7 @@ impl<D: Dialect> Printer<D> {
     }
 
     /// Formats a complete annotated operation with its arguments, return values, and annotations.
-    pub fn format_ann_opref<OpAnn: Debug, ValAnn: Debug>(
+    pub fn format_ann_opref<OpAnn: Annotation, ValAnn: Annotation>(
         &self,
         f: &mut std::fmt::Formatter<'_>,
         opref: &AnnOpRef<'_, '_, D, OpAnn, ValAnn>,
@@ -318,7 +318,7 @@ impl<D: Dialect> Printer<D> {
     }
 
     /// Formats the entire annotated IR.
-    pub fn format_ann_ir<OpAnn: Debug, ValAnn: Debug>(
+    pub fn format_ann_ir<OpAnn: Annotation, ValAnn: Annotation>(
         &self,
         f: &mut std::fmt::Formatter<'_>,
         ann_ir: &AnnIR<D, OpAnn, ValAnn>,

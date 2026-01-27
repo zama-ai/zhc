@@ -3,7 +3,7 @@ use hc_utils::svec;
 use hc_utils::{Store, small::SmallVec};
 use crate::val_ref::ValRef;
 use crate::visualization::draw_ir;
-use crate::{AnnIR, PrintWalker, ValMap, ValOrigin, ValUse};
+use crate::{AnnIR, Annotation, PrintWalker, ValMap, ValOrigin, ValUse};
 use std::path::Path;
 use std::{
     cmp::max,
@@ -665,7 +665,7 @@ impl<D: Dialect> IR<D> {
     }
 
     /// Performs backward dataflow analysis on the IR operations.
-    pub fn backward_dataflow_analysis<OpAnn, ValAnn>(
+    pub fn backward_dataflow_analysis<OpAnn: Annotation, ValAnn: Annotation>(
         &self,
         mut f: impl FnMut(&OpMap<OpAnn>, &ValMap<ValAnn>, &OpRef<D>) -> (OpAnn, SmallVec<ValAnn>),
     ) -> AnnIR<'_, D, OpAnn, ValAnn> {
@@ -684,7 +684,7 @@ impl<D: Dialect> IR<D> {
     }
 
     /// Performs forward dataflow analysis on the IR operations.
-    pub fn forward_dataflow_analysis<OpAnn, ValAnn>(
+    pub fn forward_dataflow_analysis<OpAnn: Annotation, ValAnn: Annotation>(
         &self,
         mut f: impl FnMut(&OpMap<OpAnn>, &ValMap<ValAnn>, &OpRef<D>) -> (OpAnn, SmallVec<ValAnn>)
     ) -> AnnIR<'_, D, OpAnn, ValAnn> {
