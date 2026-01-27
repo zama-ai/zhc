@@ -12,6 +12,7 @@ pub mod tracing;
 pub mod iter;
 pub mod small;
 pub mod graphics;
+mod change_guard;
 
 mod type_name;
 pub use erasable::*;
@@ -19,3 +20,4 @@ pub use fast_hash::*;
 pub use fifo::*;
 pub use store::*;
 pub use type_name::*;
+pub use change_guard::*;

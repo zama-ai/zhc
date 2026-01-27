@@ -30,13 +30,13 @@ impl DeadCodeAnalysis {
 
         let mut worklist = Vec::new();
         for effect in ir.raw_walk_ops_linear().filter(|op| op.is_effect()) {
-            states[effect.get_id()] = Liveness::Live;
+            states.insert(effect.get_id(), Liveness::Live);
             worklist.push(effect);
         }
         while let Some(op) = worklist.pop() {
             for pred in op.get_predecessors_iter() {
                 if states[pred.get_id()] == Liveness::Dead {
-                    states[pred.get_id()] = Liveness::Live;
+                    states.insert(pred.get_id(), Liveness::Live);
                     worklist.push(pred);
                 }
             }

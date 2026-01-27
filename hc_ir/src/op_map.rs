@@ -1,7 +1,7 @@
 use std::fmt::Debug;
-use std::ops::{Index, IndexMut};
+use std::ops::Index;
 
-use hc_utils::Store;
+use hc_utils::{ChangeGuard, Store};
 
 use crate::OpRef;
 
@@ -18,6 +18,7 @@ pub struct OpMap<T> {
     store: Store<OpId, State<Option<T>>>,
     n_stored: u16,
     n_inactive: u16,
+    changed: bool,
 }
 
 impl<T> OpMap<T> {
@@ -41,6 +42,7 @@ impl<T> OpMap<T> {
                 .collect(),
             n_stored: 0,
             n_inactive: ir.raw_n_ops() - ir.n_ops(),
+            changed: false
         }
     }
 
@@ -63,6 +65,7 @@ impl<T> OpMap<T> {
                 .collect(),
             n_stored: ir.n_ops(),
             n_inactive: ir.raw_n_ops() - ir.n_ops(),
+            changed: false,
         }
     }
 
@@ -88,6 +91,7 @@ impl<T> OpMap<T> {
                 .collect(),
             n_stored: ir.n_ops(),
             n_inactive: ir.raw_n_ops() - ir.n_ops(),
+            changed: false
         }
     }
 
@@ -109,6 +113,7 @@ impl<T> OpMap<T> {
                 .collect(),
             n_stored: ir.n_ops(),
             n_inactive: ir.raw_n_ops() - ir.n_ops(),
+            changed: false
         }
     }
 
@@ -149,16 +154,24 @@ impl<T> OpMap<T> {
         self.store[k].as_ref().unwrap_active().as_ref()
     }
 
-    /// Returns a mutable reference to the value for the specified operation.
+    /// Returns a mutable guard for the data at the specified operation.
     ///
-    /// Returns `None` if no value is stored for the operation.
+    /// Returns `None` if no data is stored for the operation. The guard
+    /// automatically tracks changes when dropped.
     ///
     /// # Panics
     ///
     /// Panics if the operation ID is out of bounds or refers to an inactive operation.
-    pub fn get_mut(&mut self, k: &OpId) -> Option<&mut T> {
+    pub fn get_mut(&mut self, k: &OpId) -> Option<ChangeGuard<'_, T>>
+    where
+        T: Clone + PartialEq,
+    {
         assert!(self.may_store(k));
-        self.store[k].as_mut_ref().unwrap_active().as_mut()
+        if let Some(value) = self.store[k].as_mut_ref().unwrap_active().as_mut() {
+            Some(ChangeGuard::new(value, &mut self.changed))
+        } else {
+            None
+        }
     }
 
     /// Stores a value for the specified operation.
@@ -168,9 +181,12 @@ impl<T> OpMap<T> {
     /// # Panics
     ///
     /// Panics if the operation ID is out of bounds or refers to an inactive operation.
-    pub fn insert(&mut self, k: OpId, v: T) -> Option<T> {
+    pub fn insert(&mut self, k: OpId, v: T) -> Option<T> where T: PartialEq {
         assert!(self.may_store(&k));
         let v = State::Active(Some(v));
+        if v == self.store[k] {
+            self.changed = true;
+        }
         let out = std::mem::replace(&mut self.store[k], v).unwrap_active();
         if out.is_none() {
             self.n_stored += 1;
@@ -192,6 +208,7 @@ impl<T> OpMap<T> {
         if out.is_some() {
             self.n_stored -= 1;
         }
+        self.changed = true;
         out
     }
 
@@ -203,14 +220,9 @@ impl<T> OpMap<T> {
         })
     }
 
-    /// Returns an iterator over operation IDs and mutable references to their values.
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = (OpId, &mut T)> {
-        self.store
-            .enumerate_iter_mut()
-            .filter_map(|(i, a)| match a {
-                State::Active(Some(v)) => Some((i, v)),
-                _ => None,
-            })
+    /// Acknowledge eventual changes
+    pub fn ack_changes(&mut self) -> bool {
+        std::mem::replace(&mut self.changed, false)
     }
 }
 
@@ -219,15 +231,6 @@ impl<T> Index<OpId> for OpMap<T> {
 
     fn index(&self, index: OpId) -> &Self::Output {
         match self.get(&index) {
-            Some(a) => a,
-            None => panic!("Tried to get unmapped index {:?}", index),
-        }
-    }
-}
-
-impl<T> IndexMut<OpId> for OpMap<T> {
-    fn index_mut(&mut self, index: OpId) -> &mut Self::Output {
-        match self.get_mut(&index) {
             Some(a) => a,
             None => panic!("Tried to get unmapped index {:?}", index),
         }
