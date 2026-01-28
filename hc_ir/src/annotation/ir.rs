@@ -2,7 +2,10 @@ use std::ops::Deref;
 
 use hc_utils::{iter::MultiZip, small::SmallVec};
 
-use crate::{AnnOpRef, AnnValRef, Dialect, IR, OpId, OpMap, PrintWalker, Printer, ValId, ValMap, annotation::traits::Annotation};
+use crate::{
+    AnnOpRef, AnnValRef, Dialect, IR, OpId, OpMap, PrintWalker, Printer, ValId, ValMap,
+    annotation::traits::Annotation,
+};
 
 /// IR container with parallel annotation storage for operations and values.
 #[derive(Debug, Clone)]
@@ -231,35 +234,36 @@ impl<'ir, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> AnnIR<'ir, D, OpAnn
         AnnIR::new(self.ir, opmap, valmap)
     }
 
-    /// Performs forward dataflow analysis on the IR operations.
-    pub fn forward_dataflow_analysis_fixed_point(
+    /// Transforms operation annotations using the provided function.
+    pub fn map_opann<OpAnnNew: Annotation>(
         &self,
-        mut f: impl FnMut(
-            &OpMap<OpAnn>,
-            &ValMap<ValAnn>,
-            &AnnOpRef<D, OpAnn, ValAnn>,
-        ) -> (OpAnn, SmallVec<ValAnn>),
-    ) -> AnnIR<'ir, D, OpAnn, ValAnn> {
+        mut f: impl FnMut(&AnnOpRef<D, OpAnn, ValAnn>) -> OpAnnNew,
+    ) -> AnnIR<'ir, D, OpAnnNew, ValAnn> {
         let mut opmap = self.empty_opmap();
-        let mut valmap = self.empty_valmap();
-        for opref in self.walk_ops_topological() {
-            assert!(
-                opref
-                    .get_predecessors_iter()
-                    .all(|k| opmap.contains_key(&k))
-            );
-            let (opann, valanns) = f(&opmap, &valmap, &opref);
-            assert_eq!(valanns.len(), opref.get_return_valids().len());
-            assert!(opmap.insert(**opref, opann).is_none());
-            for (valann, valref) in (valanns.into_iter(), opref.get_return_valids().iter()).mzip() {
-                assert!(valmap.insert(*valref, valann).is_none());
-            }
+        for opref in self.walk_ops_linear() {
+            let new_opann = f(&opref);
+            assert!(opmap.insert(**opref, new_opann).is_none());
         }
-        AnnIR::new(self.ir, opmap, valmap)
+        AnnIR::new(self.ir, opmap, self.val_annotations.clone())
+    }
+
+    /// Transforms value annotations using the provided function.
+    pub fn map_valann<ValAnnNew: Annotation>(
+        &self,
+        mut f: impl FnMut(&AnnValRef<D, OpAnn, ValAnn>) -> ValAnnNew,
+    ) -> AnnIR<'ir, D, OpAnn, ValAnnNew> {
+        let mut valmap = self.empty_valmap();
+        for valref in self.walk_vals_linear() {
+            let new_valann = f(&valref);
+            assert!(valmap.insert(**valref, new_valann).is_none());
+        }
+        AnnIR::new(self.ir, self.op_annotations.clone(), valmap)
     }
 }
 
-impl<'ir, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> Deref for AnnIR<'ir, D, OpAnn, ValAnn> {
+impl<'ir, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> Deref
+    for AnnIR<'ir, D, OpAnn, ValAnn>
+{
     type Target = IR<D>;
 
     fn deref(&self) -> &Self::Target {
