@@ -1,21 +1,19 @@
 use std::cell::{Ref, RefCell};
 
+use hc_crypto::integer_semantics::CiphertextBlockSpec;
 use hc_ir::{IR, cse::eliminate_common_subexpressions, dce::eliminate_dead_code};
-use hc_langs::ioplang::{Ioplang, Litteral, LutGenerator, Operations, Types};
+use hc_langs::ioplang::{Ioplang, Litteral, Lut1Def, Lut2Def, Operations, Types};
 use hc_utils::{
     iter::{Chunk, ChunkIt},
     small::SmallVec,
     svec,
 };
 
-use crate::builder::{
-    BlockConfig, CiphertextBlock, EncryptedInteger, Lut, Lut1Type, Lut2, Lut2Type, PlaintextBlock,
-    PlaintextInteger, blocks_count,
-};
+use crate::builder::{Ciphertext, CiphertextBlock, Plaintext, PlaintextBlock};
 
 /// Builder for constructing homomorphic encryption circuits.
 pub struct Builder {
-    pub(crate) config: BlockConfig,
+    pub(crate) spec: CiphertextBlockSpec,
     pub(crate) ir: RefCell<IR<Ioplang>>,
     pub(crate) input_ctr: RefCell<usize>,
     pub(crate) output_ctr: RefCell<usize>,
@@ -35,43 +33,13 @@ impl Builder {
         *ctr += 1;
         out
     }
-
-    fn decl_lut(&self, name: &str) -> Lut {
-        let (_node, ret) = self
-            .ir
-            .borrow_mut()
-            .add_op(
-                Operations::GenerateLut {
-                    name: name.into(),
-                    gene: LutGenerator::new(|a| a),
-                },
-                svec![],
-            )
-            .unwrap();
-        Lut(ret[0])
-    }
-
-    fn decl_lut2(&self, name: &str) -> Lut2 {
-        let (_node, ret) = self
-            .ir
-            .borrow_mut()
-            .add_op(
-                Operations::GenerateLut2 {
-                    name: name.into(),
-                    gene: [LutGenerator::new(|a| a), LutGenerator::new(|a| a)],
-                },
-                svec![],
-            )
-            .unwrap();
-        Lut2(ret[0])
-    }
 }
 
 impl Builder {
-    /// Creates a new builder with the specified integer `config`.
-    pub fn new(config: &BlockConfig) -> Self {
+    /// Creates a new builder with the specified block `spec`.
+    pub fn new(spec: CiphertextBlockSpec) -> Self {
         Self {
-            config: config.to_owned(),
+            spec: spec,
             ir: RefCell::new(IR::empty()),
             input_ctr: RefCell::new(0),
             output_ctr: RefCell::new(0),
@@ -89,9 +57,9 @@ impl Builder {
         ir
     }
 
-    /// Returns a reference to the integer configuration.
-    pub fn config(&self) -> &BlockConfig {
-        &self.config
+    /// Returns a reference to the integer spec.
+    pub fn spec(&self) -> &CiphertextBlockSpec {
+        &self.spec
     }
 
     /// Returns a reference to the current IR state.
@@ -105,18 +73,8 @@ impl Builder {
         panic!()
     }
 
-    /// Returns a handle to the specified 1-LUT in the circuit.
-    pub fn lut(&self, lut: Lut1Type) -> Lut {
-        self.decl_lut(lut.name())
-    }
-
-    /// Returns a handle to the specified 2-LUT in the circuit.
-    pub fn lut2(&self, lut: Lut2Type) -> Lut2 {
-        self.decl_lut2(lut.name())
-    }
-
     /// Creates a ciphertext input and returns its blocks.
-    pub fn eint_input(&self, width: u8) -> EncryptedInteger {
+    pub fn eint_input(&self, int_size: u16) -> Ciphertext {
         let pos = self.get_input_ctr();
         let (_, inp) = self
             .ir
@@ -130,32 +88,23 @@ impl Builder {
             )
             .unwrap();
         let mut output = SmallVec::new();
-        for i in 0..blocks_count(width, &self.config) {
-            let (_, index) = self
-                .ir
-                .borrow_mut()
-                .add_op(
-                    Operations::Constant {
-                        value: Litteral::Index(i as usize),
-                    },
-                    svec![],
-                )
-                .unwrap();
+        let ct_spec = self.spec.ciphertext_spec(int_size);
+        for index in 0..ct_spec.block_count() {
             let (_, ret) = self
                 .ir
                 .borrow_mut()
-                .add_op(Operations::ExtractCtBlock, svec![inp[0], index[0]])
+                .add_op(Operations::ExtractCtBlock { index }, svec![inp[0]])
                 .unwrap();
             output.push(CiphertextBlock {
                 valid: ret[0],
-                config: self.config,
+                spec: self.spec,
             });
         }
-        EncryptedInteger::from_blocks(width, output)
+        Ciphertext::from_blocks(output)
     }
 
     /// Creates a plaintext input and returns its blocks.
-    pub fn int_input(&self, width: u8) -> PlaintextInteger {
+    pub fn int_input(&self, int_size: u16) -> Plaintext {
         let pos = self.get_input_ctr();
         let (_, inp) = self
             .ir
@@ -169,60 +118,39 @@ impl Builder {
             )
             .unwrap();
         let mut output = SmallVec::new();
-        for i in 0..blocks_count(width, &self.config) {
-            let (_, index) = self
-                .ir
-                .borrow_mut()
-                .add_op(
-                    Operations::Constant {
-                        value: Litteral::Index(i as usize),
-                    },
-                    svec![],
-                )
-                .unwrap();
+        let pt_spec = self
+            .spec()
+            .matching_plaintext_block_spec()
+            .plaintext_spec(int_size);
+        for index in 0..pt_spec.block_count() {
             let (_, ret) = self
                 .ir
                 .borrow_mut()
-                .add_op(Operations::ExtractPtBlock, svec![inp[0], index[0]])
+                .add_op(Operations::ExtractPtBlock { index }, svec![inp[0]])
                 .unwrap();
             output.push(PlaintextBlock {
                 valid: ret[0],
-                config: self.config,
+                spec: self.spec.matching_plaintext_block_spec(),
             });
         }
-        PlaintextInteger::from_blocks(width, output)
+        Plaintext::from_blocks(output)
     }
 
     /// Creates a ciphertext output from the given `blocks`.
-    pub fn eint_output(&self, ct: EncryptedInteger) {
+    pub fn eint_output(&self, ct: Ciphertext) {
         let (_, acc) = self
             .ir
             .borrow_mut()
-            .add_op(
-                Operations::Let {
-                    typ: Types::Ciphertext,
-                },
-                svec![],
-            )
+            .add_op(Operations::LetCiphertext, svec![])
             .unwrap();
         let mut acc = acc[0];
-        for i in 0..ct.len() {
-            let (_, index) = self
-                .ir
-                .borrow_mut()
-                .add_op(
-                    Operations::Constant {
-                        value: Litteral::Index(i),
-                    },
-                    svec![],
-                )
-                .unwrap();
+        for index in 0..TryInto::<u8>::try_into(ct.len()).unwrap() {
             let (_, ret) = self
                 .ir
                 .borrow_mut()
                 .add_op(
-                    Operations::StoreCtBlock,
-                    svec![ct.blocks()[i].valid, acc, index[0]],
+                    Operations::StoreCtBlock { index },
+                    svec![ct.blocks()[index as usize].valid, acc],
                 )
                 .unwrap();
             acc = ret[0];
@@ -241,7 +169,7 @@ impl Builder {
     }
 
     /// Creates a plaintext block containing the specified `constant`.
-    pub fn block_constant(&self, constant: usize) -> PlaintextBlock {
+    pub fn block_constant(&self, constant: u8) -> PlaintextBlock {
         let (_node, ret) = self
             .ir
             .borrow_mut()
@@ -254,7 +182,7 @@ impl Builder {
             .unwrap();
         PlaintextBlock {
             valid: ret[0],
-            config: self.config,
+            spec: self.spec.matching_plaintext_block_spec(),
         }
     }
 
@@ -267,7 +195,7 @@ impl Builder {
             .unwrap();
         CiphertextBlock {
             valid: ret[0],
-            config: self.config,
+            spec: self.spec,
         }
     }
 
@@ -280,7 +208,7 @@ impl Builder {
             .unwrap();
         CiphertextBlock {
             valid: ret[0],
-            config: self.config,
+            spec: self.spec,
         }
     }
 
@@ -293,7 +221,7 @@ impl Builder {
             .unwrap();
         CiphertextBlock {
             valid: ret[0],
-            config: self.config,
+            spec: self.spec,
         }
     }
 
@@ -306,7 +234,7 @@ impl Builder {
             .unwrap();
         CiphertextBlock {
             valid: ret[0],
-            config: self.config,
+            spec: self.spec,
         }
     }
 
@@ -319,17 +247,12 @@ impl Builder {
             .unwrap();
         CiphertextBlock {
             valid: ret[0],
-            config: self.config,
+            spec: self.spec,
         }
     }
 
-    /// Performs multiply-accumulate with constant `cst_a` and blocks `src_a`, `src_b`.
-    ///
-    /// Computes `cst_a * src_a + src_b` where `cst_a` is plaintext and
-    /// `src_a`, `src_b` are ciphertext blocks.
-    pub fn block_mac(
+    pub fn block_pack_ct(
         &self,
-        cst_a: &PlaintextBlock,
         src_a: &CiphertextBlock,
         src_b: &CiphertextBlock,
     ) -> CiphertextBlock {
@@ -337,42 +260,38 @@ impl Builder {
             .ir
             .borrow_mut()
             .add_op(
-                Operations::Mac,
-                svec![cst_a.valid, src_a.valid, src_b.valid],
+                Operations::PackCt {
+                    mul: 2u8.pow(self.spec().message_size() as u32),
+                },
+                svec![src_a.valid, src_b.valid],
             )
             .unwrap();
         CiphertextBlock {
             valid: ret[0],
-            config: self.config,
+            spec: self.spec,
         }
-    }
-
-    pub fn block_pack(&self, src_a: &CiphertextBlock, src_b: &CiphertextBlock) -> CiphertextBlock {
-        let shift = self.block_constant(2usize.pow(self.config.message_width as u32));
-        self.block_mac(&shift, src_a, src_b)
     }
 
     pub fn block_pack_lut(
         &self,
         src_a: &CiphertextBlock,
         src_b: &CiphertextBlock,
-        lut: &Lut,
+        lut: Lut1Def,
     ) -> CiphertextBlock {
-        let shift = self.block_constant(2usize.pow(self.config.message_width as u32));
-        let maced = self.block_mac(&shift, src_a, src_b);
-        self.block_pbs(&maced, lut)
+        let packed = self.block_pack_ct(src_a, src_b);
+        self.block_pbs(&packed, lut)
     }
 
     /// Applies a 1-PBS to `src` using `lut`.
-    pub fn block_pbs(&self, src: &CiphertextBlock, lut: &Lut) -> CiphertextBlock {
+    pub fn block_pbs(&self, src: &CiphertextBlock, lut: Lut1Def) -> CiphertextBlock {
         let (_node, ret) = self
             .ir
             .borrow_mut()
-            .add_op(Operations::Pbs, svec![src.valid, lut.0])
+            .add_op(Operations::Pbs { lut }, svec![src.valid])
             .unwrap();
         CiphertextBlock {
             valid: ret[0],
-            config: self.config,
+            spec: self.spec,
         }
     }
 
@@ -380,21 +299,21 @@ impl Builder {
     pub fn block_pbs2(
         &self,
         src: &CiphertextBlock,
-        lut: &Lut2,
+        lut: Lut2Def,
     ) -> (CiphertextBlock, CiphertextBlock) {
         let (_node, ret) = self
             .ir
             .borrow_mut()
-            .add_op(Operations::Pbs2, svec![src.valid, lut.0])
+            .add_op(Operations::Pbs2 { lut }, svec![src.valid])
             .unwrap();
         (
             CiphertextBlock {
                 valid: ret[0],
-                config: self.config,
+                spec: self.spec,
             },
             CiphertextBlock {
                 valid: ret[1],
-                config: self.config,
+                spec: self.spec,
             },
         )
     }
@@ -405,13 +324,12 @@ impl Builder {
         &self,
         blocks: impl AsRef<[CiphertextBlock]>,
     ) -> SmallVec<CiphertextBlock> {
-        let shift = self.block_constant(2usize.pow(self.config.message_width as u32));
         blocks
             .as_ref()
             .iter()
             .chunk(2)
             .map(|a| match a {
-                Chunk::Complete(sv) => self.block_mac(&shift, sv[1], sv[0]),
+                Chunk::Complete(sv) => self.block_pack_ct(sv[1], sv[0]),
                 Chunk::Rest(sv) => *sv[0],
             })
             .collect()
@@ -421,24 +339,22 @@ impl Builder {
         &self,
         blocks: impl AsRef<[CiphertextBlock]>,
     ) -> SmallVec<CiphertextBlock> {
-        let lut_none = self.lut(Lut1Type::None);
-        self.vector_pack_one_lut(blocks, &lut_none)
+        self.vector_pack_one_lut(blocks, Lut1Def::None)
     }
 
     pub fn vector_pack_one_lut(
         &self,
         blocks: impl AsRef<[CiphertextBlock]>,
-        lut: &Lut,
+        lut: Lut1Def,
     ) -> SmallVec<CiphertextBlock> {
-        let shift = self.block_constant(2usize.pow(self.config.message_width as u32));
         blocks
             .as_ref()
             .iter()
             .chunk(2)
             .map(|a| match a {
                 Chunk::Complete(sv) => {
-                    let maced = self.block_mac(&shift, sv[1], sv[0]);
-                    self.block_pbs(&maced, lut)
+                    let packed = self.block_pack_ct(sv[1], sv[0]);
+                    self.block_pbs(&packed, lut)
                 }
                 Chunk::Rest(sv) => *sv[0],
             })
@@ -448,7 +364,7 @@ impl Builder {
     pub fn vector_pbs(
         &self,
         blocks: impl AsRef<[CiphertextBlock]>,
-        lut: &Lut,
+        lut: Lut1Def,
     ) -> SmallVec<CiphertextBlock> {
         blocks
             .as_ref()

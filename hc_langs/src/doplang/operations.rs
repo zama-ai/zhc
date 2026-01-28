@@ -25,7 +25,7 @@ pub const MASK_PBS8: usize = usize::MAX << 3;
 #[derive(Debug, Clone, Eq, Hash)]
 pub enum Argument {
     /// A constant immediate plaintext.
-    PtConst { val: usize },
+    PtConst { val: u8 },
     /// A ciphertext located on the heap.
     CtHeap { addr: usize },
     /// A ciphertext located in the io memory.
@@ -85,7 +85,7 @@ impl Argument {
         Argument::CtIo { addr: io_slot }
     }
 
-    pub fn pt_const(val: usize) -> Self {
+    pub fn pt_const(val: u8) -> Self {
         Argument::PtConst { val }
     }
 

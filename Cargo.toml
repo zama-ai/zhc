@@ -7,6 +7,7 @@ members = [
     "hc_utils",
     "hc_utils_macro",
     "hc_builder",
+    "hc_crypto",
 ]
 resolver = "3"
 

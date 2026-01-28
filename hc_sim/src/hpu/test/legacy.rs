@@ -17,14 +17,14 @@ mod legacy {
     pub struct SyncId(pub u32);
 
     pub enum ImmId {
-        Cst(u16),
+        Cst(u8),
         Var { tid: u8, bid: u8 },
     }
 
     impl ImmId {
-        pub fn unwrap_cst(&self) -> usize {
+        pub fn unwrap_cst(&self) -> u8 {
             match self {
-                ImmId::Cst(c) => *c as usize,
+                ImmId::Cst(c) => *c,
                 _ => panic!(),
             }
         }
@@ -178,7 +178,7 @@ impl From<legacy::DOp> for RawDOp {
                     addr: dop.0.src1_rid.0 as usize,
                 },
                 cst: Argument::PtConst {
-                    val: dop.0.mul_factor.0 as usize,
+                    val: dop.0.mul_factor.0,
                 },
             },
             legacy::DOp::ADDS(dop) => RawDOp::ADDS {

@@ -10,93 +10,100 @@ use std::{collections::HashMap, sync::LazyLock};
 use hc_ir::{IR, OpId, ValId, translation::Translator};
 use hc_langs::{
     hpulang::{Hpulang, Immediate, LutId, TDstId, TImmId, TSrcId},
-    ioplang::{Ioplang, Litteral},
+    ioplang::{Ioplang, Litteral, Lut1Def, Lut2Def, Lut4Def, Lut8Def},
 };
 use hc_utils::{FastMap, svec};
 
-static GIDS: LazyLock<FastMap<&'static str, LutId>> = LazyLock::new(|| {
+static GIDS1: LazyLock<FastMap<Lut1Def, LutId>> = LazyLock::new(|| {
     HashMap::from([
-        ("None", LutId(0)),
-        ("MsgOnly", LutId(1)),
-        ("CarryOnly", LutId(2)),
-        ("CarryInMsg", LutId(3)),
-        ("MultCarryMsg", LutId(4)),
-        ("MultCarryMsgLsb", LutId(5)),
-        ("MultCarryMsgMsb", LutId(6)),
-        ("BwAnd", LutId(7)),
-        ("BwOr", LutId(8)),
-        ("BwXor", LutId(9)),
-        ("CmpSign", LutId(10)),
-        ("CmpReduce", LutId(11)),
-        ("CmpGt", LutId(12)),
-        ("CmpGte", LutId(13)),
-        ("CmpLt", LutId(14)),
-        ("CmpLte", LutId(15)),
-        ("CmpEq", LutId(16)),
-        ("CmpNeq", LutId(17)),
-        ("ManyGenProp", LutId(18)),
-        ("ReduceCarry2", LutId(19)),
-        ("ReduceCarry3", LutId(20)),
-        ("ReduceCarryPad", LutId(21)),
-        ("GenPropAdd", LutId(22)),
-        ("IfTrueZeroed", LutId(23)),
-        ("IfFalseZeroed", LutId(24)),
-        ("Ripple2GenProp", LutId(25)),
-        ("TestMany2", LutId(128)),
-        ("TestMany4", LutId(129)),
-        ("TestMany8", LutId(130)),
-        ("ManyCarryMsg", LutId(26)),
-        ("CmpGtMrg", LutId(27)),
-        ("CmpGteMrg", LutId(28)),
-        ("CmpLtMrg", LutId(29)),
-        ("CmpLteMrg", LutId(30)),
-        ("CmpEqMrg", LutId(31)),
-        ("CmpNeqMrg", LutId(32)),
-        ("IsSome", LutId(33)),
-        ("CarryIsSome", LutId(34)),
-        ("CarryIsNone", LutId(35)),
-        ("MultCarryMsgIsSome", LutId(36)),
-        ("MultCarryMsgMsbIsSome", LutId(37)),
-        ("IsNull", LutId(38)),
-        ("IsNullPos1", LutId(39)),
-        ("NotNull", LutId(40)),
-        ("MsgNotNull", LutId(41)),
-        ("MsgNotNullPos1", LutId(42)),
-        ("ManyMsgSplitShift1", LutId(43)),
-        ("SolvePropGroupFinal0", LutId(44)),
-        ("SolvePropGroupFinal1", LutId(45)),
-        ("SolvePropGroupFinal2", LutId(46)),
-        ("ExtractPropGroup0", LutId(47)),
-        ("ExtractPropGroup1", LutId(48)),
-        ("ExtractPropGroup2", LutId(49)),
-        ("ExtractPropGroup3", LutId(50)),
-        ("SolveProp", LutId(51)),
-        ("SolvePropCarry", LutId(52)),
-        ("SolveQuotient", LutId(53)),
-        ("SolveQuotientPos1", LutId(54)),
-        ("IfPos1FalseZeroed", LutId(55)),
-        ("IfPos1FalseZeroedMsgCarry1", LutId(56)),
-        ("ShiftLeftByCarryPos0Msg", LutId(57)),
-        ("ShiftLeftByCarryPos0MsgNext", LutId(58)),
-        ("ShiftRightByCarryPos0Msg", LutId(59)),
-        ("ShiftRightByCarryPos0MsgNext", LutId(60)),
-        ("IfPos0TrueZeroed", LutId(61)),
-        ("IfPos0FalseZeroed", LutId(62)),
-        ("IfPos1TrueZeroed", LutId(63)),
-        ("ManyInv1CarryMsg", LutId(64)),
-        ("ManyInv2CarryMsg", LutId(65)),
-        ("ManyInv3CarryMsg", LutId(66)),
-        ("ManyInv4CarryMsg", LutId(67)),
-        ("ManyInv5CarryMsg", LutId(68)),
-        ("ManyInv6CarryMsg", LutId(69)),
-        ("ManyInv7CarryMsg", LutId(70)),
-        ("ManyMsgSplit", LutId(71)),
-        ("Manym2lPropBit1MsgSplit", LutId(72)),
-        ("Manym2lPropBit0MsgSplit", LutId(73)),
-        ("Manyl2mPropBit1MsgSplit", LutId(74)),
-        ("Manyl2mPropBit0MsgSplit", LutId(75)),
+        (Lut1Def::None, LutId(0)),
+        (Lut1Def::MsgOnly, LutId(1)),
+        (Lut1Def::CarryOnly, LutId(2)),
+        (Lut1Def::CarryInMsg, LutId(3)),
+        (Lut1Def::MultCarryMsg, LutId(4)),
+        (Lut1Def::MultCarryMsgLsb, LutId(5)),
+        (Lut1Def::MultCarryMsgMsb, LutId(6)),
+        (Lut1Def::BwAnd, LutId(7)),
+        (Lut1Def::BwOr, LutId(8)),
+        (Lut1Def::BwXor, LutId(9)),
+        (Lut1Def::CmpSign, LutId(10)),
+        (Lut1Def::CmpReduce, LutId(11)),
+        (Lut1Def::CmpGt, LutId(12)),
+        (Lut1Def::CmpGte, LutId(13)),
+        (Lut1Def::CmpLt, LutId(14)),
+        (Lut1Def::CmpLte, LutId(15)),
+        (Lut1Def::CmpEq, LutId(16)),
+        (Lut1Def::CmpNeq, LutId(17)),
+        (Lut1Def::ReduceCarry2, LutId(19)),
+        (Lut1Def::ReduceCarry3, LutId(20)),
+        (Lut1Def::ReduceCarryPad, LutId(21)),
+        (Lut1Def::GenPropAdd, LutId(22)),
+        (Lut1Def::IfTrueZeroed, LutId(23)),
+        (Lut1Def::IfFalseZeroed, LutId(24)),
+        (Lut1Def::Ripple2GenProp, LutId(25)),
+        (Lut1Def::CmpGtMrg, LutId(27)),
+        (Lut1Def::CmpGteMrg, LutId(28)),
+        (Lut1Def::CmpLtMrg, LutId(29)),
+        (Lut1Def::CmpLteMrg, LutId(30)),
+        (Lut1Def::CmpEqMrg, LutId(31)),
+        (Lut1Def::CmpNeqMrg, LutId(32)),
+        (Lut1Def::IsSome, LutId(33)),
+        (Lut1Def::CarryIsSome, LutId(34)),
+        (Lut1Def::CarryIsNone, LutId(35)),
+        (Lut1Def::MultCarryMsgIsSome, LutId(36)),
+        (Lut1Def::MultCarryMsgMsbIsSome, LutId(37)),
+        (Lut1Def::IsNull, LutId(38)),
+        (Lut1Def::IsNullPos1, LutId(39)),
+        (Lut1Def::NotNull, LutId(40)),
+        (Lut1Def::MsgNotNull, LutId(41)),
+        (Lut1Def::MsgNotNullPos1, LutId(42)),
+        (Lut1Def::SolvePropGroupFinal0, LutId(44)),
+        (Lut1Def::SolvePropGroupFinal1, LutId(45)),
+        (Lut1Def::SolvePropGroupFinal2, LutId(46)),
+        (Lut1Def::ExtractPropGroup0, LutId(47)),
+        (Lut1Def::ExtractPropGroup1, LutId(48)),
+        (Lut1Def::ExtractPropGroup2, LutId(49)),
+        (Lut1Def::ExtractPropGroup3, LutId(50)),
+        (Lut1Def::SolveProp, LutId(51)),
+        (Lut1Def::SolvePropCarry, LutId(52)),
+        (Lut1Def::SolveQuotient, LutId(53)),
+        (Lut1Def::SolveQuotientPos1, LutId(54)),
+        (Lut1Def::IfPos1FalseZeroed, LutId(55)),
+        (Lut1Def::IfPos1FalseZeroedMsgCarry1, LutId(56)),
+        (Lut1Def::ShiftLeftByCarryPos0Msg, LutId(57)),
+        (Lut1Def::ShiftLeftByCarryPos0MsgNext, LutId(58)),
+        (Lut1Def::ShiftRightByCarryPos0Msg, LutId(59)),
+        (Lut1Def::ShiftRightByCarryPos0MsgNext, LutId(60)),
+        (Lut1Def::IfPos0TrueZeroed, LutId(61)),
+        (Lut1Def::IfPos0FalseZeroed, LutId(62)),
+        (Lut1Def::IfPos1TrueZeroed, LutId(63)),
     ])
 });
+
+static GIDS2: LazyLock<FastMap<Lut2Def, LutId>> = LazyLock::new(|| {
+    HashMap::from([
+        (Lut2Def::ManyGenProp, LutId(18)),
+        (Lut2Def::TestMany2, LutId(128)),
+        (Lut2Def::ManyCarryMsg, LutId(26)),
+        (Lut2Def::ManyMsgSplitShift1, LutId(43)),
+        (Lut2Def::ManyInv1CarryMsg, LutId(64)),
+        (Lut2Def::ManyInv2CarryMsg, LutId(65)),
+        (Lut2Def::ManyInv3CarryMsg, LutId(66)),
+        (Lut2Def::ManyInv4CarryMsg, LutId(67)),
+        (Lut2Def::ManyInv5CarryMsg, LutId(68)),
+        (Lut2Def::ManyInv6CarryMsg, LutId(69)),
+        (Lut2Def::ManyInv7CarryMsg, LutId(70)),
+        (Lut2Def::ManyMsgSplit, LutId(71)),
+        (Lut2Def::Manym2lPropBit1MsgSplit, LutId(72)),
+        (Lut2Def::Manym2lPropBit0MsgSplit, LutId(73)),
+        (Lut2Def::Manyl2mPropBit1MsgSplit, LutId(74)),
+        (Lut2Def::Manyl2mPropBit0MsgSplit, LutId(75)),
+    ])
+});
+
+static GIDS4: LazyLock<FastMap<Lut4Def, LutId>> = LazyLock::new(|| HashMap::from([]));
+
+static GIDS8: LazyLock<FastMap<Lut8Def, LutId>> = LazyLock::new(|| HashMap::from([]));
 
 /// Translator from IOP language to HPU language intermediate representations.
 pub struct IoplangToHpulang;
@@ -140,14 +147,7 @@ impl Translator for IoplangToHpulang {
                 // For the output, we search the let reaching this output.
                 let let_pred = oup_op
                     .get_inc_reaching_iter()
-                    .find(|pr| {
-                        matches!(
-                            pr.get_operation(),
-                            IopOp::Let {
-                                typ: IopTy::Ciphertext
-                            }
-                        )
-                    })
+                    .find(|pr| matches!(pr.get_operation(), IopOp::LetCiphertext))
                     .expect("Failed to find the `let` predecessor of an `output` op.");
                 let IopOp::Output { pos, .. } = oup_op.get_operation() else {
                     unreachable!()
@@ -158,23 +158,11 @@ impl Translator for IoplangToHpulang {
 
         for op in input.walk_ops_topological() {
             match op.get_operation() {
-                IopOp::Input { .. } | IopOp::Let { .. } | IopOp::Constant { .. } => {
+                IopOp::Input { .. } | IopOp::LetCiphertext | IopOp::Constant { .. } => {
                     // Handled in consumers.
                 }
                 IopOp::Output { .. } => {
                     // Nop
-                }
-                IopOp::GenerateLut { .. } => {
-                    // TODO : Perform lut registering.
-                }
-                IopOp::GenerateLut2 { .. } => {
-                    // TODO : Perform lut registering.
-                }
-                IopOp::GenerateLut4 { .. } => {
-                    // TODO : Perform lut registering.
-                }
-                IopOp::GenerateLut8 { .. } => {
-                    // TODO : Perform lut registering.
                 }
                 IopOp::AddCt => {
                     let (_, valids) = output
@@ -194,25 +182,13 @@ impl Translator for IoplangToHpulang {
                         .unwrap();
                     map.insert(op.get_return_valids()[0], valids[0]);
                 }
-                IopOp::Mac => {
-                    let IopOp::Constant {
-                        value: Litteral::PlaintextBlock(cst),
-                    } = op
-                        .get_args_iter()
-                        .nth(0)
-                        .unwrap()
-                        .get_origin()
-                        .opref
-                        .get_operation()
-                    else {
-                        unreachable!()
-                    };
+                IopOp::PackCt { mul } => {
                     let (_, valids) = output
                         .add_op(
                             HpuOp::Mac {
-                                cst: Immediate(cst),
+                                cst: Immediate(mul),
                             },
-                            svec![map[op.get_arg_valids()[1]], map[op.get_arg_valids()[2]]],
+                            svec![map[op.get_arg_valids()[0]], map[op.get_arg_valids()[1]]],
                         )
                         .unwrap();
                     map.insert(op.get_return_valids()[0], valids[0]);
@@ -353,7 +329,7 @@ impl Translator for IoplangToHpulang {
                     };
                     map.insert(op.get_return_valids()[0], valids[0]);
                 }
-                IopOp::ExtractCtBlock => {
+                IopOp::ExtractCtBlock { index } => {
                     let src_pos = op
                         .get_args_iter()
                         .nth(0) // ct arg.
@@ -369,26 +345,12 @@ impl Translator for IoplangToHpulang {
                             _ => None,
                         })
                         .unwrap();
-                    let block_pos = op
-                        .get_args_iter()
-                        .nth(1) // index arg.
-                        .unwrap()
-                        .get_origin()
-                        .opref
-                        .get_inc_reaching_iter()
-                        .find_map(|op| match op.get_operation() {
-                            IopOp::Constant {
-                                value: Litteral::Index(i),
-                            } => Some(i),
-                            _ => None,
-                        })
-                        .unwrap();
                     let (_, valids) = output
                         .add_op(
                             HpuOp::SrcLd {
                                 from: TSrcId {
                                     src_pos: src_pos.try_into().unwrap(),
-                                    block_pos: block_pos.try_into().unwrap(),
+                                    block_pos: index.try_into().unwrap(),
                                 },
                             },
                             svec![],
@@ -396,7 +358,7 @@ impl Translator for IoplangToHpulang {
                         .unwrap();
                     map.insert(op.get_return_valids()[0], valids[0]);
                 }
-                IopOp::ExtractPtBlock => {
+                IopOp::ExtractPtBlock { index } => {
                     let imm_pos = op
                         .get_args_iter()
                         .nth(0) // pt arg.
@@ -412,26 +374,12 @@ impl Translator for IoplangToHpulang {
                             _ => None,
                         })
                         .unwrap();
-                    let block_pos = op
-                        .get_args_iter()
-                        .nth(1) // index arg.
-                        .unwrap()
-                        .get_origin()
-                        .opref
-                        .get_inc_reaching_iter()
-                        .find_map(|op| match op.get_operation() {
-                            IopOp::Constant {
-                                value: Litteral::Index(i),
-                            } => Some(i),
-                            _ => None,
-                        })
-                        .unwrap();
                     let (_, valids) = output
                         .add_op(
                             HpuOp::ImmLd {
                                 from: TImmId {
                                     imm_pos: imm_pos.try_into().unwrap(),
-                                    block_pos: block_pos.try_into().unwrap(),
+                                    block_pos: index.try_into().unwrap(),
                                 },
                             },
                             svec![],
@@ -439,7 +387,7 @@ impl Translator for IoplangToHpulang {
                         .unwrap();
                     map.insert(op.get_return_valids()[0], valids[0]);
                 }
-                IopOp::StoreCtBlock => {
+                IopOp::StoreCtBlock { index } => {
                     let dst_pos = op
                         .get_args_iter()
                         .nth(1) // ct arg.
@@ -448,23 +396,7 @@ impl Translator for IoplangToHpulang {
                         .opref
                         .get_inc_reaching_iter()
                         .find_map(|op| match op.get_operation() {
-                            IopOp::Let {
-                                typ: IopTy::Ciphertext,
-                            } => let_map.get(&op.get_id()).cloned(),
-                            _ => None,
-                        })
-                        .unwrap();
-                    let block_pos = op
-                        .get_args_iter()
-                        .nth(2) // index arg.
-                        .unwrap()
-                        .get_origin()
-                        .opref
-                        .get_inc_reaching_iter()
-                        .find_map(|op| match op.get_operation() {
-                            IopOp::Constant {
-                                value: Litteral::Index(i),
-                            } => Some(i),
+                            IopOp::LetCiphertext => let_map.get(&op.get_id()).cloned(),
                             _ => None,
                         })
                         .unwrap();
@@ -473,47 +405,27 @@ impl Translator for IoplangToHpulang {
                             HpuOp::DstSt {
                                 to: TDstId {
                                     dst_pos: dst_pos.try_into().unwrap(),
-                                    block_pos: block_pos.try_into().unwrap(),
+                                    block_pos: index.try_into().unwrap(),
                                 },
                             },
                             svec![map[op.get_arg_valids()[0]]],
                         )
                         .unwrap();
                 }
-                IopOp::Pbs => {
-                    let IopOp::GenerateLut { name: lut_name, .. } = op
-                        .get_args_iter()
-                        .nth(1)
-                        .unwrap()
-                        .get_origin()
-                        .opref
-                        .get_operation()
-                    else {
-                        unreachable!()
-                    };
-                    let lut = match GIDS.get(lut_name.as_str()) {
+                IopOp::Pbs { lut } => {
+                    let lut = match GIDS1.get(&lut) {
                         Some(v) => *v,
-                        None => panic!("Failed to lookup the gid for key: \"{lut_name}\""),
+                        None => panic!("Failed to lookup the gid for key: {lut:?}"),
                     };
                     let (_, valids) = output
                         .add_op(HpuOp::Pbs { lut }, svec![map[op.get_arg_valids()[0]]])
                         .unwrap();
                     map.insert(op.get_return_valids()[0], valids[0]);
                 }
-                IopOp::Pbs2 => {
-                    let IopOp::GenerateLut2 { name: lut_name, .. } = op
-                        .get_args_iter()
-                        .nth(1)
-                        .unwrap()
-                        .get_origin()
-                        .opref
-                        .get_operation()
-                    else {
-                        unreachable!()
-                    };
-                    let lut = match GIDS.get(lut_name.as_str()) {
+                IopOp::Pbs2 { lut } => {
+                    let lut = match GIDS2.get(&lut) {
                         Some(v) => *v,
-                        None => panic!("Failed to lookup the gid for key: \"{lut_name}\""),
+                        None => panic!("Failed to lookup the gid for key: {lut:?}"),
                     };
                     let (_, valids) = output
                         .add_op(HpuOp::Pbs2 { lut }, svec![map[op.get_arg_valids()[0]]])
@@ -521,20 +433,10 @@ impl Translator for IoplangToHpulang {
                     map.insert(op.get_return_valids()[0], valids[0]);
                     map.insert(op.get_return_valids()[1], valids[1]);
                 }
-                IopOp::Pbs4 => {
-                    let IopOp::GenerateLut4 { name: lut_name, .. } = op
-                        .get_args_iter()
-                        .nth(1)
-                        .unwrap()
-                        .get_origin()
-                        .opref
-                        .get_operation()
-                    else {
-                        unreachable!()
-                    };
-                    let lut = match GIDS.get(lut_name.as_str()) {
+                IopOp::Pbs4 { lut } => {
+                    let lut = match GIDS4.get(&lut) {
                         Some(v) => *v,
-                        None => panic!("Failed to lookup the gid for key: \"{lut_name}\""),
+                        None => panic!("Failed to lookup the gid for key: {lut:?}"),
                     };
                     let (_, valids) = output
                         .add_op(HpuOp::Pbs4 { lut }, svec![map[op.get_arg_valids()[0]]])
@@ -544,20 +446,10 @@ impl Translator for IoplangToHpulang {
                     map.insert(op.get_return_valids()[2], valids[2]);
                     map.insert(op.get_return_valids()[3], valids[3]);
                 }
-                IopOp::Pbs8 => {
-                    let IopOp::GenerateLut8 { name: lut_name, .. } = op
-                        .get_args_iter()
-                        .nth(1)
-                        .unwrap()
-                        .get_origin()
-                        .opref
-                        .get_operation()
-                    else {
-                        unreachable!()
-                    };
-                    let lut = match GIDS.get(lut_name.as_str()) {
+                IopOp::Pbs8 { lut } => {
+                    let lut = match GIDS8.get(&lut) {
                         Some(v) => *v,
-                        None => panic!("Failed to lookup the gid for key: \"{lut_name}\""),
+                        None => panic!("Failed to lookup the gid for key: {lut:?}"),
                     };
                     let (_, valids) = output
                         .add_op(HpuOp::Pbs8 { lut }, svec![map[op.get_arg_valids()[0]]])
