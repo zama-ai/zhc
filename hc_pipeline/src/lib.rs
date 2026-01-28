@@ -7,7 +7,7 @@
 
 use allocator::allocate_registers;
 use batcher::batch;
-pub use hc_builder::builder::BlockConfig;
+use hc_builder::builder::CiphertextSpec;
 use hc_builder::iops::cmp::{cmp_eq, cmp_gt, cmp_gte, cmp_lt, cmp_lte, cmp_neq};
 use hc_builder::iops::if_then_else::if_then_else;
 use hc_builder::iops::if_then_zero::if_then_zero;
@@ -39,21 +39,16 @@ pub enum Iop {
     IfThenZero,
 }
 
-fn pipeline(
-    hpu_config: &HpuConfig,
-    integer_width: u8,
-    block_config: &BlockConfig,
-    iop: Iop,
-) -> Vec<DOpRepr> {
+fn pipeline(hpu_config: &HpuConfig, spec: CiphertextSpec, iop: Iop) -> Vec<DOpRepr> {
     let ir = match iop {
-        Iop::CmpGt => cmp_gt(integer_width, block_config),
-        Iop::CmpGte => cmp_gte(integer_width, block_config),
-        Iop::CmpLt => cmp_lt(integer_width, block_config),
-        Iop::CmpLte => cmp_lte(integer_width, block_config),
-        Iop::CmpEq => cmp_eq(integer_width, block_config),
-        Iop::CmpNeq => cmp_neq(integer_width, block_config),
-        Iop::IfThenElse => if_then_else(integer_width, block_config),
-        Iop::IfThenZero => if_then_zero(integer_width, block_config),
+        Iop::CmpGt => cmp_gt(spec),
+        Iop::CmpGte => cmp_gte(spec),
+        Iop::CmpLt => cmp_lt(spec),
+        Iop::CmpLte => cmp_lte(spec),
+        Iop::CmpEq => cmp_eq(spec),
+        Iop::CmpNeq => cmp_neq(spec),
+        Iop::IfThenElse => if_then_else(spec),
+        Iop::IfThenZero => if_then_zero(spec),
     };
     let unscheduled = IoplangToHpulang.translate(&ir);
     let scheduled = schedule(&unscheduled, hpu_config);
@@ -69,11 +64,10 @@ fn pipeline(
 /// produce an hex stream.
 pub fn get_translation_table(
     hpu_config: &HpuConfig,
-    integer_width: u8,
-    block_config: &BlockConfig,
+    spec: CiphertextSpec,
     iop: Iop,
 ) -> Vec<DOpRepr> {
-    pipeline(hpu_config, integer_width, block_config, iop)
+    pipeline(hpu_config, spec, iop)
 }
 
 #[cfg(test)]

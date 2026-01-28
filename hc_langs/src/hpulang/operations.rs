@@ -6,7 +6,7 @@ use hc_utils::iter::CollectInSmallVec;
 use super::{Hpulang, types::Types};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Immediate(pub usize);
+pub struct Immediate(pub u8);
 
 impl Display for Immediate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
