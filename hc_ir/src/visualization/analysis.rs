@@ -1,7 +1,6 @@
-use hc_utils::{iter::CollectInSmallVec, small::SmallSet, svec};
+use hc_utils::svec;
 
-use crate::{AnnIR, Dialect, IR, OpId};
-
+use crate::{AnnIR, Dialect, IR};
 
 /// The height of an op is the largest distance between this op and an output/effect operation.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -12,6 +11,7 @@ impl Height {
         Height(self.0 + 1)
     }
 
+    #[allow(unused)]
     pub fn dec(self) -> Self {
         Height(self.0 - 1)
     }
@@ -21,22 +21,10 @@ impl Height {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct Children(pub(super) SmallSet<OpId>);
-
-impl std::hash::Hash for Children {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        let mut sorted_ops = self.0.iter().cosvec();
-        sorted_ops.sort_unstable();
-        sorted_ops.hash(state);
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Layer(u16);
 
 impl Layer {
-
     pub fn range_inclusive(from: Layer, to: Layer) -> impl Iterator<Item = Layer> {
         (from.0..=to.0).map(Into::into).map(Layer)
     }
@@ -56,7 +44,6 @@ impl Layer {
     }
 }
 
-
 pub fn analyze<D: Dialect>(ir: &IR<D>) -> AnnIR<'_, D, Layer, ()> {
     let depth = ir.depth();
     ir.backward_dataflow_analysis::<Height, ()>(|opmap, _, opref| {
@@ -66,23 +53,19 @@ pub fn analyze<D: Dialect>(ir: &IR<D>) -> AnnIR<'_, D, Layer, ()> {
             .max()
             .map(|a| Height(a).inc())
             .unwrap_or(Height(0));
-        (
-            height,
-            svec![(); opref.get_return_valids().len()],
-        )
+        (height, svec![(); opref.get_return_valids().len()])
     })
-    .backward_dataflow_analysis::<Layer, ()>(|_, _, opref| {
+    .map_opann(|opref| opref.get_annotation().to_layer(depth + 1))
+    .map_opann(|opref| std::cmp::min(Layer(*opref.depth), *opref.get_annotation()))
+    .backward_dataflow_analysis::<Layer, ()>(|opmap, _, opref| {
+        let min = opref
+            .get_users_iter()
+            .map(|u| opmap.get(&u).unwrap())
+            .min()
+            .unwrap_or(opref.get_annotation());
         (
-            opref.get_annotation().to_layer(depth + 1),
+            std::cmp::max(min.above(), *opref.get_annotation()),
             svec![(); opref.get_return_valids().len()],
-        )
-    })
-    .forward_dataflow_analysis::<Layer, ()>(|_,_,opref| {
-        let depth_lay = Layer(*opref.depth);
-        (
-            std::cmp::max(depth_lay, *opref.get_annotation()),
-            svec![(); opref.get_return_valids().len()],
-
         )
     })
 }

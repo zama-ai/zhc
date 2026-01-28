@@ -13,8 +13,6 @@
 //
 // TODO:
 // + add fractional approximate positioning for the input / output order.
-// + Make graph more compact (do not use height only to position the nodes).
-// + Fix
 
 use std::fmt::Debug;
 
