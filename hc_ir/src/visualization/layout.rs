@@ -10,15 +10,12 @@
 //! `reorder_top_down` passes that position nodes based on the average positions
 //! of their dependencies. The `Position` enum tracks both temporary averages
 //! during refinement and final indices after sorting.
-//
-// TODO:
-// + add fractional approximate positioning for the input / output order.
 
 use std::fmt::Debug;
 
 use hc_utils::{
     FastMap,
-    iter::{Deduped, Median, MergerOf2, MultiZip},
+    iter::{Median, MergerOf2, MultiZip},
     small::SmallVec,
     svec,
 };
@@ -28,6 +25,17 @@ use crate::{
     val_ref::ValRef,
     visualization::analysis::{Layer, analyze},
 };
+
+#[derive(Debug, Clone, PartialEq)]
+struct FracPos(f64);
+
+impl FracPos {
+    const CENTERED: Self = FracPos(0.5);
+
+    fn from_pos_arity(pos: usize, arity: usize) -> Self {
+        Self((pos as f64 / arity as f64) - 0.5)
+    }
+}
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 enum LayeredNode<'ir, 'ann, D: Dialect> {
@@ -45,56 +53,82 @@ impl<'ir, 'ann, D: Dialect> std::fmt::Debug for LayeredNode<'ir, 'ann, D> {
 }
 
 impl<'ir, 'ann, D: Dialect> LayeredNode<'ir, 'ann, D> {
-    fn above(&self) -> impl Iterator<Item = LayeredNode<'ir, 'ann, D>> {
+    fn above(&self) -> impl Iterator<Item = (LayeredNode<'ir, 'ann, D>, FracPos)> {
         match self {
             LayeredNode::Operation(op_ref) => op_ref
                 .get_args_iter()
                 .map(|v| {
-                    if *v.get_origin().get_annotation() == op_ref.get_annotation().above() {
-                        LayeredNode::Operation(v.get_origin().opref)
+                    if *v.get_origin().opref.get_annotation() == op_ref.get_annotation().above() {
+                        (
+                            LayeredNode::Operation(v.get_origin().opref),
+                            FracPos::from_pos_arity(v.get_origin().position as usize, v.get_origin().opref.get_return_arity())
+                        )
                     } else {
-                        LayeredNode::Value(v, op_ref.get_annotation().above())
+                        (
+                            LayeredNode::Value(v, op_ref.get_annotation().above()),
+                            FracPos::CENTERED
+                        )
                     }
                 })
                 .merge_1_of_2(),
             LayeredNode::Value(val_ref, layer) => {
-                if *val_ref.get_origin().get_annotation() == layer.above() {
-                    std::iter::once(LayeredNode::Operation(val_ref.get_origin().opref))
+                if *val_ref.get_origin().opref.get_annotation() == layer.above() {
+                    std::iter::once(
+                        (
+                            LayeredNode::Operation(val_ref.get_origin().opref),
+                            FracPos::from_pos_arity(val_ref.get_origin().position as usize, val_ref.get_origin().opref.get_return_arity())
+                        )
+                    )
                 } else {
-                    std::iter::once(LayeredNode::Value(val_ref.clone(), layer.above()))
+                    std::iter::once(
+                        (
+                            LayeredNode::Value(val_ref.clone(), layer.above()),
+                            FracPos::CENTERED
+                        )
+                    )
                 }
                 .merge_2_of_2()
             }
         }
-        .dedup()
     }
 
-    fn below(&self) -> impl Iterator<Item = LayeredNode<'ir, 'ann, D>> {
+    fn below(&self) -> impl Iterator<Item = (LayeredNode<'ir, 'ann, D>, FracPos)> {
         match self {
             LayeredNode::Operation(op_ref) => op_ref
                 .get_returns_iter()
-                .flat_map(|r| (std::iter::repeat(r.clone()), r.get_users_iter()).mzip())
-                .map(|(r, u)| {
-                    if *u.get_annotation() == op_ref.get_annotation().below() {
-                        LayeredNode::Operation(u)
+                .flat_map(|ret| (std::iter::repeat(ret.clone()), ret.get_uses_iter()).mzip())
+                .map(|(ret, uze)| {
+                    if *uze.opref.get_annotation() == op_ref.get_annotation().below() {
+                        (
+                            LayeredNode::Operation(uze.opref.clone()),
+                            FracPos::from_pos_arity(uze.position as usize, uze.opref.get_args_arity())
+                        )
                     } else {
-                        LayeredNode::Value(r, op_ref.get_annotation().below())
+                        (
+                            LayeredNode::Value(ret, op_ref.get_annotation().below()),
+                            FracPos::CENTERED
+                        )
                     }
                 })
                 .merge_1_of_2(),
             LayeredNode::Value(val_ref, layer) => val_ref
-                .get_users_iter()
-                .filter(|u| *u.get_annotation() > *layer)
-                .map(move |u| {
-                    if *u.get_annotation() == layer.below() {
-                        LayeredNode::Operation(u)
+                .get_uses_iter()
+                .filter(|uze| *uze.opref.get_annotation() > *layer)
+                .map(move |uze| {
+                    if *uze.opref.get_annotation() == layer.below() {
+                        (
+                            LayeredNode::Operation(uze.opref.clone()),
+                            FracPos::from_pos_arity(uze.position as usize, uze.opref.get_args_arity())
+                        )
                     } else {
-                        LayeredNode::Value(val_ref.clone(), layer.below())
+                        (
+                            LayeredNode::Value(val_ref.clone(), layer.below()),
+                            FracPos::CENTERED
+                        )
                     }
                 })
                 .merge_2_of_2(),
         }
-        .dedup()
     }
 }
 
@@ -155,7 +189,7 @@ impl<'ir, 'ann, D: Dialect> LayoutBuilder<'ir, 'ann, D> {
         // Now, for every value that is not used only in the layer below its origin, we need
         // to add intermediate val nodes.
         for val in ann_ir.walk_vals_linear() {
-            let from_layer = val.get_origin().get_annotation().clone();
+            let from_layer = val.get_origin().opref.get_annotation().clone();
             let to_layer = val
                 .get_users_iter()
                 .map(|to| *to.get_annotation())
@@ -194,7 +228,7 @@ impl<'ir, 'ann, D: Dialect> LayoutBuilder<'ir, 'ann, D> {
             for node in self.layout[layer].iter() {
                 let maybe_median = node
                     .below()
-                    .map(|n| self.position_buffer.get(&n).unwrap().unwrap_index() as f64)
+                    .map(|(n, frac)| self.position_buffer.get(&n).unwrap().unwrap_index() as f64 + frac.0)
                     .median();
                 let Some(pos) = self.position_buffer.get_mut(node) else {
                     unreachable!()
@@ -229,7 +263,7 @@ impl<'ir, 'ann, D: Dialect> LayoutBuilder<'ir, 'ann, D> {
             for node in self.layout[layer].iter() {
                 let maybe_median = node
                     .above()
-                    .map(|n| self.position_buffer.get(&n).unwrap().unwrap_index() as f64)
+                    .map(|(n, frac)| self.position_buffer.get(&n).unwrap().unwrap_index() as f64 + frac.0)
                     .median();
                 let Some(pos) = self.position_buffer.get_mut(node) else {
                     unreachable!()
@@ -312,6 +346,7 @@ pub struct Layout {
 
 impl Layout {
     pub fn from_ir<D: Dialect>(ir: &IR<D>) -> Self {
+
         let ann_ir = analyze(ir);
         let builder = LayoutBuilder::from_analyzed_ir(&ann_ir);
         let vertices = builder.into_vertices();

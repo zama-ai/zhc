@@ -414,7 +414,7 @@ impl<D: Dialect> IR<D> {
         // We compute the depth from the inputs.
         let arg_depth = args
             .iter()
-            .map(|a| self.get_val(*a).get_origin().get_depth())
+            .map(|a| self.get_val(*a).get_origin().opref.get_depth())
             .max();
         let depth = if arg_depth.is_none() {
             0
@@ -497,7 +497,7 @@ impl<D: Dialect> IR<D> {
         // Now we are going to check that the new value is not reachable by any user. That would
         // mean a cycle is introduced by the mutation.
         for user in old.get_users_iter() {
-            if user.reaches(&new.get_origin()) {
+            if user.reaches(&new.get_origin().opref) {
                 panic!("Tried to replace a value with one it reaches.");
             }
         }

@@ -1133,7 +1133,7 @@ fn test_user_consistency_after_deletion() -> Result<(), IRError<TestDialect>> {
     let remaining_users: Vec<_> = store
         .get_val(vals[0])
         .raw_get_uses_iter()
-        .map(|op| op.get_id())
+        .map(|op| op.opref.get_id())
         .collect();
     assert_eq!(remaining_users.len(), 2); // Raw users list still contains deleted op
 

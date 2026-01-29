@@ -119,6 +119,11 @@ impl<'s, D: Dialect> OpRef<'s, D> {
         self.args
     }
 
+    /// Returns the number of argument vals.
+    pub fn get_args_arity(&self) -> usize {
+        self.signature.get_args_arity()
+    }
+
     /// Returns an iterator over the operation's return values.
     pub fn get_returns_iter(&self) -> impl Iterator<Item = ValRef<'s, D>> + use<'s, D> {
         self.returns.iter().map(|valid| self.ir.get_val(*valid))
@@ -127,6 +132,11 @@ impl<'s, D: Dialect> OpRef<'s, D> {
     /// Returns the return value IDs as a slice.
     pub fn get_return_valids(&self) -> &[ValId] {
         self.returns
+    }
+
+    /// Returns the number of return vals.
+    pub fn get_return_arity(&self) -> usize {
+        self.signature.get_returns_arity()
     }
 
     /// Returns an iterator over the direct users of the current operation.
@@ -157,7 +167,7 @@ impl<'s, D: Dialect> OpRef<'s, D> {
     pub fn get_predecessors_iter(&self) -> impl Iterator<Item = OpRef<'s, D>> + use<'s, D>{
         let mut raw_predecessors = self
             .get_args_iter()
-            .map(|r| r.get_origin().get_id())
+            .map(|r| r.get_origin().opref.get_id())
             .collect::<Vec<_>>();
         raw_predecessors.sort_unstable();
         raw_predecessors.dedup();

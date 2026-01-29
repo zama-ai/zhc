@@ -96,7 +96,7 @@ impl<'s, D: Dialect> ValRef<'s, D> {
     /// Returns a reference to the operation that produces this value.
     pub fn get_origin(&self) -> ValOriginRef<'s, D> {
         let output = self.raw_get_origin();
-        assert!(output.is_active());
+        assert!(output.opref.is_active());
         output
     }
 
@@ -104,7 +104,7 @@ impl<'s, D: Dialect> ValRef<'s, D> {
     pub fn get_uses_iter(&self) -> impl Iterator<Item = ValUseRef<'s, D>> + use<'s, D> {
         self
             .raw_get_uses_iter()
-            .filter(|u| u.is_active())
+            .filter(|u| u.opref.is_active())
     }
 
     /// Returns an iterator over operations that use this value as an argument.

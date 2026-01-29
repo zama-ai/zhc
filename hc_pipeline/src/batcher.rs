@@ -22,7 +22,7 @@ impl<'a> Batcher<'a> {
             .flatten()
             .filter(|arg| {
                 // To be a batch input, an op arg origin must not be in the batch.
-                !self.0.as_slice().contains(&arg.get_origin())
+                !self.0.as_slice().contains(&arg.get_origin().opref)
             })
             .collect::<SmallSet<_>>()
             .into_iter()
