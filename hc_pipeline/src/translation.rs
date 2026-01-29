@@ -202,6 +202,7 @@ impl Translator for IoplangToHpulang {
                         .nth(0)
                         .unwrap()
                         .get_origin()
+                        .opref
                         .get_operation()
                     else {
                         unreachable!()
@@ -234,6 +235,7 @@ impl Translator for IoplangToHpulang {
                             .nth(1)
                             .unwrap()
                             .get_origin()
+                            .opref
                             .get_operation()
                         else {
                             unreachable!()
@@ -267,6 +269,7 @@ impl Translator for IoplangToHpulang {
                             .nth(1)
                             .unwrap()
                             .get_origin()
+                            .opref
                             .get_operation()
                         else {
                             unreachable!()
@@ -300,6 +303,7 @@ impl Translator for IoplangToHpulang {
                             .nth(0)
                             .unwrap()
                             .get_origin()
+                            .opref
                             .get_operation()
                         else {
                             unreachable!()
@@ -333,6 +337,7 @@ impl Translator for IoplangToHpulang {
                             .nth(1)
                             .unwrap()
                             .get_origin()
+                            .opref
                             .get_operation()
                         else {
                             unreachable!()
@@ -354,6 +359,7 @@ impl Translator for IoplangToHpulang {
                         .nth(0) // ct arg.
                         .unwrap()
                         .get_origin()
+                        .opref
                         .get_inc_reaching_iter()
                         .find_map(|op| match op.get_operation() {
                             IopOp::Input {
@@ -368,6 +374,7 @@ impl Translator for IoplangToHpulang {
                         .nth(1) // index arg.
                         .unwrap()
                         .get_origin()
+                        .opref
                         .get_inc_reaching_iter()
                         .find_map(|op| match op.get_operation() {
                             IopOp::Constant {
@@ -395,6 +402,7 @@ impl Translator for IoplangToHpulang {
                         .nth(0) // pt arg.
                         .unwrap()
                         .get_origin()
+                        .opref
                         .get_inc_reaching_iter()
                         .find_map(|op| match op.get_operation() {
                             IopOp::Input {
@@ -409,6 +417,7 @@ impl Translator for IoplangToHpulang {
                         .nth(1) // index arg.
                         .unwrap()
                         .get_origin()
+                        .opref
                         .get_inc_reaching_iter()
                         .find_map(|op| match op.get_operation() {
                             IopOp::Constant {
@@ -436,6 +445,7 @@ impl Translator for IoplangToHpulang {
                         .nth(1) // ct arg.
                         .unwrap()
                         .get_origin()
+                        .opref
                         .get_inc_reaching_iter()
                         .find_map(|op| match op.get_operation() {
                             IopOp::Let {
@@ -449,6 +459,7 @@ impl Translator for IoplangToHpulang {
                         .nth(2) // index arg.
                         .unwrap()
                         .get_origin()
+                        .opref
                         .get_inc_reaching_iter()
                         .find_map(|op| match op.get_operation() {
                             IopOp::Constant {
@@ -475,6 +486,7 @@ impl Translator for IoplangToHpulang {
                         .nth(1)
                         .unwrap()
                         .get_origin()
+                        .opref
                         .get_operation()
                     else {
                         unreachable!()
@@ -494,6 +506,7 @@ impl Translator for IoplangToHpulang {
                         .nth(1)
                         .unwrap()
                         .get_origin()
+                        .opref
                         .get_operation()
                     else {
                         unreachable!()
@@ -514,6 +527,7 @@ impl Translator for IoplangToHpulang {
                         .nth(1)
                         .unwrap()
                         .get_origin()
+                        .opref
                         .get_operation()
                     else {
                         unreachable!()
@@ -536,6 +550,7 @@ impl Translator for IoplangToHpulang {
                         .nth(1)
                         .unwrap()
                         .get_origin()
+                        .opref
                         .get_operation()
                     else {
                         unreachable!()

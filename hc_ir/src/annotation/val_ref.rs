@@ -25,11 +25,11 @@ impl<'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation>
     /// Returns the operation that produces this value with its annotation.
     pub fn get_origin(&self) -> AnnValOriginRef<'ir, 'ann, D, OpAnn, ValAnn> {
         let origin = self.valref.get_origin();
-        let ann = &self.ann_ir.op_annotations[**origin];
+        let ann = &self.ann_ir.op_annotations[*origin.opref];
         AnnValOriginRef {
             opref: AnnOpRef {
                 ann_ir: self.ann_ir,
-                opref: (*origin).clone(),
+                opref: origin.opref.clone(),
                 ann,
             },
             position: origin.position,
@@ -41,7 +41,7 @@ impl<'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation>
     ) -> impl Iterator<Item = AnnValUseRef<'ir, 'ann, D, OpAnn, ValAnn>> + use<'ir, 'ann, D, OpAnn, ValAnn>
     {
         self.valref.get_uses_iter().map(|user| {
-            let ann = &self.ann_ir.op_annotations[**user];
+            let ann = &self.ann_ir.op_annotations[*user.opref];
             AnnValUseRef {
                 opref: AnnOpRef {
                     ann_ir: self.ann_ir,
