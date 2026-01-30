@@ -1,5 +1,5 @@
-use hc_utils::small::SmallVec;
 use crate::{ValOrigin, val_use::ValUse};
+use hc_utils::small::SmallVec;
 
 use super::{Dialect, State};
 

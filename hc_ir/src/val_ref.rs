@@ -1,10 +1,10 @@
 use std::hash::Hash;
 use std::{fmt::Display, ops::Deref};
 
+use super::{Dialect, IR, State, ValId};
 use crate::val_use::ValUse;
 use crate::{OpRef, Printer, ValOrigin, ValOriginRef, ValUseRef};
 use hc_utils::iter::Deduped;
-use super::{Dialect, IR, State, ValId};
 
 /// A reference to a value within an IR graph.
 ///
@@ -100,11 +100,8 @@ impl<'s, D: Dialect> ValRef<'s, D> {
         output
     }
 
-
     pub fn get_uses_iter(&self) -> impl Iterator<Item = ValUseRef<'s, D>> + use<'s, D> {
-        self
-            .raw_get_uses_iter()
-            .filter(|u| u.opref.is_active())
+        self.raw_get_uses_iter().filter(|u| u.opref.is_active())
     }
 
     /// Returns an iterator over operations that use this value as an argument.
@@ -112,8 +109,7 @@ impl<'s, D: Dialect> ValRef<'s, D> {
     /// Only active operations are included in the result, and operations are
     /// deduplicated even if they use this value multiple times.
     pub fn get_users_iter(&self) -> impl Iterator<Item = OpRef<'s, D>> + use<'s, D> {
-        self
-            .raw_get_uses_iter()
+        self.raw_get_uses_iter()
             .map(|uze| uze.opref)
             .filter(|u| u.is_active())
             .dedup()

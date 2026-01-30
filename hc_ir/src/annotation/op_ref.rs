@@ -97,7 +97,8 @@ impl<'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation>
         })
     }
 
-    /// Returns an iterator over all operations that can be reached from this operation with annotations.
+    /// Returns an iterator over all operations that can be reached from this operation with
+    /// annotations.
     pub fn get_reached_iter(
         &self,
     ) -> impl Iterator<Item = AnnOpRef<'ir, 'ann, D, OpAnn, ValAnn>> + use<'ir, 'ann, D, OpAnn, ValAnn>

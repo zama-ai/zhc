@@ -1,6 +1,9 @@
 use std::hash::Hash;
 
-use crate::{FastSet, small::{VArrayIntoIter, stack_set::StackSet}};
+use crate::{
+    FastSet,
+    small::{VArrayIntoIter, stack_set::StackSet},
+};
 
 /// A set optimized for small collections with automatic storage strategy.
 ///
@@ -45,7 +48,6 @@ impl<T, const N: usize> Iterator for SmallSetIntoIter<T, N> {
         }
     }
 }
-
 
 impl<T: Eq + Hash> SmallSet<T> {
     /// Creates a new empty set.

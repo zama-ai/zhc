@@ -16,7 +16,10 @@
 //! Size operations include padding methods and stacking for combining dimensions.
 //! All arithmetic operations include bounds checking and validity assertions.
 
-use std::{cmp::max, ops::{Add, Div, Mul, Neg, Sub}};
+use std::{
+    cmp::max,
+    ops::{Add, Div, Mul, Neg, Sub},
+};
 
 use crate::iter::CollectInSmallVec;
 
@@ -58,7 +61,7 @@ impl FontSize {
     fn char_size(&self) -> Size {
         Size {
             width: Width::new(self.0 * 0.6),
-            height: Height::new(self.0 * 1.2)
+            height: Height::new(self.0 * 1.2),
         }
     }
 
@@ -70,11 +73,10 @@ impl FontSize {
         let char_sz = self.char_size();
         Size {
             width: char_sz.width * max_width,
-            height: char_sz.height * n_lines
+            height: char_sz.height * n_lines,
         }
     }
 }
-
 
 /// Non-negative thickness measurement serving as the base unit for dimensions.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Copy)]
@@ -218,7 +220,7 @@ impl Div<usize> for Width {
 }
 
 /// Vertical height measurement wrapping thickness with type safety.
-#[derive(Debug, Clone, Copy,PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Height(pub Thickness);
 
 impl Height {
@@ -404,7 +406,6 @@ impl Sub<Delta> for X {
     }
 }
 
-
 impl Sub<Width> for X {
     type Output = X;
 
@@ -527,12 +528,10 @@ impl Sub<Y> for Y {
     }
 }
 
-
-
 #[derive(Debug, Clone, Copy)]
 pub struct Motion {
     x: Delta,
-    y: Delta
+    y: Delta,
 }
 
 impl Mul<usize> for Motion {
@@ -556,7 +555,6 @@ impl Div<usize> for Motion {
         }
     }
 }
-
 
 /// 2D position combining X and Y coordinates.
 #[derive(Debug, Clone, Copy)]
@@ -589,7 +587,7 @@ impl Sub<Position> for Position {
     fn sub(self, rhs: Position) -> Self::Output {
         Motion {
             x: self.x - rhs.x,
-            y: self.y - rhs.y
+            y: self.y - rhs.y,
         }
     }
 }
@@ -627,7 +625,7 @@ impl Size {
     /// Zero size constant.
     pub const ZERO: Self = Size {
         width: Width::ZERO,
-        height: Height::ZERO
+        height: Height::ZERO,
     };
 
     /// Adds padding to all sides of the size.
@@ -709,7 +707,7 @@ impl Div<usize> for Size {
     fn div(self, rhs: usize) -> Self::Output {
         Size {
             width: self.width / rhs,
-            height: self.height / rhs
+            height: self.height / rhs,
         }
     }
 }
@@ -718,7 +716,7 @@ impl Div<usize> for Size {
 #[derive(Debug, Clone)]
 pub struct Frame {
     pub position: Position,
-    pub size: Size
+    pub size: Size,
 }
 
 /// Wrapper for a frame that was taken from another frame.
@@ -983,7 +981,8 @@ impl Frame {
     ///
     /// Panics if the new size is larger than the current frame size in either dimension.
     pub fn resize(self, size: &Size, halign: HAlign, valign: VAlign) -> Frame {
-        self.resize_horizontal(size.width, halign).resize_vertical(size.height, valign)
+        self.resize_horizontal(size.width, halign)
+            .resize_vertical(size.height, valign)
     }
 
     /// Consumes the frame and returns a collapsed frame at the same position.
@@ -1003,7 +1002,7 @@ impl Frame {
 pub enum HAlign {
     Left,
     Center,
-    Right
+    Right,
 }
 
 /// Vertical alignment options for positioning within frames.
@@ -1011,7 +1010,7 @@ pub enum HAlign {
 pub enum VAlign {
     Top,
     Center,
-    Bottom
+    Bottom,
 }
 
 /// RGBA color representation with standard color constants and hex formatting.
@@ -1023,7 +1022,8 @@ pub struct Color {
     pub g: u8,
     /// Blue component (0-255)
     pub b: u8,
-    /// Alpha (transparency) component (0-255, where 0 is fully transparent and 255 is fully opaque)
+    /// Alpha (transparency) component (0-255, where 0 is fully transparent and 255 is fully
+    /// opaque)
     pub a: u8,
 }
 
@@ -1193,7 +1193,11 @@ impl std::fmt::Display for Color {
         if self.a == 255 {
             write!(f, "#{:02x}{:02x}{:02x}", self.r, self.g, self.b)
         } else {
-            write!(f, "#{:02x}{:02x}{:02x}{:02x}", self.r, self.g, self.b, self.a)
+            write!(
+                f,
+                "#{:02x}{:02x}{:02x}{:02x}",
+                self.r, self.g, self.b, self.a
+            )
         }
     }
 }

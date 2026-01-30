@@ -42,7 +42,7 @@ impl<T> OpMap<T> {
                 .collect(),
             n_stored: 0,
             n_inactive: ir.raw_n_ops() - ir.n_ops(),
-            changed: false
+            changed: false,
         }
     }
 
@@ -91,7 +91,7 @@ impl<T> OpMap<T> {
                 .collect(),
             n_stored: ir.n_ops(),
             n_inactive: ir.raw_n_ops() - ir.n_ops(),
-            changed: false
+            changed: false,
         }
     }
 
@@ -113,7 +113,7 @@ impl<T> OpMap<T> {
                 .collect(),
             n_stored: ir.n_ops(),
             n_inactive: ir.raw_n_ops() - ir.n_ops(),
-            changed: false
+            changed: false,
         }
     }
 
@@ -181,7 +181,10 @@ impl<T> OpMap<T> {
     /// # Panics
     ///
     /// Panics if the operation ID is out of bounds or refers to an inactive operation.
-    pub fn insert(&mut self, k: OpId, v: T) -> Option<T> where T: PartialEq {
+    pub fn insert(&mut self, k: OpId, v: T) -> Option<T>
+    where
+        T: PartialEq,
+    {
         assert!(self.may_store(&k));
         let v = State::Active(Some(v));
         if v == self.store[k] {

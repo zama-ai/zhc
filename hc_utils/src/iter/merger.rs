@@ -1,4 +1,3 @@
-
 pub enum Merger2Way<I1, I2>
 where
     I1: Iterator,
@@ -45,7 +44,6 @@ where
         Merger2Way::Iter2(self)
     }
 }
-
 
 pub enum Merger3Way<I1, I2, I3>
 where

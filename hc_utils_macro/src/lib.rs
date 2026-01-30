@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, Data, DeriveInput, Fields, Ident, Variant};
+use syn::{Data, DeriveInput, Fields, Ident, Variant, parse_macro_input};
 
 #[proc_macro_attribute]
 pub fn fsm(_args: TokenStream, input: TokenStream) -> TokenStream {

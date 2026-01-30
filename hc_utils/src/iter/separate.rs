@@ -44,20 +44,27 @@ impl<I: Iterator, S: Iterator<Item = I::Item>> Iterator for Separated<I, S> {
     }
 }
 
-pub trait Separate where Self: Iterator + Sized {
-    fn separate<S: Iterator<Item=Self::Item>>(self, sep: S) -> Separated<Self, S>;
-    fn separate_with<F: FnMut()->Self::Item>(self, f: F) -> Separated<Self, RepeatWith<F>>;
+pub trait Separate
+where
+    Self: Iterator + Sized,
+{
+    fn separate<S: Iterator<Item = Self::Item>>(self, sep: S) -> Separated<Self, S>;
+    fn separate_with<F: FnMut() -> Self::Item>(self, f: F) -> Separated<Self, RepeatWith<F>>;
 }
 
 impl<I: Iterator> Separate for I {
-    fn separate<S: Iterator<Item=Self::Item>>(mut self, sep: S) -> Separated<Self, S> {
+    fn separate<S: Iterator<Item = Self::Item>>(mut self, sep: S) -> Separated<Self, S> {
         match self.next() {
-            Some(next) => Separated::OnIter { next, iter: self, sep},
+            Some(next) => Separated::OnIter {
+                next,
+                iter: self,
+                sep,
+            },
             None => Separated::Finished,
         }
     }
 
-    fn separate_with<F: FnMut()->Self::Item>(self, f: F) -> Separated<Self, RepeatWith<F>> {
+    fn separate_with<F: FnMut() -> Self::Item>(self, f: F) -> Separated<Self, RepeatWith<F>> {
         self.separate(std::iter::repeat_with(f))
     }
 }

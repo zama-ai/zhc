@@ -16,7 +16,12 @@ use hc_langs::{
     hpulang::{Hpulang, Operations as HpuOp},
 };
 use hc_sim::hpu::HpuConfig;
-use hc_utils::{iter::{CollectInSmallVec, CollectInVec, MultiZip}, small::{SmallMap, SmallVec}, StoreIndex, svec};
+use hc_utils::{
+    StoreIndex,
+    iter::{CollectInSmallVec, CollectInVec, MultiZip},
+    small::{SmallMap, SmallVec},
+    svec,
+};
 
 /// A register identifier used in the allocation process.
 #[derive(Clone, Debug, Copy, PartialEq, Eq)]
@@ -568,7 +573,12 @@ impl<'ir> Allocator<'ir> {
                 HpuOp::AddPt => {
                     let [r_dst] = self.get_dst_registers([rets[0]]);
                     let r_src = self.get_src_register(args[0]);
-                    let imm_ld_op = self.input.get_val(args[1]).get_origin().opref.get_operation();
+                    let imm_ld_op = self
+                        .input
+                        .get_val(args[1])
+                        .get_origin()
+                        .opref
+                        .get_operation();
                     let HpuOp::ImmLd { from } = imm_ld_op else {
                         unreachable!()
                     };
@@ -584,7 +594,12 @@ impl<'ir> Allocator<'ir> {
                 HpuOp::SubPt => {
                     let [r_dst] = self.get_dst_registers([rets[0]]);
                     let r_src = self.get_src_register(args[0]);
-                    let imm_ld_op = self.input.get_val(args[1]).get_origin().opref.get_operation();
+                    let imm_ld_op = self
+                        .input
+                        .get_val(args[1])
+                        .get_origin()
+                        .opref
+                        .get_operation();
                     let HpuOp::ImmLd { from } = imm_ld_op else {
                         unreachable!()
                     };
@@ -600,7 +615,12 @@ impl<'ir> Allocator<'ir> {
                 HpuOp::PtSub => {
                     let [r_dst] = self.get_dst_registers([rets[0]]);
                     let r_src = self.get_src_register(args[1]);
-                    let imm_ld_op = self.input.get_val(args[0]).get_origin().opref.get_operation();
+                    let imm_ld_op = self
+                        .input
+                        .get_val(args[0])
+                        .get_origin()
+                        .opref
+                        .get_operation();
                     let HpuOp::ImmLd { from } = imm_ld_op else {
                         unreachable!()
                     };
@@ -616,7 +636,12 @@ impl<'ir> Allocator<'ir> {
                 HpuOp::MulPt => {
                     let [r_dst] = self.get_dst_registers([rets[0]]);
                     let r_src = self.get_src_register(args[0]);
-                    let imm_ld_op = self.input.get_val(args[1]).get_origin().opref.get_operation();
+                    let imm_ld_op = self
+                        .input
+                        .get_val(args[1])
+                        .get_origin()
+                        .opref
+                        .get_operation();
                     let HpuOp::ImmLd { from } = imm_ld_op else {
                         unreachable!()
                     };

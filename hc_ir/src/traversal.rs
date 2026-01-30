@@ -4,7 +4,7 @@ use crate::{Dialect, IR, OpId};
 ///
 /// This trait extends `OpWalker` with methods to validate that the traversal
 /// order respects dependency constraints in the IR graph.
-pub trait OpWalkerVerifier: Iterator<Item=OpId> {
+pub trait OpWalkerVerifier: Iterator<Item = OpId> {
     /// Checks if the walker respects topological ordering of dependencies.
     ///
     /// Verifies that all operations appear after their dependencies in the
@@ -15,7 +15,7 @@ pub trait OpWalkerVerifier: Iterator<Item=OpId> {
 
 impl<T> OpWalkerVerifier for T
 where
-    T: Iterator<Item=OpId>,
+    T: Iterator<Item = OpId>,
 {
     fn is_topo_sorted<D: Dialect>(self, ir: &IR<D>) -> bool {
         let mut setmap = ir.empty_opmap();

@@ -1,5 +1,5 @@
 use hc_utils_macro::fsm;
-use std::{collections::VecDeque};
+use std::collections::VecDeque;
 
 pub trait IterMapFirst
 where
@@ -12,10 +12,7 @@ impl<I: Iterator> IterMapFirst for I {
         let mut firsts = VecDeque::new();
         let boxed: Box<dyn FnMut(Self::Item) -> A + 'a> = Box::new(f);
         firsts.push_back(boxed);
-        MapFirsts(MapMany::SpecifiedFirsts {
-            iter: self,
-            firsts,
-        })
+        MapFirsts(MapMany::SpecifiedFirsts { iter: self, firsts })
     }
 }
 
@@ -53,18 +50,10 @@ impl<'a, I: Iterator, A> MapFirsts<'a, I, A> {
 pub struct MapFirstsRest<'a, I: Iterator, A>(MapMany<'a, I, A>);
 
 impl<'a, I: Iterator, A> MapFirstsRest<'a, I, A> {
-    pub fn map_last(
-        self,
-        f: impl FnMut(I::Item) -> A + 'a,
-    ) -> MapFirstsRestLasts<'a, I, A> {
+    pub fn map_last(self, f: impl FnMut(I::Item) -> A + 'a) -> MapFirstsRestLasts<'a, I, A> {
         let MapFirstsRest(mut mm) = self;
         mm.transition(|old| {
-            let MapMany::SpecifiedFirstsRest {
-                iter,
-                firsts,
-                rest,
-            } = old
-            else {
+            let MapMany::SpecifiedFirstsRest { iter, firsts, rest } = old else {
                 unreachable!();
             };
             let mut lasts = VecDeque::new();
@@ -92,10 +81,7 @@ impl<'a, I: Iterator, A> Iterator for MapFirstsRest<'a, I, A> {
 pub struct MapFirstsRestLasts<'a, I: Iterator, A>(MapMany<'a, I, A>);
 
 impl<'a, I: Iterator, A> MapFirstsRestLasts<'a, I, A> {
-    pub fn map_last(
-        mut self,
-        f: impl FnMut(I::Item) -> A + 'a,
-    ) -> MapFirstsRestLasts<'a, I, A> {
+    pub fn map_last(mut self, f: impl FnMut(I::Item) -> A + 'a) -> MapFirstsRestLasts<'a, I, A> {
         self.0.transition(|old| {
             let MapMany::SpecifiedFirstsRestLasts {
                 iter,
@@ -153,11 +139,7 @@ impl<'a, I: Iterator, A> MapRest<'a, I, A> {
             let mut lasts = VecDeque::new();
             let boxed: Box<dyn FnMut(I::Item) -> A + 'a> = Box::new(f);
             lasts.push_back(boxed);
-            MapMany::SpecifiedRestLasts {
-                iter,
-                rest,
-                lasts,
-            }
+            MapMany::SpecifiedRestLasts { iter, rest, lasts }
         });
         MapRestLasts(mm)
     }
@@ -177,11 +159,7 @@ impl<'a, I: Iterator, A> MapRestLasts<'a, I, A> {
                 unreachable!();
             };
             lasts.push_back(Box::new(f));
-            MapMany::SpecifiedRestLasts {
-                iter,
-                rest,
-                lasts,
-            }
+            MapMany::SpecifiedRestLasts { iter, rest, lasts }
         });
         self
     }
@@ -267,13 +245,13 @@ impl<'a, I: Iterator, A> Iterator for MapMany<'a, I, A> {
                     panic!("Iterator was not long enough to span the whole map.");
                 }
                 if firsts.is_empty() {
-                    MapMany::RunningOnRestWithoutLasts { iter, has_run_once: false, rest }
-                } else {
-                    MapMany::RunningOnFirstsWithoutLasts {
+                    MapMany::RunningOnRestWithoutLasts {
                         iter,
-                        firsts,
+                        has_run_once: false,
                         rest,
                     }
+                } else {
+                    MapMany::RunningOnFirstsWithoutLasts { iter, firsts, rest }
                 }
             }
             MapMany::SpecifiedFirstsRestLasts {
@@ -290,7 +268,10 @@ impl<'a, I: Iterator, A> Iterator for MapMany<'a, I, A> {
                 if firsts.is_empty() {
                     let lookahead: VecDeque<Option<I::Item>> =
                         (0..=lasts.len()).map(|_| iter.next()).collect();
-                    assert!(lookahead.iter().all(|l| l.is_some()), "Iterator was not long enough to span the whole map.");
+                    assert!(
+                        lookahead.iter().all(|l| l.is_some()),
+                        "Iterator was not long enough to span the whole map."
+                    );
                     MapMany::RunningOnRest {
                         iter,
                         lookahead,
@@ -317,7 +298,10 @@ impl<'a, I: Iterator, A> Iterator for MapMany<'a, I, A> {
                 }
                 let lookahead: VecDeque<Option<I::Item>> =
                     (0..=lasts.len()).map(|_| iter.next()).collect();
-                assert!(lookahead.iter().all(|l| l.is_some()), "Iterator was not long enough to span the whole map.");
+                assert!(
+                    lookahead.iter().all(|l| l.is_some()),
+                    "Iterator was not long enough to span the whole map."
+                );
                 MapMany::RunningOnRest {
                     iter,
                     lookahead,
@@ -338,7 +322,10 @@ impl<'a, I: Iterator, A> Iterator for MapMany<'a, I, A> {
                 if firsts.is_empty() {
                     let lookahead: VecDeque<Option<I::Item>> =
                         (0..=lasts.len()).map(|_| iter.next()).collect();
-                    assert!(lookahead.iter().all(|l| l.is_some()), "Iterator was not long enough to span the whole map.");
+                    assert!(
+                        lookahead.iter().all(|l| l.is_some()),
+                        "Iterator was not long enough to span the whole map."
+                    );
                     MapMany::RunningOnRest {
                         iter,
                         lookahead,
@@ -364,13 +351,13 @@ impl<'a, I: Iterator, A> Iterator for MapMany<'a, I, A> {
                     panic!("Iterator was not long enough to span the whole map.");
                 }
                 if firsts.is_empty() {
-                    MapMany::RunningOnRestWithoutLasts { iter, has_run_once: false, rest }
-                } else {
-                    MapMany::RunningOnFirstsWithoutLasts {
+                    MapMany::RunningOnRestWithoutLasts {
                         iter,
-                        firsts,
+                        has_run_once: false,
                         rest,
                     }
+                } else {
+                    MapMany::RunningOnFirstsWithoutLasts { iter, firsts, rest }
                 }
             }
             MapMany::RunningOnRest {
@@ -385,10 +372,7 @@ impl<'a, I: Iterator, A> Iterator for MapMany<'a, I, A> {
                 }
                 let look = iter.next();
                 if look.is_none() {
-                    MapMany::RunningOnLasts {
-                        lookahead,
-                        lasts,
-                    }
+                    MapMany::RunningOnLasts { lookahead, lasts }
                 } else {
                     lookahead.push_back(look);
                     MapMany::RunningOnRest {
@@ -399,12 +383,20 @@ impl<'a, I: Iterator, A> Iterator for MapMany<'a, I, A> {
                     }
                 }
             }
-            MapMany::RunningOnRestWithoutLasts { mut iter, has_run_once, mut rest } => {
+            MapMany::RunningOnRestWithoutLasts {
+                mut iter,
+                has_run_once,
+                mut rest,
+            } => {
                 output = iter.next().map(&mut rest);
                 if output.is_none() && !has_run_once {
                     panic!("Iterator was not long enough to span the whole map.");
                 }
-                MapMany::RunningOnRestWithoutLasts { iter, has_run_once: true, rest }
+                MapMany::RunningOnRestWithoutLasts {
+                    iter,
+                    has_run_once: true,
+                    rest,
+                }
             }
 
             MapMany::RunningOnLasts {
@@ -422,10 +414,7 @@ impl<'a, I: Iterator, A> Iterator for MapMany<'a, I, A> {
                 if lasts.is_empty() {
                     MapMany::Finished
                 } else {
-                    MapMany::RunningOnLasts {
-                        lookahead,
-                        lasts,
-                    }
+                    MapMany::RunningOnLasts { lookahead, lasts }
                 }
             }
             MapMany::Finished => {

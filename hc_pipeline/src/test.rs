@@ -1,4 +1,7 @@
-use hc_builder::{builder::BlockConfig, iops::{add::add, cmp::cmp_gt}};
+use hc_builder::{
+    builder::BlockConfig,
+    iops::{add::add, cmp::cmp_gt},
+};
 use hc_ir::{IR, cse::eliminate_common_subexpressions, dce::eliminate_dead_code};
 use hc_langs::ioplang::Ioplang;
 

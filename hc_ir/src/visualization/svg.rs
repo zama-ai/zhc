@@ -1,12 +1,13 @@
 use hc_utils::{
-    graphics::{ Delta, HAlign, Position, VAlign},
+    graphics::{Delta, HAlign, Position, VAlign},
     iter::{Slide, Slider},
 };
 
 use crate::visualization::{
     spatial::{self, Diagram, Element},
     stylesheet::{
-        BodyClass, EffectOperationClass, InputOperationClass, InputPortClass, InputsClass, LinkClass, OperationClass, OutputPortClass, OutputsClass, StyleSheet
+        BodyClass, EffectOperationClass, InputOperationClass, InputPortClass, InputsClass,
+        LinkClass, OperationClass, OutputPortClass, OutputsClass, StyleSheet,
     },
 };
 
@@ -325,7 +326,7 @@ pub fn diagram_to_svg(diagram: &Diagram, stylesheet: &StyleSheet) -> Svg {
     Svg {
         width: frame.size.width.0.0,
         height: frame.size.height.0.0,
-        elements: [links, vertices ].into(),
+        elements: [links, vertices].into(),
         css,
         javascript,
     }
@@ -353,12 +354,12 @@ fn gen_link(link: &spatial::Path, stylesheet: &StyleSheet) -> SvgElement {
         .cloned()
         .slide::<2>()
         .filter_map(|window| match window {
-            Slider::Prelude(w) if w.len() == 1 => {
-                Some(PathCommand::MoveTo(w[0]))
-            }
-            Slider::Complete(w) => {
-                Some(PathCommand::CubicTo(w[0].move_y(magnitude / 3), w[1].move_y(-magnitude/3), w[1]))
-            }
+            Slider::Prelude(w) if w.len() == 1 => Some(PathCommand::MoveTo(w[0])),
+            Slider::Complete(w) => Some(PathCommand::CubicTo(
+                w[0].move_y(magnitude / 3),
+                w[1].move_y(-magnitude / 3),
+                w[1],
+            )),
             _ => None,
         })
         .collect();
@@ -468,7 +469,10 @@ fn gen_operation(operation: &spatial::Operation, stylesheet: &StyleSheet) -> Svg
     }
 }
 
-fn gen_effect_operation(operation: &spatial::EffectOperation, stylesheet: &StyleSheet) -> SvgElement {
+fn gen_effect_operation(
+    operation: &spatial::EffectOperation,
+    stylesheet: &StyleSheet,
+) -> SvgElement {
     let frame = operation.get_frame();
     let mut elements = Vec::new();
     let style = stylesheet.get::<EffectOperationClass>();
@@ -623,19 +627,17 @@ fn gen_body(body: &spatial::Body, stylesheet: &StyleSheet) -> SvgElement {
     let frame = body.get_frame();
     let style = stylesheet.get::<BodyClass>();
 
-    let mut elements = vec![
-        SvgElement::Rect {
-            x: frame.position.x.0,
-            y: frame.position.y.0,
-            width: frame.size.width.0.0,
-            height: frame.size.height.0.0,
-            fill: Some(style.fill_color.to_string()),
-            stroke: Some(style.border_color.to_string()),
-            stroke_width: Some(style.border_width.0),
-            class: None,
-            id: None,
-        },
-    ];
+    let mut elements = vec![SvgElement::Rect {
+        x: frame.position.x.0,
+        y: frame.position.y.0,
+        width: frame.size.width.0.0,
+        height: frame.size.height.0.0,
+        fill: Some(style.fill_color.to_string()),
+        stroke: Some(style.border_color.to_string()),
+        stroke_width: Some(style.border_width.0),
+        class: None,
+        id: None,
+    }];
 
     // Split content into lines and create a text element for each line
     for (line_index, line) in body.content.lines().enumerate() {

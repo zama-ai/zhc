@@ -2,13 +2,18 @@ use std::hash::Hash;
 
 use crate::small::SmallSet;
 
-
-pub struct Dedup<I: Iterator> where I::Item: Hash + Eq + Clone {
+pub struct Dedup<I: Iterator>
+where
+    I::Item: Hash + Eq + Clone,
+{
     iterator: I,
-    set: SmallSet<I::Item>
+    set: SmallSet<I::Item>,
 }
 
-impl<I: Iterator> Iterator for Dedup<I> where I::Item: Hash + Eq + Clone{
+impl<I: Iterator> Iterator for Dedup<I>
+where
+    I::Item: Hash + Eq + Clone,
+{
     type Item = I::Item;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -20,18 +25,28 @@ impl<I: Iterator> Iterator for Dedup<I> where I::Item: Hash + Eq + Clone{
                     self.set.insert(val.clone());
                     Some(val)
                 }
-            },
-            None => None
+            }
+            None => None,
         }
     }
 }
 
-pub trait Deduped where Self: Iterator + Sized, Self::Item: Hash + Eq + Clone {
+pub trait Deduped
+where
+    Self: Iterator + Sized,
+    Self::Item: Hash + Eq + Clone,
+{
     fn dedup(self) -> Dedup<Self>;
 }
 
-impl<I: Iterator> Deduped for I where Self::Item: Hash + Eq + Clone {
+impl<I: Iterator> Deduped for I
+where
+    Self::Item: Hash + Eq + Clone,
+{
     fn dedup(self) -> Dedup<Self> {
-        Dedup { iterator: self, set: SmallSet::new() }
+        Dedup {
+            iterator: self,
+            set: SmallSet::new(),
+        }
     }
 }

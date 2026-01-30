@@ -2,7 +2,9 @@ use std::cmp::max;
 
 use hc_ir::IR;
 use hc_langs::ioplang::Ioplang;
-use hc_utils::iter::{ChunkIt, CollectInSmallVec, Intermediate, IterMapFirst, MultiZip, Slide, filter_out_postludes};
+use hc_utils::iter::{
+    ChunkIt, CollectInSmallVec, Intermediate, IterMapFirst, MultiZip, Slide, filter_out_postludes,
+};
 
 use crate::builder::{
     BlockConfig, Builder, EncryptedInteger, ExtensionBehavior, Lut1Type, Lut2Type,
@@ -47,7 +49,10 @@ impl Builder {
         // into one vector with msg + [1b of carry]
         // Also handle src of different sizes.
         let sums = self.vector_add(&lhs, &rhs, ExtensionBehavior::Passthrough);
-        assert!(sums.len().is_multiple_of(4), "Addition for non-multiple-of-4 integers is not supported yet.");
+        assert!(
+            sums.len().is_multiple_of(4),
+            "Addition for non-multiple-of-4 integers is not supported yet."
+        );
 
         // Step 2 =================================================================
         // Compute P/G/N state for each block.

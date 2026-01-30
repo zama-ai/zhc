@@ -1,7 +1,4 @@
-use std::{
-    fmt::Debug,
-    ops::Index,
-};
+use std::{fmt::Debug, ops::Index};
 
 use hc_utils::{ChangeGuard, Store};
 
@@ -20,7 +17,7 @@ pub struct ValMap<T> {
     store: Store<ValId, State<Option<T>>>,
     n_stored: u16,
     n_inactive: u16,
-    changed: bool
+    changed: bool,
 }
 
 impl<T> ValMap<T> {
@@ -44,7 +41,7 @@ impl<T> ValMap<T> {
                 .collect(),
             n_stored: 0,
             n_inactive: ir.raw_n_vals() - ir.n_vals(),
-            changed: false
+            changed: false,
         }
     }
 
@@ -93,7 +90,7 @@ impl<T> ValMap<T> {
                 .collect(),
             n_stored: ir.n_vals(),
             n_inactive: ir.raw_n_vals() - ir.n_vals(),
-            changed: false
+            changed: false,
         }
     }
 
@@ -115,7 +112,7 @@ impl<T> ValMap<T> {
                 .collect(),
             n_stored: ir.n_vals(),
             n_inactive: ir.raw_n_vals() - ir.n_vals(),
-            changed: false
+            changed: false,
         }
     }
 
@@ -156,7 +153,6 @@ impl<T> ValMap<T> {
         self.store[k].as_ref().unwrap_active().as_ref()
     }
 
-
     /// Returns a mutable guard for the data at the specified value.
     ///
     /// Returns `None` if no data is stored for the value. The guard
@@ -184,7 +180,10 @@ impl<T> ValMap<T> {
     /// # Panics
     ///
     /// Panics if the value ID is out of bounds or refers to an inactive value.
-    pub fn insert(&mut self, k: ValId, v: T) -> Option<T>  where T: PartialEq {
+    pub fn insert(&mut self, k: ValId, v: T) -> Option<T>
+    where
+        T: PartialEq,
+    {
         assert!(self.may_store(&k));
         let v = State::Active(Some(v));
         if v == self.store[k] {

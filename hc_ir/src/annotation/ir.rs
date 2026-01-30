@@ -20,7 +20,8 @@ impl<'ir, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> AnnIR<'ir, D, OpAnn
     ///
     /// # Panics
     ///
-    /// Panics if the annotation maps are not completely filled for all active operations and values.
+    /// Panics if the annotation maps are not completely filled for all active operations and
+    /// values.
     pub fn new(
         ir: &'ir IR<D>,
         op_annotations: OpMap<OpAnn>,
