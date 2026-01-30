@@ -1,8 +1,11 @@
-pub trait Average where Self: Iterator<Item=f64> {
+pub trait Average
+where
+    Self: Iterator<Item = f64>,
+{
     fn average(self) -> Option<f64>;
 }
 
-impl<I: Iterator<Item=f64>> Average for I  {
+impl<I: Iterator<Item = f64>> Average for I {
     fn average(mut self) -> Option<f64> {
         let mut val = self.next()?;
         let mut n = 1;
@@ -10,15 +13,18 @@ impl<I: Iterator<Item=f64>> Average for I  {
             val = val + v;
             n += 1;
         }
-        Some(val/(n as f64))
+        Some(val / (n as f64))
     }
 }
 
-pub trait Median where Self: Iterator<Item=f64> {
+pub trait Median
+where
+    Self: Iterator<Item = f64>,
+{
     fn median(self) -> Option<f64>;
 }
 
-impl<I: Iterator<Item=f64>> Median for I {
+impl<I: Iterator<Item = f64>> Median for I {
     fn median(self) -> Option<f64> {
         let mut values: Vec<f64> = self.collect();
         if values.is_empty() {

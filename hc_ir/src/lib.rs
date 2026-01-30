@@ -11,7 +11,7 @@ pub mod scheduling;
 pub mod translation;
 pub mod traversal;
 
-pub mod visualization;
+mod annotation;
 mod dialect;
 mod id;
 mod ir;
@@ -25,11 +25,12 @@ mod state;
 mod val;
 mod val_map;
 mod val_mut;
+mod val_origin;
 mod val_ref;
 mod val_use;
-mod val_origin;
-mod annotation;
+pub mod visualization;
 
+pub(crate) use annotation::*;
 pub use dialect::*;
 pub use id::*;
 pub use ir::*;
@@ -43,10 +44,8 @@ pub(crate) use state::*;
 pub(crate) use val::*;
 pub use val_map::*;
 pub(crate) use val_mut::*;
-pub(crate) use annotation::*;
 pub use val_origin::*;
 pub use val_use::*;
-
 
 /// Errors that can occur during IR construction or manipulation.
 #[derive(Clone, Debug)]

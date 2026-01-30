@@ -1,7 +1,6 @@
 use crate::{small::VArray, varr};
 use std::mem::MaybeUninit;
 
-
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Slider<A, const N: usize> {
     Prelude(VArray<A, N>),
@@ -13,19 +12,19 @@ impl<A, const N: usize> Slider<A, N> {
     pub fn unwrap_prelude(self) -> VArray<A, N> {
         match self {
             Slider::Prelude(sv) => sv,
-            _ => panic!()
+            _ => panic!(),
         }
     }
     pub fn unwrap_complete(self) -> VArray<A, N> {
         match self {
             Slider::Complete(sv) => sv,
-            _ => panic!()
+            _ => panic!(),
         }
     }
     pub fn unwrap_postlude(self) -> VArray<A, N> {
         match self {
             Slider::Postlude(sv) => sv,
-            _ => panic!()
+            _ => panic!(),
         }
     }
 }
@@ -68,7 +67,9 @@ where
                 let current_buffer = unsafe { self.buffer.assume_init_read() };
                 let output = current_buffer.clone();
                 match current_buffer {
-                    Slider::Prelude(mut sv) | Slider::Complete(mut sv) | Slider::Postlude(mut sv) => {
+                    Slider::Prelude(mut sv)
+                    | Slider::Complete(mut sv)
+                    | Slider::Postlude(mut sv) => {
                         if !sv.is_empty() {
                             sv.as_mut_slice().rotate_left(1);
                             sv.pop();
@@ -76,12 +77,14 @@ where
                         self.buffer.write(Slider::Postlude(sv))
                     }
                 };
-                if let Slider::Postlude(sv) = &output && sv.is_empty() {
+                if let Slider::Postlude(sv) = &output
+                    && sv.is_empty()
+                {
                     None
                 } else {
-                   Some(output)
+                    Some(output)
                 }
-            },
+            }
         }
     }
 }
@@ -100,10 +103,7 @@ impl<I: Iterator> Slide for I {
             Some(v) => MaybeUninit::new(Slider::Prelude(varr![v])),
             None => MaybeUninit::new(Slider::Postlude(varr![])),
         };
-        Slided {
-            iter: self,
-            buffer,
-        }
+        Slided { iter: self, buffer }
     }
 }
 
@@ -168,28 +168,33 @@ mod tests {
     fn test_slide_collect() {
         let vec = vec![1, 2, 3, 4];
         let result: Vec<_> = vec.into_iter().slide::<2>().collect();
-        assert_eq!(result, vec![
-            Slider::Prelude(varr![1]),
-            Slider::Complete(varr![1, 2]),
-            Slider::Complete(varr![2, 3]),
-            Slider::Complete(varr![3, 4]),
-            Slider::Postlude(varr![4]),
-        ]);
+        assert_eq!(
+            result,
+            vec![
+                Slider::Prelude(varr![1]),
+                Slider::Complete(varr![1, 2]),
+                Slider::Complete(varr![2, 3]),
+                Slider::Complete(varr![3, 4]),
+                Slider::Postlude(varr![4]),
+            ]
+        );
     }
 
     #[test]
     fn test_smaller_than_window() {
         let vec = vec![1, 2, 3, 4];
         let result: Vec<_> = vec.into_iter().slide::<5>().collect();
-        assert_eq!(result, vec![
-            Slider::Prelude(varr![1]),
-            Slider::Prelude(varr![1, 2]),
-            Slider::Prelude(varr![1, 2, 3]),
-            Slider::Prelude(varr![1, 2, 3, 4]),
-            Slider::Postlude(varr![2, 3, 4]),
-            Slider::Postlude(varr![3, 4]),
-            Slider::Postlude(varr![4]),
-        ]);
+        assert_eq!(
+            result,
+            vec![
+                Slider::Prelude(varr![1]),
+                Slider::Prelude(varr![1, 2]),
+                Slider::Prelude(varr![1, 2, 3]),
+                Slider::Prelude(varr![1, 2, 3, 4]),
+                Slider::Postlude(varr![2, 3, 4]),
+                Slider::Postlude(varr![3, 4]),
+                Slider::Postlude(varr![4]),
+            ]
+        );
     }
-
 }

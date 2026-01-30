@@ -1,6 +1,9 @@
 use crate::{iter::collectors::CollectInSmallVec, small::SmallVecIntoIter};
 
-pub trait Intermediate where Self: Iterator {
+pub trait Intermediate
+where
+    Self: Iterator,
+{
     fn intermediate(self) -> SmallVecIntoIter<Self::Item>;
 }
 

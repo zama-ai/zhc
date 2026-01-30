@@ -23,7 +23,6 @@ pub struct StackVec<A> {
     len: usize,
 }
 
-
 impl<A> Default for StackVec<A> {
     fn default() -> Self {
         Self::new()
@@ -45,7 +44,7 @@ impl<A> StackVec<A> {
         let size = std::mem::size_of::<A>();
         if size > STACK_BYTES {
             return 0;
-        } else if  size == 0 {
+        } else if size == 0 {
             return usize::MAX;
         } else {
             STACK_BYTES / size
@@ -177,7 +176,6 @@ impl<A> StackVec<A> {
         }
         None
     }
-
 
     /// Returns `true` if the vector can accommodate one more element.
     pub fn may_push(&self) -> bool {
@@ -473,7 +471,6 @@ impl<'a, A> Drop for StackVecIntoIter<'a, A> {
         }
     }
 }
-
 
 #[cfg(test)]
 mod test {
@@ -934,7 +931,6 @@ mod test {
         assert_eq!(drained, vec![1, 3]);
         assert_eq!(vec.len(), 0);
     }
-
 
     #[test]
     fn test_ownership_and_drops() {

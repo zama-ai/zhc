@@ -31,7 +31,7 @@ impl Schedule {
     }
 
     /// Returns a walker that yields operations in scheduled order.
-    pub fn get_walker(&self) -> impl Iterator<Item=OpId> {
+    pub fn get_walker(&self) -> impl Iterator<Item = OpId> {
         self.0.iter().copied()
     }
 }

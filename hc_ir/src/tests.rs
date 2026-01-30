@@ -163,7 +163,8 @@ pub fn gen_complex_ir() -> Result<IR<TestDialect>, IRError<TestDialect>> {
     let (_, branch2) = ir.add_op(Operations::Add, svec![branch1[0], inc7[0]])?;
     let (_, _) = ir.add_op(Operations::Return, svec![branch2[0]])?;
 
-    ir.check_ir("
+    ir.check_ir(
+        "
         %0 : Int = int_input<pos: 0>();
         %1 : Int = int_input<pos: 1>();
         %2 : Int = int_input<pos: 2>();
@@ -215,7 +216,8 @@ pub fn gen_complex_ir() -> Result<IR<TestDialect>, IRError<TestDialect>> {
         return(%46);
         %49 : Int = add(%48, %24);
         return(%49);
-    ");
+    ",
+    );
 
     Ok(ir)
 }
@@ -1655,7 +1657,11 @@ fn test_position_consistency_after_replacement() -> Result<(), IRError<TestDiale
     let val1 = store.get_val(v1[0]);
 
     // val3 should now be used at position 0 of the add operation
-    assert!(val3.users.iter().any(|u| u.opid == add_id && u.position == 0));
+    assert!(
+        val3.users
+            .iter()
+            .any(|u| u.opid == add_id && u.position == 0)
+    );
 
     // val1 should no longer be used by the add operation
     assert!(!val1.users.iter().any(|u| u.opid == add_id));
@@ -1777,20 +1783,44 @@ fn test_val_origin_and_val_use_equality() -> Result<(), IRError<TestDialect>> {
     let (op2_id, _v2) = store.add_op(Operations::IntInput { pos: 1 }, svec![])?;
 
     // Test ValOrigin equality
-    let origin1 = ValOrigin { opid: op1_id, position: 0 };
-    let origin2 = ValOrigin { opid: op1_id, position: 0 };
-    let origin3 = ValOrigin { opid: op1_id, position: 1 };
-    let origin4 = ValOrigin { opid: op2_id, position: 0 };
+    let origin1 = ValOrigin {
+        opid: op1_id,
+        position: 0,
+    };
+    let origin2 = ValOrigin {
+        opid: op1_id,
+        position: 0,
+    };
+    let origin3 = ValOrigin {
+        opid: op1_id,
+        position: 1,
+    };
+    let origin4 = ValOrigin {
+        opid: op2_id,
+        position: 0,
+    };
 
     assert_eq!(origin1, origin2);
     assert_ne!(origin1, origin3);
     assert_ne!(origin1, origin4);
 
     // Test ValUse equality
-    let use1 = ValUse { opid: op1_id, position: 0 };
-    let use2 = ValUse { opid: op1_id, position: 0 };
-    let use3 = ValUse { opid: op1_id, position: 1 };
-    let use4 = ValUse { opid: op2_id, position: 0 };
+    let use1 = ValUse {
+        opid: op1_id,
+        position: 0,
+    };
+    let use2 = ValUse {
+        opid: op1_id,
+        position: 0,
+    };
+    let use3 = ValUse {
+        opid: op1_id,
+        position: 1,
+    };
+    let use4 = ValUse {
+        opid: op2_id,
+        position: 0,
+    };
 
     assert_eq!(use1, use2);
     assert_ne!(use1, use3);
@@ -1817,8 +1847,14 @@ fn test_val_origin_and_val_use_debug() -> Result<(), IRError<TestDialect>> {
     let mut store: IR<TestDialect> = IR::empty();
     let (op_id, _v) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
 
-    let origin = ValOrigin { opid: op_id, position: 2 };
-    let use_val = ValUse { opid: op_id, position: 3 };
+    let origin = ValOrigin {
+        opid: op_id,
+        position: 2,
+    };
+    let use_val = ValUse {
+        opid: op_id,
+        position: 3,
+    };
 
     let origin_debug = format!("{:?}", origin);
     let use_debug = format!("{:?}", use_val);

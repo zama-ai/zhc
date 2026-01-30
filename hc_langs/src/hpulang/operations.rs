@@ -113,11 +113,9 @@ impl Display for Operations {
             Operations::Pbs2F { lut } => write!(f, "pbs_2f<{lut}>"),
             Operations::Pbs4F { lut } => write!(f, "pbs_4f<{lut}>"),
             Operations::Pbs8F { lut } => write!(f, "pbs_8f<{lut}>"),
-            Operations::Batch { block, .. } => write!(
-                f,
-                "batch {{\n        {}}}",
-                block.to_string()
-            ),
+            Operations::Batch { block, .. } => {
+                write!(f, "batch {{\n        {}}}", block.to_string())
+            }
             Operations::BatchArg { pos, ty } => write!(f, "batch_arg<{pos}, {ty}>"),
             Operations::BatchRet { pos, ty } => write!(f, "batch_ret<{pos}, {ty}>"),
         }

@@ -1,7 +1,10 @@
 use std::hash::Hash;
 
-use crate::{FastMap, small::stack_map::{StackMapIntoIter, StackMapIter, StackMapMutIter}};
 use super::stack_map::StackMap;
+use crate::{
+    FastMap,
+    small::stack_map::{StackMapIntoIter, StackMapIter, StackMapMutIter},
+};
 
 /// A map that starts stack-allocated and spills to heap when capacity is exceeded.
 #[derive(Clone, Debug)]

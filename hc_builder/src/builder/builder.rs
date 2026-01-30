@@ -2,10 +2,15 @@ use std::cell::{Ref, RefCell};
 
 use hc_ir::{IR, cse::eliminate_common_subexpressions, dce::eliminate_dead_code};
 use hc_langs::ioplang::{Ioplang, Litteral, LutGenerator, Operations, Types};
-use hc_utils::{iter::{Chunk, ChunkIt}, small::SmallVec, svec};
+use hc_utils::{
+    iter::{Chunk, ChunkIt},
+    small::SmallVec,
+    svec,
+};
 
 use crate::builder::{
-    BlockConfig, CiphertextBlock, EncryptedInteger, Lut, Lut1Type, Lut2, Lut2Type, PlaintextBlock, PlaintextInteger, blocks_count
+    BlockConfig, CiphertextBlock, EncryptedInteger, Lut, Lut1Type, Lut2, Lut2Type, PlaintextBlock,
+    PlaintextInteger, blocks_count,
 };
 
 /// Builder for constructing homomorphic encryption circuits.
@@ -60,7 +65,6 @@ impl Builder {
             .unwrap();
         Lut2(ret[0])
     }
-
 }
 
 impl Builder {
@@ -255,11 +259,7 @@ impl Builder {
     }
 
     /// Adds two ciphertext blocks `src_a` and `src_b`.
-    pub fn block_add(
-        &self,
-        src_a: &CiphertextBlock,
-        src_b: &CiphertextBlock,
-    ) -> CiphertextBlock {
+    pub fn block_add(&self, src_a: &CiphertextBlock, src_b: &CiphertextBlock) -> CiphertextBlock {
         let (_node, ret) = self
             .ir
             .borrow_mut()
@@ -272,11 +272,7 @@ impl Builder {
     }
 
     /// Adds a ciphertext block `src_a` and a plaintext block `src_b`.
-    pub fn block_adds(
-        &self,
-        src_a: &CiphertextBlock,
-        src_b: &PlaintextBlock,
-    ) -> CiphertextBlock {
+    pub fn block_adds(&self, src_a: &CiphertextBlock, src_b: &PlaintextBlock) -> CiphertextBlock {
         let (_node, ret) = self
             .ir
             .borrow_mut()
@@ -289,11 +285,7 @@ impl Builder {
     }
 
     /// Subtracts ciphertext block `src_b` from `src_a`.
-    pub fn block_sub(
-        &self,
-        src_a: &CiphertextBlock,
-        src_b: &CiphertextBlock,
-    ) -> CiphertextBlock {
+    pub fn block_sub(&self, src_a: &CiphertextBlock, src_b: &CiphertextBlock) -> CiphertextBlock {
         let (_node, ret) = self
             .ir
             .borrow_mut()
@@ -306,11 +298,7 @@ impl Builder {
     }
 
     /// Subtracts plaintext block `src_b` from ciphertext block `src_a`.
-    pub fn block_subs(
-        &self,
-        src_a: &CiphertextBlock,
-        src_b: &PlaintextBlock,
-    ) -> CiphertextBlock {
+    pub fn block_subs(&self, src_a: &CiphertextBlock, src_b: &PlaintextBlock) -> CiphertextBlock {
         let (_node, ret) = self
             .ir
             .borrow_mut()
@@ -323,11 +311,7 @@ impl Builder {
     }
 
     /// Subtracts ciphertext block `src_b` from plaintext block `src_a`.
-    pub fn block_ssub(
-        &self,
-        src_a: &PlaintextBlock,
-        src_b: &CiphertextBlock,
-    ) -> CiphertextBlock {
+    pub fn block_ssub(&self, src_a: &PlaintextBlock, src_b: &CiphertextBlock) -> CiphertextBlock {
         let (_node, ret) = self
             .ir
             .borrow_mut()
@@ -363,11 +347,7 @@ impl Builder {
         }
     }
 
-    pub fn block_pack(
-        &self,
-        src_a: &CiphertextBlock,
-        src_b: &CiphertextBlock,
-    ) -> CiphertextBlock {
+    pub fn block_pack(&self, src_a: &CiphertextBlock, src_b: &CiphertextBlock) -> CiphertextBlock {
         let shift = self.block_constant(2usize.pow(self.config.message_width as u32));
         self.block_mac(&shift, src_a, src_b)
     }
@@ -397,20 +377,25 @@ impl Builder {
     }
 
     /// Applies a 2-PBS to `src` using `lut`.
-    pub fn block_pbs2(&self, src: &CiphertextBlock, lut: &Lut2) -> (CiphertextBlock, CiphertextBlock) {
+    pub fn block_pbs2(
+        &self,
+        src: &CiphertextBlock,
+        lut: &Lut2,
+    ) -> (CiphertextBlock, CiphertextBlock) {
         let (_node, ret) = self
             .ir
             .borrow_mut()
             .add_op(Operations::Pbs2, svec![src.valid, lut.0])
             .unwrap();
-        (CiphertextBlock {
-            valid: ret[0],
-            config: self.config,
-        },
-        CiphertextBlock {
-            valid: ret[1],
-            config: self.config,
-        }
+        (
+            CiphertextBlock {
+                valid: ret[0],
+                config: self.config,
+            },
+            CiphertextBlock {
+                valid: ret[1],
+                config: self.config,
+            },
         )
     }
 }
@@ -443,7 +428,7 @@ impl Builder {
     pub fn vector_pack_one_lut(
         &self,
         blocks: impl AsRef<[CiphertextBlock]>,
-        lut: &Lut
+        lut: &Lut,
     ) -> SmallVec<CiphertextBlock> {
         let shift = self.block_constant(2usize.pow(self.config.message_width as u32));
         blocks

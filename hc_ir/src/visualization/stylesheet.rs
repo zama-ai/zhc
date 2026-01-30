@@ -13,11 +13,11 @@
 //! providing compile-time safety and avoiding string-based lookups. All predefined
 //! classes start with default styling that can be customized by inserting new styles.
 
-use std::any::TypeId;
 use hc_utils::{
     FastMap,
     graphics::{Color, Font, FontSize, HAlign, Thickness, VAlign},
 };
+use std::any::TypeId;
 
 /// Marker trait for compile-time style class identification.
 pub trait Class: 'static {}
@@ -32,7 +32,7 @@ pub struct Style {
     pub padding: Thickness,
     pub spacing: Thickness,
     pub border_width: Thickness,
-    pub border_color:  Color,
+    pub border_color: Color,
     pub fill_color: Color,
     pub halign: HAlign,
     pub valign: VAlign,

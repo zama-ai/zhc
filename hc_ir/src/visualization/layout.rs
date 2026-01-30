@@ -61,31 +61,33 @@ impl<'ir, 'ann, D: Dialect> LayeredNode<'ir, 'ann, D> {
                     if *v.get_origin().opref.get_annotation() == op_ref.get_annotation().above() {
                         (
                             LayeredNode::Operation(v.get_origin().opref),
-                            FracPos::from_pos_arity(v.get_origin().position as usize, v.get_origin().opref.get_return_arity())
+                            FracPos::from_pos_arity(
+                                v.get_origin().position as usize,
+                                v.get_origin().opref.get_return_arity(),
+                            ),
                         )
                     } else {
                         (
                             LayeredNode::Value(v, op_ref.get_annotation().above()),
-                            FracPos::CENTERED
+                            FracPos::CENTERED,
                         )
                     }
                 })
                 .merge_1_of_2(),
             LayeredNode::Value(val_ref, layer) => {
                 if *val_ref.get_origin().opref.get_annotation() == layer.above() {
-                    std::iter::once(
-                        (
-                            LayeredNode::Operation(val_ref.get_origin().opref),
-                            FracPos::from_pos_arity(val_ref.get_origin().position as usize, val_ref.get_origin().opref.get_return_arity())
-                        )
-                    )
+                    std::iter::once((
+                        LayeredNode::Operation(val_ref.get_origin().opref),
+                        FracPos::from_pos_arity(
+                            val_ref.get_origin().position as usize,
+                            val_ref.get_origin().opref.get_return_arity(),
+                        ),
+                    ))
                 } else {
-                    std::iter::once(
-                        (
-                            LayeredNode::Value(val_ref.clone(), layer.above()),
-                            FracPos::CENTERED
-                        )
-                    )
+                    std::iter::once((
+                        LayeredNode::Value(val_ref.clone(), layer.above()),
+                        FracPos::CENTERED,
+                    ))
                 }
                 .merge_2_of_2()
             }
@@ -101,12 +103,15 @@ impl<'ir, 'ann, D: Dialect> LayeredNode<'ir, 'ann, D> {
                     if *uze.opref.get_annotation() == op_ref.get_annotation().below() {
                         (
                             LayeredNode::Operation(uze.opref.clone()),
-                            FracPos::from_pos_arity(uze.position as usize, uze.opref.get_args_arity())
+                            FracPos::from_pos_arity(
+                                uze.position as usize,
+                                uze.opref.get_args_arity(),
+                            ),
                         )
                     } else {
                         (
                             LayeredNode::Value(ret, op_ref.get_annotation().below()),
-                            FracPos::CENTERED
+                            FracPos::CENTERED,
                         )
                     }
                 })
@@ -118,12 +123,15 @@ impl<'ir, 'ann, D: Dialect> LayeredNode<'ir, 'ann, D> {
                     if *uze.opref.get_annotation() == layer.below() {
                         (
                             LayeredNode::Operation(uze.opref.clone()),
-                            FracPos::from_pos_arity(uze.position as usize, uze.opref.get_args_arity())
+                            FracPos::from_pos_arity(
+                                uze.position as usize,
+                                uze.opref.get_args_arity(),
+                            ),
                         )
                     } else {
                         (
                             LayeredNode::Value(val_ref.clone(), layer.below()),
-                            FracPos::CENTERED
+                            FracPos::CENTERED,
                         )
                     }
                 })
@@ -167,7 +175,8 @@ type HStack<T> = Vec<T>;
 
 #[derive(Debug)]
 struct LayoutBuilder<'ir, 'ann, D: Dialect> {
-    // Layout is a vertical stack (top-to-bottom ordered) of horizontal stacks (left-to-right ordered) of nodes.
+    // Layout is a vertical stack (top-to-bottom ordered) of horizontal stacks (left-to-right
+    // ordered) of nodes.
     layout: VStack<HStack<LayeredNode<'ir, 'ann, D>>>,
     position_buffer: FastMap<LayeredNode<'ir, 'ann, D>, Position>,
 }
@@ -228,7 +237,9 @@ impl<'ir, 'ann, D: Dialect> LayoutBuilder<'ir, 'ann, D> {
             for node in self.layout[layer].iter() {
                 let maybe_median = node
                     .below()
-                    .map(|(n, frac)| self.position_buffer.get(&n).unwrap().unwrap_index() as f64 + frac.0)
+                    .map(|(n, frac)| {
+                        self.position_buffer.get(&n).unwrap().unwrap_index() as f64 + frac.0
+                    })
                     .median();
                 let Some(pos) = self.position_buffer.get_mut(node) else {
                     unreachable!()
@@ -263,7 +274,9 @@ impl<'ir, 'ann, D: Dialect> LayoutBuilder<'ir, 'ann, D> {
             for node in self.layout[layer].iter() {
                 let maybe_median = node
                     .above()
-                    .map(|(n, frac)| self.position_buffer.get(&n).unwrap().unwrap_index() as f64 + frac.0)
+                    .map(|(n, frac)| {
+                        self.position_buffer.get(&n).unwrap().unwrap_index() as f64 + frac.0
+                    })
                     .median();
                 let Some(pos) = self.position_buffer.get_mut(node) else {
                     unreachable!()
@@ -346,13 +359,13 @@ pub struct Layout {
 
 impl Layout {
     pub fn from_ir<D: Dialect>(ir: &IR<D>) -> Self {
-
         let ann_ir = analyze(ir);
         let builder = LayoutBuilder::from_analyzed_ir(&ann_ir);
         let vertices = builder.into_vertices();
         let mut links = Vec::new();
 
-        // Now we have to build the list of links. For that we use a worklist approach, and iterate through the layers.
+        // Now we have to build the list of links. For that we use a worklist approach, and iterate
+        // through the layers.
         #[derive(Debug)]
         struct FutureLink<'ir, D: Dialect> {
             value: ValRef<'ir, D>,
@@ -403,7 +416,8 @@ impl Layout {
                 }
             });
 
-            // STEP 2 -> The worklist contains only transient links in the layer. We give them their control point in the layer.
+            // STEP 2 -> The worklist contains only transient links in the layer. We give them their
+            // control point in the layer.
             work_list.iter_mut().for_each(|fut| {
                 fut.path.push(Coordinates {
                     layer: layer_i as u16,
@@ -412,7 +426,8 @@ impl Layout {
                 });
             });
 
-            // STEP 3 -> We append the worklist with future links for every operation returns in the layer.
+            // STEP 3 -> We append the worklist with future links for every operation returns in the
+            // layer.
             work_list.extend(op_map.into_iter().flat_map(|(opid, node_i)| {
                 ir.get_op(*opid)
                     .get_returns_iter()

@@ -226,7 +226,7 @@ impl<D: Dialect> Printer<D> {
             PrintWalker::Topo => {
                 store
                     .raw_walk_ops_topo()
-                    .filter(|opref|opref.is_active() || self.show_erased_ops )
+                    .filter(|opref| opref.is_active() || self.show_erased_ops)
                     .map(|opref| NewLined::Line(opref))
                     .separate_with(|| NewLined::NewLine)
                     .for_each(|a| match a {
@@ -276,15 +276,12 @@ impl<D: Dialect> Printer<D> {
         f: &mut std::fmt::Formatter<'_>,
         valref: &AnnValRef<'_, '_, D, OpAnn, ValAnn>,
     ) -> std::fmt::Result {
-
         let name = self.names.get(&valref.get_id()).unwrap();
         if valref.is_inactive() {
             write!(f, "%_{} -> {:?}", name.0, valref.get_annotation())
         } else {
             write!(f, "%{} -> {:?}", name.0, valref.get_annotation())
         }
-
-
     }
 
     /// Formats a complete annotated operation with its arguments, return values, and annotations.
@@ -293,7 +290,6 @@ impl<D: Dialect> Printer<D> {
         f: &mut std::fmt::Formatter<'_>,
         opref: &AnnOpRef<'_, '_, D, OpAnn, ValAnn>,
     ) -> std::fmt::Result {
-
         self.format_opref(f, opref)?;
 
         // Add operation annotation
@@ -324,14 +320,9 @@ impl<D: Dialect> Printer<D> {
         f: &mut std::fmt::Formatter<'_>,
         ann_ir: &AnnIR<D, OpAnn, ValAnn>,
     ) -> std::fmt::Result {
-
         match self.walker {
-            PrintWalker::Linear => {
-                ann_ir.walk_ops_linear().cosvec().into_iter()
-            }
-            PrintWalker::Topo => {
-                ann_ir.walk_ops_topological().cosvec().into_iter()
-            }
+            PrintWalker::Linear => ann_ir.walk_ops_linear().cosvec().into_iter(),
+            PrintWalker::Topo => ann_ir.walk_ops_topological().cosvec().into_iter(),
         }
         .map(|opref| NewLined::Line(opref))
         .separate_with(|| NewLined::NewLine)
@@ -345,6 +336,5 @@ impl<D: Dialect> Printer<D> {
         });
 
         Ok(())
-
     }
 }

@@ -3,5 +3,5 @@ use crate::{AnnOpRef, Annotation, Dialect};
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct AnnValUseRef<'s, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> {
     pub opref: AnnOpRef<'s, 'ann, D, OpAnn, ValAnn>,
-    pub position: u8
+    pub position: u8,
 }

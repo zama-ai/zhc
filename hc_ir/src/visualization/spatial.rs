@@ -37,7 +37,7 @@ use crate::{
 };
 use hc_utils::{graphics::*, iter::Separate, small::SmallVec};
 use hc_utils_macro::fsm;
-use std::{marker::PhantomData};
+use std::marker::PhantomData;
 
 use super::layout;
 use super::stylesheet::{Class, NoClass, StyleSheet};
@@ -518,7 +518,7 @@ pub fn layout_to_diagram<D: Dialect>(
                         let arg = match node {
                             D4::E2(op) => &op.e1.content[arg_i as usize],
                             D4::E3(eff) => &eff.e1.content[arg_i as usize],
-                            _ => unreachable!()
+                            _ => unreachable!(),
                         };
                         arg.get_frame().center()
                     }
@@ -528,7 +528,7 @@ pub fn layout_to_diagram<D: Dialect>(
                         let ret = match node {
                             D4::E1(inp) => &inp.e2.content[ret_i as usize],
                             D4::E2(op) => &op.e3.content[ret_i as usize],
-                            _ => unreachable!()
+                            _ => unreachable!(),
                         };
                         ret.get_frame().center()
                     }

@@ -1,6 +1,6 @@
 use std::fmt::Debug;
-use std::mem::MaybeUninit;
 use std::hash::{Hash, Hasher};
+use std::mem::MaybeUninit;
 
 pub struct VArray<A, const N: usize> {
     data: [MaybeUninit<A>; N],
@@ -148,7 +148,10 @@ impl<A, const N: usize> VArray<A, N> {
     /// consumed when the iterator is dropped.
     pub fn drain_all(&mut self) -> impl Iterator<Item = A> {
         let drained = VArray {
-            data: std::mem::replace(&mut self.data, std::array::from_fn(|_| MaybeUninit::uninit())),
+            data: std::mem::replace(
+                &mut self.data,
+                std::array::from_fn(|_| MaybeUninit::uninit()),
+            ),
             len: self.len,
         };
         self.len = 0;
@@ -250,13 +253,12 @@ impl<A: Debug, const N: usize> Debug for VArray<A, N> {
 }
 
 impl<A: PartialEq, const N: usize, const NN: usize> PartialEq<VArray<A, NN>> for VArray<A, N> {
-    fn eq(&self, other: &VArray<A,NN>) -> bool {
+    fn eq(&self, other: &VArray<A, NN>) -> bool {
         self.as_slice() == other.as_slice()
     }
 }
 
 impl<A: Eq, const N: usize> Eq for VArray<A, N> {}
-
 
 impl<A, const N: usize> std::iter::FromIterator<A> for VArray<A, N> {
     fn from_iter<I: IntoIterator<Item = A>>(iter: I) -> Self {

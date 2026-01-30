@@ -4,7 +4,9 @@ use std::{
     ops::Deref,
 };
 
-use crate::{AnnIR, AnnOpRef, AnnValOriginRef, AnnValUseRef, Annotation, Dialect, Printer, val_ref::ValRef};
+use crate::{
+    AnnIR, AnnOpRef, AnnValOriginRef, AnnValUseRef, Annotation, Dialect, Printer, val_ref::ValRef,
+};
 
 /// Value reference with attached annotation data.
 #[derive(Debug, Clone)]
@@ -79,7 +81,8 @@ impl<'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> Deref
     }
 }
 
-impl<'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> Display for AnnValRef<'ir, 'ann, D, OpAnn, ValAnn>
+impl<'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> Display
+    for AnnValRef<'ir, 'ann, D, OpAnn, ValAnn>
 where
     OpAnn: Debug + Clone,
     ValAnn: Debug + Clone,
@@ -103,9 +106,14 @@ impl<'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> PartialEq
     }
 }
 
-impl<'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> Eq for AnnValRef<'ir, 'ann, D, OpAnn, ValAnn> {}
+impl<'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> Eq
+    for AnnValRef<'ir, 'ann, D, OpAnn, ValAnn>
+{
+}
 
-impl<'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> Hash for AnnValRef<'ir, 'ann, D, OpAnn, ValAnn> {
+impl<'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> Hash
+    for AnnValRef<'ir, 'ann, D, OpAnn, ValAnn>
+{
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.valref.hash(state);
         self.ann.hash(state);

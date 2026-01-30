@@ -1,6 +1,9 @@
 use hc_ir::IR;
 use hc_langs::ioplang::Ioplang;
-use hc_utils::{iter::{CollectInSmallVec, MultiZip}, svec};
+use hc_utils::{
+    iter::{CollectInSmallVec, MultiZip},
+    svec,
+};
 
 use crate::builder::{BlockConfig, Builder, EncryptedInteger, Lut1Type};
 

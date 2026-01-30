@@ -1,11 +1,11 @@
-use std::path::Path;
 use crate::{Dialect, IR};
+use std::path::Path;
 
+mod analysis;
 mod layout;
 mod spatial;
-mod svg;
 mod stylesheet;
-mod analysis;
+mod svg;
 
 pub fn draw_ir<D: Dialect>(ir: &IR<D>, path: impl AsRef<Path>) {
     let stylesheet = stylesheet::StyleSheet::new();
@@ -16,11 +16,10 @@ pub fn draw_ir<D: Dialect>(ir: &IR<D>, path: impl AsRef<Path>) {
     std::fs::write(path, svg_content).expect("Failed to write SVG file");
 }
 
-
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{tests::gen_complex_ir};
+    use crate::tests::gen_complex_ir;
 
     #[test]
     fn test_visualization() {
