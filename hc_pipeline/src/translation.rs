@@ -474,6 +474,7 @@ impl Translator for IoplangToHpulang {
 mod test {
     use hc_ir::{IR, translation::Translator};
     use hc_langs::{hpulang::HpuLang, ioplang::IopLang};
+    use hc_utils::assert_display_is;
 
     use crate::test::{get_add_ir, get_cmp_ir};
 
@@ -486,8 +487,9 @@ mod test {
     #[test]
     fn test_translate_add_ir() {
         let ir = pipeline(&get_add_ir(16, 2, 2));
-        ir.check_ir(
-            "
+        assert_display_is!(
+            ir.format(),
+            r#"
             %0 : CtRegister = src_ld<0.0_tsrc>();
             %1 : CtRegister = src_ld<0.1_tsrc>();
             %2 : CtRegister = src_ld<0.2_tsrc>();
@@ -504,66 +506,67 @@ mod test {
             %13 : CtRegister = src_ld<1.5_tsrc>();
             %14 : CtRegister = src_ld<1.6_tsrc>();
             %15 : CtRegister = src_ld<1.7_tsrc>();
-            %16 : CtRegister = add_ct(%0, %8);
-            %17 : CtRegister = add_ct(%1, %9);
-            %18 : CtRegister = add_ct(%2, %10);
-            %19 : CtRegister = add_ct(%3, %11);
-            %20 : CtRegister = add_ct(%4, %12);
-            %21 : CtRegister = add_ct(%5, %13);
-            %22 : CtRegister = add_ct(%6, %14);
-            %23 : CtRegister = add_ct(%7, %15);
-            %24 : CtRegister, %25 : CtRegister = pbs_2<Lut@26>(%16);
-            %26 : CtRegister = pbs<Lut@47>(%17);
-            %27 : CtRegister = pbs<Lut@48>(%18);
-            %28 : CtRegister = pbs<Lut@49>(%19);
-            %29 : CtRegister = pbs<Lut@47>(%20);
-            %30 : CtRegister = pbs<Lut@48>(%21);
-            %31 : CtRegister = pbs<Lut@49>(%22);
-            %32 : CtRegister = pbs<Lut@50>(%23);
-            %33 : CtRegister = add_ct(%25, %26);
-            %34 : CtRegister = add_ct(%29, %30);
-            %35 : CtRegister = add_ct(%23, %24);
-            %36 : CtRegister = add_ct(%33, %27);
-            %37 : CtRegister = add_ct(%34, %31);
-            %38 : CtRegister = pbs<Lut@44>(%33);
-            dst_st<0.7_tdst>(%35);
-            %39 : CtRegister = add_ct(%36, %28);
-            %40 : CtRegister = add_ct(%37, %32);
-            %41 : CtRegister = pbs<Lut@45>(%36);
-            %42 : CtRegister = add_ct(%16, %38);
-            %43 : CtRegister = pbs<Lut@46>(%39);
-            %44 : CtRegister = pbs<Lut@21>(%40);
-            %45 : CtRegister = add_ct(%17, %41);
-            dst_st<0.0_tdst>(%42);
-            %46 : CtRegister = add_cst<1_imm>(%44);
-            %47 : CtRegister = add_ct(%29, %43);
-            %48 : CtRegister = add_ct(%34, %43);
-            %49 : CtRegister = add_ct(%37, %43);
-            %50 : CtRegister = add_ct(%18, %43);
-            dst_st<0.1_tdst>(%45);
-            %51 : CtRegister = mac<4_imm>(%46, %43);
-            %52 : CtRegister = pbs<Lut@44>(%47);
-            %53 : CtRegister = pbs<Lut@45>(%48);
-            %54 : CtRegister = pbs<Lut@46>(%49);
-            dst_st<0.2_tdst>(%50);
-            %55 : CtRegister = pbs<Lut@52>(%51);
-            %56 : CtRegister = add_ct(%19, %52);
-            %57 : CtRegister = add_ct(%20, %53);
-            %58 : CtRegister = add_ct(%21, %54);
-            %59 : CtRegister = add_ct(%22, %55);
-            dst_st<0.3_tdst>(%56);
-            dst_st<0.4_tdst>(%57);
-            dst_st<0.5_tdst>(%58);
-            dst_st<0.6_tdst>(%59);
-        ",
+            %16 : CtRegister = add_ct(%0 : CtRegister, %8 : CtRegister);
+            %17 : CtRegister = add_ct(%1 : CtRegister, %9 : CtRegister);
+            %18 : CtRegister = add_ct(%2 : CtRegister, %10 : CtRegister);
+            %19 : CtRegister = add_ct(%3 : CtRegister, %11 : CtRegister);
+            %20 : CtRegister = add_ct(%4 : CtRegister, %12 : CtRegister);
+            %21 : CtRegister = add_ct(%5 : CtRegister, %13 : CtRegister);
+            %22 : CtRegister = add_ct(%6 : CtRegister, %14 : CtRegister);
+            %23 : CtRegister = add_ct(%7 : CtRegister, %15 : CtRegister);
+            %24 : CtRegister, %25 : CtRegister = pbs_2<Lut@26>(%16 : CtRegister);
+            %26 : CtRegister = pbs<Lut@47>(%17 : CtRegister);
+            %27 : CtRegister = pbs<Lut@48>(%18 : CtRegister);
+            %28 : CtRegister = pbs<Lut@49>(%19 : CtRegister);
+            %29 : CtRegister = pbs<Lut@47>(%20 : CtRegister);
+            %30 : CtRegister = pbs<Lut@48>(%21 : CtRegister);
+            %31 : CtRegister = pbs<Lut@49>(%22 : CtRegister);
+            %32 : CtRegister = pbs<Lut@50>(%23 : CtRegister);
+            %33 : CtRegister = add_ct(%25 : CtRegister, %26 : CtRegister);
+            %34 : CtRegister = add_ct(%29 : CtRegister, %30 : CtRegister);
+            %35 : CtRegister = add_ct(%23 : CtRegister, %24 : CtRegister);
+            %36 : CtRegister = add_ct(%33 : CtRegister, %27 : CtRegister);
+            %37 : CtRegister = add_ct(%34 : CtRegister, %31 : CtRegister);
+            %38 : CtRegister = pbs<Lut@44>(%33 : CtRegister);
+            dst_st<0.7_tdst>(%35 : CtRegister);
+            %39 : CtRegister = add_ct(%36 : CtRegister, %28 : CtRegister);
+            %40 : CtRegister = add_ct(%37 : CtRegister, %32 : CtRegister);
+            %41 : CtRegister = pbs<Lut@45>(%36 : CtRegister);
+            %42 : CtRegister = add_ct(%16 : CtRegister, %38 : CtRegister);
+            %43 : CtRegister = pbs<Lut@46>(%39 : CtRegister);
+            %44 : CtRegister = pbs<Lut@21>(%40 : CtRegister);
+            %45 : CtRegister = add_ct(%17 : CtRegister, %41 : CtRegister);
+            dst_st<0.0_tdst>(%42 : CtRegister);
+            %46 : CtRegister = add_cst<1_imm>(%44 : CtRegister);
+            %47 : CtRegister = add_ct(%29 : CtRegister, %43 : CtRegister);
+            %48 : CtRegister = add_ct(%34 : CtRegister, %43 : CtRegister);
+            %49 : CtRegister = add_ct(%37 : CtRegister, %43 : CtRegister);
+            %50 : CtRegister = add_ct(%18 : CtRegister, %43 : CtRegister);
+            dst_st<0.1_tdst>(%45 : CtRegister);
+            %51 : CtRegister = mac<4_imm>(%46 : CtRegister, %43 : CtRegister);
+            %52 : CtRegister = pbs<Lut@44>(%47 : CtRegister);
+            %53 : CtRegister = pbs<Lut@45>(%48 : CtRegister);
+            %54 : CtRegister = pbs<Lut@46>(%49 : CtRegister);
+            dst_st<0.2_tdst>(%50 : CtRegister);
+            %55 : CtRegister = pbs<Lut@52>(%51 : CtRegister);
+            %56 : CtRegister = add_ct(%19 : CtRegister, %52 : CtRegister);
+            %57 : CtRegister = add_ct(%20 : CtRegister, %53 : CtRegister);
+            %58 : CtRegister = add_ct(%21 : CtRegister, %54 : CtRegister);
+            %59 : CtRegister = add_ct(%22 : CtRegister, %55 : CtRegister);
+            dst_st<0.3_tdst>(%56 : CtRegister);
+            dst_st<0.4_tdst>(%57 : CtRegister);
+            dst_st<0.5_tdst>(%58 : CtRegister);
+            dst_st<0.6_tdst>(%59 : CtRegister);
+        "#
         );
     }
 
     #[test]
     fn test_translate_cmp_ir() {
         let ir = pipeline(&get_cmp_ir(16, 2, 2));
-        ir.check_ir(
-            "
+        assert_display_is!(
+            ir.format(),
+            r#"
             %0 : CtRegister = src_ld<0.0_tsrc>();
             %1 : CtRegister = src_ld<0.1_tsrc>();
             %2 : CtRegister = src_ld<0.2_tsrc>();
@@ -580,42 +583,42 @@ mod test {
             %13 : CtRegister = src_ld<1.5_tsrc>();
             %14 : CtRegister = src_ld<1.6_tsrc>();
             %15 : CtRegister = src_ld<1.7_tsrc>();
-            %16 : CtRegister = mac<4_imm>(%1, %0);
-            %17 : CtRegister = mac<4_imm>(%3, %2);
-            %18 : CtRegister = mac<4_imm>(%5, %4);
-            %19 : CtRegister = mac<4_imm>(%7, %6);
-            %20 : CtRegister = mac<4_imm>(%9, %8);
-            %21 : CtRegister = mac<4_imm>(%11, %10);
-            %22 : CtRegister = mac<4_imm>(%13, %12);
-            %23 : CtRegister = mac<4_imm>(%15, %14);
-            %24 : CtRegister = pbs<Lut@0>(%16);
-            %25 : CtRegister = pbs<Lut@0>(%17);
-            %26 : CtRegister = pbs<Lut@0>(%18);
-            %27 : CtRegister = pbs<Lut@0>(%19);
-            %28 : CtRegister = pbs<Lut@0>(%20);
-            %29 : CtRegister = pbs<Lut@0>(%21);
-            %30 : CtRegister = pbs<Lut@0>(%22);
-            %31 : CtRegister = pbs<Lut@0>(%23);
-            %32 : CtRegister = sub_ct(%24, %28);
-            %33 : CtRegister = sub_ct(%25, %29);
-            %34 : CtRegister = sub_ct(%26, %30);
-            %35 : CtRegister = sub_ct(%27, %31);
-            %36 : CtRegister = pbs<Lut@10>(%32);
-            %37 : CtRegister = pbs<Lut@10>(%33);
-            %38 : CtRegister = pbs<Lut@10>(%34);
-            %39 : CtRegister = pbs<Lut@10>(%35);
-            %40 : CtRegister = add_cst<1_imm>(%36);
-            %41 : CtRegister = add_cst<1_imm>(%37);
-            %42 : CtRegister = add_cst<1_imm>(%38);
-            %43 : CtRegister = add_cst<1_imm>(%39);
-            %44 : CtRegister = mac<4_imm>(%41, %40);
-            %45 : CtRegister = mac<4_imm>(%43, %42);
-            %46 : CtRegister = pbs<Lut@11>(%44);
-            %47 : CtRegister = pbs<Lut@11>(%45);
-            %48 : CtRegister = mac<4_imm>(%47, %46);
-            %49 : CtRegister = pbs<Lut@27>(%48);
-            dst_st<0.0_tdst>(%49);
-        ",
+            %16 : CtRegister = mac<4_imm>(%1 : CtRegister, %0 : CtRegister);
+            %17 : CtRegister = mac<4_imm>(%3 : CtRegister, %2 : CtRegister);
+            %18 : CtRegister = mac<4_imm>(%5 : CtRegister, %4 : CtRegister);
+            %19 : CtRegister = mac<4_imm>(%7 : CtRegister, %6 : CtRegister);
+            %20 : CtRegister = mac<4_imm>(%9 : CtRegister, %8 : CtRegister);
+            %21 : CtRegister = mac<4_imm>(%11 : CtRegister, %10 : CtRegister);
+            %22 : CtRegister = mac<4_imm>(%13 : CtRegister, %12 : CtRegister);
+            %23 : CtRegister = mac<4_imm>(%15 : CtRegister, %14 : CtRegister);
+            %24 : CtRegister = pbs<Lut@0>(%16 : CtRegister);
+            %25 : CtRegister = pbs<Lut@0>(%17 : CtRegister);
+            %26 : CtRegister = pbs<Lut@0>(%18 : CtRegister);
+            %27 : CtRegister = pbs<Lut@0>(%19 : CtRegister);
+            %28 : CtRegister = pbs<Lut@0>(%20 : CtRegister);
+            %29 : CtRegister = pbs<Lut@0>(%21 : CtRegister);
+            %30 : CtRegister = pbs<Lut@0>(%22 : CtRegister);
+            %31 : CtRegister = pbs<Lut@0>(%23 : CtRegister);
+            %32 : CtRegister = sub_ct(%24 : CtRegister, %28 : CtRegister);
+            %33 : CtRegister = sub_ct(%25 : CtRegister, %29 : CtRegister);
+            %34 : CtRegister = sub_ct(%26 : CtRegister, %30 : CtRegister);
+            %35 : CtRegister = sub_ct(%27 : CtRegister, %31 : CtRegister);
+            %36 : CtRegister = pbs<Lut@10>(%32 : CtRegister);
+            %37 : CtRegister = pbs<Lut@10>(%33 : CtRegister);
+            %38 : CtRegister = pbs<Lut@10>(%34 : CtRegister);
+            %39 : CtRegister = pbs<Lut@10>(%35 : CtRegister);
+            %40 : CtRegister = add_cst<1_imm>(%36 : CtRegister);
+            %41 : CtRegister = add_cst<1_imm>(%37 : CtRegister);
+            %42 : CtRegister = add_cst<1_imm>(%38 : CtRegister);
+            %43 : CtRegister = add_cst<1_imm>(%39 : CtRegister);
+            %44 : CtRegister = mac<4_imm>(%41 : CtRegister, %40 : CtRegister);
+            %45 : CtRegister = mac<4_imm>(%43 : CtRegister, %42 : CtRegister);
+            %46 : CtRegister = pbs<Lut@11>(%44 : CtRegister);
+            %47 : CtRegister = pbs<Lut@11>(%45 : CtRegister);
+            %48 : CtRegister = mac<4_imm>(%47 : CtRegister, %46 : CtRegister);
+            %49 : CtRegister = pbs<Lut@27>(%48 : CtRegister);
+            dst_st<0.0_tdst>(%49 : CtRegister);
+        "#
         );
     }
 }

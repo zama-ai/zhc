@@ -1,19 +1,16 @@
 use crate::interpretation::{Interpretable, Interpretation, InterpretsTo, interpret_ir};
 use crate::val_ref::ValRef;
 use crate::visualization::draw_ir;
-use crate::{AnnIR, Annotation, PrintWalker, ValMap, ValOrigin, ValUse};
+use crate::{AnnIR, Annotation, IRFormatter, PrintWalker, ValMap, ValOrigin, ValUse};
 use hc_utils::iter::MultiZip;
 use hc_utils::svec;
 use hc_utils::{Store, small::SmallVec};
 use std::path::Path;
-use std::{
-    cmp::max,
-    fmt::{Debug, Display},
-};
+use std::{cmp::max, fmt::Debug};
 
 use super::{
-    Dialect, DialectInstructionSet, IRError, Op, OpId, OpIdRaw, OpMut, OpRef, Printer, Signature,
-    State, Val, ValId, ValIdRaw, ValMut, op_map::OpMap,
+    Dialect, DialectInstructionSet, IRError, Op, OpId, OpIdRaw, OpMut, OpRef, Signature, State,
+    Val, ValId, ValIdRaw, ValMut, op_map::OpMap,
 };
 
 pub type Depth = u16;
@@ -600,35 +597,8 @@ impl<D: Dialect> IR<D> {
     /// This is a debugging utility that displays the current IR state
     /// before terminating the program.
     pub fn dump(&self) {
-        println!("{}", self);
+        println!("{}", self.format());
         panic!();
-    }
-
-    /// Verifies that the IR matches the expected string representation.
-    ///
-    /// Uses topological ordering for comparison. Panics if the representations
-    /// don't match after normalizing whitespace.
-    pub fn check_ir(&self, expected: &str) {
-        self.check_ir_gen(PrintWalker::Topo, expected);
-    }
-
-    /// Verifies that the IR matches the expected string representation using linear ordering.
-    ///
-    /// Similar to `check_ir` but uses linear ordering instead of topological.
-    pub fn check_ir_linear(&self, expected: &str) {
-        self.check_ir_gen(PrintWalker::Linear, expected);
-    }
-
-    fn check_ir_gen(&self, walker: PrintWalker, expected: &str) {
-        let clean = |inp: &str| inp.replace(' ', "").replace('\n', "");
-        let repr = Printer::from_ir(self, walker, true, false).ir_to_string(self);
-        if clean(&repr) != clean(expected) {
-            println!(
-                "Failed to check ir.\nExpected:\n{}\nActual:\n{}",
-                expected, repr
-            );
-            panic!("Failed to check ir");
-        }
     }
 
     /// Draws the IR as an SVG at the path.
@@ -741,16 +711,8 @@ impl<D: Dialect> IR<D> {
         let interpreted = interpret_ir(self, &mut context);
         (interpreted, context)
     }
-}
 
-impl<D: Dialect> Display for IR<D> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if f.alternate() {
-            let printer = Printer::from_ir(self, crate::PrintWalker::Linear, true, false);
-            printer.format_ir(f, self)
-        } else {
-            let printer = Printer::from_ir(self, crate::PrintWalker::Topo, true, false);
-            printer.format_ir(f, self)
-        }
+    pub fn format(&self) -> IRFormatter<'_, D> {
+        IRFormatter::new(self)
     }
 }

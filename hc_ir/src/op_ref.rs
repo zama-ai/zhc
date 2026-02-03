@@ -1,8 +1,6 @@
-use std::{fmt::Display, hash::Hash, ops::Deref};
-
+use crate::OpRefFormatter;
 use hc_utils::FastSet;
-
-use crate::Printer;
+use std::{hash::Hash, ops::Deref};
 
 use super::{Depth, Dialect, IR, OpId, Signature, State, ValId, val_ref::ValRef};
 
@@ -12,44 +10,32 @@ use super::{Depth, Dialect, IR, OpId, Signature, State, ValId, val_ref::ValRef};
 /// traversal methods. The reference is tied to the lifetime of the IR it
 /// references and maintains cached pointers to operation data for efficient access.
 #[derive(Debug, Clone)]
-pub struct OpRef<'s, D: Dialect> {
+pub struct OpRef<'ir, D: Dialect> {
     pub(super) id: OpId,
-    pub(super) ir: &'s IR<D>,
-    pub(super) operation: &'s D::InstructionSet,
-    pub(super) signature: &'s Signature<D::TypeSystem>,
-    pub(super) args: &'s [ValId],
-    pub(super) returns: &'s [ValId],
-    pub(super) state: &'s State,
-    pub(super) depth: &'s Depth,
+    pub(super) ir: &'ir IR<D>,
+    pub(super) operation: &'ir D::InstructionSet,
+    pub(super) signature: &'ir Signature<D::TypeSystem>,
+    pub(super) args: &'ir [ValId],
+    pub(super) returns: &'ir [ValId],
+    pub(super) state: &'ir State,
+    pub(super) depth: &'ir Depth,
 }
 
-impl<'s, D: Dialect> Display for OpRef<'s, D> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if f.alternate() {
-            let printer = Printer::from_ir(self.ir, crate::PrintWalker::Linear, true, true);
-            printer.format_opref(f, self)
-        } else {
-            let printer = Printer::from_ir(self.ir, crate::PrintWalker::Topo, true, true);
-            printer.format_opref(f, self)
-        }
-    }
-}
-
-impl<'s, D: Dialect> Hash for OpRef<'s, D> {
+impl<'ir, D: Dialect> Hash for OpRef<'ir, D> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.id.hash(state)
     }
 }
 
-impl<'s, D: Dialect> PartialEq for OpRef<'s, D> {
+impl<'ir, D: Dialect> PartialEq for OpRef<'ir, D> {
     fn eq(&self, other: &Self) -> bool {
         std::ptr::eq(self.ir, other.ir) && self.id == other.id
     }
 }
 
-impl<'s, D: Dialect> Eq for OpRef<'s, D> {}
+impl<'ir, D: Dialect> Eq for OpRef<'ir, D> {}
 
-impl<'s, D: Dialect> Deref for OpRef<'s, D> {
+impl<'ir, D: Dialect> Deref for OpRef<'ir, D> {
     type Target = OpId;
 
     fn deref(&self) -> &Self::Target {
@@ -57,19 +43,21 @@ impl<'s, D: Dialect> Deref for OpRef<'s, D> {
     }
 }
 
-impl<'s, D: Dialect> OpRef<'s, D> {
+impl<'ir, D: Dialect> OpRef<'ir, D> {
     /// Returns an iterator over the operation's argument values without state checking.
-    pub(super) fn raw_get_args_iter(&self) -> impl Iterator<Item = ValRef<'s, D>> + use<'s, D> {
+    pub(super) fn raw_get_args_iter(&self) -> impl Iterator<Item = ValRef<'ir, D>> + use<'ir, D> {
         self.args.iter().map(|valid| self.ir.raw_get_val(*valid))
     }
 
     /// Returns an iterator over the operation's return values without state checking.
-    pub(super) fn raw_get_returns_iter(&self) -> impl Iterator<Item = ValRef<'s, D>> + use<'s, D> {
+    pub(super) fn raw_get_returns_iter(
+        &self,
+    ) -> impl Iterator<Item = ValRef<'ir, D>> + use<'ir, D> {
         self.returns.iter().map(|valid| self.ir.raw_get_val(*valid))
     }
 }
 
-impl<'s, D: Dialect> OpRef<'s, D> {
+impl<'ir, D: Dialect> OpRef<'ir, D> {
     /// Checks if the operation is active.
     pub fn is_active(&self) -> bool {
         self.state.is_active()
@@ -110,7 +98,7 @@ impl<'s, D: Dialect> OpRef<'s, D> {
     }
 
     /// Returns an iterator over the operation's argument values.
-    pub fn get_args_iter(&self) -> impl Iterator<Item = ValRef<'s, D>> + use<'s, D> {
+    pub fn get_args_iter(&self) -> impl Iterator<Item = ValRef<'ir, D>> + use<'ir, D> {
         self.args.iter().map(|valid| self.ir.get_val(*valid))
     }
 
@@ -125,7 +113,7 @@ impl<'s, D: Dialect> OpRef<'s, D> {
     }
 
     /// Returns an iterator over the operation's return values.
-    pub fn get_returns_iter(&self) -> impl Iterator<Item = ValRef<'s, D>> + use<'s, D> {
+    pub fn get_returns_iter(&self) -> impl Iterator<Item = ValRef<'ir, D>> + use<'ir, D> {
         self.returns.iter().map(|valid| self.ir.get_val(*valid))
     }
 
@@ -144,7 +132,7 @@ impl<'s, D: Dialect> OpRef<'s, D> {
     /// Users are deduplicated, meaning that if an operation uses multiple
     /// return values from this operation, it will appear only once in the
     /// iterator.
-    pub fn get_users_iter(&self) -> impl Iterator<Item = OpRef<'s, D>> + use<'s, D> {
+    pub fn get_users_iter(&self) -> impl Iterator<Item = OpRef<'ir, D>> + use<'ir, D> {
         let mut raw_users = self
             .get_returns_iter()
             .flat_map(|r| r.get_users_iter().map(|a| a.get_id()))
@@ -164,7 +152,7 @@ impl<'s, D: Dialect> OpRef<'s, D> {
     /// Predecessors are deduplicated, meaning that if a predecessor produces
     /// multiple return values used by this operation, it will appear only once
     /// in the iterator.
-    pub fn get_predecessors_iter(&self) -> impl Iterator<Item = OpRef<'s, D>> + use<'s, D> {
+    pub fn get_predecessors_iter(&self) -> impl Iterator<Item = OpRef<'ir, D>> + use<'ir, D> {
         let mut raw_predecessors = self
             .get_args_iter()
             .map(|r| r.get_origin().opref.get_id())
@@ -179,7 +167,7 @@ impl<'s, D: Dialect> OpRef<'s, D> {
     /// Performs a backward traversal through the operation graph, collecting all
     /// operations that directly or indirectly produce values used by this operation.
     /// Operations are deduplicated in the result set.
-    pub fn get_reaching_iter(&self) -> impl Iterator<Item = OpRef<'s, D>> + use<'s, D> {
+    pub fn get_reaching_iter(&self) -> impl Iterator<Item = OpRef<'ir, D>> + use<'ir, D> {
         let mut output = FastSet::new();
         let mut worklist = vec![self.clone()];
         while let Some(val) = worklist.pop() {
@@ -197,7 +185,7 @@ impl<'s, D: Dialect> OpRef<'s, D> {
     /// Combines the results of `get_reached_iter()` with the current operation to provide
     /// a complete set of all operations in the forward reachability cone starting from
     /// this operation.
-    pub fn get_inc_reaching_iter(&self) -> impl Iterator<Item = OpRef<'s, D>> + use<'s, D> {
+    pub fn get_inc_reaching_iter(&self) -> impl Iterator<Item = OpRef<'ir, D>> + use<'ir, D> {
         self.get_reaching_iter()
             .chain(std::iter::once(self.to_owned()))
     }
@@ -207,7 +195,7 @@ impl<'s, D: Dialect> OpRef<'s, D> {
     /// Performs a forward traversal through the operation graph, collecting all
     /// operations that directly or indirectly use values produced by this operation.
     /// Operations are deduplicated in the result set.
-    pub fn get_reached_iter(&self) -> impl Iterator<Item = OpRef<'s, D>> + use<'s, D> {
+    pub fn get_reached_iter(&self) -> impl Iterator<Item = OpRef<'ir, D>> + use<'ir, D> {
         let mut output = FastSet::new();
         let mut worklist = vec![self.clone()];
         while let Some(val) = worklist.pop() {
@@ -235,5 +223,9 @@ impl<'s, D: Dialect> OpRef<'s, D> {
         }
         self.get_users_iter()
             .any(|a| a.get_id() == other.get_id() || a.reaches(other))
+    }
+
+    pub fn format(&self) -> OpRefFormatter<'_, 'ir, D> {
+        OpRefFormatter::new(self)
     }
 }

@@ -46,8 +46,10 @@ enum LayeredNode<'ir, 'ann, D: Dialect> {
 impl<'ir, 'ann, D: Dialect> std::fmt::Debug for LayeredNode<'ir, 'ann, D> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LayeredNode::Operation(op_ref) => write!(f, "Op(\"{}\")", op_ref),
-            LayeredNode::Value(val_ref, layer) => write!(f, "Val(\"{}\", {:?})", val_ref, layer),
+            LayeredNode::Operation(op_ref) => write!(f, "Op(\"{}\")", op_ref.format()),
+            LayeredNode::Value(val_ref, layer) => {
+                write!(f, "Val(\"{}\", {:?})", val_ref.format(), layer)
+            }
         }
     }
 }
@@ -466,7 +468,6 @@ mod test {
     fn test() {
         let ir = gen_complex_ir().unwrap();
         let analyzed_ir = analyze(&ir);
-        // analyzed_ir.check_ir("");
         let _layout = Layout::from_ir(&analyzed_ir);
     }
 }

@@ -1,9 +1,9 @@
 use std::hash::Hash;
-use std::{fmt::Display, ops::Deref};
+use std::ops::Deref;
 
 use super::{Dialect, IR, State, ValId};
 use crate::val_use::ValUse;
-use crate::{OpRef, Printer, ValOrigin, ValOriginRef, ValUseRef};
+use crate::{OpRef, ValOrigin, ValOriginRef, ValRefFormatter, ValUseRef};
 use hc_utils::iter::Deduped;
 
 /// A reference to a value within an IR graph.
@@ -12,42 +12,30 @@ use hc_utils::iter::Deduped;
 /// relationships. The reference is tied to the lifetime of the IR it
 /// references and maintains cached pointers to value data for efficient access.
 #[derive(Debug, Clone)]
-pub struct ValRef<'s, D: Dialect> {
+pub struct ValRef<'ir, D: Dialect> {
     pub(super) id: ValId,
-    pub(super) ir: &'s IR<D>,
-    pub(super) users: &'s [ValUse],
-    pub(super) origin: &'s ValOrigin,
-    pub(super) typ: &'s D::TypeSystem,
-    pub(super) state: &'s State,
+    pub(super) ir: &'ir IR<D>,
+    pub(super) users: &'ir [ValUse],
+    pub(super) origin: &'ir ValOrigin,
+    pub(super) typ: &'ir D::TypeSystem,
+    pub(super) state: &'ir State,
 }
 
-impl<'s, D: Dialect> Display for ValRef<'s, D> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if f.alternate() {
-            let printer = Printer::from_ir(self.ir, crate::PrintWalker::Linear, true, true);
-            printer.format_arg(f, self)
-        } else {
-            let printer = Printer::from_ir(self.ir, crate::PrintWalker::Topo, true, true);
-            printer.format_arg(f, self)
-        }
-    }
-}
-
-impl<'s, D: Dialect> Hash for ValRef<'s, D> {
+impl<'ir, D: Dialect> Hash for ValRef<'ir, D> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.id.hash(state)
     }
 }
 
-impl<'s, D: Dialect> PartialEq for ValRef<'s, D> {
+impl<'ir, D: Dialect> PartialEq for ValRef<'ir, D> {
     fn eq(&self, other: &Self) -> bool {
         std::ptr::eq(self.ir, other.ir) && self.id == other.id
     }
 }
 
-impl<'s, D: Dialect> Eq for ValRef<'s, D> {}
+impl<'ir, D: Dialect> Eq for ValRef<'ir, D> {}
 
-impl<'s, D: Dialect> Deref for ValRef<'s, D> {
+impl<'ir, D: Dialect> Deref for ValRef<'ir, D> {
     type Target = ValId;
 
     fn deref(&self) -> &Self::Target {
@@ -56,15 +44,17 @@ impl<'s, D: Dialect> Deref for ValRef<'s, D> {
 }
 
 #[allow(unused)]
-impl<'s, D: Dialect> ValRef<'s, D> {
-    pub(super) fn raw_get_uses_iter(&self) -> impl Iterator<Item = ValUseRef<'s, D>> + use<'s, D> {
+impl<'ir, D: Dialect> ValRef<'ir, D> {
+    pub(super) fn raw_get_uses_iter(
+        &self,
+    ) -> impl Iterator<Item = ValUseRef<'ir, D>> + use<'ir, D> {
         self.users.iter().map(|uze| ValUseRef {
             opref: self.ir.raw_get_op(uze.opid),
             position: uze.position,
         })
     }
 
-    pub(super) fn raw_get_origin(&self) -> ValOriginRef<'s, D> {
+    pub(super) fn raw_get_origin(&self) -> ValOriginRef<'ir, D> {
         ValOriginRef {
             opref: self.ir.raw_get_op(self.origin.opid),
             position: self.origin.position,
@@ -72,7 +62,7 @@ impl<'s, D: Dialect> ValRef<'s, D> {
     }
 }
 
-impl<'s, D: Dialect> ValRef<'s, D> {
+impl<'ir, D: Dialect> ValRef<'ir, D> {
     /// Checks if the value is active.
     pub fn is_active(&self) -> bool {
         self.state.is_active()
@@ -94,13 +84,13 @@ impl<'s, D: Dialect> ValRef<'s, D> {
     }
 
     /// Returns a reference to the operation that produces this value.
-    pub fn get_origin(&self) -> ValOriginRef<'s, D> {
+    pub fn get_origin(&self) -> ValOriginRef<'ir, D> {
         let output = self.raw_get_origin();
         assert!(output.opref.is_active());
         output
     }
 
-    pub fn get_uses_iter(&self) -> impl Iterator<Item = ValUseRef<'s, D>> + use<'s, D> {
+    pub fn get_uses_iter(&self) -> impl Iterator<Item = ValUseRef<'ir, D>> + use<'ir, D> {
         self.raw_get_uses_iter().filter(|u| u.opref.is_active())
     }
 
@@ -108,7 +98,7 @@ impl<'s, D: Dialect> ValRef<'s, D> {
     ///
     /// Only active operations are included in the result, and operations are
     /// deduplicated even if they use this value multiple times.
-    pub fn get_users_iter(&self) -> impl Iterator<Item = OpRef<'s, D>> + use<'s, D> {
+    pub fn get_users_iter(&self) -> impl Iterator<Item = OpRef<'ir, D>> + use<'ir, D> {
         self.raw_get_uses_iter()
             .map(|uze| uze.opref)
             .filter(|u| u.is_active())
@@ -118,5 +108,9 @@ impl<'s, D: Dialect> ValRef<'s, D> {
     /// Returns `true` if any active operations use this value as an argument.
     pub fn has_users(&self) -> bool {
         self.get_users_iter().next().is_some()
+    }
+
+    pub fn format(&self) -> ValRefFormatter<'_, 'ir, D> {
+        ValRefFormatter::new(self)
     }
 }

@@ -150,7 +150,7 @@ pub fn eliminate_common_subexpressions<D: AllowCse>(ir: &mut IR<D>) {
 
 #[cfg(test)]
 mod test {
-    use hc_utils::svec;
+    use hc_utils::{assert_display_is, svec};
 
     use super::ValueNumber;
     use super::*;
@@ -188,7 +188,7 @@ mod test {
         let mut ir = IR::<TestDialect>::empty();
         eliminate_common_subexpressions(&mut ir);
         assert_eq!(ir.n_ops(), 0);
-        ir.check_ir("");
+        assert_display_is!(ir.format(), r#""#);
     }
 
     #[test]
@@ -199,13 +199,14 @@ mod test {
         let (inc2, inc2_vals) = ir.add_op(Operations::Inc, input_vals.clone())?;
         let (_ret, _ret_vals) = ir.add_op(Operations::Return, inc2_vals)?;
 
-        ir.check_ir(
-            "
+        assert_display_is!(
+            ir.format(),
+            r#"
             %0 : Int = int_input<pos: 0>();
-            %1 : Int = inc(%0);
-            %2 : Int = inc(%0);
-            return(%2);
-            ",
+            %1 : Int = inc(%0 : Int);
+            %2 : Int = inc(%0 : Int);
+            return(%2 : Int);
+        "#
         );
 
         eliminate_common_subexpressions(&mut ir);
@@ -214,12 +215,13 @@ mod test {
         assert!(ir.has_opid(inc1));
         assert!(!ir.has_opid(inc2));
         assert_eq!(ir.n_ops(), 3);
-        ir.check_ir(
-            "
+        assert_display_is!(
+            ir.format(),
+            r#"
             %0 : Int = int_input<pos: 0>();
-            %1 : Int = inc(%0);
-            return(%1);
-            ",
+            %1 : Int = inc(%0 : Int);
+            return(%1 : Int);
+        "#
         );
         Ok(())
     }
@@ -234,14 +236,15 @@ mod test {
         let (add2, a2_vals) = ir.add_op(Operations::Add, svec![v2[0], v1[0]])?;
         let (_ret, _ret_vals) = ir.add_op(Operations::Return, a2_vals)?;
 
-        ir.check_ir(
-            "
+        assert_display_is!(
+            ir.format(),
+            r#"
             %0 : Int = int_input<pos: 0>();
             %1 : Int = int_input<pos: 1>();
-            %2 : Int = add(%0, %1);
-            %3 : Int = add(%1, %0);
-            return(%3);
-            ",
+            %2 : Int = add(%0 : Int, %1 : Int);
+            %3 : Int = add(%1 : Int, %0 : Int);
+            return(%3 : Int);
+        "#
         );
 
         eliminate_common_subexpressions(&mut ir);
@@ -249,13 +252,14 @@ mod test {
         // With commutativity-aware normalization add2 should be replaced by add1.
         assert!(ir.has_opid(add1));
         assert!(!ir.has_opid(add2));
-        ir.check_ir(
-            "
+        assert_display_is!(
+            ir.format(),
+            r#"
             %0 : Int = int_input<pos: 0>();
             %1 : Int = int_input<pos: 1>();
-            %2 : Int = add(%0, %1);
-            return(%2);
-            ",
+            %2 : Int = add(%0 : Int, %1 : Int);
+            return(%2 : Int);
+        "#
         );
         Ok(())
     }
@@ -279,15 +283,16 @@ mod test {
         assert!(ir.has_opid(div1_op));
         assert!(ir.has_opid(div2_op));
 
-        ir.check_ir(
-            "
+        assert_display_is!(
+            ir.format(),
+            r#"
             %0 : Int = int_input<pos: 0>();
             %1 : Int = int_input<pos: 1>();
-            %2 : Int, %3 : Int = div_rem(%0, %1);
-            %4 : Int, %5 : Int = div_rem(%0, %1);
-            %6 : Int = add(%4, %3);
-            return(%6);
-            ",
+            %2 : Int, %3 : Int = div_rem(%0 : Int, %1 : Int);
+            %4 : Int, %5 : Int = div_rem(%0 : Int, %1 : Int);
+            %6 : Int = add(%4 : Int, %3 : Int);
+            return(%6 : Int);
+        "#
         );
 
         eliminate_common_subexpressions(&mut ir);
@@ -307,14 +312,15 @@ mod test {
         assert_eq!(args[0], div1_vals[0]);
         assert_eq!(args[1], div1_vals[1]);
 
-        ir.check_ir(
-            "
+        assert_display_is!(
+            ir.format(),
+            r#"
             %0 : Int = int_input<pos: 0>();
             %1 : Int = int_input<pos: 1>();
-            %2 : Int, %3 : Int = div_rem(%0, %1);
-            %6 : Int = add(%2, %3);
-            return(%6);
-            ",
+            %2 : Int, %3 : Int = div_rem(%0 : Int, %1 : Int);
+            %6 : Int = add(%2 : Int, %3 : Int);
+            return(%6 : Int);
+        "#
         );
 
         Ok(())

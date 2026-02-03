@@ -75,8 +75,9 @@ where
         {
             if !expected_type.is_inhabited_by(arg) {
                 panic!(
-                    "Unexpected argument type encountered while interpreting {opref}. \
+                    "Unexpected argument type encountered while interpreting {}. \
                      At position {i}, expected type {expected_type}, but encountered {}.",
+                    opref.format(),
                     D::TypeSystem::type_of(arg)
                 )
             }
@@ -92,8 +93,9 @@ where
         {
             if !expected_type.is_inhabited_by(ret) {
                 panic!(
-                    "Unexpected return type encountered while interpreting {opref}. \
+                    "Unexpected return type encountered while interpreting {}. \
                      At position {i}, expected type {expected_type}, but encountered {}.",
+                    opref.format(),
                     D::TypeSystem::type_of(ret)
                 )
             }

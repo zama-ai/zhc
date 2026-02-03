@@ -72,7 +72,7 @@ impl Builder {
 
     /// Dumps the ir.
     pub fn dump_panic(&self) {
-        println!("{:#}", self.ir.borrow());
+        println!("{:#}", self.ir.borrow().format());
         panic!()
     }
 
@@ -93,7 +93,7 @@ impl Builder {
         };
         let ir = self.ir.borrow();
         let (interpreted, _) = ir.interpret(context);
-        println!("{:#}", interpreted);
+        println!("{:#}", interpreted.format());
         panic!()
     }
 

@@ -1,10 +1,10 @@
 use std::{
-    fmt::{Debug, Display},
+    fmt::Debug,
     hash::{Hash, Hasher},
     ops::Deref,
 };
 
-use crate::{AnnIR, AnnValRef, Annotation, Dialect, OpRef, Printer};
+use crate::{AnnIR, AnnOpRefFormatter, AnnValRef, Annotation, Dialect, OpRef};
 
 /// Operation reference with attached annotation data.
 #[derive(Debug, Clone)]
@@ -112,6 +112,10 @@ impl<'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation>
             }
         })
     }
+
+    pub fn format(&self) -> AnnOpRefFormatter<'_, 'ir, 'ann, D, OpAnn, ValAnn> {
+        AnnOpRefFormatter::new(self)
+    }
 }
 
 impl<'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> Deref
@@ -121,32 +125,6 @@ impl<'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> Deref
 
     fn deref(&self) -> &Self::Target {
         &self.opref
-    }
-}
-
-impl<'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> Display
-    for AnnOpRef<'ir, 'ann, D, OpAnn, ValAnn>
-where
-    OpAnn: Debug + Clone,
-    ValAnn: Debug + Clone,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if f.alternate() {
-            let printer = Printer::from_ann_ir(
-                self.ann_ir,
-                crate::PrintWalker::Linear,
-                true,
-                true,
-                true,
-                true,
-                true,
-                true,
-            );
-            printer.format_ann_opref(f, self)
-        } else {
-            let printer = Printer::from_ir(self.ir, crate::PrintWalker::Topo, true, true);
-            printer.format_ann_opref(f, self)
-        }
     }
 }
 

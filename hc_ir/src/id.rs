@@ -1,4 +1,7 @@
-use std::ops::{Add, Sub};
+use std::{
+    fmt::Display,
+    ops::{Add, Sub},
+};
 
 use hc_utils::StoreIndex;
 
@@ -75,3 +78,24 @@ impl_index!(
     u16,
     "Identifier used in value numbering for optimization passes."
 );
+
+impl Display for ValId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if f.alternate() {
+            // Alternate is an inactive valid
+            write!(f, "%_{}", self.0)
+        } else {
+            write!(f, "%{}", self.0)
+        }
+    }
+}
+
+impl Display for OpId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(width) = f.width() {
+            write!(f, "@{:0width$}", self.0, width = width)
+        } else {
+            write!(f, "@{}", self.0)
+        }
+    }
+}
