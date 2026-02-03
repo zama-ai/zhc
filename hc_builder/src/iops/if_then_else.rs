@@ -41,7 +41,7 @@ mod test {
             %0 : CtInt = input<0, CtInt>();
             %1 : CtInt = input<1, CtInt>();
             %2 : CtInt = input<2, CtInt>();
-            %3 : CtInt = let_ct();
+            %3 : CtInt = zero_ct();
             %4 : CtBlock = extract_ct_block<0>(%0);
             %5 : CtBlock = extract_ct_block<1>(%0);
             %6 : CtBlock = extract_ct_block<2>(%0);

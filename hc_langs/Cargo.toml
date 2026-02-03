@@ -6,4 +6,5 @@ edition = "2024"
 [dependencies]
 hc_ir = { path = "../hc_ir" }
 hc_utils = { path = "../hc_utils" }
+hc_crypto = { path = "../hc_crypto" }
 serde = { workspace = true }

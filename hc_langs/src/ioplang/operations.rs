@@ -3,34 +3,32 @@ use std::{
     hash::Hash,
 };
 
+use hc_crypto::integer_semantics::PlaintextBlockStorage;
 use hc_ir::{DialectOperations, Signature, sig};
 
 use crate::ioplang::lut::{Lut1Def, Lut2Def, Lut4Def, Lut8Def};
 
 use super::types::Types;
 
-#[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
-pub enum Litteral {
-    PlaintextBlock(u8),
-}
-
-impl Display for Litteral {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Litteral::PlaintextBlock(i) => write!(f, "{}_pt_block", i),
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Operations {
-    Input { pos: usize, typ: Types },
-    Output { pos: usize, typ: Types },
-    LetCiphertext,
-    Constant { value: Litteral },
+    Input {
+        pos: usize,
+        typ: Types,
+    },
+    Output {
+        pos: usize,
+        typ: Types,
+    },
+    ZeroCiphertext,
+    LetPlaintextBlock {
+        value: PlaintextBlockStorage,
+    },
     AddCt,
     SubCt,
-    PackCt { mul: u8 },
+    PackCt {
+        mul: PlaintextBlockStorage
+    },
     AddPt,
     SubPt,
     PtSub,
@@ -49,9 +47,9 @@ impl Display for Operations {
         match self {
             Operations::Input { pos, typ } => write!(f, "input<{pos}, {typ}>"),
             Operations::Output { pos, typ } => write!(f, "output<{pos}, {typ}>"),
-            Operations::LetCiphertext => write!(f, "let_ct"),
-            Operations::Constant { value } => write!(f, "constant<{value}>"),
-            Operations::PackCt { mul } => write!(f, "pack_ct<{mul}>"),
+            Operations::ZeroCiphertext => write!(f, "zero_ct"),
+            Operations::LetPlaintextBlock { value } => write!(f, "let_pt_block<{value}>"),
+            Operations::PackCt{mul} => write!(f, "pack_ct<{mul}>"),
             Operations::AddCt => write!(f, "add_ct"),
             Operations::SubCt => write!(f, "sub_ct"),
             Operations::AddPt => write!(f, "add_pt"),
@@ -77,10 +75,8 @@ impl DialectOperations for Operations {
         match self {
             Operations::Input { typ, .. } => sig![() -> (typ.clone())],
             Operations::Output { typ, .. } => sig![(typ.clone()) -> ()],
-            Operations::LetCiphertext => sig![() -> (Ciphertext)],
-            Operations::Constant {
-                value: Litteral::PlaintextBlock(_),
-            } => sig![() -> (PlaintextBlock)],
+            Operations::ZeroCiphertext => sig![() -> (Ciphertext)],
+            Operations::LetPlaintextBlock { .. } => sig![() -> (PlaintextBlock)],
             Operations::AddCt => sig![(CiphertextBlock, CiphertextBlock) -> (CiphertextBlock)],
             Operations::SubCt => sig![(CiphertextBlock, CiphertextBlock) -> (CiphertextBlock)],
             Operations::PackCt { .. } => {
