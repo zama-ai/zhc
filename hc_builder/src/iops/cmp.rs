@@ -137,8 +137,8 @@ mod test {
             "
             %0 : CtInt = input<0, CtInt>();
             %1 : CtInt = input<1, CtInt>();
-            %2 : PtBlock = constant<1_pt_block>();
-            %6 : CtInt = let_ct();
+            %2 : PtBlock = let_pt_block<1>();
+            %6 : CtInt = zero_ct();
             %7 : CtBlock = extract_ct_block<0>(%0);
             %8 : CtBlock = extract_ct_block<1>(%0);
             %9 : CtBlock = extract_ct_block<2>(%0);

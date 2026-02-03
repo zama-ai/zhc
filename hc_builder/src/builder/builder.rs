@@ -1,15 +1,13 @@
 use std::cell::{Ref, RefCell};
 
-use hc_crypto::integer_semantics::CiphertextBlockSpec;
+use hc_crypto::integer_semantics::{CiphertextBlockSpec, PlaintextBlockStorage};
 use hc_ir::{IR, cse::eliminate_common_subexpressions, dce::eliminate_dead_code};
-use hc_langs::ioplang::{Ioplang, Litteral, Lut1Def, Lut2Def, Operations, Types};
-use hc_utils::{
-    iter::{Chunk, ChunkIt},
-    small::SmallVec,
-    svec,
-};
+use hc_langs::ioplang::{Ioplang, Lut1Def, Lut2Def, Operations, Types};
+use hc_utils::{iter::{Chunk, ChunkIt}, small::SmallVec, svec};
 
-use crate::builder::{Ciphertext, CiphertextBlock, Plaintext, PlaintextBlock};
+use crate::builder::{
+    CiphertextBlock, Ciphertext, PlaintextBlock, Plaintext
+};
 
 /// Builder for constructing homomorphic encryption circuits.
 pub struct Builder {
@@ -141,7 +139,10 @@ impl Builder {
         let (_, acc) = self
             .ir
             .borrow_mut()
-            .add_op(Operations::LetCiphertext, svec![])
+            .add_op(
+                Operations::ZeroCiphertext,
+                svec![],
+            )
             .unwrap();
         let mut acc = acc[0];
         for index in 0..TryInto::<u8>::try_into(ct.len()).unwrap() {
@@ -174,8 +175,8 @@ impl Builder {
             .ir
             .borrow_mut()
             .add_op(
-                Operations::Constant {
-                    value: Litteral::PlaintextBlock(constant),
+                Operations::LetPlaintextBlock {
+                    value: constant as PlaintextBlockStorage,
                 },
                 svec![],
             )
@@ -260,9 +261,7 @@ impl Builder {
             .ir
             .borrow_mut()
             .add_op(
-                Operations::PackCt {
-                    mul: 2u8.pow(self.spec().message_size() as u32),
-                },
+                Operations::PackCt{ mul: 2u8.pow(self.spec().message_size() as u32) as PlaintextBlockStorage},
                 svec![src_a.valid, src_b.valid],
             )
             .unwrap();

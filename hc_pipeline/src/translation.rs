@@ -10,7 +10,7 @@ use std::{collections::HashMap, sync::LazyLock};
 use hc_ir::{IR, OpId, ValId, translation::Translator};
 use hc_langs::{
     hpulang::{Hpulang, Immediate, LutId, TDstId, TImmId, TSrcId},
-    ioplang::{Ioplang, Litteral, Lut1Def, Lut2Def, Lut4Def, Lut8Def},
+    ioplang::{Ioplang, Lut1Def, Lut2Def, Lut4Def, Lut8Def},
 };
 use hc_utils::{FastMap, svec};
 
@@ -83,7 +83,6 @@ static GIDS1: LazyLock<FastMap<Lut1Def, LutId>> = LazyLock::new(|| {
 static GIDS2: LazyLock<FastMap<Lut2Def, LutId>> = LazyLock::new(|| {
     HashMap::from([
         (Lut2Def::ManyGenProp, LutId(18)),
-        (Lut2Def::TestMany2, LutId(128)),
         (Lut2Def::ManyCarryMsg, LutId(26)),
         (Lut2Def::ManyMsgSplitShift1, LutId(43)),
         (Lut2Def::ManyInv1CarryMsg, LutId(64)),
@@ -147,7 +146,12 @@ impl Translator for IoplangToHpulang {
                 // For the output, we search the let reaching this output.
                 let let_pred = oup_op
                     .get_inc_reaching_iter()
-                    .find(|pr| matches!(pr.get_operation(), IopOp::LetCiphertext))
+                    .find(|pr| {
+                        matches!(
+                            pr.get_operation(),
+                            IopOp::ZeroCiphertext
+                        )
+                    })
                     .expect("Failed to find the `let` predecessor of an `output` op.");
                 let IopOp::Output { pos, .. } = oup_op.get_operation() else {
                     unreachable!()
@@ -158,7 +162,7 @@ impl Translator for IoplangToHpulang {
 
         for op in input.walk_ops_topological() {
             match op.get_operation() {
-                IopOp::Input { .. } | IopOp::LetCiphertext | IopOp::Constant { .. } => {
+                IopOp::Input { .. } | IopOp::ZeroCiphertext | IopOp::LetPlaintextBlock { .. } => {
                     // Handled in consumers.
                 }
                 IopOp::Output { .. } => {
@@ -186,7 +190,7 @@ impl Translator for IoplangToHpulang {
                     let (_, valids) = output
                         .add_op(
                             HpuOp::Mac {
-                                cst: Immediate(mul),
+                                cst: Immediate(mul as u8),
                             },
                             svec![map[op.get_arg_valids()[0]], map[op.get_arg_valids()[1]]],
                         )
@@ -204,8 +208,8 @@ impl Translator for IoplangToHpulang {
                             .unwrap()
                     } else {
                         // The plaintext input is constant.
-                        let IopOp::Constant {
-                            value: Litteral::PlaintextBlock(cst),
+                        let IopOp::LetPlaintextBlock {
+                            value: cst,
                         } = op
                             .get_args_iter()
                             .nth(1)
@@ -219,7 +223,7 @@ impl Translator for IoplangToHpulang {
                         output
                             .add_op(
                                 HpuOp::AddCst {
-                                    cst: Immediate(cst),
+                                    cst: Immediate(cst as u8),
                                 },
                                 svec![map[op.get_arg_valids()[0]]],
                             )
@@ -238,8 +242,8 @@ impl Translator for IoplangToHpulang {
                             .unwrap()
                     } else {
                         // The plaintext input is constant.
-                        let IopOp::Constant {
-                            value: Litteral::PlaintextBlock(cst),
+                        let IopOp::LetPlaintextBlock {
+                            value: cst,
                         } = op
                             .get_args_iter()
                             .nth(1)
@@ -253,7 +257,7 @@ impl Translator for IoplangToHpulang {
                         output
                             .add_op(
                                 HpuOp::SubCst {
-                                    cst: Immediate(cst),
+                                    cst: Immediate(cst as u8),
                                 },
                                 svec![map[op.get_arg_valids()[0]]],
                             )
@@ -272,8 +276,8 @@ impl Translator for IoplangToHpulang {
                             .unwrap()
                     } else {
                         // The plaintext input is constant.
-                        let IopOp::Constant {
-                            value: Litteral::PlaintextBlock(cst),
+                        let IopOp::LetPlaintextBlock {
+                            value: cst,
                         } = op
                             .get_args_iter()
                             .nth(0)
@@ -287,7 +291,7 @@ impl Translator for IoplangToHpulang {
                         output
                             .add_op(
                                 HpuOp::CstSub {
-                                    cst: Immediate(cst),
+                                    cst: Immediate(cst as u8),
                                 },
                                 svec![map[op.get_arg_valids()[1]]],
                             )
@@ -306,8 +310,8 @@ impl Translator for IoplangToHpulang {
                             .unwrap()
                     } else {
                         // The plaintext input is constant.
-                        let IopOp::Constant {
-                            value: Litteral::PlaintextBlock(cst),
+                        let IopOp::LetPlaintextBlock {
+                            value: cst,
                         } = op
                             .get_args_iter()
                             .nth(1)
@@ -321,7 +325,7 @@ impl Translator for IoplangToHpulang {
                         output
                             .add_op(
                                 HpuOp::MulCst {
-                                    cst: Immediate(cst),
+                                    cst: Immediate(cst as u8),
                                 },
                                 svec![map[op.get_arg_valids()[0]]],
                             )
@@ -396,7 +400,7 @@ impl Translator for IoplangToHpulang {
                         .opref
                         .get_inc_reaching_iter()
                         .find_map(|op| match op.get_operation() {
-                            IopOp::LetCiphertext => let_map.get(&op.get_id()).cloned(),
+                            IopOp::ZeroCiphertext => let_map.get(&op.get_id()).cloned(),
                             _ => None,
                         })
                         .unwrap();
