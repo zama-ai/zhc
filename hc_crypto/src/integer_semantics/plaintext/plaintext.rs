@@ -1,6 +1,6 @@
-use std::fmt::Debug;
-use hc_utils::iter::Separate;
 use super::*;
+use hc_utils::iter::Separate;
+use std::fmt::Debug;
 
 use super::super::{PlaintextBlock, PlaintextBlockStorage};
 

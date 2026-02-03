@@ -13,7 +13,10 @@
 //! over an entire IR, producing an annotated IR with interpretation values
 //! attached to each SSA value.
 
-use hc_utils::{iter::{CollectInSmallVec, MultiZip}, small::SmallVec};
+use hc_utils::{
+    iter::{CollectInSmallVec, MultiZip},
+    small::SmallVec,
+};
 
 use crate::{AnnIR, Annotation, Dialect, DialectInstructionSet, DialectTypeSystem, IR, ValMap};
 
@@ -60,10 +63,15 @@ where
         let sig = opref.get_operation().get_signature();
 
         // Retrieve the arguments
-        let arguments = opref.get_arg_valids().iter().map(|valid| valmap.get(valid).unwrap().clone()).cosvec();
+        let arguments = opref
+            .get_arg_valids()
+            .iter()
+            .map(|valid| valmap.get(valid).unwrap().clone())
+            .cosvec();
 
         // Typecheck the arguments
-        for (i, (arg, expected_type)) in (arguments.iter(), sig.get_args().iter()).mzip().enumerate()
+        for (i, (arg, expected_type)) in
+            (arguments.iter(), sig.get_args().iter()).mzip().enumerate()
         {
             if !expected_type.is_inhabited_by(arg) {
                 panic!(
@@ -78,7 +86,10 @@ where
         let returns = opref.get_operation().interpret(context, arguments);
 
         // Typechecks the returns
-        for (i, (ret, expected_type)) in (returns.iter(), sig.get_returns().iter()).mzip().enumerate() {
+        for (i, (ret, expected_type)) in (returns.iter(), sig.get_returns().iter())
+            .mzip()
+            .enumerate()
+        {
             if !expected_type.is_inhabited_by(ret) {
                 panic!(
                     "Unexpected return type encountered while interpreting {opref}. \

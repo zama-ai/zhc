@@ -6,7 +6,10 @@ use hc_langs::ioplang::{
     IopInstructionSet, IopInterepreterContext, IopLang, IopTypeSystem, IopValue, Lut1Def, Lut2Def,
 };
 use hc_utils::{
-    FastMap, iter::{Chunk, ChunkIt}, small::SmallVec, svec
+    FastMap,
+    iter::{Chunk, ChunkIt},
+    small::SmallVec,
+    svec,
 };
 
 use crate::builder::{Ciphertext, CiphertextBlock, Plaintext, PlaintextBlock};
