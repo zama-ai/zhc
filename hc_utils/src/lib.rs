@@ -4,22 +4,21 @@
 //! compiler workloads, including stack-allocated containers for small data,
 //! type-safe indices, and iterator extensions.
 
-
-pub mod tracing;
+pub mod graphics;
 pub mod iter;
 pub mod small;
-pub mod graphics;
+pub mod tracing;
 
+mod change_guard;
 mod erasable;
 mod fast_hash;
 mod fifo;
 mod store;
-mod change_guard;
 mod type_name;
 
+pub use change_guard::*;
 pub use erasable::*;
 pub use fast_hash::*;
 pub use fifo::*;
 pub use store::*;
 pub use type_name::*;
-pub use change_guard::*;

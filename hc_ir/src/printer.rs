@@ -94,7 +94,7 @@ impl<D: Dialect> Printer<D> {
         show_op_ann: bool,
         show_op_ann_alternate: bool,
         show_val_ann: bool,
-        show_val_ann_alternate: bool
+        show_val_ann_alternate: bool,
     ) -> Printer<D> {
         let names = match walker {
             PrintWalker::Linear => ann_ir
@@ -316,7 +316,7 @@ impl<D: Dialect> Printer<D> {
                 writeln!(f)?;
                 let name = self.names.get(&ret.get_id()).unwrap();
                 if ret.is_inactive() {
-                    if self.show_val_ann_alternate{
+                    if self.show_val_ann_alternate {
                         write!(f, "    %_{} -> {:#?}", name.0, ret.get_annotation())?;
                     } else {
                         write!(f, "    %_{} -> {:?}", name.0, ret.get_annotation())?;
