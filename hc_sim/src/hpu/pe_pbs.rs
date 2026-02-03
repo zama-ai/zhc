@@ -210,7 +210,7 @@ impl PePbsMemory {
 
     pub fn mutate_to_flush(&mut self, dopid: DOpId) {
         let op = self.memory.iter_mut().find(|a| a.id == dopid).unwrap();
-        use hc_langs::doplang::Operations::*;
+        use hc_langs::doplang::DopInstructionSet::*;
         let new_op = match op.raw.clone() {
             PBS { dst, src, lut } | PBS_F { dst, src, lut } => PBS_F { dst, src, lut },
             PBS_ML2 { dst, src, lut } | PBS_ML2_F { dst, src, lut } => PBS_ML2_F { dst, src, lut },

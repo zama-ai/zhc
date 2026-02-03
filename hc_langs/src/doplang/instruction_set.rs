@@ -1,7 +1,7 @@
 use crate::hpulang::LutId;
 
-use super::types::Types;
-use hc_ir::{DialectOperations, Signature, sig};
+use super::type_system::DopTypeSystem;
+use hc_ir::{DialectInstructionSet, Signature, sig};
 use serde::Serialize;
 use std::fmt::{Debug, Display};
 
@@ -175,7 +175,7 @@ impl Display for Affinity {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[allow(non_camel_case_types)]
-pub enum Operations {
+pub enum DopInstructionSet {
     ADD {
         dst: Argument,
         src1: Argument,
@@ -264,9 +264,9 @@ pub enum Operations {
     SYNC,
 }
 
-impl Display for Operations {
+impl Display for DopInstructionSet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        use Operations::*;
+        use DopInstructionSet::*;
         match self {
             ADD { dst, src1, src2 } => write!(f, "ADD<{}, {}, {}>", dst, src1, src2),
             SUB { dst, src1, src2 } => write!(f, "SUB<{}, {}, {}>", dst, src1, src2),
@@ -296,9 +296,9 @@ impl Display for Operations {
     }
 }
 
-impl Operations {
+impl DopInstructionSet {
     pub fn is_pbs_flush(&self) -> bool {
-        use Operations::*;
+        use DopInstructionSet::*;
         match self {
             PBS_F { .. } | PBS_ML2_F { .. } | PBS_ML4_F { .. } | PBS_ML8_F { .. } => true,
             _ => false,
@@ -307,7 +307,7 @@ impl Operations {
 
     pub fn affinity(&self) -> Affinity {
         use Affinity::*;
-        use Operations::*;
+        use DopInstructionSet::*;
         match self {
             ADD { .. } => Alu,
             SUB { .. } => Alu,
@@ -332,7 +332,7 @@ impl Operations {
     }
 
     pub fn has_source(&self, arg: &Argument) -> bool {
-        use Operations::*;
+        use DopInstructionSet::*;
         match self {
             ADD { src1, src2, .. } => arg == src1 || arg == src2,
             SUB { src1, src2, .. } => arg == src1 || arg == src2,
@@ -357,7 +357,7 @@ impl Operations {
     }
 
     pub fn get_dst(&self) -> Option<&Argument> {
-        use Operations::*;
+        use DopInstructionSet::*;
         match self {
             ADD { dst, .. } => Some(dst),
             SUB { dst, .. } => Some(dst),
@@ -382,7 +382,7 @@ impl Operations {
     }
 
     pub fn get_src1(&self) -> Option<&Argument> {
-        use Operations::*;
+        use DopInstructionSet::*;
         match self {
             ADD { src1, .. } => Some(src1),
             SUB { src1, .. } => Some(src1),
@@ -407,7 +407,7 @@ impl Operations {
     }
 
     pub fn get_src2(&self) -> Option<&Argument> {
-        use Operations::*;
+        use DopInstructionSet::*;
         match self {
             ADD { src2, .. } => Some(src2),
             SUB { src2, .. } => Some(src2),
@@ -432,12 +432,12 @@ impl Operations {
     }
 }
 
-impl DialectOperations for Operations {
-    type Types = Types;
+impl DialectInstructionSet for DopInstructionSet {
+    type TypeSystem = DopTypeSystem;
 
-    fn get_signature(&self) -> Signature<Self::Types> {
-        use Operations::*;
-        use Types::*;
+    fn get_signature(&self) -> Signature<Self::TypeSystem> {
+        use DopInstructionSet::*;
+        use DopTypeSystem::*;
         match self {
             ADD { .. }
             | SUB { .. }

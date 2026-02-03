@@ -3,9 +3,9 @@ use hc_builder::{
     iops::{add::add, cmp::cmp_gt},
 };
 use hc_ir::{IR, cse::eliminate_common_subexpressions, dce::eliminate_dead_code};
-use hc_langs::ioplang::Ioplang;
+use hc_langs::ioplang::IopLang;
 
-pub fn get_add_ir(integer_w: i64, msg_w: i64, carry_w: i64) -> IR<Ioplang> {
+pub fn get_add_ir(integer_w: i64, msg_w: i64, carry_w: i64) -> IR<IopLang> {
     let mut ir = add(CiphertextSpec::new(
         integer_w as u16,
         msg_w as u8,
@@ -16,7 +16,7 @@ pub fn get_add_ir(integer_w: i64, msg_w: i64, carry_w: i64) -> IR<Ioplang> {
     ir
 }
 
-pub fn get_cmp_ir(integer_w: i64, msg_w: i64, carry_w: i64) -> IR<Ioplang> {
+pub fn get_cmp_ir(integer_w: i64, msg_w: i64, carry_w: i64) -> IR<IopLang> {
     let mut ir = cmp_gt(CiphertextSpec::new(
         integer_w as u16,
         msg_w as u8,

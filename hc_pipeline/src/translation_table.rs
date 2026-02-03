@@ -7,7 +7,7 @@
 
 use bitfield_struct::bitfield;
 use hc_ir::IR;
-use hc_langs::doplang::Doplang;
+use hc_langs::doplang::DopLang;
 
 /// Binary representation of a device operation instruction.
 pub type DOpRepr = u32;
@@ -129,12 +129,12 @@ pub struct PeSyncHex {
 /// Converts the intermediate representation `ir` containing device operations
 /// into a vector of binary instruction representations suitable for execution
 /// on the target hardware.
-pub fn generate_translation_table(ir: &IR<Doplang>) -> Vec<DOpRepr> {
+pub fn generate_translation_table(ir: &IR<DopLang>) -> Vec<DOpRepr> {
     let mut output = Vec::with_capacity(ir.n_ops() as usize);
     output.push(0); // reserve room for the length of the stream at the beginning of the stream.
     for op in ir.walk_ops_topological() {
         use hc_langs::doplang::Argument::*;
-        use hc_langs::doplang::Operations::*;
+        use hc_langs::doplang::DopInstructionSet::*;
         match op.get_operation() {
             ADD {
                 dst: CtReg { addr: dst, .. },
@@ -512,7 +512,7 @@ pub fn generate_translation_table(ir: &IR<Doplang>) -> Vec<DOpRepr> {
 mod test {
 
     use hc_ir::{IR, translation::Translator};
-    use hc_langs::ioplang::Ioplang;
+    use hc_langs::ioplang::IopLang;
     use hc_sim::hpu::{HpuConfig, PhysicalConfig};
 
     use crate::{
@@ -525,7 +525,7 @@ mod test {
 
     use super::generate_translation_table;
 
-    fn pipeline(ir: &IR<Ioplang>) -> Vec<u32> {
+    fn pipeline(ir: &IR<IopLang>) -> Vec<u32> {
         let ir = IoplangToHpulang.translate(&ir);
         let config = HpuConfig::from(PhysicalConfig::gaussian_64b_fast());
         let scheduled = schedule(&ir, &config);

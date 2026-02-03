@@ -53,16 +53,16 @@ pub enum IRError<D: Dialect> {
     /// Operation signature mismatch between expected and received argument types.
     OpSig {
         /// The operation that caused the signature error.
-        op: D::Operations,
+        op: D::InstructionSet,
         /// The types that were actually received as arguments.
-        recv: Vec<D::Types>,
+        recv: Vec<D::TypeSystem>,
         /// The types that were expected as arguments.
-        exp: Vec<D::Types>,
+        exp: Vec<D::TypeSystem>,
     },
     /// Value cannot be represented with the specified type.
     Range {
         /// The type that cannot represent the value.
-        typ: D::Types,
+        typ: D::TypeSystem,
     },
 }
 

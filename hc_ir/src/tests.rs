@@ -2,7 +2,7 @@
 pub mod test_dialect {
     use std::fmt::Display;
 
-    use crate::{Dialect, DialectOperations, DialectTypes, signature::Signature};
+    use crate::{Dialect, DialectInstructionSet, DialectTypeSystem, signature::Signature};
 
     use hc_utils::svec;
 
@@ -19,7 +19,7 @@ pub mod test_dialect {
             }
         }
     }
-    impl DialectTypes for Types {}
+    impl DialectTypeSystem for Types {}
 
     #[derive(Debug, Clone, Hash, PartialEq, Eq)]
     pub enum Operations {
@@ -46,10 +46,10 @@ pub mod test_dialect {
         }
     }
 
-    impl DialectOperations for Operations {
-        type Types = Types;
+    impl DialectInstructionSet for Operations {
+        type TypeSystem = Types;
 
-        fn get_signature(&self) -> crate::signature::Signature<Self::Types> {
+        fn get_signature(&self) -> crate::signature::Signature<Self::TypeSystem> {
             use Types::*;
             match self {
                 Operations::IntInput { .. } => Signature(svec![], svec![Int]),
@@ -67,12 +67,12 @@ pub mod test_dialect {
     pub struct TestDialect;
 
     impl Dialect for TestDialect {
-        type Types = Types;
-        type Operations = Operations;
+        type TypeSystem = Types;
+        type InstructionSet = Operations;
     }
 }
 
-use crate::{DialectOperations, IR, IRError};
+use crate::{DialectInstructionSet, IR, IRError};
 use hc_utils::{iter::CollectInVec, svec};
 
 use test_dialect::{Operations, TestDialect};

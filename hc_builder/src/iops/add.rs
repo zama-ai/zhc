@@ -2,14 +2,14 @@ use std::cmp::max;
 
 use hc_crypto::integer_semantics::CiphertextSpec;
 use hc_ir::IR;
-use hc_langs::ioplang::{Ioplang, Lut1Def, Lut2Def};
+use hc_langs::ioplang::{IopLang, Lut1Def, Lut2Def};
 use hc_utils::iter::{
     ChunkIt, CollectInSmallVec, Intermediate, IterMapFirst, MultiZip, Slide, filter_out_postludes,
 };
 
 use crate::builder::{Builder, Ciphertext, ExtensionBehavior};
 
-pub fn add(spec: CiphertextSpec) -> IR<Ioplang> {
+pub fn add(spec: CiphertextSpec) -> IR<IopLang> {
     // Add 2 integers, using the Hillis Steel method.
     // Outputs a list containing the resulting blocks.
     // clean_ct : option to clean the ct at the output.

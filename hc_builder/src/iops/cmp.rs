@@ -1,6 +1,6 @@
 use hc_crypto::integer_semantics::CiphertextSpec;
 use hc_ir::IR;
-use hc_langs::ioplang::{Ioplang, Lut1Def};
+use hc_langs::ioplang::{IopLang, Lut1Def};
 use hc_utils::{
     iter::{CollectInSmallVec, MultiZip},
     svec,
@@ -9,32 +9,32 @@ use hc_utils::{
 use crate::builder::{Builder, Ciphertext};
 
 /// Creates an IR for greater-than comparison between two encrypted integers.
-pub fn cmp_gt(spec: CiphertextSpec) -> IR<Ioplang> {
+pub fn cmp_gt(spec: CiphertextSpec) -> IR<IopLang> {
     cmp(spec, Kind::Gt)
 }
 
 /// Creates an IR for greater-than-or-equal comparison between two encrypted integers.
-pub fn cmp_gte(spec: CiphertextSpec) -> IR<Ioplang> {
+pub fn cmp_gte(spec: CiphertextSpec) -> IR<IopLang> {
     cmp(spec, Kind::Gte)
 }
 
 /// Creates an IR for less-than comparison between two encrypted integers.
-pub fn cmp_lt(spec: CiphertextSpec) -> IR<Ioplang> {
+pub fn cmp_lt(spec: CiphertextSpec) -> IR<IopLang> {
     cmp(spec, Kind::Lt)
 }
 
 /// Creates an IR for less-than-or-equal comparison between two encrypted integers.
-pub fn cmp_lte(spec: CiphertextSpec) -> IR<Ioplang> {
+pub fn cmp_lte(spec: CiphertextSpec) -> IR<IopLang> {
     cmp(spec, Kind::Lte)
 }
 
 /// Creates an IR for equality comparison between two encrypted integers.
-pub fn cmp_eq(spec: CiphertextSpec) -> IR<Ioplang> {
+pub fn cmp_eq(spec: CiphertextSpec) -> IR<IopLang> {
     cmp(spec, Kind::Eq)
 }
 
 /// Creates an IR for inequality comparison between two encrypted integers.
-pub fn cmp_neq(spec: CiphertextSpec) -> IR<Ioplang> {
+pub fn cmp_neq(spec: CiphertextSpec) -> IR<IopLang> {
     cmp(spec, Kind::Neq)
 }
 
@@ -71,7 +71,7 @@ impl Kind {
     }
 }
 
-fn cmp(spec: CiphertextSpec, kind: Kind) -> IR<Ioplang> {
+fn cmp(spec: CiphertextSpec, kind: Kind) -> IR<IopLang> {
     let builder = Builder::new(spec.block_spec());
 
     // get input as array of blk
