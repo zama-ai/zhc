@@ -175,12 +175,19 @@ impl Lut2Def {
             Lut2Def::ManyInv6CarryMsg => (ManyInv6CarryMsg_0, ManyInv6CarryMsg_1),
             Lut2Def::ManyInv7CarryMsg => (ManyInv7CarryMsg_0, ManyInv7CarryMsg_1),
             Lut2Def::ManyMsgSplit => (ManyMsgSplit_0, ManyMsgSplit_1),
-            Lut2Def::Manym2lPropBit1MsgSplit => (Manym2lPropBit1MsgSplit_0, Manym2lPropBit1MsgSplit_1),
-            Lut2Def::Manym2lPropBit0MsgSplit => (Manym2lPropBit0MsgSplit_0, Manym2lPropBit0MsgSplit_1),
-            Lut2Def::Manyl2mPropBit1MsgSplit => (Manyl2mPropBit1MsgSplit_0, Manyl2mPropBit1MsgSplit_1),
-            Lut2Def::Manyl2mPropBit0MsgSplit => (Manyl2mPropBit0MsgSplit_0, Manyl2mPropBit0MsgSplit_1),
+            Lut2Def::Manym2lPropBit1MsgSplit => {
+                (Manym2lPropBit1MsgSplit_0, Manym2lPropBit1MsgSplit_1)
+            }
+            Lut2Def::Manym2lPropBit0MsgSplit => {
+                (Manym2lPropBit0MsgSplit_0, Manym2lPropBit0MsgSplit_1)
+            }
+            Lut2Def::Manyl2mPropBit1MsgSplit => {
+                (Manyl2mPropBit1MsgSplit_0, Manyl2mPropBit1MsgSplit_1)
+            }
+            Lut2Def::Manyl2mPropBit0MsgSplit => {
+                (Manyl2mPropBit0MsgSplit_0, Manyl2mPropBit0MsgSplit_1)
+            }
         }
-
     }
 }
 
@@ -217,7 +224,6 @@ impl Lut8Def {
         fn(CiphertextBlock) -> CiphertextBlock,
         fn(CiphertextBlock) -> CiphertextBlock,
         fn(CiphertextBlock) -> CiphertextBlock,
-
     ) {
         unreachable!()
     }

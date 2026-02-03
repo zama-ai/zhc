@@ -11,7 +11,7 @@ use std::{
 };
 
 use super::{
-    Dialect, DialectOperations, IRError, Op, OpId, OpIdRaw, OpMut, OpRef, Printer, Signature,
+    Dialect, DialectInstructionSet, IRError, Op, OpId, OpIdRaw, OpMut, OpRef, Printer, Signature,
     State, Val, ValId, ValIdRaw, ValMut, op_map::OpMap,
 };
 
@@ -33,8 +33,8 @@ fn op_active<'a, D: Dialect>(op: &OpRef<'a, D>) -> bool {
 /// and maintains structural integrity through automatic bookkeeping.
 #[derive(Clone)]
 pub struct IR<D: Dialect> {
-    pub(super) op_operations: Store<OpId, D::Operations>,
-    pub(super) op_signatures: Store<OpId, Signature<D::Types>>,
+    pub(super) op_operations: Store<OpId, D::InstructionSet>,
+    pub(super) op_signatures: Store<OpId, Signature<D::TypeSystem>>,
     pub(super) op_arguments: Store<OpId, SmallVec<ValId>>,
     pub(super) op_returns: Store<OpId, SmallVec<ValId>>,
     pub(super) op_states: Store<OpId, State>,
@@ -42,7 +42,7 @@ pub struct IR<D: Dialect> {
     pub(super) op_count: OpIdRaw,
     pub(super) val_users: Store<ValId, SmallVec<ValUse>>,
     pub(super) val_origins: Store<ValId, ValOrigin>,
-    pub(super) val_types: Store<ValId, D::Types>,
+    pub(super) val_types: Store<ValId, D::TypeSystem>,
     pub(super) val_states: Store<ValId, State>,
     pub(super) val_count: ValIdRaw,
 }
@@ -366,7 +366,7 @@ impl<D: Dialect> IR<D> {
     }
 
     /// Applies a mutation function to all active operations in linear order.
-    pub fn mutate_ops(&mut self, f: impl FnMut(&mut D::Operations)) {
+    pub fn mutate_ops(&mut self, f: impl FnMut(&mut D::InstructionSet)) {
         self.mutate_ops_with_walker(
             self.raw_linear_opwalker()
                 .collect::<SmallVec<_>>()
@@ -381,7 +381,7 @@ impl<D: Dialect> IR<D> {
     pub fn mutate_ops_with_walker(
         &mut self,
         walker: impl Iterator<Item = OpId>,
-        mut f: impl FnMut(&mut D::Operations),
+        mut f: impl FnMut(&mut D::InstructionSet),
     ) {
         walker.for_each(|opid| {
             let opmut = self.raw_get_op_mut(opid);
@@ -403,7 +403,7 @@ impl<D: Dialect> IR<D> {
     /// computation overflows.
     pub fn add_op(
         &mut self,
-        op: D::Operations,
+        op: D::InstructionSet,
         args: SmallVec<ValId>,
     ) -> Result<(OpId, SmallVec<ValId>), IRError<D>> {
         // Check that the args are live.

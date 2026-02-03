@@ -2,7 +2,7 @@ use serde::Serialize;
 use std::fmt::Display;
 
 /// Raw operation type from the DOp language specification.
-pub type RawDOp = hc_langs::doplang::Operations;
+pub type RawDOp = hc_langs::doplang::DopInstructionSet;
 
 /// Unique identifier for a DOp operation within the simulation.
 #[derive(Debug, Clone, PartialEq, Eq, Copy, Hash, serde::Deserialize)]

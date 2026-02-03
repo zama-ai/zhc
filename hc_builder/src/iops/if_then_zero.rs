@@ -1,11 +1,11 @@
 use hc_crypto::integer_semantics::CiphertextSpec;
 use hc_ir::IR;
-use hc_langs::ioplang::{Ioplang, Lut1Def};
+use hc_langs::ioplang::{IopLang, Lut1Def};
 use hc_utils::iter::CollectInSmallVec;
 
 use crate::builder::{Builder, Ciphertext};
 
-pub fn if_then_zero(spec: CiphertextSpec) -> IR<Ioplang> {
+pub fn if_then_zero(spec: CiphertextSpec) -> IR<IopLang> {
     let builder = Builder::new(spec.block_spec());
 
     let src = builder.eint_input(spec.int_size());

@@ -1,23 +1,23 @@
 use hc_ir::{
-    Dialect, DialectOperations,
+    Dialect, DialectInstructionSet,
     cse::{AllowCse, Expr},
 };
 use hc_utils::iter::CollectInSmallVec;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Ioplang;
+pub struct IopLang;
 
-impl Dialect for Ioplang {
-    type Types = super::types::Types;
-    type Operations = super::operations::Operations;
+impl Dialect for IopLang {
+    type TypeSystem = super::IopTypeSystem;
+    type InstructionSet = super::IopInstructionSet;
 }
 
-impl AllowCse for Ioplang {
+impl AllowCse for IopLang {
     fn op_to_exprs(
-        op: Self::Operations,
+        op: Self::InstructionSet,
         args: impl Iterator<Item = hc_ir::ValueNumber>,
     ) -> impl Iterator<Item = Expr<Self>> {
-        use super::Operations::*;
+        use super::IopInstructionSet::*;
         let mut args = args.cosvec();
         let arity = op.get_signature().get_returns_arity();
         let (args, op) = match op {

@@ -1,23 +1,23 @@
 use hc_ir::{IR, OpRef, ValId, ValMap};
-use hc_langs::hpulang::{Hpulang, Operations};
+use hc_langs::hpulang::{HpuInstructionSet, HpuLang};
 use hc_utils::{
     iter::MultiZip,
     small::{SmallMap, SmallSet, SmallVec},
     svec,
 };
 
-struct Batcher<'a>(Vec<OpRef<'a, Hpulang>>);
+struct Batcher<'a>(Vec<OpRef<'a, HpuLang>>);
 
 impl<'a> Batcher<'a> {
     pub fn new() -> Self {
         Batcher(Vec::new())
     }
 
-    pub fn push_op(&mut self, op: OpRef<'a, Hpulang>) {
+    pub fn push_op(&mut self, op: OpRef<'a, HpuLang>) {
         self.0.push(op);
     }
 
-    pub fn flush(&mut self, output: &mut IR<Hpulang>, output_map: &mut ValMap<ValId>) {
+    pub fn flush(&mut self, output: &mut IR<HpuLang>, output_map: &mut ValMap<ValId>) {
         // We collect the inputs and outputs of the batch.
         let mut inputs = self
             .0
@@ -53,7 +53,7 @@ impl<'a> Batcher<'a> {
         for (i, val) in inputs.iter().enumerate() {
             let (_, batch_arg) = batch
                 .add_op(
-                    Operations::BatchArg {
+                    HpuInstructionSet::BatchArg {
                         pos: i.try_into().unwrap(),
                         ty: val.get_type(),
                     },
@@ -80,7 +80,7 @@ impl<'a> Batcher<'a> {
         for (i, val) in outputs.iter().enumerate() {
             batch
                 .add_op(
-                    Operations::BatchRet {
+                    HpuInstructionSet::BatchRet {
                         pos: i.try_into().unwrap(),
                         ty: val.get_type(),
                     },
@@ -92,7 +92,7 @@ impl<'a> Batcher<'a> {
         // We add the batch op in the new IR.
         let (_, valids) = output
             .add_op(
-                Operations::Batch {
+                HpuInstructionSet::Batch {
                     block: Box::new(batch),
                 },
                 inputs
@@ -111,12 +111,12 @@ impl<'a> Batcher<'a> {
     }
 }
 
-pub fn batch(ir: &IR<Hpulang>) -> IR<Hpulang> {
+pub fn batch(ir: &IR<HpuLang>) -> IR<HpuLang> {
     let mut output = IR::empty();
     let mut map = ir.empty_valmap::<ValId>();
     let mut batcher = Batcher::new();
     for op in ir.walk_ops_linear() {
-        use hc_langs::hpulang::Operations::*;
+        use hc_langs::hpulang::HpuInstructionSet::*;
         match op.get_operation() {
             AddCt | SubCt | Mac { .. } | AddPt | SubPt | PtSub | MulPt => {
                 let (_, valids) = output
@@ -160,7 +160,7 @@ pub fn batch(ir: &IR<Hpulang>) -> IR<Hpulang> {
 #[cfg(test)]
 mod test {
     use hc_ir::{IR, translation::Translator};
-    use hc_langs::{hpulang::Hpulang, ioplang::Ioplang};
+    use hc_langs::{hpulang::HpuLang, ioplang::IopLang};
     use hc_sim::hpu::{HpuConfig, PhysicalConfig};
 
     use crate::{
@@ -171,12 +171,12 @@ mod test {
 
     use super::batch;
 
-    fn pipeline(ir: &IR<Ioplang>) -> IR<Hpulang> {
+    fn pipeline(ir: &IR<IopLang>) -> IR<HpuLang> {
         let ir = IoplangToHpulang.translate(&ir);
         let config = HpuConfig::from(PhysicalConfig::gaussian_64b());
         let scheduled = schedule(&ir, &config);
         let batch = batch(&scheduled);
-        use hc_langs::hpulang::Operations::*;
+        use hc_langs::hpulang::HpuInstructionSet::*;
         batch
             .walk_ops_linear()
             .for_each(|op| match op.get_operation() {

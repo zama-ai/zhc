@@ -1,9 +1,9 @@
 use hc_ir::Dialect;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Hpulang;
+pub struct HpuLang;
 
-impl Dialect for Hpulang {
-    type Types = super::types::Types;
-    type Operations = super::operations::Operations;
+impl Dialect for HpuLang {
+    type TypeSystem = super::HpuTypeSystem;
+    type InstructionSet = super::HpuInstructionSet;
 }

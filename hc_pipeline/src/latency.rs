@@ -6,7 +6,7 @@
 //! dependencies, and execution pipeline behavior.
 
 use hc_ir::IR;
-use hc_langs::doplang::Doplang;
+use hc_langs::doplang::DopLang;
 use hc_sim::{
     Cycle, Simulator,
     hpu::{DOp, DOpId, Events, Hpu, HpuConfig},
@@ -17,7 +17,7 @@ use hc_sim::{
 /// Takes an intermediate representation `ir` containing device operations and
 /// the hardware configuration `config` to simulate execution and determine
 /// the total number of cycles required for completion.
-pub fn compute_latency(ir: &IR<Doplang>, config: HpuConfig) -> Cycle {
+pub fn compute_latency(ir: &IR<DopLang>, config: HpuConfig) -> Cycle {
     let mut simulator = Simulator::from_simulatable(config.freq, Hpu::new(&config));
     let dops = ir
         .walk_ops_linear()
@@ -43,13 +43,13 @@ mod test {
         translation::IoplangToHpulang,
     };
     use hc_ir::{IR, translation::Translator};
-    use hc_langs::ioplang::Ioplang;
+    use hc_langs::ioplang::IopLang;
     use hc_sim::{
         Cycle, MHz,
         hpu::{HpuConfig, PhysicalConfig},
     };
 
-    fn pipeline(ir: &IR<Ioplang>) -> Cycle {
+    fn pipeline(ir: &IR<IopLang>) -> Cycle {
         let ir = IoplangToHpulang.translate(&ir);
         let config = HpuConfig::from(PhysicalConfig::gaussian_64b());
         let scheduled = schedule(&ir, &config);

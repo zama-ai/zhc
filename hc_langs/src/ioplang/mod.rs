@@ -1,9 +1,9 @@
 mod dialect;
+mod instruction_set;
 mod lut;
-mod operations;
-mod types;
+mod type_system;
 
 pub use dialect::*;
+pub use instruction_set::*;
 pub use lut::*;
-pub use operations::*;
-pub use types::*;
+pub use type_system::*;

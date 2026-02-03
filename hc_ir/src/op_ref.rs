@@ -15,8 +15,8 @@ use super::{Depth, Dialect, IR, OpId, Signature, State, ValId, val_ref::ValRef};
 pub struct OpRef<'s, D: Dialect> {
     pub(super) id: OpId,
     pub(super) ir: &'s IR<D>,
-    pub(super) operation: &'s D::Operations,
-    pub(super) signature: &'s Signature<D::Types>,
+    pub(super) operation: &'s D::InstructionSet,
+    pub(super) signature: &'s Signature<D::TypeSystem>,
     pub(super) args: &'s [ValId],
     pub(super) returns: &'s [ValId],
     pub(super) state: &'s State,
@@ -100,7 +100,7 @@ impl<'s, D: Dialect> OpRef<'s, D> {
     }
 
     /// Returns a copy of the operation's dialect-specific data.
-    pub fn get_operation(&self) -> D::Operations {
+    pub fn get_operation(&self) -> D::InstructionSet {
         self.operation.clone()
     }
 

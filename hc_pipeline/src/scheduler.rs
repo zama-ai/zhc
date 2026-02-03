@@ -15,7 +15,7 @@ use hc_ir::{
 };
 use hc_langs::{
     doplang::{Affinity, Argument},
-    hpulang::Hpulang,
+    hpulang::HpuLang,
 };
 use hc_sim::{
     Cycle, Simulatable, Simulator,
@@ -29,15 +29,15 @@ use serde::Serialize;
 /// Takes an intermediate representation `ir` containing HPU operations and the
 /// hardware configuration `config` to produce a new IR with operations
 /// reordered for better performance while preserving semantic correctness.
-pub fn schedule<'a, 'b>(ir: &'a IR<Hpulang>, config: &'b HpuConfig) -> IR<Hpulang> {
+pub fn schedule<'a, 'b>(ir: &'a IR<HpuLang>, config: &'b HpuConfig) -> IR<HpuLang> {
     let mut scheduler = Scheduler::init(ir, config);
     let schedule = scheduler.schedule(&ir);
     assert_eq!(ir.n_ops() as usize, schedule.len());
     assert!(schedule.get_walker().is_topo_sorted(&ir));
     let should_flush = scheduler.into_should_flush();
     // Produce the scheduled ir.
-    let flusher = |opref: &OpRef<Hpulang>| {
-        use hc_langs::hpulang::Operations::*;
+    let flusher = |opref: &OpRef<HpuLang>| {
+        use hc_langs::hpulang::HpuInstructionSet::*;
         if should_flush.contains(&opref.get_id()) {
             match opref.get_operation() {
                 Pbs { lut } | PbsF { lut } => PbsF { lut },
@@ -109,7 +109,7 @@ impl Simulatable for Timeouter {
 
 struct Scheduler<'ir> {
     simulator: Simulator<(Hpu, Timeouter)>,
-    ir: &'ir IR<Hpulang>,
+    ir: &'ir IR<HpuLang>,
     affinities: OpMap<Affinity>,
     priorities: OpMap<Depth>,
     mem_buffer: Vec<OpId>,
@@ -120,8 +120,8 @@ struct Scheduler<'ir> {
 }
 
 impl<'ir> Scheduler<'ir> {
-    pub fn init(ir: &'ir IR<Hpulang>, config: &HpuConfig) -> Scheduler<'ir> {
-        use hc_langs::hpulang::Operations::*;
+    pub fn init(ir: &'ir IR<HpuLang>, config: &HpuConfig) -> Scheduler<'ir> {
+        use hc_langs::hpulang::HpuInstructionSet::*;
         let config = config.to_owned();
         let simulator =
             Simulator::from_simulatable(config.freq, (Hpu::new(&config), Timeouter::new()));
@@ -176,7 +176,7 @@ impl<'ir> Scheduler<'ir> {
 }
 
 impl<'ir> ForwardSimulator for Scheduler<'ir> {
-    type Dialect = Hpulang;
+    type Dialect = HpuLang;
 
     fn select(
         &mut self,
@@ -263,8 +263,8 @@ impl<'ir> ForwardSimulator for Scheduler<'ir> {
     }
 }
 
-fn opref_to_dop<'a>(opref: OpRef<'a, Hpulang>, force_flush: bool) -> Option<DOp> {
-    use hc_langs::hpulang::Operations::*;
+fn opref_to_dop<'a>(opref: OpRef<'a, HpuLang>, force_flush: bool) -> Option<DOp> {
+    use hc_langs::hpulang::HpuInstructionSet::*;
     let raw = match opref.get_operation() {
         AddCt => Some(RawDOp::ADD {
             dst: Argument::ct_reg(opref.get_return_valids()[0]),
@@ -369,7 +369,7 @@ fn opref_to_dop<'a>(opref: OpRef<'a, Hpulang>, force_flush: bool) -> Option<DOp>
 #[cfg(test)]
 mod test {
     use hc_ir::{IR, translation::Translator};
-    use hc_langs::{hpulang::Hpulang, ioplang::Ioplang};
+    use hc_langs::{hpulang::HpuLang, ioplang::IopLang};
     use hc_sim::hpu::{HpuConfig, PhysicalConfig};
 
     use crate::{
@@ -379,7 +379,7 @@ mod test {
 
     use super::schedule;
 
-    fn pipeline(ir: &IR<Ioplang>) -> IR<Hpulang> {
+    fn pipeline(ir: &IR<IopLang>) -> IR<HpuLang> {
         let ir = IoplangToHpulang.translate(&ir);
         let config = HpuConfig::from(PhysicalConfig::gaussian_64b());
         schedule(&ir, &config)

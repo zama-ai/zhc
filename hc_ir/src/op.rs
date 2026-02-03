@@ -9,9 +9,9 @@ use super::{Depth, Dialect, Signature, State, ValId};
 /// are the fundamental computational units in the IR graph.
 pub struct Op<D: Dialect> {
     /// The dialect-specific operation being performed.
-    pub operation: D::Operations,
+    pub operation: D::InstructionSet,
     /// Type signature specifying argument and return types.
-    pub signature: Signature<D::Types>,
+    pub signature: Signature<D::TypeSystem>,
     /// Input values consumed by this operation.
     pub args: SmallVec<ValId>,
     /// Output values produced by this operation.

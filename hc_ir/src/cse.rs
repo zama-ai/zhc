@@ -1,6 +1,6 @@
 use hc_utils::{FastMap, Store, small::SmallVec};
 
-use super::{Dialect, DialectOperations, IR, ValId, ValueNumber, dce::eliminate_dead_code};
+use super::{Dialect, DialectInstructionSet, IR, ValId, ValueNumber, dce::eliminate_dead_code};
 
 /// This trait extends `Dialect` to enable Common Subexpression Elimination (CSE).
 ///
@@ -29,7 +29,7 @@ pub trait AllowCse: Dialect {
     /// recognized as equivalent. Override this method to implement custom argument normalization
     /// for commutative operations.
     fn op_to_exprs(
-        op: Self::Operations,
+        op: Self::InstructionSet,
         args: impl Iterator<Item = ValueNumber>,
     ) -> impl Iterator<Item = Expr<Self>> {
         let args = args.collect::<SmallVec<_>>();
@@ -49,7 +49,7 @@ pub trait AllowCse: Dialect {
 #[derive(Hash, PartialEq, Eq)]
 pub struct Expr<D: Dialect> {
     /// The operation that computes this expression.
-    pub op: D::Operations,
+    pub op: D::InstructionSet,
     /// The value numbers of the operation's arguments.
     pub args: SmallVec<ValueNumber>,
     /// Which return value position (0-based) this expression represents.
@@ -159,7 +159,7 @@ mod test {
     // For the commutative Add test we normalize Add arguments by sorting the value numbers.
     impl AllowCse for TestDialect {
         fn op_to_exprs(
-            op: Self::Operations,
+            op: Self::InstructionSet,
             args: impl Iterator<Item = ValueNumber>,
         ) -> impl Iterator<Item = Expr<Self>> {
             let args = args.collect::<SmallVec<_>>();

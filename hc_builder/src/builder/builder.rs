@@ -2,17 +2,19 @@ use std::cell::{Ref, RefCell};
 
 use hc_crypto::integer_semantics::{CiphertextBlockSpec, PlaintextBlockStorage};
 use hc_ir::{IR, cse::eliminate_common_subexpressions, dce::eliminate_dead_code};
-use hc_langs::ioplang::{Ioplang, Lut1Def, Lut2Def, Operations, Types};
-use hc_utils::{iter::{Chunk, ChunkIt}, small::SmallVec, svec};
-
-use crate::builder::{
-    CiphertextBlock, Ciphertext, PlaintextBlock, Plaintext
+use hc_langs::ioplang::{IopInstructionSet, IopLang, IopTypeSystem, Lut1Def, Lut2Def};
+use hc_utils::{
+    iter::{Chunk, ChunkIt},
+    small::SmallVec,
+    svec,
 };
+
+use crate::builder::{Ciphertext, CiphertextBlock, Plaintext, PlaintextBlock};
 
 /// Builder for constructing homomorphic encryption circuits.
 pub struct Builder {
     pub(crate) spec: CiphertextBlockSpec,
-    pub(crate) ir: RefCell<IR<Ioplang>>,
+    pub(crate) ir: RefCell<IR<IopLang>>,
     pub(crate) input_ctr: RefCell<usize>,
     pub(crate) output_ctr: RefCell<usize>,
 }
@@ -48,7 +50,7 @@ impl Builder {
     ///
     /// This method applies dead code elimination and common subexpression
     /// elimination before returning the final IR representation.
-    pub fn into_ir(self) -> IR<Ioplang> {
+    pub fn into_ir(self) -> IR<IopLang> {
         let mut ir = self.ir.into_inner();
         eliminate_dead_code(&mut ir);
         eliminate_common_subexpressions(&mut ir);
@@ -61,7 +63,7 @@ impl Builder {
     }
 
     /// Returns a reference to the current IR state.
-    pub fn ir(&self) -> Ref<'_, IR<Ioplang>> {
+    pub fn ir(&self) -> Ref<'_, IR<IopLang>> {
         self.ir.borrow()
     }
 
@@ -78,9 +80,9 @@ impl Builder {
             .ir
             .borrow_mut()
             .add_op(
-                Operations::Input {
+                IopInstructionSet::Input {
                     pos,
-                    typ: Types::Ciphertext,
+                    typ: IopTypeSystem::Ciphertext,
                 },
                 svec![],
             )
@@ -91,7 +93,7 @@ impl Builder {
             let (_, ret) = self
                 .ir
                 .borrow_mut()
-                .add_op(Operations::ExtractCtBlock { index }, svec![inp[0]])
+                .add_op(IopInstructionSet::ExtractCtBlock { index }, svec![inp[0]])
                 .unwrap();
             output.push(CiphertextBlock {
                 valid: ret[0],
@@ -108,9 +110,9 @@ impl Builder {
             .ir
             .borrow_mut()
             .add_op(
-                Operations::Input {
+                IopInstructionSet::Input {
                     pos,
-                    typ: Types::Plaintext,
+                    typ: IopTypeSystem::Plaintext,
                 },
                 svec![],
             )
@@ -124,7 +126,7 @@ impl Builder {
             let (_, ret) = self
                 .ir
                 .borrow_mut()
-                .add_op(Operations::ExtractPtBlock { index }, svec![inp[0]])
+                .add_op(IopInstructionSet::ExtractPtBlock { index }, svec![inp[0]])
                 .unwrap();
             output.push(PlaintextBlock {
                 valid: ret[0],
@@ -139,10 +141,7 @@ impl Builder {
         let (_, acc) = self
             .ir
             .borrow_mut()
-            .add_op(
-                Operations::ZeroCiphertext,
-                svec![],
-            )
+            .add_op(IopInstructionSet::ZeroCiphertext, svec![])
             .unwrap();
         let mut acc = acc[0];
         for index in 0..TryInto::<u8>::try_into(ct.len()).unwrap() {
@@ -150,7 +149,7 @@ impl Builder {
                 .ir
                 .borrow_mut()
                 .add_op(
-                    Operations::StoreCtBlock { index },
+                    IopInstructionSet::StoreCtBlock { index },
                     svec![ct.blocks()[index as usize].valid, acc],
                 )
                 .unwrap();
@@ -160,9 +159,9 @@ impl Builder {
         self.ir
             .borrow_mut()
             .add_op(
-                Operations::Output {
+                IopInstructionSet::Output {
                     pos,
-                    typ: Types::Ciphertext,
+                    typ: IopTypeSystem::Ciphertext,
                 },
                 svec![acc],
             )
@@ -175,7 +174,7 @@ impl Builder {
             .ir
             .borrow_mut()
             .add_op(
-                Operations::LetPlaintextBlock {
+                IopInstructionSet::LetPlaintextBlock {
                     value: constant as PlaintextBlockStorage,
                 },
                 svec![],
@@ -192,7 +191,7 @@ impl Builder {
         let (_node, ret) = self
             .ir
             .borrow_mut()
-            .add_op(Operations::AddCt, svec![src_a.valid, src_b.valid])
+            .add_op(IopInstructionSet::AddCt, svec![src_a.valid, src_b.valid])
             .unwrap();
         CiphertextBlock {
             valid: ret[0],
@@ -205,7 +204,7 @@ impl Builder {
         let (_node, ret) = self
             .ir
             .borrow_mut()
-            .add_op(Operations::AddPt, svec![src_a.valid, src_b.valid])
+            .add_op(IopInstructionSet::AddPt, svec![src_a.valid, src_b.valid])
             .unwrap();
         CiphertextBlock {
             valid: ret[0],
@@ -218,7 +217,7 @@ impl Builder {
         let (_node, ret) = self
             .ir
             .borrow_mut()
-            .add_op(Operations::SubCt, svec![src_a.valid, src_b.valid])
+            .add_op(IopInstructionSet::SubCt, svec![src_a.valid, src_b.valid])
             .unwrap();
         CiphertextBlock {
             valid: ret[0],
@@ -231,7 +230,7 @@ impl Builder {
         let (_node, ret) = self
             .ir
             .borrow_mut()
-            .add_op(Operations::SubPt, svec![src_a.valid, src_b.valid])
+            .add_op(IopInstructionSet::SubPt, svec![src_a.valid, src_b.valid])
             .unwrap();
         CiphertextBlock {
             valid: ret[0],
@@ -244,7 +243,7 @@ impl Builder {
         let (_node, ret) = self
             .ir
             .borrow_mut()
-            .add_op(Operations::PtSub, svec![src_a.valid, src_b.valid])
+            .add_op(IopInstructionSet::PtSub, svec![src_a.valid, src_b.valid])
             .unwrap();
         CiphertextBlock {
             valid: ret[0],
@@ -261,7 +260,9 @@ impl Builder {
             .ir
             .borrow_mut()
             .add_op(
-                Operations::PackCt{ mul: 2u8.pow(self.spec().message_size() as u32) as PlaintextBlockStorage},
+                IopInstructionSet::PackCt {
+                    mul: 2u8.pow(self.spec().message_size() as u32) as PlaintextBlockStorage,
+                },
                 svec![src_a.valid, src_b.valid],
             )
             .unwrap();
@@ -286,7 +287,7 @@ impl Builder {
         let (_node, ret) = self
             .ir
             .borrow_mut()
-            .add_op(Operations::Pbs { lut }, svec![src.valid])
+            .add_op(IopInstructionSet::Pbs { lut }, svec![src.valid])
             .unwrap();
         CiphertextBlock {
             valid: ret[0],
@@ -303,7 +304,7 @@ impl Builder {
         let (_node, ret) = self
             .ir
             .borrow_mut()
-            .add_op(Operations::Pbs2 { lut }, svec![src.valid])
+            .add_op(IopInstructionSet::Pbs2 { lut }, svec![src.valid])
             .unwrap();
         (
             CiphertextBlock {

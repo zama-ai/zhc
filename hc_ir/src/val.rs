@@ -15,7 +15,7 @@ pub struct Val<D: Dialect> {
     /// Operation that produced this value.
     pub origin: ValOrigin,
     /// Type of this value within the dialect's type system.
-    pub typ: D::Types,
+    pub typ: D::TypeSystem,
     /// Current state of the value.
     pub state: State,
 }

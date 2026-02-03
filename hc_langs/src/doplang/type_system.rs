@@ -1,18 +1,18 @@
 use std::fmt::Display;
 
-use hc_ir::DialectTypes;
+use hc_ir::DialectTypeSystem;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Types {
+pub enum DopTypeSystem {
     Ctx(usize),
 }
 
-impl Display for Types {
+impl Display for DopTypeSystem {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Types::Ctx(_) => write!(f, "Ctx"),
+            DopTypeSystem::Ctx(_) => write!(f, "Ctx"),
         }
     }
 }
 
-impl DialectTypes for Types {}
+impl DialectTypeSystem for DopTypeSystem {}

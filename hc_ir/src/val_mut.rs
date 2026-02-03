@@ -10,6 +10,6 @@ pub struct ValMut<'s, D: Dialect> {
     pub id: ValId,
     pub users: &'s mut SmallVec<ValUse>,
     pub origin: &'s mut ValOrigin,
-    pub typ: &'s mut D::Types,
+    pub typ: &'s mut D::TypeSystem,
     pub state: &'s mut State,
 }

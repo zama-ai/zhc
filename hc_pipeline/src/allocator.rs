@@ -12,8 +12,8 @@ use std::{
 
 use hc_ir::{IR, OpId, OpIdRaw, OpRef, ValId, ValMap};
 use hc_langs::{
-    doplang::{Argument, Doplang, Operations as DopOp},
-    hpulang::{Hpulang, Operations as HpuOp},
+    doplang::{Argument, DopInstructionSet, DopLang},
+    hpulang::{HpuInstructionSet, HpuLang},
 };
 use hc_sim::hpu::HpuConfig;
 use hc_utils::{
@@ -253,7 +253,7 @@ impl LiveRange {
 struct LiveRangeMap(ValMap<LiveRange>);
 
 impl LiveRangeMap {
-    pub fn from_scheduled_ir(ir: &IR<Hpulang>) -> Self {
+    pub fn from_scheduled_ir(ir: &IR<HpuLang>) -> Self {
         let mut live_ranges: ValMap<LiveRange> = ir.empty_valmap();
         for (point, op) in ir.walk_ops_linear().enumerate() {
             for val in op.get_args_iter() {
@@ -343,29 +343,29 @@ impl Display for Heap {
 struct BatchMap(SmallMap<ValId, ValId>);
 
 impl BatchMap {
-    pub fn from_op(op: &OpRef<Hpulang>) -> Self {
+    pub fn from_op(op: &OpRef<HpuLang>) -> Self {
         let args = op.get_arg_valids();
         let rets = op.get_return_valids();
         let mut map = SmallMap::<ValId, ValId>::new();
-        let HpuOp::Batch { block } = op.get_operation() else {
+        let HpuInstructionSet::Batch { block } = op.get_operation() else {
             unreachable!()
         };
         let mut ordered_batch_arg_valids = block
             .walk_ops_linear()
-            .filter(|op| matches!(op.get_operation(), HpuOp::BatchArg { .. }))
+            .filter(|op| matches!(op.get_operation(), HpuInstructionSet::BatchArg { .. }))
             .covec();
         ordered_batch_arg_valids.sort_unstable_by_key(|op| {
-            let HpuOp::BatchArg { pos, .. } = op.get_operation() else {
+            let HpuInstructionSet::BatchArg { pos, .. } = op.get_operation() else {
                 unreachable!()
             };
             pos
         });
         let mut ordered_batch_ret_valids = block
             .walk_ops_linear()
-            .filter(|op| matches!(op.get_operation(), HpuOp::BatchRet { .. }))
+            .filter(|op| matches!(op.get_operation(), HpuInstructionSet::BatchRet { .. }))
             .covec();
         ordered_batch_ret_valids.sort_unstable_by_key(|op| {
-            let HpuOp::BatchRet { pos, .. } = op.get_operation() else {
+            let HpuInstructionSet::BatchRet { pos, .. } = op.get_operation() else {
                 unreachable!()
             };
             pos
@@ -409,8 +409,8 @@ impl Index<ValId> for BatchMap {
 /// contender, it may make sense to try to better schedule the spills (to lift them slightly up in
 /// the stream, ensuring that no time is spent waiting for them).
 struct Allocator<'ir> {
-    input: &'ir IR<Hpulang>,
-    output: IR<Doplang>,
+    input: &'ir IR<HpuLang>,
+    output: IR<DopLang>,
     live_ranges: LiveRangeMap,
     register_file: RegisterFile,
     heap: Heap,
@@ -420,13 +420,13 @@ struct Allocator<'ir> {
 }
 
 impl<'ir> Allocator<'ir> {
-    pub fn init(ir: &IR<Hpulang>, nregs: usize) -> Allocator<'_> {
+    pub fn init(ir: &IR<HpuLang>, nregs: usize) -> Allocator<'_> {
         let live_ranges = LiveRangeMap::from_scheduled_ir(ir);
         let register_file = RegisterFile::empty(nregs);
         let translation_map = ir.empty_valmap();
         let input = ir;
         let mut output = IR::empty();
-        let (_, rets) = output.add_op(DopOp::_INIT, svec![]).unwrap();
+        let (_, rets) = output.add_op(DopInstructionSet::_INIT, svec![]).unwrap();
         let current_ctx = rets[0];
         let point = 0;
         let heap = Heap::empty();
@@ -442,7 +442,7 @@ impl<'ir> Allocator<'ir> {
         }
     }
 
-    fn add_dop(&mut self, dop: DopOp) -> OpId {
+    fn add_dop(&mut self, dop: DopInstructionSet) -> OpId {
         let (opid, rets) = self.output.add_op(dop, svec![self.current_ctx]).unwrap();
         self.current_ctx = rets[0];
         opid
@@ -455,7 +455,7 @@ impl<'ir> Allocator<'ir> {
         let slot = match self.heap.get(&valid) {
             Ok(hs) => hs,
             Err(hs) => {
-                self.add_dop(DopOp::ST {
+                self.add_dop(DopInstructionSet::ST {
                     dst: Argument::ct_heap(hs.0 as usize),
                     src: Argument::ct_reg(reg.0 as usize),
                 });
@@ -500,7 +500,7 @@ impl<'ir> Allocator<'ir> {
             ValState::Registered { reg } => reg,
             ValState::Spilled { slot } => {
                 let [r] = self.get_register([vs]);
-                self.add_dop(DopOp::LD {
+                self.add_dop(DopInstructionSet::LD {
                     dst: Argument::ct_reg(r.0),
                     src: Argument::ct_heap(slot.0 as usize),
                 });
@@ -509,15 +509,15 @@ impl<'ir> Allocator<'ir> {
         }
     }
 
-    pub fn allocate_registers(mut self) -> IR<Doplang> {
+    pub fn allocate_registers(mut self) -> IR<DopLang> {
         for op in self.input.walk_ops_linear().covec().into_iter() {
             let args = op.get_arg_valids();
             let rets = op.get_return_valids();
 
             match op.get_operation() {
-                HpuOp::SrcLd { from } => {
+                HpuInstructionSet::SrcLd { from } => {
                     let [r_dst] = self.get_dst_registers([rets[0]]);
-                    self.add_dop(DopOp::LD {
+                    self.add_dop(DopInstructionSet::LD {
                         dst: Argument::ct_reg(r_dst.0),
                         src: Argument::ct_var(
                             from.src_pos.try_into().unwrap(),
@@ -525,9 +525,9 @@ impl<'ir> Allocator<'ir> {
                         ),
                     });
                 }
-                HpuOp::DstSt { to } => {
+                HpuInstructionSet::DstSt { to } => {
                     let r_src = self.get_src_register(args[0]);
-                    self.add_dop(DopOp::ST {
+                    self.add_dop(DopInstructionSet::ST {
                         src: Argument::ct_reg(r_src.0),
                         dst: Argument::ct_var(
                             to.dst_pos.try_into().unwrap(),
@@ -535,42 +535,42 @@ impl<'ir> Allocator<'ir> {
                         ),
                     });
                 }
-                HpuOp::ImmLd { .. } => {
+                HpuInstructionSet::ImmLd { .. } => {
                     // This is a no-op in the doplang dialect.
                     // Handled in Pt operations.
                 }
-                HpuOp::AddCt => {
+                HpuInstructionSet::AddCt => {
                     let [r_dst] = self.get_dst_registers([rets[0]]);
                     let r_src1 = self.get_src_register(args[0]);
                     let r_src2 = self.get_src_register(args[1]);
-                    self.add_dop(DopOp::ADD {
+                    self.add_dop(DopInstructionSet::ADD {
                         dst: Argument::ct_reg(r_dst.0),
                         src1: Argument::ct_reg(r_src1.0),
                         src2: Argument::ct_reg(r_src2.0),
                     });
                 }
-                HpuOp::SubCt => {
+                HpuInstructionSet::SubCt => {
                     let [r_dst] = self.get_dst_registers([rets[0]]);
                     let r_src1 = self.get_src_register(args[0]);
                     let r_src2 = self.get_src_register(args[1]);
-                    self.add_dop(DopOp::SUB {
+                    self.add_dop(DopInstructionSet::SUB {
                         dst: Argument::ct_reg(r_dst.0),
                         src1: Argument::ct_reg(r_src1.0),
                         src2: Argument::ct_reg(r_src2.0),
                     });
                 }
-                HpuOp::Mac { cst } => {
+                HpuInstructionSet::Mac { cst } => {
                     let [r_dst] = self.get_dst_registers([rets[0]]);
                     let r_src1 = self.get_src_register(args[0]);
                     let r_src2 = self.get_src_register(args[1]);
-                    self.add_dop(DopOp::MAC {
+                    self.add_dop(DopInstructionSet::MAC {
                         dst: Argument::ct_reg(r_dst.0),
                         src1: Argument::ct_reg(r_src1.0),
                         src2: Argument::ct_reg(r_src2.0),
                         cst: Argument::pt_const(cst.0),
                     });
                 }
-                HpuOp::AddPt => {
+                HpuInstructionSet::AddPt => {
                     let [r_dst] = self.get_dst_registers([rets[0]]);
                     let r_src = self.get_src_register(args[0]);
                     let imm_ld_op = self
@@ -579,10 +579,10 @@ impl<'ir> Allocator<'ir> {
                         .get_origin()
                         .opref
                         .get_operation();
-                    let HpuOp::ImmLd { from } = imm_ld_op else {
+                    let HpuInstructionSet::ImmLd { from } = imm_ld_op else {
                         unreachable!()
                     };
-                    self.add_dop(DopOp::ADDS {
+                    self.add_dop(DopInstructionSet::ADDS {
                         dst: Argument::ct_reg(r_dst.0),
                         src: Argument::ct_reg(r_src.0),
                         cst: Argument::pt_var(
@@ -591,7 +591,7 @@ impl<'ir> Allocator<'ir> {
                         ),
                     });
                 }
-                HpuOp::SubPt => {
+                HpuInstructionSet::SubPt => {
                     let [r_dst] = self.get_dst_registers([rets[0]]);
                     let r_src = self.get_src_register(args[0]);
                     let imm_ld_op = self
@@ -600,10 +600,10 @@ impl<'ir> Allocator<'ir> {
                         .get_origin()
                         .opref
                         .get_operation();
-                    let HpuOp::ImmLd { from } = imm_ld_op else {
+                    let HpuInstructionSet::ImmLd { from } = imm_ld_op else {
                         unreachable!()
                     };
-                    self.add_dop(DopOp::SUBS {
+                    self.add_dop(DopInstructionSet::SUBS {
                         dst: Argument::ct_reg(r_dst.0),
                         src: Argument::ct_reg(r_src.0),
                         cst: Argument::pt_var(
@@ -612,7 +612,7 @@ impl<'ir> Allocator<'ir> {
                         ),
                     });
                 }
-                HpuOp::PtSub => {
+                HpuInstructionSet::PtSub => {
                     let [r_dst] = self.get_dst_registers([rets[0]]);
                     let r_src = self.get_src_register(args[1]);
                     let imm_ld_op = self
@@ -621,10 +621,10 @@ impl<'ir> Allocator<'ir> {
                         .get_origin()
                         .opref
                         .get_operation();
-                    let HpuOp::ImmLd { from } = imm_ld_op else {
+                    let HpuInstructionSet::ImmLd { from } = imm_ld_op else {
                         unreachable!()
                     };
-                    self.add_dop(DopOp::SSUB {
+                    self.add_dop(DopInstructionSet::SSUB {
                         dst: Argument::ct_reg(r_dst.0),
                         src: Argument::ct_reg(r_src.0),
                         cst: Argument::pt_var(
@@ -633,7 +633,7 @@ impl<'ir> Allocator<'ir> {
                         ),
                     });
                 }
-                HpuOp::MulPt => {
+                HpuInstructionSet::MulPt => {
                     let [r_dst] = self.get_dst_registers([rets[0]]);
                     let r_src = self.get_src_register(args[0]);
                     let imm_ld_op = self
@@ -642,10 +642,10 @@ impl<'ir> Allocator<'ir> {
                         .get_origin()
                         .opref
                         .get_operation();
-                    let HpuOp::ImmLd { from } = imm_ld_op else {
+                    let HpuInstructionSet::ImmLd { from } = imm_ld_op else {
                         unreachable!()
                     };
-                    self.add_dop(DopOp::MULS {
+                    self.add_dop(DopInstructionSet::MULS {
                         dst: Argument::ct_reg(r_dst.0),
                         src: Argument::ct_reg(r_src.0),
                         cst: Argument::pt_var(
@@ -654,87 +654,87 @@ impl<'ir> Allocator<'ir> {
                         ),
                     });
                 }
-                HpuOp::AddCst { cst } => {
+                HpuInstructionSet::AddCst { cst } => {
                     let [r_dst] = self.get_dst_registers([rets[0]]);
                     let r_src = self.get_src_register(args[0]);
-                    self.add_dop(DopOp::ADDS {
+                    self.add_dop(DopInstructionSet::ADDS {
                         dst: Argument::ct_reg(r_dst.0),
                         src: Argument::ct_reg(r_src.0),
                         cst: Argument::pt_const(cst.0),
                     });
                 }
-                HpuOp::SubCst { cst } => {
+                HpuInstructionSet::SubCst { cst } => {
                     let [r_dst] = self.get_dst_registers([rets[0]]);
                     let r_src = self.get_src_register(args[0]);
-                    self.add_dop(DopOp::SUBS {
+                    self.add_dop(DopInstructionSet::SUBS {
                         dst: Argument::ct_reg(r_dst.0),
                         src: Argument::ct_reg(r_src.0),
                         cst: Argument::pt_const(cst.0),
                     });
                 }
-                HpuOp::CstSub { cst } => {
+                HpuInstructionSet::CstSub { cst } => {
                     let [r_dst] = self.get_dst_registers([rets[0]]);
                     let r_src = self.get_src_register(args[0]);
-                    self.add_dop(DopOp::SSUB {
+                    self.add_dop(DopInstructionSet::SSUB {
                         dst: Argument::ct_reg(r_dst.0),
                         src: Argument::ct_reg(r_src.0),
                         cst: Argument::pt_const(cst.0),
                     });
                 }
-                HpuOp::MulCst { cst } => {
+                HpuInstructionSet::MulCst { cst } => {
                     let [r_dst] = self.get_dst_registers([rets[0]]);
                     let r_src = self.get_src_register(args[0]);
-                    self.add_dop(DopOp::MULS {
+                    self.add_dop(DopInstructionSet::MULS {
                         dst: Argument::ct_reg(r_dst.0),
                         src: Argument::ct_reg(r_src.0),
                         cst: Argument::pt_const(cst.0),
                     });
                 }
-                HpuOp::Batch { block } => {
+                HpuInstructionSet::Batch { block } => {
                     let map = BatchMap::from_op(&op);
                     for op in block.walk_ops_linear() {
                         let rets = op.get_return_valids();
                         let args = op.get_arg_valids();
                         match op.get_operation() {
-                            HpuOp::Pbs { lut } => {
+                            HpuInstructionSet::Pbs { lut } => {
                                 let [r_dst] = self.get_dst_registers([map[rets[0]]]);
                                 let r_src = self.get_src_register(map[args[0]]);
-                                self.add_dop(DopOp::PBS {
+                                self.add_dop(DopInstructionSet::PBS {
                                     dst: Argument::ct_reg(r_dst.0),
                                     src: Argument::ct_reg(r_src.0),
                                     lut: Argument::lut_id(lut),
                                 });
                             }
-                            HpuOp::PbsF { lut } => {
+                            HpuInstructionSet::PbsF { lut } => {
                                 let [r_dst] = self.get_dst_registers([map[rets[0]]]);
                                 let r_src = self.get_src_register(map[args[0]]);
-                                self.add_dop(DopOp::PBS_F {
+                                self.add_dop(DopInstructionSet::PBS_F {
                                     dst: Argument::ct_reg(r_dst.0),
                                     src: Argument::ct_reg(r_src.0),
                                     lut: Argument::lut_id(lut),
                                 });
                             }
-                            HpuOp::Pbs2 { lut } => {
+                            HpuInstructionSet::Pbs2 { lut } => {
                                 let [r_dst, ..] =
                                     self.get_dst_registers([map[rets[0]], map[rets[1]]]);
                                 let r_src = self.get_src_register(map[args[0]]);
-                                self.add_dop(DopOp::PBS_ML2 {
+                                self.add_dop(DopInstructionSet::PBS_ML2 {
                                     dst: Argument::ct_reg2(r_dst.0),
                                     src: Argument::ct_reg(r_src.0),
                                     lut: Argument::lut_id(lut),
                                 });
                             }
-                            HpuOp::Pbs2F { lut } => {
+                            HpuInstructionSet::Pbs2F { lut } => {
                                 let [r_dst, ..] =
                                     self.get_dst_registers([map[rets[0]], map[rets[1]]]);
                                 let r_src = self.get_src_register(map[args[0]]);
-                                self.add_dop(DopOp::PBS_ML2_F {
+                                self.add_dop(DopInstructionSet::PBS_ML2_F {
                                     dst: Argument::ct_reg2(r_dst.0),
                                     src: Argument::ct_reg(r_src.0),
                                     lut: Argument::lut_id(lut),
                                 });
                             }
-                            HpuOp::Pbs4 { lut } => {
+                            HpuInstructionSet::Pbs4 { lut } => {
                                 let [r_dst, ..] = self.get_dst_registers([
                                     map[rets[0]],
                                     map[rets[1]],
@@ -742,13 +742,13 @@ impl<'ir> Allocator<'ir> {
                                     map[rets[3]],
                                 ]);
                                 let r_src = self.get_src_register(map[args[0]]);
-                                self.add_dop(DopOp::PBS_ML4 {
+                                self.add_dop(DopInstructionSet::PBS_ML4 {
                                     dst: Argument::ct_reg4(r_dst.0),
                                     src: Argument::ct_reg(r_src.0),
                                     lut: Argument::lut_id(lut),
                                 });
                             }
-                            HpuOp::Pbs4F { lut } => {
+                            HpuInstructionSet::Pbs4F { lut } => {
                                 let [r_dst, ..] = self.get_dst_registers([
                                     map[rets[0]],
                                     map[rets[1]],
@@ -756,13 +756,13 @@ impl<'ir> Allocator<'ir> {
                                     map[rets[3]],
                                 ]);
                                 let r_src = self.get_src_register(map[args[0]]);
-                                self.add_dop(DopOp::PBS_ML4_F {
+                                self.add_dop(DopInstructionSet::PBS_ML4_F {
                                     dst: Argument::ct_reg4(r_dst.0),
                                     src: Argument::ct_reg(r_src.0),
                                     lut: Argument::lut_id(lut),
                                 });
                             }
-                            HpuOp::Pbs8 { lut } => {
+                            HpuInstructionSet::Pbs8 { lut } => {
                                 let [r_dst, ..] = self.get_dst_registers([
                                     map[rets[0]],
                                     map[rets[1]],
@@ -774,13 +774,13 @@ impl<'ir> Allocator<'ir> {
                                     map[rets[7]],
                                 ]);
                                 let r_src = self.get_src_register(map[args[0]]);
-                                self.add_dop(DopOp::PBS_ML8 {
+                                self.add_dop(DopInstructionSet::PBS_ML8 {
                                     dst: Argument::ct_reg8(r_dst.0),
                                     src: Argument::ct_reg(r_src.0),
                                     lut: Argument::lut_id(lut),
                                 });
                             }
-                            HpuOp::Pbs8F { lut } => {
+                            HpuInstructionSet::Pbs8F { lut } => {
                                 let [r_dst, ..] = self.get_dst_registers([
                                     map[rets[0]],
                                     map[rets[1]],
@@ -792,13 +792,14 @@ impl<'ir> Allocator<'ir> {
                                     map[rets[7]],
                                 ]);
                                 let r_src = self.get_src_register(map[args[0]]);
-                                self.add_dop(DopOp::PBS_ML8_F {
+                                self.add_dop(DopInstructionSet::PBS_ML8_F {
                                     dst: Argument::ct_reg8(r_dst.0),
                                     src: Argument::ct_reg(r_src.0),
                                     lut: Argument::lut_id(lut),
                                 });
                             }
-                            HpuOp::BatchArg { .. } | HpuOp::BatchRet { .. } => {}
+                            HpuInstructionSet::BatchArg { .. }
+                            | HpuInstructionSet::BatchRet { .. } => {}
                             _ => unreachable!(
                                 "Encountered unexpected operation while allocating: {}",
                                 op.get_operation()
@@ -840,7 +841,7 @@ impl<'ir> Allocator<'ir> {
 /// Takes a scheduled intermediate representation `ir` containing HPU operations
 /// and the hardware configuration `config` to produce a new IR in the device
 /// operation language with physical register assignments for all values.
-pub fn allocate_registers(ir: &IR<Hpulang>, config: &HpuConfig) -> IR<Doplang> {
+pub fn allocate_registers(ir: &IR<HpuLang>, config: &HpuConfig) -> IR<DopLang> {
     let allocator = Allocator::init(ir, config.regf_size);
     allocator.allocate_registers()
 }
@@ -848,7 +849,7 @@ pub fn allocate_registers(ir: &IR<Hpulang>, config: &HpuConfig) -> IR<Doplang> {
 #[cfg(test)]
 mod test {
     use hc_ir::{IR, translation::Translator};
-    use hc_langs::{doplang::Doplang, ioplang::Ioplang};
+    use hc_langs::{doplang::DopLang, ioplang::IopLang};
     use hc_sim::hpu::{HpuConfig, PhysicalConfig};
 
     use crate::{
@@ -860,7 +861,7 @@ mod test {
 
     use super::allocate_registers;
 
-    fn pipeline(ir: &IR<Ioplang>) -> IR<Doplang> {
+    fn pipeline(ir: &IR<IopLang>) -> IR<DopLang> {
         let ir = IoplangToHpulang.translate(&ir);
         let config = HpuConfig::from(PhysicalConfig::gaussian_64b());
         let scheduled = schedule(&ir, &config);

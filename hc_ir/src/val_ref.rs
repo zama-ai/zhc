@@ -17,7 +17,7 @@ pub struct ValRef<'s, D: Dialect> {
     pub(super) ir: &'s IR<D>,
     pub(super) users: &'s [ValUse],
     pub(super) origin: &'s ValOrigin,
-    pub(super) typ: &'s D::Types,
+    pub(super) typ: &'s D::TypeSystem,
     pub(super) state: &'s State,
 }
 
@@ -89,7 +89,7 @@ impl<'s, D: Dialect> ValRef<'s, D> {
     }
 
     /// Returns the type of the value according to the dialect's type system.
-    pub fn get_type(&self) -> D::Types {
+    pub fn get_type(&self) -> D::TypeSystem {
         self.typ.clone()
     }
 
