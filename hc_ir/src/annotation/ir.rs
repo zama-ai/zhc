@@ -1,11 +1,9 @@
-use std::{fmt::Display, ops::Deref};
-
-use hc_utils::{iter::MultiZip, small::SmallVec};
-
+use super::*;
 use crate::{
-    AnnOpRef, AnnValRef, Dialect, IR, OpId, OpMap, PrintWalker, Printer, ValId, ValMap,
-    annotation::traits::Annotation,
+    AnnIRFormatter, AnnOpRef, AnnValRef, Dialect, IR, OpId, OpMap, PrintWalker, ValId, ValMap,
 };
+use hc_utils::{iter::MultiZip, small::SmallVec};
+use std::ops::Deref;
 
 /// IR container with parallel annotation storage for operations and values.
 #[derive(Debug, Clone)]
@@ -164,27 +162,6 @@ impl<'ir, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> AnnIR<'ir, D, OpAnn
         })
     }
 
-    pub fn check_ir(&self, expected: &str) {
-        self.check_ir_gen(PrintWalker::Topo, expected);
-    }
-
-    pub fn check_ir_linear(&self, expected: &str) {
-        self.check_ir_gen(PrintWalker::Linear, expected);
-    }
-
-    fn check_ir_gen(&self, walker: PrintWalker, expected: &str) {
-        let clean = |inp: &str| inp.replace(' ', "").replace('\n', "");
-        let repr = Printer::from_ann_ir(self, walker, true, false, false, true, true, true)
-            .ann_ir_to_string(self);
-        if clean(&repr) != clean(expected) {
-            println!(
-                "Failed to check ir.\nExpected:\n{}\nActual:\n{}",
-                expected, repr
-            );
-            panic!("Failed to check ir");
-        }
-    }
-
     /// Performs backward dataflow analysis on the IR operations.
     pub fn backward_dataflow_analysis<OpAnnNew: Annotation, ValAnnNew: Annotation>(
         &self,
@@ -260,6 +237,10 @@ impl<'ir, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> AnnIR<'ir, D, OpAnn
         }
         AnnIR::new(self.ir, self.op_annotations.clone(), valmap)
     }
+
+    pub fn format(&self) -> AnnIRFormatter<'_, 'ir, D, OpAnn, ValAnn> {
+        AnnIRFormatter::new(self)
+    }
 }
 
 impl<'ir, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> Deref
@@ -269,37 +250,5 @@ impl<'ir, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> Deref
 
     fn deref(&self) -> &Self::Target {
         self.ir
-    }
-}
-
-impl<'ir, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> Display
-    for AnnIR<'ir, D, OpAnn, ValAnn>
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if f.alternate() {
-            let printer = Printer::from_ann_ir(
-                self,
-                crate::PrintWalker::Topo,
-                true,
-                false,
-                true,
-                true,
-                true,
-                true,
-            );
-            printer.format_ann_ir(f, self)
-        } else {
-            let printer = Printer::from_ann_ir(
-                self,
-                crate::PrintWalker::Topo,
-                true,
-                false,
-                true,
-                false,
-                true,
-                false,
-            );
-            printer.format_ann_ir(f, self)
-        }
     }
 }

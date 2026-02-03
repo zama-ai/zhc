@@ -124,8 +124,8 @@ fn cmp(spec: CiphertextSpec, kind: Kind) -> IR<IopLang> {
 
 #[cfg(test)]
 mod test {
-
     use hc_crypto::integer_semantics::CiphertextSpec;
+    use hc_utils::assert_display_is;
 
     use super::cmp_eq;
 
@@ -133,65 +133,66 @@ mod test {
     fn test_cmp() {
         let spec = CiphertextSpec::new(16, 2, 2);
         let ir = cmp_eq(spec);
-        ir.check_ir(
-            "
+        assert_display_is!(
+            ir.format(),
+            r#"
             %0 : CtInt = input<0, CtInt>();
-            %1 : CtInt = input<1, CtInt>();
-            %2 : PtBlock = let_pt_block<1>();
-            %6 : CtInt = zero_ct();
-            %7 : CtBlock = extract_ct_block<0>(%0);
-            %8 : CtBlock = extract_ct_block<1>(%0);
-            %9 : CtBlock = extract_ct_block<2>(%0);
-            %10 : CtBlock = extract_ct_block<3>(%0);
-            %11 : CtBlock = extract_ct_block<4>(%0);
-            %12 : CtBlock = extract_ct_block<5>(%0);
-            %13 : CtBlock = extract_ct_block<6>(%0);
-            %14 : CtBlock = extract_ct_block<7>(%0);
-            %15 : CtBlock = extract_ct_block<0>(%1);
-            %16 : CtBlock = extract_ct_block<1>(%1);
-            %17 : CtBlock = extract_ct_block<2>(%1);
-            %18 : CtBlock = extract_ct_block<3>(%1);
-            %19 : CtBlock = extract_ct_block<4>(%1);
-            %20 : CtBlock = extract_ct_block<5>(%1);
-            %21 : CtBlock = extract_ct_block<6>(%1);
-            %22 : CtBlock = extract_ct_block<7>(%1);
-            %23 : CtBlock = pack_ct<4>(%8, %7);
-            %24 : CtBlock = pack_ct<4>(%10, %9);
-            %25 : CtBlock = pack_ct<4>(%12, %11);
-            %26 : CtBlock = pack_ct<4>(%14, %13);
-            %27 : CtBlock = pack_ct<4>(%16, %15);
-            %28 : CtBlock = pack_ct<4>(%18, %17);
-            %29 : CtBlock = pack_ct<4>(%20, %19);
-            %30 : CtBlock = pack_ct<4>(%22, %21);
-            %31 : CtBlock = pbs<None>(%23);
-            %32 : CtBlock = pbs<None>(%24);
-            %33 : CtBlock = pbs<None>(%25);
-            %34 : CtBlock = pbs<None>(%26);
-            %35 : CtBlock = pbs<None>(%27);
-            %36 : CtBlock = pbs<None>(%28);
-            %37 : CtBlock = pbs<None>(%29);
-            %38 : CtBlock = pbs<None>(%30);
-            %39 : CtBlock = sub_ct(%31, %35);
-            %40 : CtBlock = sub_ct(%32, %36);
-            %41 : CtBlock = sub_ct(%33, %37);
-            %42 : CtBlock = sub_ct(%34, %38);
-            %43 : CtBlock = pbs<CmpSign>(%39);
-            %44 : CtBlock = pbs<CmpSign>(%40);
-            %45 : CtBlock = pbs<CmpSign>(%41);
-            %46 : CtBlock = pbs<CmpSign>(%42);
-            %47 : CtBlock = add_pt(%43, %2);
-            %48 : CtBlock = add_pt(%44, %2);
-            %49 : CtBlock = add_pt(%45, %2);
-            %50 : CtBlock = add_pt(%46, %2);
-            %51 : CtBlock = pack_ct<4>(%48, %47);
-            %52 : CtBlock = pack_ct<4>(%50, %49);
-            %53 : CtBlock = pbs<CmpReduce>(%51);
-            %54 : CtBlock = pbs<CmpReduce>(%52);
-            %55 : CtBlock = pack_ct<4>(%54, %53);
-            %56 : CtBlock = pbs<CmpEqMrg>(%55);
-            %57 : CtInt = store_ct_block<0>(%56, %6);
-            output<0, CtInt>(%57);
-        ",
+            %9 : CtInt = input<1, CtInt>();
+            %36 : PtBlock = let_pt_block<1>();
+            %56 : CtInt = zero_ct();
+            %1 : CtBlock = extract_ct_block<0>(%0 : CtInt);
+            %2 : CtBlock = extract_ct_block<1>(%0 : CtInt);
+            %3 : CtBlock = extract_ct_block<2>(%0 : CtInt);
+            %4 : CtBlock = extract_ct_block<3>(%0 : CtInt);
+            %5 : CtBlock = extract_ct_block<4>(%0 : CtInt);
+            %6 : CtBlock = extract_ct_block<5>(%0 : CtInt);
+            %7 : CtBlock = extract_ct_block<6>(%0 : CtInt);
+            %8 : CtBlock = extract_ct_block<7>(%0 : CtInt);
+            %10 : CtBlock = extract_ct_block<0>(%9 : CtInt);
+            %11 : CtBlock = extract_ct_block<1>(%9 : CtInt);
+            %12 : CtBlock = extract_ct_block<2>(%9 : CtInt);
+            %13 : CtBlock = extract_ct_block<3>(%9 : CtInt);
+            %14 : CtBlock = extract_ct_block<4>(%9 : CtInt);
+            %15 : CtBlock = extract_ct_block<5>(%9 : CtInt);
+            %16 : CtBlock = extract_ct_block<6>(%9 : CtInt);
+            %17 : CtBlock = extract_ct_block<7>(%9 : CtInt);
+            %18 : CtBlock = pack_ct<4>(%2 : CtBlock, %1 : CtBlock);
+            %20 : CtBlock = pack_ct<4>(%4 : CtBlock, %3 : CtBlock);
+            %22 : CtBlock = pack_ct<4>(%6 : CtBlock, %5 : CtBlock);
+            %24 : CtBlock = pack_ct<4>(%8 : CtBlock, %7 : CtBlock);
+            %26 : CtBlock = pack_ct<4>(%11 : CtBlock, %10 : CtBlock);
+            %28 : CtBlock = pack_ct<4>(%13 : CtBlock, %12 : CtBlock);
+            %30 : CtBlock = pack_ct<4>(%15 : CtBlock, %14 : CtBlock);
+            %32 : CtBlock = pack_ct<4>(%17 : CtBlock, %16 : CtBlock);
+            %19 : CtBlock = pbs<None>(%18 : CtBlock);
+            %21 : CtBlock = pbs<None>(%20 : CtBlock);
+            %23 : CtBlock = pbs<None>(%22 : CtBlock);
+            %25 : CtBlock = pbs<None>(%24 : CtBlock);
+            %27 : CtBlock = pbs<None>(%26 : CtBlock);
+            %29 : CtBlock = pbs<None>(%28 : CtBlock);
+            %31 : CtBlock = pbs<None>(%30 : CtBlock);
+            %33 : CtBlock = pbs<None>(%32 : CtBlock);
+            %34 : CtBlock = sub_ct(%19 : CtBlock, %27 : CtBlock);
+            %38 : CtBlock = sub_ct(%21 : CtBlock, %29 : CtBlock);
+            %42 : CtBlock = sub_ct(%23 : CtBlock, %31 : CtBlock);
+            %46 : CtBlock = sub_ct(%25 : CtBlock, %33 : CtBlock);
+            %35 : CtBlock = pbs<CmpSign>(%34 : CtBlock);
+            %39 : CtBlock = pbs<CmpSign>(%38 : CtBlock);
+            %43 : CtBlock = pbs<CmpSign>(%42 : CtBlock);
+            %47 : CtBlock = pbs<CmpSign>(%46 : CtBlock);
+            %37 : CtBlock = add_pt(%35 : CtBlock, %36 : PtBlock);
+            %41 : CtBlock = add_pt(%39 : CtBlock, %36 : PtBlock);
+            %45 : CtBlock = add_pt(%43 : CtBlock, %36 : PtBlock);
+            %49 : CtBlock = add_pt(%47 : CtBlock, %36 : PtBlock);
+            %50 : CtBlock = pack_ct<4>(%41 : CtBlock, %37 : CtBlock);
+            %51 : CtBlock = pack_ct<4>(%49 : CtBlock, %45 : CtBlock);
+            %52 : CtBlock = pbs<CmpReduce>(%50 : CtBlock);
+            %53 : CtBlock = pbs<CmpReduce>(%51 : CtBlock);
+            %54 : CtBlock = pack_ct<4>(%53 : CtBlock, %52 : CtBlock);
+            %55 : CtBlock = pbs<CmpEqMrg>(%54 : CtBlock);
+            %57 : CtInt = store_ct_block<0>(%55 : CtBlock, %56 : CtInt);
+            output<0, CtInt>(%57 : CtInt);
+        "#
         );
     }
 }

@@ -46,6 +46,7 @@ pub(crate) use val::*;
 pub use val_map::*;
 pub(crate) use val_mut::*;
 pub use val_origin::*;
+pub use val_ref::*;
 pub use val_use::*;
 
 /// Errors that can occur during IR construction or manipulation.

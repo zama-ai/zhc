@@ -73,7 +73,7 @@ pub mod test_dialect {
 }
 
 use crate::{DialectInstructionSet, IR, IRError};
-use hc_utils::{iter::CollectInVec, svec};
+use hc_utils::{assert_display_is, iter::CollectInVec, svec};
 
 use test_dialect::{Operations, TestDialect};
 
@@ -163,60 +163,61 @@ pub fn gen_complex_ir() -> Result<IR<TestDialect>, IRError<TestDialect>> {
     let (_, branch2) = ir.add_op(Operations::Add, svec![branch1[0], inc7[0]])?;
     let (_, _) = ir.add_op(Operations::Return, svec![branch2[0]])?;
 
-    ir.check_ir(
-        "
+    assert_display_is!(
+        ir.format(),
+        r#"
         %0 : Int = int_input<pos: 0>();
         %1 : Int = int_input<pos: 1>();
         %2 : Int = int_input<pos: 2>();
         %3 : Int = int_input<pos: 3>();
         %4 : Bool = bool_constant<val: true>();
-        %5 : Int = add(%0, %1);
-        %6 : Int = add(%2, %3);
-        %7 : Int = inc(%0);
-        %8 : Int = inc(%1);
-        %9 : Int = inc(%2);
-        %10 : Int = inc(%0);
-        %11 : Int = inc(%3);
-        %12 : Int = inc(%5);
-        %13 : Int = inc(%5);
-        %14 : Int = inc(%9);
-        %15 : Int, %16 : Int = div_rem(%6, %7);
-        %17 : Int = inc(%10);
-        %18 : Int = inc(%11);
-        %19 : Int = inc(%6);
-        %20 : Int = add(%12, %13);
-        %21 : Int = inc(%14);
-        %22 : Int = inc(%15);
-        %23 : Int = inc(%16);
-        %24 : Int = inc(%17);
-        %25 : Int = add(%18, %14);
-        %26 : Int = inc(%19);
-        %27 : Int = inc(%21);
-        %28 : Int = add(%22, %23);
-        %29 : Int = add(%20, %21);
-        return(%25);
-        %30 : Int = inc(%27);
-        %31 : Int = if_else(%29, %4, %8);
-        return(%29);
-        %32 : Int, %33 : Int = div_rem(%30, %3);
-        %34 : Int = add(%30, %20);
-        %35 : Int = inc(%32);
-        %36 : Int = inc(%33);
-        %37 : Int, %38 : Int = div_rem(%34, %31);
-        %39 : Int = add(%35, %36);
-        %40 : Int = add(%26, %36);
-        %41 : Int = if_else(%28, %4, %39);
-        %42 : Int = add(%28, %39);
-        return(%40);
-        %43 : Int = add(%41, %31);
-        %44 : Int, %45 : Int = div_rem(%43, %42);
-        %46 : Int = add(%44, %37);
-        %47 : Int = add(%45, %38);
-        %48 : Int = add(%46, %47);
-        return(%46);
-        %49 : Int = add(%48, %24);
-        return(%49);
-    ",
+        %5 : Int = add(%0 : Int, %1 : Int);
+        %6 : Int = add(%2 : Int, %3 : Int);
+        %7 : Int = inc(%0 : Int);
+        %8 : Int = inc(%1 : Int);
+        %12 : Int = inc(%2 : Int);
+        %40 : Int = inc(%0 : Int);
+        %44 : Int = inc(%3 : Int);
+        %9 : Int = inc(%5 : Int);
+        %10 : Int = inc(%5 : Int);
+        %13 : Int = inc(%12 : Int);
+        %17 : Int, %18 : Int = div_rem(%6 : Int, %7 : Int);
+        %41 : Int = inc(%40 : Int);
+        %45 : Int = inc(%44 : Int);
+        %47 : Int = inc(%6 : Int);
+        %11 : Int = add(%9 : Int, %10 : Int);
+        %14 : Int = inc(%13 : Int);
+        %21 : Int = inc(%17 : Int);
+        %22 : Int = inc(%18 : Int);
+        %42 : Int = inc(%41 : Int);
+        %46 : Int = add(%45 : Int, %13 : Int);
+        %48 : Int = inc(%47 : Int);
+        %15 : Int = inc(%14 : Int);
+        %25 : Int = add(%21 : Int, %22 : Int);
+        %27 : Int = add(%11 : Int, %14 : Int);
+        return(%46 : Int);
+        %16 : Int = inc(%15 : Int);
+        %29 : Int = if_else(%27 : Int, %4 : Bool, %8 : Int);
+        return(%27 : Int);
+        %19 : Int, %20 : Int = div_rem(%16 : Int, %3 : Int);
+        %32 : Int = add(%16 : Int, %11 : Int);
+        %23 : Int = inc(%19 : Int);
+        %24 : Int = inc(%20 : Int);
+        %35 : Int, %36 : Int = div_rem(%32 : Int, %29 : Int);
+        %26 : Int = add(%23 : Int, %24 : Int);
+        %49 : Int = add(%48 : Int, %24 : Int);
+        %28 : Int = if_else(%25 : Int, %4 : Bool, %26 : Int);
+        %31 : Int = add(%25 : Int, %26 : Int);
+        return(%49 : Int);
+        %30 : Int = add(%28 : Int, %29 : Int);
+        %33 : Int, %34 : Int = div_rem(%30 : Int, %31 : Int);
+        %37 : Int = add(%33 : Int, %35 : Int);
+        %38 : Int = add(%34 : Int, %36 : Int);
+        %39 : Int = add(%37 : Int, %38 : Int);
+        return(%37 : Int);
+        %43 : Int = add(%39 : Int, %42 : Int);
+        return(%43 : Int);
+    "#
     );
 
     Ok(ir)
@@ -254,17 +255,18 @@ fn test_construction() -> Result<(), IRError<TestDialect>> {
     let p7 = store.get_val(v6[0]);
     let effect = store.get_op(effect_id);
 
-    store.check_ir(
-        "
-            %0 : Int = int_input<pos: 0>();
-            %1 : Int = int_input<pos: 1>();
-            %2 : Int = add(%0, %1);
-            %3 : Int, %4 : Int = div_rem(%2, %0);
-            %5 : Int = inc(%3);
-            %6 : Int = inc(%4);
-            return(%3);
-            %7 : Int = add(%5, %6);
-            ",
+    assert_display_is!(
+        store.format(),
+        r#"
+        %0 : Int = int_input<pos: 0>();
+        %1 : Int = int_input<pos: 1>();
+        %2 : Int = add(%0 : Int, %1 : Int);
+        %3 : Int, %4 : Int = div_rem(%2 : Int, %0 : Int);
+        %5 : Int = inc(%3 : Int);
+        %6 : Int = inc(%4 : Int);
+        return(%3 : Int);
+        %7 : Int = add(%5 : Int, %6 : Int);
+    "#
     );
 
     assert_eq!(store.n_ops(), 8);
@@ -349,10 +351,11 @@ fn test_reaches_self() -> Result<(), IRError<TestDialect>> {
     let mut store: IR<TestDialect> = IR::empty();
     let (lhs_id, _) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
     let lhs = store.get_op(lhs_id);
-    store.check_ir(
-        "
-            %0 : Int = int_input<pos: 0>();
-            ",
+    assert_display_is!(
+        store.format(),
+        r#"
+        %0 : Int = int_input<pos: 0>();
+    "#
     );
     assert!(lhs.reaches(&lhs));
     Ok(())
@@ -366,11 +369,12 @@ fn test_reaches_base() -> Result<(), IRError<TestDialect>> {
     let (ulhs_id, _) = store.add_op(Operations::Inc, svec![v0[0]])?;
     let lhs = store.get_op(lhs_id);
     let ulhs = store.get_op(ulhs_id);
-    store.check_ir(
-        "
-            %0 : Int = int_input<pos: 0>();
-            %1 : Int = inc(%0);
-            ",
+    assert_display_is!(
+        store.format(),
+        r#"
+        %0 : Int = int_input<pos: 0>();
+        %1 : Int = inc(%0 : Int);
+    "#
     );
     assert!(lhs.reaches(&ulhs));
     Ok(())
@@ -388,15 +392,16 @@ fn test_reaches_chain() -> Result<(), IRError<TestDialect>> {
     let (ulhs_id, _) = store.add_op(Operations::Inc, svec![v4[0]])?;
     let lhs = store.get_op(lhs_id);
     let ulhs = store.get_op(ulhs_id);
-    store.check_ir(
-        "
-            %0 : Int = int_input<pos: 0>();
-            %1 : Int = inc(%0);
-            %2 : Int = inc(%1);
-            %3 : Int = inc(%2);
-            %4 : Int = inc(%3);
-            %5 : Int = inc(%4);
-            ",
+    assert_display_is!(
+        store.format(),
+        r#"
+        %0 : Int = int_input<pos: 0>();
+        %1 : Int = inc(%0 : Int);
+        %2 : Int = inc(%1 : Int);
+        %3 : Int = inc(%2 : Int);
+        %4 : Int = inc(%3 : Int);
+        %5 : Int = inc(%4 : Int);
+    "#
     );
     assert!(lhs.reaches(&ulhs));
     Ok(())
@@ -411,12 +416,13 @@ fn test_reaches_happy_path() -> Result<(), IRError<TestDialect>> {
     let _ = store.add_op(Operations::Inc, svec![v0[0]])?;
     let lhs = store.get_op(lhs_id);
     let rhs = store.get_op(rhs_id);
-    store.check_ir(
-        "
-            %0 : Int = int_input<pos: 0>();
-            %1 : Int = int_input<pos: 1>();
-            %2 : Int = inc(%0);
-            ",
+    assert_display_is!(
+        store.format(),
+        r#"
+        %0 : Int = int_input<pos: 0>();
+        %1 : Int = int_input<pos: 1>();
+        %2 : Int = inc(%0 : Int);
+    "#
     );
     assert!(!lhs.reaches(&rhs));
     Ok(())
@@ -739,10 +745,11 @@ fn test_delete_op() -> Result<(), IRError<TestDialect>> {
     let (join_id, v2) = store.add_op(Operations::Add, svec![v0[0], v1[0]])?;
     store.delete_op(join_id);
     store.delete_op(rhs_id);
-    store.check_ir(
-        "
-            %0 : Int = int_input<pos: 0>();
-            ",
+    assert_display_is!(
+        store.format(),
+        r#"
+        %0 : Int = int_input<pos: 0>();
+    "#
     );
     assert!(store.raw_get_val(v2[0]).is_inactive());
     assert!(store.raw_get_val(v1[0]).is_inactive());
@@ -762,11 +769,12 @@ fn test_replace_val_use_wrong() {
     let (_, v1) = store
         .add_op(Operations::Inc, svec![v0[0]])
         .expect("Bad add_op");
-    store.check_ir(
-        "
-            %0 : Int = int_input<pos: 0>();
-            %1 : Int = inc(%0);
-            ",
+    assert_display_is!(
+        store.format(),
+        r#"
+        %0 : Int = int_input<pos: 0>();
+        %1 : Int = inc(%0 : Int);
+    "#
     );
     store.replace_val_use(v0[0], v1[0]);
 }
@@ -782,11 +790,12 @@ fn test_replace_val_use_wrong_longer() {
     let (_, v1) = store
         .add_op(Operations::Inc, svec![v0[0]])
         .expect("Bad add_op");
-    store.check_ir(
-        "
-            %0 : Int = int_input<pos: 0>();
-            %1 : Int = inc(%0);
-            ",
+    assert_display_is!(
+        store.format(),
+        r#"
+        %0 : Int = int_input<pos: 0>();
+        %1 : Int = inc(%0 : Int);
+    "#
     );
     store.replace_val_use(v0[0], v1[0]);
 }
@@ -798,20 +807,22 @@ fn test_replace_val_use() -> Result<(), IRError<TestDialect>> {
     let (_inp1_id, v0) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
     let (_inp2_id, v1) = store.add_op(Operations::IntInput { pos: 1 }, svec![])?;
     let (inc_id, _v2) = store.add_op(Operations::Inc, svec![v0[0]])?;
-    store.check_ir(
-        "
-            %0 : Int = int_input<pos: 0>();
-            %1 : Int = int_input<pos: 1>();
-            %2 : Int = inc(%0);
-            ",
+    assert_display_is!(
+        store.format(),
+        r#"
+        %0 : Int = int_input<pos: 0>();
+        %1 : Int = int_input<pos: 1>();
+        %2 : Int = inc(%0 : Int);
+    "#
     );
     store.replace_val_use(v0[0], v1[0]);
-    store.check_ir(
-        "
-            %0 : Int = int_input<pos: 0>();
-            %1 : Int = int_input<pos: 1>();
-            %2 : Int = inc(%1);
-            ",
+    assert_display_is!(
+        store.format(),
+        r#"
+        %0 : Int = int_input<pos: 0>();
+        %1 : Int = int_input<pos: 1>();
+        %2 : Int = inc(%1 : Int);
+    "#
     );
     let inc = store.get_op(inc_id);
     let v0 = store.get_val(v0[0]);
@@ -831,28 +842,30 @@ fn test_replace_val_use_make_shallower() -> Result<(), IRError<TestDialect>> {
     let (_, v3) = store.add_op(Operations::Inc, svec![v2[0]])?;
     let (_, v4) = store.add_op(Operations::Inc, svec![v3[0]])?;
     let (last_id, _v5) = store.add_op(Operations::Inc, svec![v4[0]])?;
-    store.check_ir(
-        "
-            %0 : Int = int_input<pos: 0>();
-            %1 : Int = int_input<pos: 1>();
-            %2 : Int = inc(%1);
-            %3 : Int = inc(%2);
-            %4 : Int = inc(%3);
-            %5 : Int = inc(%4);
-            ",
+    assert_display_is!(
+        store.format(),
+        r#"
+        %0 : Int = int_input<pos: 0>();
+        %1 : Int = int_input<pos: 1>();
+        %2 : Int = inc(%1 : Int);
+        %3 : Int = inc(%2 : Int);
+        %4 : Int = inc(%3 : Int);
+        %5 : Int = inc(%4 : Int);
+    "#
     );
     let last = store.get_op(last_id);
     assert_eq!(last.get_depth(), 4);
     store.replace_val_use(v4[0], v0[0]);
-    store.check_ir(
-        "
-            %0 : Int = int_input<pos: 0>();
-            %1 : Int = int_input<pos: 1>();
-            %2 : Int = inc(%1);
-            %3 : Int = inc(%0);
-            %4 : Int = inc(%2);
-            %5 : Int = inc(%4);
-            ",
+    assert_display_is!(
+        store.format(),
+        r#"
+        %0 : Int = int_input<pos: 0>();
+        %1 : Int = int_input<pos: 1>();
+        %2 : Int = inc(%1 : Int);
+        %5 : Int = inc(%0 : Int);
+        %3 : Int = inc(%2 : Int);
+        %4 : Int = inc(%3 : Int);
+    "#
     );
     let last = store.get_op(last_id);
     assert_eq!(last.get_depth(), 1);
@@ -869,28 +882,30 @@ fn test_replace_val_use_make_deeper() -> Result<(), IRError<TestDialect>> {
     let (_, v3) = store.add_op(Operations::Inc, svec![v2[0]])?;
     let (_, v4) = store.add_op(Operations::Inc, svec![v0[0]])?;
     let (last_id, _v5) = store.add_op(Operations::Inc, svec![v4[0]])?;
-    store.check_ir(
-        "
-            %0 : Int = int_input<pos: 0>();
-            %1 : Int = int_input<pos: 1>();
-            %2 : Int = inc(%1);
-            %3 : Int = inc(%0);
-            %4 : Int = inc(%2);
-            %5 : Int = inc(%3);
-            ",
+    assert_display_is!(
+        store.format(),
+        r#"
+        %0 : Int = int_input<pos: 0>();
+        %1 : Int = int_input<pos: 1>();
+        %2 : Int = inc(%1 : Int);
+        %4 : Int = inc(%0 : Int);
+        %3 : Int = inc(%2 : Int);
+        %5 : Int = inc(%4 : Int);
+    "#
     );
     let last = store.get_op(last_id);
     assert_eq!(last.get_depth(), 2);
     store.replace_val_use(v0[0], v3[0]);
-    store.check_ir(
-        "
-            %0 : Int = int_input<pos: 0>();
-            %1 : Int = int_input<pos: 1>();
-            %2 : Int = inc(%1);
-            %3 : Int = inc(%2);
-            %4 : Int = inc(%3);
-            %5 : Int = inc(%4);
-            ",
+    assert_display_is!(
+        store.format(),
+        r#"
+        %0 : Int = int_input<pos: 0>();
+        %1 : Int = int_input<pos: 1>();
+        %2 : Int = inc(%1 : Int);
+        %3 : Int = inc(%2 : Int);
+        %4 : Int = inc(%3 : Int);
+        %5 : Int = inc(%4 : Int);
+    "#
     );
     let last = store.get_op(last_id);
     assert_eq!(last.get_depth(), 4);
@@ -998,11 +1013,12 @@ fn test_replace_val_use_self() -> Result<(), IRError<TestDialect>> {
     let inc_after = format!("{:?}", store.get_op(inc_id));
 
     assert_eq!(inc_before, inc_after);
-    store.check_ir(
-        "
+    assert_display_is!(
+        store.format(),
+        r#"
         %0 : Int = int_input<pos: 0>();
-        %1 : Int = inc(%0);
-    ",
+        %1 : Int = inc(%0 : Int);
+    "#
     );
     Ok(())
 }

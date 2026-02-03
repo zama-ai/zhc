@@ -83,7 +83,7 @@ pub fn eliminate_dead_code<D: Dialect>(ir: &mut IR<D>) {
 mod test {
     use super::*;
     use crate::{tests::test_dialect::*, *};
-    use hc_utils::svec;
+    use hc_utils::{assert_display_is, svec};
 
     #[test]
     fn test_empty_ir() {
@@ -92,7 +92,7 @@ mod test {
         assert_eq!(analysis.get_statuses_iter().count(), 0);
         eliminate_dead_code(&mut ir);
         assert_eq!(ir.n_ops(), 0);
-        ir.check_ir("");
+        assert_display_is!(ir.format(), r#""#);
     }
 
     #[test]
@@ -100,11 +100,12 @@ mod test {
         let mut ir = IR::<TestDialect>::empty();
         let (input_op, input_vals) = ir.add_op(Operations::IntInput { pos: 0 }, svec![])?;
         let (return_op, _) = ir.add_op(Operations::Return, input_vals)?;
-        ir.check_ir(
-            "
+        assert_display_is!(
+            ir.format(),
+            r#"
             %0 : Int = int_input<pos: 0>();
-            return(%0);
-            ",
+            return(%0 : Int);
+        "#
         );
 
         let analysis = DeadCodeAnalysis::from_ir(&ir);
@@ -115,11 +116,12 @@ mod test {
         assert_eq!(ir.n_ops(), 2);
         assert!(ir.has_opid(input_op));
         assert!(ir.has_opid(return_op));
-        ir.check_ir(
-            "
+        assert_display_is!(
+            ir.format(),
+            r#"
             %0 : Int = int_input<pos: 0>();
-            return(%0);
-            ",
+            return(%0 : Int);
+        "#
         );
         Ok(())
     }
@@ -132,12 +134,13 @@ mod test {
             ir.add_op(Operations::Add, svec![input_vals[0], input_vals[0]])?;
         let (return_op, _) = ir.add_op(Operations::Return, svec![input_vals[0]])?;
 
-        ir.check_ir(
-            "
+        assert_display_is!(
+            ir.format(),
+            r#"
             %0 : Int = int_input<pos: 0>();
-            %1 : Int = add(%0, %0);
-            return(%0);
-            ",
+            %1 : Int = add(%0 : Int, %0 : Int);
+            return(%0 : Int);
+        "#
         );
 
         let analysis = DeadCodeAnalysis::from_ir(&ir);
@@ -151,11 +154,12 @@ mod test {
         assert!(!ir.has_opid(add_op));
         assert!(ir.has_opid(return_op));
 
-        ir.check_ir(
-            "
+        assert_display_is!(
+            ir.format(),
+            r#"
             %0 : Int = int_input<pos: 0>();
-            return(%0);
-            ",
+            return(%0 : Int);
+        "#
         );
         Ok(())
     }
@@ -169,14 +173,15 @@ mod test {
         let (inc_op, inc_vals) = ir.add_op(Operations::Inc, add_vals)?;
         let (return_op, _) = ir.add_op(Operations::Return, inc_vals)?;
 
-        ir.check_ir(
-            "
+        assert_display_is!(
+            ir.format(),
+            r#"
             %0 : Int = int_input<pos: 0>();
             %1 : Int = int_input<pos: 1>();
-            %2 : Int = add(%0, %1);
-            %3 : Int = inc(%2);
-            return(%3);
-            ",
+            %2 : Int = add(%0 : Int, %1 : Int);
+            %3 : Int = inc(%2 : Int);
+            return(%3 : Int);
+        "#
         );
 
         let analysis = DeadCodeAnalysis::from_ir(&ir);
@@ -189,14 +194,15 @@ mod test {
         eliminate_dead_code(&mut ir);
         assert_eq!(ir.n_ops(), 5);
 
-        ir.check_ir(
-            "
+        assert_display_is!(
+            ir.format(),
+            r#"
             %0 : Int = int_input<pos: 0>();
             %1 : Int = int_input<pos: 1>();
-            %2 : Int = add(%0, %1);
-            %3 : Int = inc(%2);
-            return(%3);
-            ",
+            %2 : Int = add(%0 : Int, %1 : Int);
+            %3 : Int = inc(%2 : Int);
+            return(%3 : Int);
+        "#
         );
         Ok(())
     }
@@ -210,14 +216,15 @@ mod test {
         let (add_op, _) = ir.add_op(Operations::Add, svec![inc1_vals[0], inc2_vals[0]])?;
         let (return_op, _) = ir.add_op(Operations::Return, svec![inc1_vals[0]])?;
 
-        ir.check_ir(
-            "
+        assert_display_is!(
+            ir.format(),
+            r#"
             %0 : Int = int_input<pos: 0>();
-            %1 : Int = inc(%0);
-            %2 : Int = inc(%0);
-            %3 : Int = add(%1, %2);
-            return(%1);
-            ",
+            %1 : Int = inc(%0 : Int);
+            %2 : Int = inc(%0 : Int);
+            %3 : Int = add(%1 : Int, %2 : Int);
+            return(%1 : Int);
+        "#
         );
 
         let analysis = DeadCodeAnalysis::from_ir(&ir);
@@ -235,12 +242,13 @@ mod test {
         assert!(!ir.has_opid(add_op));
         assert!(ir.has_opid(return_op));
 
-        ir.check_ir(
-            "
+        assert_display_is!(
+            ir.format(),
+            r#"
             %0 : Int = int_input<pos: 0>();
-            %1 : Int = inc(%0);
-            return(%1);
-        ",
+            %1 : Int = inc(%0 : Int);
+            return(%1 : Int);
+        "#
         );
         Ok(())
     }
@@ -254,14 +262,15 @@ mod test {
         let (return1, _) = ir.add_op(Operations::Return, svec![vals1[0]])?;
         let (return2, _) = ir.add_op(Operations::Return, svec![vals2[0]])?;
 
-        ir.check_ir(
-            "
+        assert_display_is!(
+            ir.format(),
+            r#"
             %0 : Int = int_input<pos: 0>();
             %1 : Int = int_input<pos: 1>();
-            %2 : Int = add(%0, %1);
-            return(%0);
-            return(%1);
-            ",
+            %2 : Int = add(%0 : Int, %1 : Int);
+            return(%0 : Int);
+            return(%1 : Int);
+        "#
         );
 
         let analysis = DeadCodeAnalysis::from_ir(&ir);
@@ -274,13 +283,14 @@ mod test {
         eliminate_dead_code(&mut ir);
         assert_eq!(ir.n_ops(), 4);
         assert!(!ir.has_opid(add_op));
-        ir.check_ir(
-            "
+        assert_display_is!(
+            ir.format(),
+            r#"
             %0 : Int = int_input<pos: 0>();
             %1 : Int = int_input<pos: 1>();
-            return(%0);
-            return(%1);
-            ",
+            return(%0 : Int);
+            return(%1 : Int);
+        "#
         );
         Ok(())
     }
@@ -292,12 +302,13 @@ mod test {
         let (add_op, add_vals) = ir.add_op(Operations::Add, svec![input_vals[0], input_vals[0]])?;
         let (inc_op, _) = ir.add_op(Operations::Inc, add_vals)?;
 
-        ir.check_ir(
-            "
+        assert_display_is!(
+            ir.format(),
+            r#"
             %0 : Int = int_input<pos: 0>();
-            %1 : Int = add(%0, %0);
-            %2 : Int = inc(%1);
-            ",
+            %1 : Int = add(%0 : Int, %0 : Int);
+            %2 : Int = inc(%1 : Int);
+        "#
         );
 
         let analysis = DeadCodeAnalysis::from_ir(&ir);
@@ -308,9 +319,10 @@ mod test {
         eliminate_dead_code(&mut ir);
         assert_eq!(ir.n_ops(), 0);
 
-        ir.check_ir(
-            "
-            ",
+        assert_display_is!(
+            ir.format(),
+            r#"
+            "#
         );
         Ok(())
     }
@@ -324,11 +336,12 @@ mod test {
 
         ir.delete_op(add_op);
 
-        ir.check_ir(
-            "
+        assert_display_is!(
+            ir.format(),
+            r#"
             %0 : Int = int_input<pos: 0>();
-            return(%0);
-            ",
+            return(%0 : Int);
+        "#
         );
 
         let analysis = DeadCodeAnalysis::from_ir(&ir);
@@ -340,11 +353,12 @@ mod test {
         assert!(ir.has_opid(input_op));
         assert!(ir.has_opid(return_op));
 
-        ir.check_ir(
-            "
+        assert_display_is!(
+            ir.format(),
+            r#"
             %0 : Int = int_input<pos: 0>();
-            return(%0);
-            ",
+            return(%0 : Int);
+        "#
         );
         Ok(())
     }
@@ -359,15 +373,16 @@ mod test {
         let (live_inc, live_vals) = ir.add_op(Operations::Inc, svec![vals1[0]])?;
         let (return_op, _) = ir.add_op(Operations::Return, live_vals)?;
 
-        ir.check_ir(
-            "
+        assert_display_is!(
+            ir.format(),
+            r#"
             %0 : Int = int_input<pos: 0>();
             %1 : Int = int_input<pos: 1>();
-            %2 : Int = add(%0, %1);
-            %3 : Int = inc(%0);
-            %4 : Int = add(%2, %2);
-            return(%3);
-            ",
+            %2 : Int = add(%0 : Int, %1 : Int);
+            %4 : Int = inc(%0 : Int);
+            %3 : Int = add(%2 : Int, %2 : Int);
+            return(%4 : Int);
+        "#
         );
 
         let analysis = DeadCodeAnalysis::from_ir(&ir);
@@ -386,12 +401,13 @@ mod test {
         assert!(!ir.has_opid(dead_add2));
         assert!(ir.has_opid(live_inc));
         assert!(ir.has_opid(return_op));
-        ir.check_ir(
-            "
+        assert_display_is!(
+            ir.format(),
+            r#"
             %0 : Int = int_input<pos: 0>();
-            %3 : Int = inc(%0);
-            return(%3);
-            ",
+            %4 : Int = inc(%0 : Int);
+            return(%4 : Int);
+        "#
         );
         Ok(())
     }

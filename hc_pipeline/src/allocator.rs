@@ -815,7 +815,7 @@ impl<'ir> Allocator<'ir> {
 
             #[cfg(debug_assertions)]
             {
-                println!("{}", op);
+                println!("{}", op.format());
                 println!("{}: {}", self.point, self.register_file);
             }
 
@@ -848,9 +848,10 @@ pub fn allocate_registers(ir: &IR<HpuLang>, config: &HpuConfig) -> IR<DopLang> {
 
 #[cfg(test)]
 mod test {
-    use hc_ir::{IR, translation::Translator};
+    use hc_ir::{IR, PrintWalker, translation::Translator};
     use hc_langs::{doplang::DopLang, ioplang::IopLang};
     use hc_sim::hpu::{HpuConfig, PhysicalConfig};
+    use hc_utils::assert_display_is;
 
     use crate::{
         batcher::batch,
@@ -873,138 +874,140 @@ mod test {
     #[test]
     fn test_allocate_add_ir() {
         let ir = pipeline(&get_add_ir(16, 2, 2));
-        ir.check_ir(
-            "
+        assert_display_is!(
+            ir.format(),
+            r#"
             %0 : Ctx = _INIT();
-            %1 : Ctx = LD<R(0), TC(0, 0)>(%0);
-            %2 : Ctx = LD<R(1), TC(0, 1)>(%1);
-            %3 : Ctx = LD<R(2), TC(0, 2)>(%2);
-            %4 : Ctx = LD<R(3), TC(0, 3)>(%3);
-            %5 : Ctx = LD<R(4), TC(0, 4)>(%4);
-            %6 : Ctx = LD<R(5), TC(0, 5)>(%5);
-            %7 : Ctx = LD<R(6), TC(0, 6)>(%6);
-            %8 : Ctx = LD<R(7), TC(0, 7)>(%7);
-            %9 : Ctx = LD<R(8), TC(1, 0)>(%8);
-            %10 : Ctx = ADD<R(9), R(0), R(8)>(%9);
-            %11 : Ctx = LD<R(0), TC(1, 1)>(%10);
-            %12 : Ctx = LD<R(8), TC(1, 2)>(%11);
-            %13 : Ctx = LD<R(10), TC(1, 3)>(%12);
-            %14 : Ctx = LD<R(11), TC(1, 4)>(%13);
-            %15 : Ctx = ADD<R(12), R(1), R(0)>(%14);
-            %16 : Ctx = LD<R(0), TC(1, 5)>(%15);
-            %17 : Ctx = LD<R(1), TC(1, 6)>(%16);
-            %18 : Ctx = LD<R(13), TC(1, 7)>(%17);
-            %19 : Ctx = ADD<R(14), R(2), R(8)>(%18);
-            %20 : Ctx = ADD<R(2), R(3), R(10)>(%19);
-            %21 : Ctx = ADD<R(3), R(4), R(11)>(%20);
-            %22 : Ctx = ADD<R(4), R(5), R(0)>(%21);
-            %23 : Ctx = ADD<R(0), R(6), R(1)>(%22);
-            %24 : Ctx = ADD<R(1), R(7), R(13)>(%23);
-            %25 : Ctx = PBS2<R(6, 2), R(9), LUT(26)>(%24);
-            %26 : Ctx = PBS<R(5), R(12), LUT(47)>(%25);
-            %27 : Ctx = PBS<R(8), R(14), LUT(48)>(%26);
-            %28 : Ctx = PBS<R(10), R(2), LUT(49)>(%27);
-            %29 : Ctx = PBS<R(11), R(3), LUT(47)>(%28);
-            %30 : Ctx = PBS<R(13), R(4), LUT(48)>(%29);
-            %31 : Ctx = PBS<R(15), R(0), LUT(49)>(%30);
-            %32 : Ctx = PBSF<R(16), R(1), LUT(50)>(%31);
-            %33 : Ctx = ADD<R(17), R(1), R(6)>(%32);
-            %34 : Ctx = ADD<R(1), R(7), R(5)>(%33);
-            %35 : Ctx = PBSF<R(5), R(1), LUT(44)>(%34);
-            %36 : Ctx = ADD<R(6), R(11), R(13)>(%35);
-            %37 : Ctx = ST<TC(0, 7), R(17)>(%36);
-            %38 : Ctx = ADD<R(7), R(1), R(8)>(%37);
-            %39 : Ctx = ADD<R(1), R(6), R(15)>(%38);
-            %40 : Ctx = PBSF<R(8), R(7), LUT(45)>(%39);
-            %41 : Ctx = ADD<R(13), R(7), R(10)>(%40);
-            %42 : Ctx = ADD<R(7), R(1), R(16)>(%41);
-            %43 : Ctx = ADD<R(10), R(9), R(5)>(%42);
-            %44 : Ctx = PBS<R(5), R(13), LUT(46)>(%43);
-            %45 : Ctx = PBSF<R(9), R(7), LUT(21)>(%44);
-            %46 : Ctx = ADD<R(7), R(12), R(8)>(%45);
-            %47 : Ctx = ST<TC(0, 0), R(10)>(%46);
-            %48 : Ctx = ST<TC(0, 1), R(7)>(%47);
-            %49 : Ctx = ADD<R(7), R(11), R(5)>(%48);
-            %50 : Ctx = ADDS<R(8), R(9), PT_I(1)>(%49);
-            %51 : Ctx = ADD<R(9), R(6), R(5)>(%50);
-            %52 : Ctx = ADD<R(6), R(1), R(5)>(%51);
-            %53 : Ctx = ADD<R(1), R(14), R(5)>(%52);
-            %54 : Ctx = MAC<R(10), R(8), R(5), PT_I(4)>(%53);
-            %55 : Ctx = ST<TC(0, 2), R(1)>(%54);
-            %56 : Ctx = PBS<R(1), R(7), LUT(44)>(%55);
-            %57 : Ctx = PBS<R(5), R(9), LUT(45)>(%56);
-            %58 : Ctx = PBS<R(8), R(6), LUT(46)>(%57);
-            %59 : Ctx = PBSF<R(11), R(10), LUT(52)>(%58);
-            %60 : Ctx = ADD<R(6), R(2), R(1)>(%59);
-            %61 : Ctx = ADD<R(1), R(3), R(5)>(%60);
-            %62 : Ctx = ST<TC(0, 3), R(6)>(%61);
-            %63 : Ctx = ADD<R(2), R(4), R(8)>(%62);
-            %64 : Ctx = ST<TC(0, 4), R(1)>(%63);
-            %65 : Ctx = ADD<R(1), R(0), R(11)>(%64);
-            %66 : Ctx = ST<TC(0, 5), R(2)>(%65);
-            %67 : Ctx = ST<TC(0, 6), R(1)>(%66);
-            ",
+            %1 : Ctx = LD<R(0), TC(0, 0)>(%0 : Ctx);
+            %2 : Ctx = LD<R(1), TC(0, 1)>(%1 : Ctx);
+            %3 : Ctx = LD<R(2), TC(0, 2)>(%2 : Ctx);
+            %4 : Ctx = LD<R(3), TC(0, 3)>(%3 : Ctx);
+            %5 : Ctx = LD<R(4), TC(0, 4)>(%4 : Ctx);
+            %6 : Ctx = LD<R(5), TC(0, 5)>(%5 : Ctx);
+            %7 : Ctx = LD<R(6), TC(0, 6)>(%6 : Ctx);
+            %8 : Ctx = LD<R(7), TC(0, 7)>(%7 : Ctx);
+            %9 : Ctx = LD<R(8), TC(1, 0)>(%8 : Ctx);
+            %10 : Ctx = ADD<R(9), R(0), R(8)>(%9 : Ctx);
+            %11 : Ctx = LD<R(0), TC(1, 1)>(%10 : Ctx);
+            %12 : Ctx = LD<R(8), TC(1, 2)>(%11 : Ctx);
+            %13 : Ctx = LD<R(10), TC(1, 3)>(%12 : Ctx);
+            %14 : Ctx = LD<R(11), TC(1, 4)>(%13 : Ctx);
+            %15 : Ctx = ADD<R(12), R(1), R(0)>(%14 : Ctx);
+            %16 : Ctx = LD<R(0), TC(1, 5)>(%15 : Ctx);
+            %17 : Ctx = LD<R(1), TC(1, 6)>(%16 : Ctx);
+            %18 : Ctx = LD<R(13), TC(1, 7)>(%17 : Ctx);
+            %19 : Ctx = ADD<R(14), R(2), R(8)>(%18 : Ctx);
+            %20 : Ctx = ADD<R(2), R(3), R(10)>(%19 : Ctx);
+            %21 : Ctx = ADD<R(3), R(4), R(11)>(%20 : Ctx);
+            %22 : Ctx = ADD<R(4), R(5), R(0)>(%21 : Ctx);
+            %23 : Ctx = ADD<R(0), R(6), R(1)>(%22 : Ctx);
+            %24 : Ctx = ADD<R(1), R(7), R(13)>(%23 : Ctx);
+            %25 : Ctx = PBS2<R(6, 2), R(9), LUT(26)>(%24 : Ctx);
+            %26 : Ctx = PBS<R(5), R(12), LUT(47)>(%25 : Ctx);
+            %27 : Ctx = PBS<R(8), R(14), LUT(48)>(%26 : Ctx);
+            %28 : Ctx = PBS<R(10), R(2), LUT(49)>(%27 : Ctx);
+            %29 : Ctx = PBS<R(11), R(3), LUT(47)>(%28 : Ctx);
+            %30 : Ctx = PBS<R(13), R(4), LUT(48)>(%29 : Ctx);
+            %31 : Ctx = PBS<R(15), R(0), LUT(49)>(%30 : Ctx);
+            %32 : Ctx = PBSF<R(16), R(1), LUT(50)>(%31 : Ctx);
+            %33 : Ctx = ADD<R(17), R(1), R(6)>(%32 : Ctx);
+            %34 : Ctx = ADD<R(1), R(7), R(5)>(%33 : Ctx);
+            %35 : Ctx = PBSF<R(5), R(1), LUT(44)>(%34 : Ctx);
+            %36 : Ctx = ADD<R(6), R(11), R(13)>(%35 : Ctx);
+            %37 : Ctx = ST<TC(0, 7), R(17)>(%36 : Ctx);
+            %38 : Ctx = ADD<R(7), R(1), R(8)>(%37 : Ctx);
+            %39 : Ctx = ADD<R(1), R(6), R(15)>(%38 : Ctx);
+            %40 : Ctx = PBSF<R(8), R(7), LUT(45)>(%39 : Ctx);
+            %41 : Ctx = ADD<R(13), R(7), R(10)>(%40 : Ctx);
+            %42 : Ctx = ADD<R(7), R(1), R(16)>(%41 : Ctx);
+            %43 : Ctx = ADD<R(10), R(9), R(5)>(%42 : Ctx);
+            %44 : Ctx = PBS<R(5), R(13), LUT(46)>(%43 : Ctx);
+            %45 : Ctx = PBSF<R(9), R(7), LUT(21)>(%44 : Ctx);
+            %46 : Ctx = ADD<R(7), R(12), R(8)>(%45 : Ctx);
+            %47 : Ctx = ST<TC(0, 0), R(10)>(%46 : Ctx);
+            %48 : Ctx = ST<TC(0, 1), R(7)>(%47 : Ctx);
+            %49 : Ctx = ADD<R(7), R(11), R(5)>(%48 : Ctx);
+            %50 : Ctx = ADDS<R(8), R(9), PT_I(1)>(%49 : Ctx);
+            %51 : Ctx = ADD<R(9), R(6), R(5)>(%50 : Ctx);
+            %52 : Ctx = ADD<R(6), R(1), R(5)>(%51 : Ctx);
+            %53 : Ctx = ADD<R(1), R(14), R(5)>(%52 : Ctx);
+            %54 : Ctx = MAC<R(10), R(8), R(5), PT_I(4)>(%53 : Ctx);
+            %55 : Ctx = ST<TC(0, 2), R(1)>(%54 : Ctx);
+            %56 : Ctx = PBS<R(1), R(7), LUT(44)>(%55 : Ctx);
+            %57 : Ctx = PBS<R(5), R(9), LUT(45)>(%56 : Ctx);
+            %58 : Ctx = PBS<R(8), R(6), LUT(46)>(%57 : Ctx);
+            %59 : Ctx = PBSF<R(11), R(10), LUT(52)>(%58 : Ctx);
+            %60 : Ctx = ADD<R(6), R(2), R(1)>(%59 : Ctx);
+            %61 : Ctx = ADD<R(1), R(3), R(5)>(%60 : Ctx);
+            %62 : Ctx = ST<TC(0, 3), R(6)>(%61 : Ctx);
+            %63 : Ctx = ADD<R(2), R(4), R(8)>(%62 : Ctx);
+            %64 : Ctx = ST<TC(0, 4), R(1)>(%63 : Ctx);
+            %65 : Ctx = ADD<R(1), R(0), R(11)>(%64 : Ctx);
+            %66 : Ctx = ST<TC(0, 5), R(2)>(%65 : Ctx);
+            %67 : Ctx = ST<TC(0, 6), R(1)>(%66 : Ctx);
+        "#
         );
     }
 
     #[test]
     fn test_allocate_cmp_ir() {
         let ir = pipeline(&get_cmp_ir(16, 2, 2));
-        ir.check_ir_linear(
-            "
+        assert_display_is!(
+            ir.format().with_walker(PrintWalker::Linear),
+            r#"
             %0 : Ctx = _INIT();
-            %1 : Ctx = LD<R(0), TC(0, 0)>(%0);
-            %2 : Ctx = LD<R(1), TC(0, 1)>(%1);
-            %3 : Ctx = MAC<R(2), R(1), R(0), PT_I(4)>(%2);
-            %4 : Ctx = LD<R(0), TC(0, 2)>(%3);
-            %5 : Ctx = LD<R(1), TC(0, 3)>(%4);
-            %6 : Ctx = LD<R(3), TC(0, 4)>(%5);
-            %7 : Ctx = LD<R(4), TC(0, 5)>(%6);
-            %8 : Ctx = MAC<R(5), R(1), R(0), PT_I(4)>(%7);
-            %9 : Ctx = LD<R(0), TC(0, 6)>(%8);
-            %10 : Ctx = LD<R(1), TC(0, 7)>(%9);
-            %11 : Ctx = LD<R(6), TC(1, 0)>(%10);
-            %12 : Ctx = LD<R(7), TC(1, 1)>(%11);
-            %13 : Ctx = MAC<R(8), R(4), R(3), PT_I(4)>(%12);
-            %14 : Ctx = LD<R(3), TC(1, 2)>(%13);
-            %15 : Ctx = LD<R(4), TC(1, 3)>(%14);
-            %16 : Ctx = LD<R(9), TC(1, 4)>(%15);
-            %17 : Ctx = LD<R(10), TC(1, 5)>(%16);
-            %18 : Ctx = MAC<R(11), R(1), R(0), PT_I(4)>(%17);
-            %19 : Ctx = LD<R(0), TC(1, 6)>(%18);
-            %20 : Ctx = LD<R(1), TC(1, 7)>(%19);
-            %21 : Ctx = MAC<R(12), R(7), R(6), PT_I(4)>(%20);
-            %22 : Ctx = MAC<R(6), R(4), R(3), PT_I(4)>(%21);
-            %23 : Ctx = MAC<R(3), R(10), R(9), PT_I(4)>(%22);
-            %24 : Ctx = MAC<R(4), R(1), R(0), PT_I(4)>(%23);
-            %25 : Ctx = PBS<R(0), R(2), LUT(0)>(%24);
-            %26 : Ctx = PBS<R(1), R(5), LUT(0)>(%25);
-            %27 : Ctx = PBS<R(7), R(8), LUT(0)>(%26);
-            %28 : Ctx = PBS<R(9), R(11), LUT(0)>(%27);
-            %29 : Ctx = PBS<R(10), R(12), LUT(0)>(%28);
-            %30 : Ctx = PBS<R(13), R(6), LUT(0)>(%29);
-            %31 : Ctx = PBS<R(14), R(3), LUT(0)>(%30);
-            %32 : Ctx = PBSF<R(15), R(4), LUT(0)>(%31);
-            %33 : Ctx = SUB<R(2), R(0), R(10)>(%32);
-            %34 : Ctx = SUB<R(0), R(1), R(13)>(%33);
-            %35 : Ctx = SUB<R(1), R(7), R(14)>(%34);
-            %36 : Ctx = SUB<R(3), R(9), R(15)>(%35);
-            %37 : Ctx = PBS<R(4), R(2), LUT(10)>(%36);
-            %38 : Ctx = PBS<R(5), R(0), LUT(10)>(%37);
-            %39 : Ctx = PBS<R(6), R(1), LUT(10)>(%38);
-            %40 : Ctx = PBSF<R(7), R(3), LUT(10)>(%39);
-            %41 : Ctx = ADDS<R(0), R(4), PT_I(1)>(%40);
-            %42 : Ctx = ADDS<R(1), R(5), PT_I(1)>(%41);
-            %43 : Ctx = ADDS<R(2), R(6), PT_I(1)>(%42);
-            %44 : Ctx = ADDS<R(3), R(7), PT_I(1)>(%43);
-            %45 : Ctx = MAC<R(4), R(1), R(0), PT_I(4)>(%44);
-            %46 : Ctx = MAC<R(0), R(3), R(2), PT_I(4)>(%45);
-            %47 : Ctx = PBS<R(1), R(4), LUT(11)>(%46);
-            %48 : Ctx = PBSF<R(2), R(0), LUT(11)>(%47);
-            %49 : Ctx = MAC<R(0), R(2), R(1), PT_I(4)>(%48);
-            %50 : Ctx = PBSF<R(1), R(0), LUT(27)>(%49);
-            %51 : Ctx = ST<TC(0, 0), R(1)>(%50);
-            ",
+            %1 : Ctx = LD<R(0), TC(0, 0)>(%0 : Ctx);
+            %2 : Ctx = LD<R(1), TC(0, 1)>(%1 : Ctx);
+            %3 : Ctx = MAC<R(2), R(1), R(0), PT_I(4)>(%2 : Ctx);
+            %4 : Ctx = LD<R(0), TC(0, 2)>(%3 : Ctx);
+            %5 : Ctx = LD<R(1), TC(0, 3)>(%4 : Ctx);
+            %6 : Ctx = LD<R(3), TC(0, 4)>(%5 : Ctx);
+            %7 : Ctx = LD<R(4), TC(0, 5)>(%6 : Ctx);
+            %8 : Ctx = MAC<R(5), R(1), R(0), PT_I(4)>(%7 : Ctx);
+            %9 : Ctx = LD<R(0), TC(0, 6)>(%8 : Ctx);
+            %10 : Ctx = LD<R(1), TC(0, 7)>(%9 : Ctx);
+            %11 : Ctx = LD<R(6), TC(1, 0)>(%10 : Ctx);
+            %12 : Ctx = LD<R(7), TC(1, 1)>(%11 : Ctx);
+            %13 : Ctx = MAC<R(8), R(4), R(3), PT_I(4)>(%12 : Ctx);
+            %14 : Ctx = LD<R(3), TC(1, 2)>(%13 : Ctx);
+            %15 : Ctx = LD<R(4), TC(1, 3)>(%14 : Ctx);
+            %16 : Ctx = LD<R(9), TC(1, 4)>(%15 : Ctx);
+            %17 : Ctx = LD<R(10), TC(1, 5)>(%16 : Ctx);
+            %18 : Ctx = MAC<R(11), R(1), R(0), PT_I(4)>(%17 : Ctx);
+            %19 : Ctx = LD<R(0), TC(1, 6)>(%18 : Ctx);
+            %20 : Ctx = LD<R(1), TC(1, 7)>(%19 : Ctx);
+            %21 : Ctx = MAC<R(12), R(7), R(6), PT_I(4)>(%20 : Ctx);
+            %22 : Ctx = MAC<R(6), R(4), R(3), PT_I(4)>(%21 : Ctx);
+            %23 : Ctx = MAC<R(3), R(10), R(9), PT_I(4)>(%22 : Ctx);
+            %24 : Ctx = MAC<R(4), R(1), R(0), PT_I(4)>(%23 : Ctx);
+            %25 : Ctx = PBS<R(0), R(2), LUT(0)>(%24 : Ctx);
+            %26 : Ctx = PBS<R(1), R(5), LUT(0)>(%25 : Ctx);
+            %27 : Ctx = PBS<R(7), R(8), LUT(0)>(%26 : Ctx);
+            %28 : Ctx = PBS<R(9), R(11), LUT(0)>(%27 : Ctx);
+            %29 : Ctx = PBS<R(10), R(12), LUT(0)>(%28 : Ctx);
+            %30 : Ctx = PBS<R(13), R(6), LUT(0)>(%29 : Ctx);
+            %31 : Ctx = PBS<R(14), R(3), LUT(0)>(%30 : Ctx);
+            %32 : Ctx = PBSF<R(15), R(4), LUT(0)>(%31 : Ctx);
+            %33 : Ctx = SUB<R(2), R(0), R(10)>(%32 : Ctx);
+            %34 : Ctx = SUB<R(0), R(1), R(13)>(%33 : Ctx);
+            %35 : Ctx = SUB<R(1), R(7), R(14)>(%34 : Ctx);
+            %36 : Ctx = SUB<R(3), R(9), R(15)>(%35 : Ctx);
+            %37 : Ctx = PBS<R(4), R(2), LUT(10)>(%36 : Ctx);
+            %38 : Ctx = PBS<R(5), R(0), LUT(10)>(%37 : Ctx);
+            %39 : Ctx = PBS<R(6), R(1), LUT(10)>(%38 : Ctx);
+            %40 : Ctx = PBSF<R(7), R(3), LUT(10)>(%39 : Ctx);
+            %41 : Ctx = ADDS<R(0), R(4), PT_I(1)>(%40 : Ctx);
+            %42 : Ctx = ADDS<R(1), R(5), PT_I(1)>(%41 : Ctx);
+            %43 : Ctx = ADDS<R(2), R(6), PT_I(1)>(%42 : Ctx);
+            %44 : Ctx = ADDS<R(3), R(7), PT_I(1)>(%43 : Ctx);
+            %45 : Ctx = MAC<R(4), R(1), R(0), PT_I(4)>(%44 : Ctx);
+            %46 : Ctx = MAC<R(0), R(3), R(2), PT_I(4)>(%45 : Ctx);
+            %47 : Ctx = PBS<R(1), R(4), LUT(11)>(%46 : Ctx);
+            %48 : Ctx = PBSF<R(2), R(0), LUT(11)>(%47 : Ctx);
+            %49 : Ctx = MAC<R(0), R(2), R(1), PT_I(4)>(%48 : Ctx);
+            %50 : Ctx = PBSF<R(1), R(0), LUT(27)>(%49 : Ctx);
+            %51 : Ctx = ST<TC(0, 0), R(1)>(%50 : Ctx);
+        "#
         );
     }
 }

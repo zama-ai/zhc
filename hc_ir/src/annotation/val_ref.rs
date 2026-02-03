@@ -1,11 +1,11 @@
 use std::{
-    fmt::{Debug, Display},
+    fmt::Debug,
     hash::{Hash, Hasher},
     ops::Deref,
 };
 
 use crate::{
-    AnnIR, AnnOpRef, AnnValOriginRef, AnnValUseRef, Annotation, Dialect, Printer, val_ref::ValRef,
+    AnnIR, AnnOpRef, AnnValOriginRef, AnnValRefFormatter, AnnValUseRef, Annotation, Dialect, ValRef,
 };
 
 /// Value reference with attached annotation data.
@@ -69,6 +69,10 @@ impl<'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation>
             }
         })
     }
+
+    pub fn format(&self) -> AnnValRefFormatter<'_, 'ir, 'ann, D, OpAnn, ValAnn> {
+        AnnValRefFormatter::new(self)
+    }
 }
 
 impl<'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> Deref
@@ -78,23 +82,6 @@ impl<'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> Deref
 
     fn deref(&self) -> &Self::Target {
         &self.valref
-    }
-}
-
-impl<'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> Display
-    for AnnValRef<'ir, 'ann, D, OpAnn, ValAnn>
-where
-    OpAnn: Debug + Clone,
-    ValAnn: Debug + Clone,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if f.alternate() {
-            let printer = Printer::from_ir(self.ir, crate::PrintWalker::Linear, true, true);
-            printer.format_ann_valref(f, self)
-        } else {
-            let printer = Printer::from_ir(self.ir, crate::PrintWalker::Topo, true, true);
-            printer.format_ann_valref(f, self)
-        }
     }
 }
 
