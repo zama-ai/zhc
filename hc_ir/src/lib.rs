@@ -10,8 +10,9 @@ pub mod dce;
 pub mod scheduling;
 pub mod translation;
 pub mod traversal;
+pub mod visualization;
+pub mod interpretation;
 
-mod annotation;
 mod dialect;
 mod id;
 mod ir;
@@ -28,7 +29,7 @@ mod val_mut;
 mod val_origin;
 mod val_ref;
 mod val_use;
-pub mod visualization;
+mod annotation;
 
 pub(crate) use annotation::*;
 pub use dialect::*;

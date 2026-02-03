@@ -240,8 +240,8 @@ fn display_formatting() {
         spec,
     };
 
-    assert_eq!(format!("{}", block), "1_3_5_cblk");
-    assert_eq!(format!("{:#}", block), "1_11_101_cblk");
+    assert_eq!(format!("{:?}", block), "1_3_5_cblk");
+    assert_eq!(format!("{:#?}", block), "1_11_101_cblk");
 }
 
 #[test]

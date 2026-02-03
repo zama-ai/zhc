@@ -1,3 +1,4 @@
+use crate::interpretation::{Interpretable, Interpretation, InterpretsTo, interpret_ir};
 use crate::val_ref::ValRef;
 use crate::visualization::draw_ir;
 use crate::{AnnIR, Annotation, PrintWalker, ValMap, ValOrigin, ValUse};
@@ -723,6 +724,22 @@ impl<D: Dialect> IR<D> {
             }
         }
         AnnIR::new(self, opmap, valmap)
+    }
+
+    /// Interprets the IR with the given context and returns the annotated result.
+    pub fn interpret<I: Interpretation>(
+        &self,
+        mut context: <D::InstructionSet as Interpretable<I>>::Context,
+    ) -> (
+        AnnIR<'_, D, (), I>,
+        <D::InstructionSet as Interpretable<I>>::Context,
+    )
+    where
+        D::InstructionSet: Interpretable<I>,
+        D::TypeSystem: InterpretsTo<I>,
+    {
+        let interpreted = interpret_ir(self, &mut context);
+        (interpreted, context)
     }
 }
 

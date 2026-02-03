@@ -1,4 +1,4 @@
-use hc_utils::iter::{CollectInSmallVec, Separate};
+use hc_utils::iter::{CollectInSmallVec, CollectInVec, Separate};
 
 use crate::{AnnValRef, Annotation};
 
@@ -22,7 +22,9 @@ pub struct Printer<D: Dialect> {
     show_erased_ops: bool,
     show_types: bool,
     show_op_ann: bool,
+    show_op_ann_alternate: bool,
     show_val_ann: bool,
+    show_val_ann_alternate: bool,
     walker: PrintWalker,
     phantom: PhantomData<D>,
 }
@@ -71,7 +73,9 @@ impl<D: Dialect> Printer<D> {
             show_erased_ops,
             show_types,
             show_op_ann: false,
+            show_op_ann_alternate: false,
             show_val_ann: false,
+            show_val_ann_alternate: false,
             walker,
             phantom: PhantomData,
         }
@@ -88,7 +92,9 @@ impl<D: Dialect> Printer<D> {
         show_types: bool,
         show_erased_ops: bool,
         show_op_ann: bool,
+        show_op_ann_alternate: bool,
         show_val_ann: bool,
+        show_val_ann_alternate: bool
     ) -> Printer<D> {
         let names = match walker {
             PrintWalker::Linear => ann_ir
@@ -109,7 +115,9 @@ impl<D: Dialect> Printer<D> {
             show_erased_ops,
             show_types,
             show_op_ann,
+            show_op_ann_alternate,
             show_val_ann,
+            show_val_ann_alternate,
             walker,
             phantom: PhantomData,
         }
@@ -295,7 +303,11 @@ impl<D: Dialect> Printer<D> {
         // Add operation annotation
         if self.show_op_ann {
             writeln!(f)?;
-            write!(f, "    operation -> {:?}", opref.get_annotation())?;
+            if self.show_op_ann_alternate {
+                write!(f, "    operation -> {:#?}", opref.get_annotation())?;
+            } else {
+                write!(f, "    operation -> {:?}", opref.get_annotation())?;
+            }
         }
 
         // Add value annotations for return values
@@ -304,9 +316,17 @@ impl<D: Dialect> Printer<D> {
                 writeln!(f)?;
                 let name = self.names.get(&ret.get_id()).unwrap();
                 if ret.is_inactive() {
-                    write!(f, "    %_{} -> {:?}", name.0, ret.get_annotation())?;
+                    if self.show_val_ann_alternate{
+                        write!(f, "    %_{} -> {:#?}", name.0, ret.get_annotation())?;
+                    } else {
+                        write!(f, "    %_{} -> {:?}", name.0, ret.get_annotation())?;
+                    }
                 } else {
-                    write!(f, "    %{} -> {:?}", name.0, ret.get_annotation())?;
+                    if self.show_val_ann_alternate {
+                        write!(f, "    %{} -> {:#?}", name.0, ret.get_annotation())?;
+                    } else {
+                        write!(f, "    %{} -> {:?}", name.0, ret.get_annotation())?;
+                    }
                 }
             }
         }
@@ -321,8 +341,8 @@ impl<D: Dialect> Printer<D> {
         ann_ir: &AnnIR<D, OpAnn, ValAnn>,
     ) -> std::fmt::Result {
         match self.walker {
-            PrintWalker::Linear => ann_ir.walk_ops_linear().cosvec().into_iter(),
-            PrintWalker::Topo => ann_ir.walk_ops_topological().cosvec().into_iter(),
+            PrintWalker::Linear => ann_ir.walk_ops_linear().covec().into_iter(),
+            PrintWalker::Topo => ann_ir.walk_ops_topological().covec().into_iter(),
         }
         .map(|opref| NewLined::Line(opref))
         .separate_with(|| NewLined::NewLine)

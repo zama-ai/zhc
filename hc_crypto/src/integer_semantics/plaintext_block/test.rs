@@ -174,8 +174,8 @@ fn display_formatting() {
         spec,
     };
 
-    assert_eq!(format!("{}", block), "10_pblk");
-    assert_eq!(format!("{:#}", block), "1010_pblk");
+    assert_eq!(format!("{:?}", block), "10_pblk");
+    assert_eq!(format!("{:#?}", block), "1010_pblk");
 }
 
 #[test]

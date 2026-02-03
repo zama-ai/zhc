@@ -78,6 +78,6 @@ impl CiphertextSpec {
     }
 
     pub fn matching_plaintext_spec(&self) -> PlaintextSpec {
-        PlaintextSpec::new(self.int_size(), self.block_spec().message_size())
+        PlaintextSpec::new(self.int_size(), self.block.message_size())
     }
 }

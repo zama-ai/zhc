@@ -2,11 +2,11 @@ use std::cell::{Ref, RefCell};
 
 use hc_crypto::integer_semantics::{CiphertextBlockSpec, PlaintextBlockStorage};
 use hc_ir::{IR, cse::eliminate_common_subexpressions, dce::eliminate_dead_code};
-use hc_langs::ioplang::{IopInstructionSet, IopLang, IopTypeSystem, Lut1Def, Lut2Def};
+use hc_langs::ioplang::{
+    IopInstructionSet, IopInterepreterContext, IopLang, IopTypeSystem, IopValue, Lut1Def, Lut2Def,
+};
 use hc_utils::{
-    iter::{Chunk, ChunkIt},
-    small::SmallVec,
-    svec,
+    FastMap, iter::{Chunk, ChunkIt}, small::SmallVec, svec
 };
 
 use crate::builder::{Ciphertext, CiphertextBlock, Plaintext, PlaintextBlock};
@@ -68,8 +68,29 @@ impl Builder {
     }
 
     /// Dumps the ir.
-    pub fn dump(&self) {
+    pub fn dump_panic(&self) {
         println!("{:#}", self.ir.borrow());
+        panic!()
+    }
+
+    /// Evaluates the IR with given inputs and panics with the interpretation-annotated graph.
+    pub fn dump_eval_panic(&self, inputs: SmallVec<IopValue>) {
+        let max_int_size = inputs
+            .iter()
+            .filter_map(|a| match a {
+                IopValue::Ciphertext(ciphertext) => Some(ciphertext.spec().int_size()),
+                _ => None,
+            })
+            .max()
+            .unwrap();
+        let context = IopInterepreterContext {
+            spec: self.spec.ciphertext_spec(max_int_size),
+            inputs: inputs.into_iter().enumerate().collect(),
+            outputs: FastMap::new(),
+        };
+        let ir = self.ir.borrow();
+        let (interpreted, _) = ir.interpret(context);
+        println!("{:#}", interpreted);
         panic!()
     }
 
