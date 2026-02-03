@@ -43,7 +43,7 @@ where
         // Compare results
         assert_eq!(
             legacy_result, lut_result,
-            "Mismatch for input block {:#}: legacy={:#}, lut={:#}",
+            "Mismatch for input block {:#?}: legacy={:#?}, lut={:#?}",
             block, legacy_result, lut_result
         );
     }

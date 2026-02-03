@@ -1,12 +1,10 @@
-use std::fmt::Display;
-
+use std::fmt::Debug;
 use hc_utils::iter::Separate;
-
 use super::*;
 
 use super::super::{PlaintextBlock, PlaintextBlockStorage};
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct Plaintext {
     pub(crate) storage: PlaintextStorage,
     pub(crate) spec: PlaintextSpec,
@@ -41,7 +39,7 @@ impl Plaintext {
     }
 }
 
-impl Display for Plaintext {
+impl Debug for Plaintext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let alternate = f.alternate();
         (0..self.len())

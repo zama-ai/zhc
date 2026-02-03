@@ -188,8 +188,8 @@ fn display_formatting() {
     let spec = CiphertextSpec::new(8, 2, 4);
     let ciphertext = spec.from_int(0b1111_0101);
 
-    assert_eq!(format!("{}", ciphertext), "15_5_cint");
-    assert_eq!(format!("{:#}", ciphertext), "1111_0101_cint");
+    assert_eq!(format!("{:?}", ciphertext), "15_5_cint");
+    assert_eq!(format!("{:#?}", ciphertext), "1111_0101_cint");
 }
 
 #[test]

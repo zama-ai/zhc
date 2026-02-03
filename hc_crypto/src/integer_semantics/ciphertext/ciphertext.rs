@@ -1,10 +1,10 @@
 use super::super::{CiphertextBlock, CiphertextBlockStorage};
 use super::*;
 use hc_utils::iter::Separate;
-use std::fmt::Display;
+use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct Ciphertext {
     pub(crate) storage: CiphertextStorage,
     pub(crate) spec: CiphertextSpec,
@@ -48,7 +48,7 @@ impl Ciphertext {
     }
 }
 
-impl Display for Ciphertext {
+impl Debug for Ciphertext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let alternate = f.alternate();
         (0..self.len())

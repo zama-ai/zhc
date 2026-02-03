@@ -1,8 +1,8 @@
 use super::{PlaintextBlockSpec, PlaintextBlockStorage};
-use std::fmt::Display;
+use std::fmt::Debug;
 
 /// A plaintext block containing only message data.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct PlaintextBlock {
     pub(crate) storage: PlaintextBlockStorage,
     pub(crate) spec: PlaintextBlockSpec,
@@ -23,7 +23,7 @@ impl PlaintextBlock {
     }
 }
 
-impl Display for PlaintextBlock {
+impl Debug for PlaintextBlock {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if f.alternate() {
             write!(

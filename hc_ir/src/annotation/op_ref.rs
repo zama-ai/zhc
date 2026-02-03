@@ -139,6 +139,8 @@ where
                 true,
                 true,
                 true,
+                true,
+                true
             );
             printer.format_ann_opref(f, self)
         } else {

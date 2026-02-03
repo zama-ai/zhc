@@ -1,4 +1,4 @@
-use std::ops::Deref;
+use std::{fmt::Display, ops::Deref};
 
 use hc_utils::{iter::MultiZip, small::SmallVec};
 
@@ -174,8 +174,8 @@ impl<'ir, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> AnnIR<'ir, D, OpAnn
 
     fn check_ir_gen(&self, walker: PrintWalker, expected: &str) {
         let clean = |inp: &str| inp.replace(' ', "").replace('\n', "");
-        let repr =
-            Printer::from_ann_ir(self, walker, true, false, true, false).ann_ir_to_string(self);
+        let repr = Printer::from_ann_ir(self, walker, true, false, false, true, true, true)
+            .ann_ir_to_string(self);
         if clean(&repr) != clean(expected) {
             println!(
                 "Failed to check ir.\nExpected:\n{}\nActual:\n{}",
@@ -269,5 +269,37 @@ impl<'ir, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> Deref
 
     fn deref(&self) -> &Self::Target {
         self.ir
+    }
+}
+
+impl<'ir, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> Display
+    for AnnIR<'ir, D, OpAnn, ValAnn>
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if f.alternate() {
+            let printer = Printer::from_ann_ir(
+                self,
+                crate::PrintWalker::Topo,
+                true,
+                false,
+                true,
+                true,
+                true,
+                true,
+            );
+            printer.format_ann_ir(f, self)
+        } else {
+            let printer = Printer::from_ann_ir(
+                self,
+                crate::PrintWalker::Topo,
+                true,
+                false,
+                true,
+                false,
+                true,
+                false,
+            );
+            printer.format_ann_ir(f, self)
+        }
     }
 }

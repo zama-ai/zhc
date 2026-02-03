@@ -1,7 +1,7 @@
 use hc_crypto::integer_semantics::CiphertextSpec;
 use hc_ir::IR;
 use hc_langs::ioplang::{IopLang, Lut1Def};
-use hc_utils::iter::CollectInSmallVec;
+use hc_utils::{iter::CollectInSmallVec};
 
 use crate::builder::{Builder, Ciphertext};
 
@@ -21,6 +21,8 @@ pub fn if_then_zero(spec: CiphertextSpec) -> IR<IopLang> {
         .cosvec();
 
     builder.eint_output(Ciphertext::from_blocks(output_blocks));
+
+    // builder.dump_eval_panic(svec![IopValue::Ciphertext(spec.from_int(6)), IopValue::Ciphertext(spec.from_int(1))]);
 
     builder.into_ir()
 }

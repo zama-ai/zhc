@@ -17,6 +17,7 @@ use translation::IoplangToHpulang;
 use translation_table::{DOpRepr, generate_translation_table};
 
 pub mod allocator;
+pub mod interpreter;
 pub mod batcher;
 pub mod latency;
 pub mod scheduler;
