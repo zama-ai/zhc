@@ -114,7 +114,7 @@ impl Display for HpuInstructionSet {
             HpuInstructionSet::Pbs4F { lut } => write!(f, "pbs_4f<{lut}>"),
             HpuInstructionSet::Pbs8F { lut } => write!(f, "pbs_8f<{lut}>"),
             HpuInstructionSet::Batch { block, .. } => {
-                write!(f, "batch {{\n        {}}}", block.format().to_string())
+                write!(f, "batch {{\n{}\n}}", block.format().with_indent(4))
             }
             HpuInstructionSet::BatchArg { pos, ty } => write!(f, "batch_arg<{pos}, {ty}>"),
             HpuInstructionSet::BatchRet { pos, ty } => write!(f, "batch_ret<{pos}, {ty}>"),

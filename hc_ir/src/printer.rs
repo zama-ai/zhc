@@ -29,6 +29,7 @@ pub struct IRFormatter<'r, D: Dialect> {
     show_types: bool,
     show_opid: bool,
     walker: PrintWalker,
+    indent: usize,
 }
 
 impl<'ir, D: Dialect> IRFormatter<'ir, D> {
@@ -40,7 +41,13 @@ impl<'ir, D: Dialect> IRFormatter<'ir, D> {
             show_types: true,
             show_opid: false,
             walker: PrintWalker::Topo,
+            indent: 0,
         }
+    }
+
+    pub fn with_indent(mut self, indent: usize) -> Self {
+        self.indent += indent;
+        self
     }
 
     pub fn show_erased_ops(mut self, show: bool) -> Self {
@@ -78,6 +85,7 @@ impl<D: Dialect> std::fmt::Display for IRFormatter<'_, D> {
             self.show_erased_ops,
             self.show_types,
             self.show_opid,
+            self.indent,
         )
     }
 }
@@ -93,6 +101,7 @@ pub struct AnnIRFormatter<'r, 'ir, D: Dialect, OpAnn: Annotation, ValAnn: Annota
     show_val_ann: bool,
     show_val_ann_alternate: bool,
     walker: PrintWalker,
+    indent: usize,
 }
 
 impl<'r, 'ir, D: Dialect, OpAnn: Annotation, ValAnn: Annotation>
@@ -110,7 +119,13 @@ impl<'r, 'ir, D: Dialect, OpAnn: Annotation, ValAnn: Annotation>
             show_val_ann: true,
             show_val_ann_alternate: false,
             walker: PrintWalker::Topo,
+            indent: 0,
         }
+    }
+
+    pub fn with_indent(mut self, indent: usize) -> Self {
+        self.indent += indent;
+        self
     }
 
     pub fn show_opid(mut self, show: bool) -> Self {
@@ -174,6 +189,7 @@ impl<D: Dialect, OpAnn: Annotation, ValAnn: Annotation> std::fmt::Display
             self.show_op_ann_alternate,
             self.show_val_ann,
             self.show_val_ann_alternate,
+            self.indent,
         )
     }
 }
@@ -184,6 +200,7 @@ pub struct OpRefFormatter<'r, 'ir, D: Dialect> {
     show_erased: bool,
     show_types: bool,
     show_opid: bool,
+    indent: usize,
 }
 
 impl<'r, 'ir, D: Dialect> OpRefFormatter<'r, 'ir, D> {
@@ -193,7 +210,13 @@ impl<'r, 'ir, D: Dialect> OpRefFormatter<'r, 'ir, D> {
             show_erased: false,
             show_types: true,
             show_opid: false,
+            indent: 0,
         }
+    }
+
+    pub fn with_indent(mut self, indent: usize) -> Self {
+        self.indent += indent;
+        self
     }
 
     pub fn show_erased(mut self, show: bool) -> Self {
@@ -225,6 +248,7 @@ impl<D: Dialect> std::fmt::Display for OpRefFormatter<'_, '_, D> {
             self.show_erased,
             self.show_types,
             self.show_opid,
+            self.indent,
         )
     }
 }
@@ -270,6 +294,7 @@ pub struct AnnOpRefFormatter<'r, 'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAn
     show_op_ann_alternate: bool,
     show_val_ann: bool,
     show_val_ann_alternate: bool,
+    indent: usize,
 }
 
 impl<'r, 'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation>
@@ -285,7 +310,13 @@ impl<'r, 'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation>
             show_op_ann_alternate: false,
             show_val_ann: true,
             show_val_ann_alternate: false,
+            indent: 0,
         }
+    }
+
+    pub fn with_indent(mut self, indent: usize) -> Self {
+        self.indent += indent;
+        self
     }
 
     pub fn show_erased(mut self, show: bool) -> Self {
@@ -343,6 +374,7 @@ impl<D: Dialect, OpAnn: Annotation, ValAnn: Annotation> std::fmt::Display
             self.show_op_ann_alternate,
             self.show_val_ann,
             self.show_val_ann_alternate,
+            self.indent,
         )
     }
 }
@@ -409,6 +441,7 @@ fn format_ir<D: Dialect>(
     show_erased_ops: bool,
     show_types: bool,
     show_opid: bool,
+    indent: usize,
 ) -> std::fmt::Result {
     let ops_iter = match walker {
         PrintWalker::Linear => ir.raw_walk_ops_linear().merge_1_of_2(),
@@ -420,7 +453,7 @@ fn format_ir<D: Dialect>(
         .separate_with(|| Separated::Separator)
         .try_for_each(|a| match a {
             Separated::Content(opref) => {
-                format_opref(f, &opref, show_erased_ops, show_types, show_opid)
+                format_opref(f, &opref, show_erased_ops, show_types, show_opid, indent)
             }
             Separated::Separator => writeln!(f),
         })
@@ -437,6 +470,7 @@ fn format_ann_ir<D: Dialect, OpAnn: Annotation, ValAnn: Annotation>(
     show_op_ann_alternate: bool,
     show_val_ann: bool,
     show_val_ann_alternate: bool,
+    indent: usize,
 ) -> std::fmt::Result {
     let ops_iter = match walker {
         PrintWalker::Linear => ann_ir.walk_ops_linear().merge_1_of_2(),
@@ -458,6 +492,7 @@ fn format_ann_ir<D: Dialect, OpAnn: Annotation, ValAnn: Annotation>(
                 show_op_ann_alternate,
                 show_val_ann,
                 show_val_ann_alternate,
+                indent,
             ),
             Separated::Separator => writeln!(f),
         })
@@ -481,10 +516,15 @@ fn format_opref<D: Dialect>(
     show_erased_ops: bool,
     show_types: bool,
     show_opid: bool,
+    indent: usize,
 ) -> std::fmt::Result {
     if opref.is_inactive() && !show_erased_ops {
         return Ok(());
     }
+
+    // Write indent
+    write!(f, "{:indent$}", "", indent = indent)?;
+
     if opref.is_inactive() {
         write!(f, "// ")?;
     }
@@ -531,17 +571,30 @@ fn format_ann_opref<D: Dialect, OpAnn: Annotation, ValAnn: Annotation>(
     show_op_ann_alternate: bool,
     show_val_ann: bool,
     show_val_ann_alternate: bool,
+    indent: usize,
 ) -> std::fmt::Result {
     // Format base operation (reuse the inner OpRef)
-    format_opref(f, opref, show_erased_ops, show_types, show_opid)?;
+    format_opref(f, opref, show_erased_ops, show_types, show_opid, indent)?;
 
     // Add operation annotation (skip if OpAnn is ())
     if show_op_ann && TypeId::of::<OpAnn>() != TypeId::of::<()>() {
         writeln!(f)?;
         if show_op_ann_alternate {
-            write!(f, "    operation -> {:#?}", opref.get_annotation())?;
+            write!(
+                f,
+                "{:indent$}    operation -> {:#?}",
+                "",
+                opref.get_annotation(),
+                indent = indent
+            )?;
         } else {
-            write!(f, "    operation -> {:?}", opref.get_annotation())?;
+            write!(
+                f,
+                "{:indent$}    operation -> {:?}",
+                "",
+                opref.get_annotation(),
+                indent = indent
+            )?;
         }
     }
 
@@ -553,15 +606,15 @@ fn format_ann_opref<D: Dialect, OpAnn: Annotation, ValAnn: Annotation>(
             let ann = ret.get_annotation();
             if ret.is_inactive() {
                 if show_val_ann_alternate {
-                    write!(f, "    %_{id} -> {ann:#?}")?;
+                    write!(f, "{:indent$}    %_{id} -> {ann:#?}", "", indent = indent)?;
                 } else {
-                    write!(f, "    %_{id} -> {ann:?}")?;
+                    write!(f, "{:indent$}    %_{id} -> {ann:?}", "", indent = indent)?;
                 }
             } else {
                 if show_val_ann_alternate {
-                    write!(f, "    %{id} -> {ann:#?}")?;
+                    write!(f, "{:indent$}    %{id} -> {ann:#?}", "", indent = indent)?;
                 } else {
-                    write!(f, "    %{id} -> {ann:?}")?;
+                    write!(f, "{:indent$}    %{id} -> {ann:?}", "", indent = indent)?;
                 }
             }
         }
