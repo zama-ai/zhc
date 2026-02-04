@@ -1,7 +1,7 @@
 use crate::interpretation::{Interpretable, Interpretation, InterpretsTo, interpret_ir};
 use crate::val_ref::ValRef;
 use crate::visualization::draw_ir;
-use crate::{AnnIR, Annotation, IRFormatter, PrintWalker, ValMap, ValOrigin, ValUse};
+use crate::{AnnIR, Annotation, IRFormatter, ValMap, ValOrigin, ValUse};
 use hc_utils::iter::MultiZip;
 use hc_utils::svec;
 use hc_utils::{Store, small::SmallVec};
