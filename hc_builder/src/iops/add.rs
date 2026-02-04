@@ -3,8 +3,12 @@ use std::cmp::max;
 use hc_crypto::integer_semantics::CiphertextSpec;
 use hc_ir::IR;
 use hc_langs::ioplang::{IopLang, Lut1Def, Lut2Def};
-use hc_utils::iter::{
-    ChunkIt, CollectInSmallVec, Intermediate, IterMapFirst, MultiZip, Slide, filter_out_postludes,
+use hc_utils::{
+    iter::{
+        ChunkIt, CollectInSmallVec, Intermediate, IterMapFirst, MultiZip, Slide,
+        filter_out_postludes,
+    },
+    svec,
 };
 
 use crate::builder::{Builder, Ciphertext, ExtensionBehavior};
@@ -19,22 +23,24 @@ pub fn add(spec: CiphertextSpec) -> IR<IopLang> {
     let mut builder = Builder::new(spec.block_spec());
     let src_a = builder.eint_input(spec.int_size());
     let src_b = builder.eint_input(spec.int_size());
-    let res = builder.iop_add_hillis_steele(src_a, src_b);
+    let res = builder.iop_add_hillis_steele(&src_a, &src_b);
     builder.eint_output(res);
     builder.into_ir()
 }
 
 impl Builder {
-    pub fn iop_add_hillis_steele(&mut self, lhs: Ciphertext, rhs: Ciphertext) -> Ciphertext {
+    pub fn iop_add_hillis_steele(&mut self, lhs: &Ciphertext, rhs: &Ciphertext) -> Ciphertext {
         // Step 1 =================================================================
         // Add blocks together, no fancy stuff here. Just pack two input vector (with msg only)
         // into one vector with msg + [1b of carry]
         // Also handle src of different sizes.
+        self.push_comment("Raw sum");
         let sums = self.vector_add(&lhs, &rhs, ExtensionBehavior::Passthrough);
         assert!(
             sums.len().is_multiple_of(4),
             "Addition for non-multiple-of-4 integers is not supported yet."
         );
+        self.pop_comment();
 
         // Step 2 =================================================================
         // Compute P/G/N state for each block.
@@ -42,65 +48,81 @@ impl Builder {
         // P => 0b01 << (block_id % 4)
         // N => 0b00 << (block_id % 4)
         // G => 0b10 << (block_id % 4)
+        self.push_comment("Computing PGNs");
         let pgns = sums
             .iter()
             .chunk(4)
             .map(|c| c.unwrap_complete())
+            .enumerate()
             // NB: LSB bloc is handle differently to reduce the work
             //     -> input carry is known, so it could be directly resolved
-            .map_first(|chunk| {
-                [
-                    self.block_pbs2(&chunk[0], Lut2Def::ManyCarryMsg).1,
-                    self.block_pbs(&sums[1], Lut1Def::ExtractPropGroup0),
-                    self.block_pbs(&sums[2], Lut1Def::ExtractPropGroup1),
-                    self.block_pbs(&sums[3], Lut1Def::ExtractPropGroup2),
-                ]
+            .map_first(|(_, chunk)| {
+                self.with_comment("Special first", || {
+                    [
+                        self.block_pbs2(&chunk[0], Lut2Def::ManyCarryMsg).1,
+                        self.block_pbs(&sums[1], Lut1Def::ExtractPropGroup0),
+                        self.block_pbs(&sums[2], Lut1Def::ExtractPropGroup1),
+                        self.block_pbs(&sums[3], Lut1Def::ExtractPropGroup2),
+                    ]
+                })
             })
-            .map_rest(|chunk| {
-                [
-                    self.block_pbs(chunk[0], Lut1Def::ExtractPropGroup0),
-                    self.block_pbs(chunk[1], Lut1Def::ExtractPropGroup1),
-                    self.block_pbs(chunk[2], Lut1Def::ExtractPropGroup2),
-                    self.block_pbs(chunk[3], Lut1Def::ExtractPropGroup3),
-                ]
+            .map_rest(|(i, chunk)| {
+                self.with_comment(format!("{i}-th group"), || {
+                    [
+                        self.block_pbs(chunk[0], Lut1Def::ExtractPropGroup0),
+                        self.block_pbs(chunk[1], Lut1Def::ExtractPropGroup1),
+                        self.block_pbs(chunk[2], Lut1Def::ExtractPropGroup2),
+                        self.block_pbs(chunk[3], Lut1Def::ExtractPropGroup3),
+                    ]
+                })
             })
             .cosvec();
+        self.pop_comment();
 
         // Step 3 =================================================================
         // Spread propagation status *within* each chunk
         // spread_pgns [0,1,2] contains the sum of the propagation status at each step
         // spread_pgns [3] contains the propagation status of the chunk
+        self.push_comment("Spread PGNs within groups");
         let spread_pgns = pgns
             .iter()
+            .enumerate()
             // NB: chunk #0 is particular, since the status is actually
             // the carry value => This chunk is directly solved
-            .map_first(|chunk| {
-                let s0 = chunk[0];
-                let s1 = self.block_add(&s0, &chunk[1]);
-                let s2 = self.block_add(&s1, &chunk[2]);
-                let _s3 = self.block_add(&s2, &chunk[3]);
-                let s3 = self.block_pbs(&_s3, Lut1Def::SolvePropGroupFinal2);
-                [s0, s1, s2, s3]
+            .map_first(|(_, chunk)| {
+                self.with_comment("Special first", || {
+                    let s0 = chunk[0];
+                    let s1 = self.block_add(&s0, &chunk[1]);
+                    let s2 = self.block_add(&s1, &chunk[2]);
+                    let _s3 = self.block_add(&s2, &chunk[3]);
+                    let s3 = self.block_pbs(&_s3, Lut1Def::SolvePropGroupFinal2);
+                    [s0, s1, s2, s3]
+                })
             })
-            .map_rest(|chunk| {
-                let s0 = chunk[0];
-                let s1 = self.block_add(&s0, &chunk[1]);
-                let s2 = self.block_add(&s1, &chunk[2]);
-                let cst_1 = self.block_constant(1);
-                let _s3 = self.block_add(&s2, &chunk[3]);
-                let _s3 = self.block_pbs(&_s3, Lut1Def::ReduceCarryPad);
-                let s3 = self.block_adds(&_s3, &cst_1);
-                [s0, s1, s2, s3]
+            .map_rest(|(i, chunk)| {
+                self.with_comment(format!("{i}-th group"), || {
+                    let s0 = chunk[0];
+                    let s1 = self.block_add(&s0, &chunk[1]);
+                    let s2 = self.block_add(&s1, &chunk[2]);
+                    let cst_1 = self.block_constant(1);
+                    let _s3 = self.block_add(&s2, &chunk[3]);
+                    let _s3 = self.block_pbs(&_s3, Lut1Def::ReduceCarryPad);
+                    let s3 = self.block_add_plaintext_wrapping(&_s3, &cst_1);
+                    [s0, s1, s2, s3]
+                })
             })
             .cosvec();
+        self.pop_comment();
 
         // Step 4 ===========================================
         // Resolve PGN status across each group with parallel scan (based on Hillis-Steel algorithm)
         // I.e. solve PGN into GN for each chunk => Will end with a carry info for each group
+        self.push_comment("Resolve PGNs across groups");
         let mut chunk_gns = spread_pgns.iter().map(|group| group[3]).cosvec();
         let chunk_nb = chunk_gns.len();
         let stage_nb = (chunk_nb as f32).log2().ceil() as usize;
         for stage in 0..stage_nb {
+            self.push_comment(format!("{stage}-th stage"));
             // After stage_nb the propagation will be complete.
             let stride = 1usize << stage;
             // We override the chunks_gns with the current stage one.
@@ -143,46 +165,67 @@ impl Builder {
                 .take(chunk_nb)
                 .collect();
             assert_eq!(chunk_gns.len(), chunk_nb);
+            self.pop_comment();
         }
+        self.pop_comment();
 
         // Step 5 =================================================================
         // Final resolution: Solve PGN status inside chunk
         // Convert back 2d array in vector
-        let mut carries = (spread_pgns.into_iter(), chunk_gns.into_iter())
+        self.push_comment("Final resolution");
+        let carries = (spread_pgns.into_iter(), chunk_gns.into_iter())
             .mzip()
             .slide::<2>()
             .filter(filter_out_postludes)
-            .map_first(|slider| {
-                let (spread_pgn, chunk_gn) = slider.unwrap_prelude()[0];
-                [
-                    spread_pgn[0],
-                    self.block_pbs(&spread_pgn[1], Lut1Def::SolvePropGroupFinal0),
-                    self.block_pbs(&spread_pgn[2], Lut1Def::SolvePropGroupFinal1),
-                    chunk_gn,
-                ]
+            .enumerate()
+            .map_first(|(_, slider)| {
+                self.with_comment("Special first", || {
+                    let (spread_pgn, chunk_gn) = slider.unwrap_prelude()[0];
+                    [
+                        spread_pgn[0],
+                        self.block_pbs(&spread_pgn[1], Lut1Def::SolvePropGroupFinal0),
+                        self.block_pbs(&spread_pgn[2], Lut1Def::SolvePropGroupFinal1),
+                        chunk_gn,
+                    ]
+                })
             })
-            .map_rest(|slider| {
-                let sv = slider.unwrap_complete();
-                let (_, prev_chunk_gn) = sv[0];
-                let (spread_pgn, chunk_gn) = sv[1];
-                let s0 = self.block_add(&spread_pgn[0], &prev_chunk_gn);
-                let s0 = self.block_pbs(&s0, Lut1Def::SolvePropGroupFinal0);
-                let s1 = self.block_add(&spread_pgn[1], &prev_chunk_gn);
-                let s1 = self.block_pbs(&s1, Lut1Def::SolvePropGroupFinal1);
-                let s2 = self.block_add(&spread_pgn[2], &prev_chunk_gn);
-                let s2 = self.block_pbs(&s2, Lut1Def::SolvePropGroupFinal2);
-                [s0, s1, s2, chunk_gn]
+            .map_rest(|(i, slider)| {
+                self.with_comment(format!("{i}-th group"), || {
+                    let sv = slider.unwrap_complete();
+                    let (_, prev_chunk_gn) = sv[0];
+                    let (spread_pgn, chunk_gn) = sv[1];
+                    let s0 = self.block_add(&spread_pgn[0], &prev_chunk_gn);
+                    let s0 = self.block_pbs(&s0, Lut1Def::SolvePropGroupFinal0);
+                    let s1 = self.block_add(&spread_pgn[1], &prev_chunk_gn);
+                    let s1 = self.block_pbs(&s1, Lut1Def::SolvePropGroupFinal1);
+                    let s2 = self.block_add(&spread_pgn[2], &prev_chunk_gn);
+                    let s2 = self.block_pbs(&s2, Lut1Def::SolvePropGroupFinal2);
+                    [s0, s1, s2, chunk_gn]
+                })
             })
             .flatten()
             .cosvec();
-        carries.push(self.block_pbs2(&sums[0], Lut2Def::ManyCarryMsg).0);
+        self.pop_comment();
 
         // Step 6 =================================================================
         // Carry is known now, propagate them in sum
-        let result = (sums.into_iter(), carries.into_iter().skip(1))
-            .mzip()
-            .map(|(sum, carry)| self.block_add(&sum, &carry))
+        self.push_comment("Carry propagation");
+        let mut result = svec![self.block_pbs2(&sums[0], Lut2Def::ManyCarryMsg).0];
+        result.extend(
+            (sums.into_iter().skip(1), carries.into_iter())
+                .mzip()
+                .map(|(sum, carry)| self.block_add(&sum, &carry)),
+        );
+        self.pop_comment();
+
+        // Step 7 =================================================================
+        // Cleanup
+        self.push_comment("Cleanup");
+        let result = result
+            .into_iter()
+            .map(|ct| self.block_pbs(&ct, Lut1Def::MsgOnly))
             .cosvec();
+        self.pop_comment();
 
         Ciphertext {
             blocks: result,
@@ -203,81 +246,84 @@ mod test {
         let spec = CiphertextSpec::new(16, 2, 2);
         let ir = add(spec);
         assert_display_is!(
-            ir.format(),
+            ir.format()
+                .with_walker(hc_ir::PrintWalker::Linear)
+                .show_comments(true)
+                .show_types(false),
             r#"
-            %0 : CtInt = input<0, CtInt>();
-            %9 : CtInt = input<1, CtInt>();
-            %41 : PtBlock = let_pt_block<1>();
-            %65 : CtInt = zero_ct();
-            %1 : CtBlock = extract_ct_block<0>(%0 : CtInt);
-            %2 : CtBlock = extract_ct_block<1>(%0 : CtInt);
-            %3 : CtBlock = extract_ct_block<2>(%0 : CtInt);
-            %4 : CtBlock = extract_ct_block<3>(%0 : CtInt);
-            %5 : CtBlock = extract_ct_block<4>(%0 : CtInt);
-            %6 : CtBlock = extract_ct_block<5>(%0 : CtInt);
-            %7 : CtBlock = extract_ct_block<6>(%0 : CtInt);
-            %8 : CtBlock = extract_ct_block<7>(%0 : CtInt);
-            %10 : CtBlock = extract_ct_block<0>(%9 : CtInt);
-            %11 : CtBlock = extract_ct_block<1>(%9 : CtInt);
-            %12 : CtBlock = extract_ct_block<2>(%9 : CtInt);
-            %13 : CtBlock = extract_ct_block<3>(%9 : CtInt);
-            %14 : CtBlock = extract_ct_block<4>(%9 : CtInt);
-            %15 : CtBlock = extract_ct_block<5>(%9 : CtInt);
-            %16 : CtBlock = extract_ct_block<6>(%9 : CtInt);
-            %17 : CtBlock = extract_ct_block<7>(%9 : CtInt);
-            %18 : CtBlock = add_ct(%1 : CtBlock, %10 : CtBlock);
-            %19 : CtBlock = add_ct(%2 : CtBlock, %11 : CtBlock);
-            %20 : CtBlock = add_ct(%3 : CtBlock, %12 : CtBlock);
-            %21 : CtBlock = add_ct(%4 : CtBlock, %13 : CtBlock);
-            %22 : CtBlock = add_ct(%5 : CtBlock, %14 : CtBlock);
-            %23 : CtBlock = add_ct(%6 : CtBlock, %15 : CtBlock);
-            %24 : CtBlock = add_ct(%7 : CtBlock, %16 : CtBlock);
-            %25 : CtBlock = add_ct(%8 : CtBlock, %17 : CtBlock);
-            %26 : CtBlock, %27 : CtBlock = pbs2<ManyCarryMsg>(%18 : CtBlock);
-            %28 : CtBlock = pbs<ExtractPropGroup0>(%19 : CtBlock);
-            %29 : CtBlock = pbs<ExtractPropGroup1>(%20 : CtBlock);
-            %30 : CtBlock = pbs<ExtractPropGroup2>(%21 : CtBlock);
-            %31 : CtBlock = pbs<ExtractPropGroup0>(%22 : CtBlock);
-            %32 : CtBlock = pbs<ExtractPropGroup1>(%23 : CtBlock);
-            %33 : CtBlock = pbs<ExtractPropGroup2>(%24 : CtBlock);
-            %34 : CtBlock = pbs<ExtractPropGroup3>(%25 : CtBlock);
-            %35 : CtBlock = add_ct(%27 : CtBlock, %28 : CtBlock);
-            %39 : CtBlock = add_ct(%31 : CtBlock, %32 : CtBlock);
-            %64 : CtBlock = add_ct(%25 : CtBlock, %26 : CtBlock);
-            %36 : CtBlock = add_ct(%35 : CtBlock, %29 : CtBlock);
-            %40 : CtBlock = add_ct(%39 : CtBlock, %33 : CtBlock);
-            %47 : CtBlock = pbs<SolvePropGroupFinal0>(%35 : CtBlock);
-            %37 : CtBlock = add_ct(%36 : CtBlock, %30 : CtBlock);
-            %42 : CtBlock = add_ct(%40 : CtBlock, %34 : CtBlock);
-            %48 : CtBlock = pbs<SolvePropGroupFinal1>(%36 : CtBlock);
-            %57 : CtBlock = add_ct(%18 : CtBlock, %47 : CtBlock);
-            %38 : CtBlock = pbs<SolvePropGroupFinal2>(%37 : CtBlock);
-            %43 : CtBlock = pbs<ReduceCarryPad>(%42 : CtBlock);
-            %58 : CtBlock = add_ct(%19 : CtBlock, %48 : CtBlock);
-            %66 : CtInt = store_ct_block<0>(%57 : CtBlock, %65 : CtInt);
-            %44 : CtBlock = add_pt(%43 : CtBlock, %41 : PtBlock);
-            %49 : CtBlock = add_ct(%31 : CtBlock, %38 : CtBlock);
-            %51 : CtBlock = add_ct(%39 : CtBlock, %38 : CtBlock);
-            %53 : CtBlock = add_ct(%40 : CtBlock, %38 : CtBlock);
-            %59 : CtBlock = add_ct(%20 : CtBlock, %38 : CtBlock);
-            %67 : CtInt = store_ct_block<1>(%58 : CtBlock, %66 : CtInt);
-            %45 : CtBlock = pack_ct<4>(%44 : CtBlock, %38 : CtBlock);
-            %50 : CtBlock = pbs<SolvePropGroupFinal0>(%49 : CtBlock);
-            %52 : CtBlock = pbs<SolvePropGroupFinal1>(%51 : CtBlock);
-            %54 : CtBlock = pbs<SolvePropGroupFinal2>(%53 : CtBlock);
-            %68 : CtInt = store_ct_block<2>(%59 : CtBlock, %67 : CtInt);
-            %46 : CtBlock = pbs<SolvePropCarry>(%45 : CtBlock);
-            %60 : CtBlock = add_ct(%21 : CtBlock, %50 : CtBlock);
-            %61 : CtBlock = add_ct(%22 : CtBlock, %52 : CtBlock);
-            %62 : CtBlock = add_ct(%23 : CtBlock, %54 : CtBlock);
-            %63 : CtBlock = add_ct(%24 : CtBlock, %46 : CtBlock);
-            %69 : CtInt = store_ct_block<3>(%60 : CtBlock, %68 : CtInt);
-            %70 : CtInt = store_ct_block<4>(%61 : CtBlock, %69 : CtInt);
-            %71 : CtInt = store_ct_block<5>(%62 : CtBlock, %70 : CtInt);
-            %72 : CtInt = store_ct_block<6>(%63 : CtBlock, %71 : CtInt);
-            %73 : CtInt = store_ct_block<7>(%64 : CtBlock, %72 : CtInt);
-            output<0, CtInt>(%73 : CtInt);
-        "#
+                                                               | %0 = input<0, CtInt>();
+                                                               | %1 = extract_ct_block<0>(%0);
+                                                               | %2 = extract_ct_block<1>(%0);
+                                                               | %3 = extract_ct_block<2>(%0);
+                                                               | %4 = extract_ct_block<3>(%0);
+                                                               | %5 = extract_ct_block<4>(%0);
+                                                               | %6 = extract_ct_block<5>(%0);
+                                                               | %7 = extract_ct_block<6>(%0);
+                                                               | %8 = extract_ct_block<7>(%0);
+                                                               | %9 = input<1, CtInt>();
+                                                               | %10 = extract_ct_block<0>(%9);
+                                                               | %11 = extract_ct_block<1>(%9);
+                                                               | %12 = extract_ct_block<2>(%9);
+                                                               | %13 = extract_ct_block<3>(%9);
+                                                               | %14 = extract_ct_block<4>(%9);
+                                                               | %15 = extract_ct_block<5>(%9);
+                                                               | %16 = extract_ct_block<6>(%9);
+                                                               | %17 = extract_ct_block<7>(%9);
+                // Raw sum                                     | %18 = add_ct(%1, %10);
+                // Raw sum                                     | %19 = add_ct(%2, %11);
+                // Raw sum                                     | %20 = add_ct(%3, %12);
+                // Raw sum                                     | %21 = add_ct(%4, %13);
+                // Raw sum                                     | %22 = add_ct(%5, %14);
+                // Raw sum                                     | %23 = add_ct(%6, %15);
+                // Raw sum                                     | %24 = add_ct(%7, %16);
+                // Raw sum                                     | %25 = add_ct(%8, %17);
+                // Computing PGNs / Special first              | %26, %27 = pbs2<ManyCarryMsg>(%18);
+                // Computing PGNs / Special first              | %28 = pbs<ExtractPropGroup0>(%19);
+                // Computing PGNs / Special first              | %29 = pbs<ExtractPropGroup1>(%20);
+                // Computing PGNs / Special first              | %30 = pbs<ExtractPropGroup2>(%21);
+                // Computing PGNs / 1-th group                 | %31 = pbs<ExtractPropGroup0>(%22);
+                // Computing PGNs / 1-th group                 | %32 = pbs<ExtractPropGroup1>(%23);
+                // Computing PGNs / 1-th group                 | %33 = pbs<ExtractPropGroup2>(%24);
+                // Spread PGNs within groups / Special first   | %35 = add_ct(%27, %28);
+                // Spread PGNs within groups / Special first   | %36 = add_ct(%35, %29);
+                // Spread PGNs within groups / Special first   | %37 = add_ct(%36, %30);
+                // Spread PGNs within groups / Special first   | %38 = pbs<SolvePropGroupFinal2>(%37);
+                // Spread PGNs within groups / 1-th group      | %39 = add_ct(%31, %32);
+                // Spread PGNs within groups / 1-th group      | %40 = add_ct(%39, %33);
+                // Final resolution / Special first            | %47 = pbs<SolvePropGroupFinal0>(%35);
+                // Final resolution / Special first            | %48 = pbs<SolvePropGroupFinal1>(%36);
+                // Final resolution / 1-th group               | %49 = add_ct(%31, %38);
+                // Final resolution / 1-th group               | %50 = pbs<SolvePropGroupFinal0>(%49);
+                // Final resolution / 1-th group               | %51 = add_ct(%39, %38);
+                // Final resolution / 1-th group               | %52 = pbs<SolvePropGroupFinal1>(%51);
+                // Final resolution / 1-th group               | %53 = add_ct(%40, %38);
+                // Final resolution / 1-th group               | %54 = pbs<SolvePropGroupFinal2>(%53);
+                // Carry propagation                           | %57 = add_ct(%19, %27);
+                // Carry propagation                           | %58 = add_ct(%20, %47);
+                // Carry propagation                           | %59 = add_ct(%21, %48);
+                // Carry propagation                           | %60 = add_ct(%22, %38);
+                // Carry propagation                           | %61 = add_ct(%23, %50);
+                // Carry propagation                           | %62 = add_ct(%24, %52);
+                // Carry propagation                           | %63 = add_ct(%25, %54);
+                // Cleanup                                     | %64 = pbs<MsgOnly>(%26);
+                // Cleanup                                     | %65 = pbs<MsgOnly>(%57);
+                // Cleanup                                     | %66 = pbs<MsgOnly>(%58);
+                // Cleanup                                     | %67 = pbs<MsgOnly>(%59);
+                // Cleanup                                     | %68 = pbs<MsgOnly>(%60);
+                // Cleanup                                     | %69 = pbs<MsgOnly>(%61);
+                // Cleanup                                     | %70 = pbs<MsgOnly>(%62);
+                // Cleanup                                     | %71 = pbs<MsgOnly>(%63);
+                                                               | %72 = zero_ct();
+                                                               | %73 = store_ct_block<0>(%64, %72);
+                                                               | %74 = store_ct_block<1>(%65, %73);
+                                                               | %75 = store_ct_block<2>(%66, %74);
+                                                               | %76 = store_ct_block<3>(%67, %75);
+                                                               | %77 = store_ct_block<4>(%68, %76);
+                                                               | %78 = store_ct_block<5>(%69, %77);
+                                                               | %79 = store_ct_block<6>(%70, %78);
+                                                               | %80 = store_ct_block<7>(%71, %79);
+                                                               | output<0, CtInt>(%80);
+            "#
         );
     }
 }
