@@ -28,6 +28,7 @@ pub struct IRFormatter<'r, D: Dialect> {
     show_erased_ops: bool,
     show_types: bool,
     show_opid: bool,
+    show_comments: bool,
     walker: PrintWalker,
     indent: usize,
 }
@@ -40,6 +41,7 @@ impl<'ir, D: Dialect> IRFormatter<'ir, D> {
             show_erased_ops: false,
             show_types: true,
             show_opid: false,
+            show_comments: false,
             walker: PrintWalker::Topo,
             indent: 0,
         }
@@ -65,6 +67,11 @@ impl<'ir, D: Dialect> IRFormatter<'ir, D> {
         self
     }
 
+    pub fn show_comments(mut self, show: bool) -> Self {
+        self.show_comments = show;
+        self
+    }
+
     pub fn with_walker(mut self, walker: PrintWalker) -> Self {
         self.walker = walker;
         self
@@ -78,6 +85,22 @@ impl<'ir, D: Dialect> IRFormatter<'ir, D> {
 
 impl<D: Dialect> std::fmt::Display for IRFormatter<'_, D> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Compute max comment length if showing comments
+        let max_comment_len = if self.show_comments {
+            self.ir
+                .walk_ops_linear()
+                .filter_map(|op| op.get_comment().map(|c| c.len()))
+                .max()
+                .unwrap_or(0)
+        } else {
+            0
+        };
+        // Compute opid width if showing opids
+        let opid_width = if self.show_opid {
+            self.ir.n_ops().checked_ilog10().map_or(1, |x| x + 1) as usize
+        } else {
+            0
+        };
         format_ir(
             f,
             self.ir,
@@ -85,6 +108,9 @@ impl<D: Dialect> std::fmt::Display for IRFormatter<'_, D> {
             self.show_erased_ops,
             self.show_types,
             self.show_opid,
+            opid_width,
+            self.show_comments,
+            max_comment_len,
             self.indent,
         )
     }
@@ -96,6 +122,7 @@ pub struct AnnIRFormatter<'r, 'ir, D: Dialect, OpAnn: Annotation, ValAnn: Annota
     show_erased_ops: bool,
     show_types: bool,
     show_opid: bool,
+    show_comments: bool,
     show_op_ann: bool,
     show_op_ann_alternate: bool,
     show_val_ann: bool,
@@ -114,6 +141,7 @@ impl<'r, 'ir, D: Dialect, OpAnn: Annotation, ValAnn: Annotation>
             show_erased_ops: false,
             show_types: true,
             show_opid: false,
+            show_comments: false,
             show_op_ann: true,
             show_op_ann_alternate: false,
             show_val_ann: true,
@@ -140,6 +168,11 @@ impl<'r, 'ir, D: Dialect, OpAnn: Annotation, ValAnn: Annotation>
 
     pub fn show_types(mut self, show: bool) -> Self {
         self.show_types = show;
+        self
+    }
+
+    pub fn show_comments(mut self, show: bool) -> Self {
+        self.show_comments = show;
         self
     }
 
@@ -178,6 +211,22 @@ impl<D: Dialect, OpAnn: Annotation, ValAnn: Annotation> std::fmt::Display
     for AnnIRFormatter<'_, '_, D, OpAnn, ValAnn>
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Compute max comment length if showing comments
+        let max_comment_len = if self.show_comments {
+            self.ann_ir
+                .walk_ops_linear()
+                .filter_map(|op| op.get_comment().map(|c| c.len()))
+                .max()
+                .unwrap_or(0)
+        } else {
+            0
+        };
+        // Compute opid width if showing opids
+        let opid_width = if self.show_opid {
+            self.ann_ir.n_ops().checked_ilog10().map_or(1, |x| x + 1) as usize
+        } else {
+            0
+        };
         format_ann_ir(
             f,
             self.ann_ir,
@@ -185,6 +234,9 @@ impl<D: Dialect, OpAnn: Annotation, ValAnn: Annotation> std::fmt::Display
             self.show_erased_ops,
             self.show_types,
             self.show_opid,
+            opid_width,
+            self.show_comments,
+            max_comment_len,
             self.show_op_ann,
             self.show_op_ann_alternate,
             self.show_val_ann,
@@ -200,6 +252,7 @@ pub struct OpRefFormatter<'r, 'ir, D: Dialect> {
     show_erased: bool,
     show_types: bool,
     show_opid: bool,
+    show_comments: bool,
     indent: usize,
 }
 
@@ -210,6 +263,7 @@ impl<'r, 'ir, D: Dialect> OpRefFormatter<'r, 'ir, D> {
             show_erased: false,
             show_types: true,
             show_opid: false,
+            show_comments: false,
             indent: 0,
         }
     }
@@ -234,6 +288,11 @@ impl<'r, 'ir, D: Dialect> OpRefFormatter<'r, 'ir, D> {
         self
     }
 
+    pub fn show_comments(mut self, show: bool) -> Self {
+        self.show_comments = show;
+        self
+    }
+
     pub fn dump(&self) -> ! {
         println!("{self}");
         panic!("dump");
@@ -242,12 +301,27 @@ impl<'r, 'ir, D: Dialect> OpRefFormatter<'r, 'ir, D> {
 
 impl<D: Dialect> std::fmt::Display for OpRefFormatter<'_, '_, D> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // For single op, max_comment_len is just this op's comment length (no alignment needed)
+        let max_comment_len = if self.show_comments {
+            self.opref.get_comment().map(|c| c.len()).unwrap_or(0)
+        } else {
+            0
+        };
+        // For single op, use the opid's own width
+        let opid_width = if self.show_opid {
+            self.opref.get_id().0.checked_ilog10().map_or(1, |x| x + 1) as usize
+        } else {
+            0
+        };
         format_opref(
             f,
             self.opref,
             self.show_erased,
             self.show_types,
             self.show_opid,
+            opid_width,
+            self.show_comments,
+            max_comment_len,
             self.indent,
         )
     }
@@ -290,6 +364,7 @@ pub struct AnnOpRefFormatter<'r, 'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAn
     show_erased: bool,
     show_types: bool,
     show_opid: bool,
+    show_comments: bool,
     show_op_ann: bool,
     show_op_ann_alternate: bool,
     show_val_ann: bool,
@@ -306,6 +381,7 @@ impl<'r, 'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation>
             show_erased: false,
             show_types: true,
             show_opid: false,
+            show_comments: false,
             show_op_ann: true,
             show_op_ann_alternate: false,
             show_val_ann: true,
@@ -331,6 +407,11 @@ impl<'r, 'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation>
 
     pub fn show_opid(mut self, show: bool) -> Self {
         self.show_opid = show;
+        self
+    }
+
+    pub fn show_comments(mut self, show: bool) -> Self {
+        self.show_comments = show;
         self
     }
 
@@ -364,12 +445,27 @@ impl<D: Dialect, OpAnn: Annotation, ValAnn: Annotation> std::fmt::Display
     for AnnOpRefFormatter<'_, '_, '_, D, OpAnn, ValAnn>
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // For single op, max_comment_len is just this op's comment length (no alignment needed)
+        let max_comment_len = if self.show_comments {
+            self.opref.get_comment().map(|c| c.len()).unwrap_or(0)
+        } else {
+            0
+        };
+        // For single op, use the opid's own width
+        let opid_width = if self.show_opid {
+            self.opref.get_id().0.checked_ilog10().map_or(1, |x| x + 1) as usize
+        } else {
+            0
+        };
         format_ann_opref(
             f,
             self.opref,
             self.show_erased,
             self.show_types,
             self.show_opid,
+            opid_width,
+            self.show_comments,
+            max_comment_len,
             self.show_op_ann,
             self.show_op_ann_alternate,
             self.show_val_ann,
@@ -441,6 +537,9 @@ fn format_ir<D: Dialect>(
     show_erased_ops: bool,
     show_types: bool,
     show_opid: bool,
+    opid_width: usize,
+    show_comments: bool,
+    max_comment_len: usize,
     indent: usize,
 ) -> std::fmt::Result {
     let ops_iter = match walker {
@@ -452,9 +551,17 @@ fn format_ir<D: Dialect>(
         .map(Separated::Content)
         .separate_with(|| Separated::Separator)
         .try_for_each(|a| match a {
-            Separated::Content(opref) => {
-                format_opref(f, &opref, show_erased_ops, show_types, show_opid, indent)
-            }
+            Separated::Content(opref) => format_opref(
+                f,
+                &opref,
+                show_erased_ops,
+                show_types,
+                show_opid,
+                opid_width,
+                show_comments,
+                max_comment_len,
+                indent,
+            ),
             Separated::Separator => writeln!(f),
         })
 }
@@ -466,6 +573,9 @@ fn format_ann_ir<D: Dialect, OpAnn: Annotation, ValAnn: Annotation>(
     show_erased_ops: bool,
     show_types: bool,
     show_opid: bool,
+    opid_width: usize,
+    show_comments: bool,
+    max_comment_len: usize,
     show_op_ann: bool,
     show_op_ann_alternate: bool,
     show_val_ann: bool,
@@ -488,6 +598,9 @@ fn format_ann_ir<D: Dialect, OpAnn: Annotation, ValAnn: Annotation>(
                 show_erased_ops,
                 show_types,
                 show_opid,
+                opid_width,
+                show_comments,
+                max_comment_len,
                 show_op_ann,
                 show_op_ann_alternate,
                 show_val_ann,
@@ -516,6 +629,9 @@ fn format_opref<D: Dialect>(
     show_erased_ops: bool,
     show_types: bool,
     show_opid: bool,
+    opid_width: usize,
+    show_comments: bool,
+    max_comment_len: usize,
     indent: usize,
 ) -> std::fmt::Result {
     if opref.is_inactive() && !show_erased_ops {
@@ -528,9 +644,26 @@ fn format_opref<D: Dialect>(
     if opref.is_inactive() {
         write!(f, "// ")?;
     }
+
+    let has_comments = show_comments && max_comment_len > 0;
     if show_opid {
-        let n_digits = opref.ir.n_vals().checked_ilog10().map_or(1, |x| x + 1) as usize;
-        write!(f, "{:0width$}   |  ", opref.id, width = n_digits)?;
+        if has_comments {
+            // No separator between opid and comment
+            write!(f, "{:0width$}   ", opref.id, width = opid_width)?;
+        } else {
+            write!(f, "{:0width$}   |  ", opref.id, width = opid_width)?;
+        }
+    }
+
+    // Format comment column on the left if enabled
+    if has_comments {
+        // "// " prefix is 3 chars
+        let comment_col_width = max_comment_len + 3;
+        if let Some(comment) = opref.get_comment() {
+            write!(f, "// {:width$}   | ", comment, width = max_comment_len)?;
+        } else {
+            write!(f, "{:width$}   | ", "", width = comment_col_width)?;
+        }
     }
 
     // Format return values
@@ -558,7 +691,9 @@ fn format_opref<D: Dialect>(
             Separated::Content(arg) => format_valref(f, &arg, show_types),
             Separated::Separator => write!(f, ", "),
         })?;
-    write!(f, ");")
+    write!(f, ");")?;
+
+    Ok(())
 }
 
 fn format_ann_opref<D: Dialect, OpAnn: Annotation, ValAnn: Annotation>(
@@ -567,6 +702,9 @@ fn format_ann_opref<D: Dialect, OpAnn: Annotation, ValAnn: Annotation>(
     show_erased_ops: bool,
     show_types: bool,
     show_opid: bool,
+    opid_width: usize,
+    show_comments: bool,
+    max_comment_len: usize,
     show_op_ann: bool,
     show_op_ann_alternate: bool,
     show_val_ann: bool,
@@ -574,7 +712,17 @@ fn format_ann_opref<D: Dialect, OpAnn: Annotation, ValAnn: Annotation>(
     indent: usize,
 ) -> std::fmt::Result {
     // Format base operation (reuse the inner OpRef)
-    format_opref(f, opref, show_erased_ops, show_types, show_opid, indent)?;
+    format_opref(
+        f,
+        opref,
+        show_erased_ops,
+        show_types,
+        show_opid,
+        opid_width,
+        show_comments,
+        max_comment_len,
+        indent,
+    )?;
 
     // Add operation annotation (skip if OpAnn is ())
     if show_op_ann && TypeId::of::<OpAnn>() != TypeId::of::<()>() {

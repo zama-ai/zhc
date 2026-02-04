@@ -1,7 +1,5 @@
 use super::*;
-use crate::{
-    AnnIRFormatter, AnnOpRef, AnnValRef, Dialect, IR, OpId, OpMap, PrintWalker, ValId, ValMap,
-};
+use crate::{AnnIRFormatter, AnnOpRef, AnnValRef, Dialect, IR, OpId, OpMap, ValId, ValMap};
 use hc_utils::{iter::MultiZip, small::SmallVec};
 use std::ops::Deref;
 

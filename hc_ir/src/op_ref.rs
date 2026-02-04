@@ -19,6 +19,7 @@ pub struct OpRef<'ir, D: Dialect> {
     pub(super) returns: &'ir [ValId],
     pub(super) state: &'ir State,
     pub(super) depth: &'ir Depth,
+    pub(super) comment: &'ir Option<String>,
 }
 
 impl<'ir, D: Dialect> Hash for OpRef<'ir, D> {
@@ -95,6 +96,11 @@ impl<'ir, D: Dialect> OpRef<'ir, D> {
     /// Returns the depth of the operation within the IR graph from the inputs.
     pub fn get_depth(&self) -> Depth {
         *self.depth
+    }
+
+    /// Returns the optional comment attached to this operation.
+    pub fn get_comment(&self) -> Option<&str> {
+        self.comment.as_deref()
     }
 
     /// Returns an iterator over the operation's argument values.
