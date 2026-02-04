@@ -61,13 +61,23 @@ impl Builder {
         }
     }
 
+    /// Pushes a comment onto the stack.
+    pub fn push_comment(&self, comment: impl Into<String>) {
+        self.comment_stack.borrow_mut().push(comment.into());
+    }
+
+    /// Pops a comment from the stack.
+    pub fn pop_comment(&self) {
+        self.comment_stack.borrow_mut().pop();
+    }
+
     /// Executes `f` with `comment` pushed onto the comment stack.
     ///
     /// All operations added within `f` will have the stacked comments attached.
-    pub fn with_comment<R>(&self, comment: impl Into<String>, f: impl FnOnce(&Self) -> R) -> R {
-        self.comment_stack.borrow_mut().push(comment.into());
-        let result = f(self);
-        self.comment_stack.borrow_mut().pop();
+    pub fn with_comment<R>(&self, comment: impl Into<String>, f: impl FnOnce() -> R) -> R {
+        self.push_comment(comment);
+        let result = f();
+        self.pop_comment();
         result
     }
 

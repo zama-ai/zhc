@@ -79,21 +79,17 @@ fn cmp(spec: CiphertextSpec, kind: Kind) -> IR<IopLang> {
     let src_b = builder.eint_input(spec.int_size());
 
     // pack a by pairs
-    let packed_a = builder.with_comment("Pack A", |builder| {
-        builder.vector_pack_one_clean(src_a.blocks())
-    });
+    let packed_a = builder.with_comment("Pack A", || builder.vector_pack_one_clean(src_a.blocks()));
     // pack b by pairs
-    let packed_b = builder.with_comment("Pack B", |builder| {
-        builder.vector_pack_one_clean(src_b.blocks())
-    });
+    let packed_b = builder.with_comment("Pack B", || builder.vector_pack_one_clean(src_b.blocks()));
 
     // merge a /b and get sign
-    let mut merged = builder.with_comment("Compare blocks", |builder| {
+    let mut merged = builder.with_comment("Compare blocks", || {
         (packed_a.iter(), packed_b.iter())
             .mzip()
             .enumerate()
             .map(|(i, (l, r))| {
-                builder.with_comment(format!("{i}-th"), |builder| {
+                builder.with_comment(format!("{i}-th"), || {
                     let sub_lr = builder.block_sub(l, r);
                     let pbsed = builder.block_pbs(&sub_lr, Lut1Def::CmpSign);
                     let cst = builder.block_constant(1);
@@ -104,7 +100,7 @@ fn cmp(spec: CiphertextSpec, kind: Kind) -> IR<IopLang> {
     });
 
     // reduce (tree-based reduce)
-    builder.with_comment("Reduce comparison", |builder| {
+    builder.with_comment("Reduce comparison", || {
         while merged.len() > 2 {
             let packed = builder.vector_pack_one(merged.as_slice());
             let reduced = packed
