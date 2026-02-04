@@ -11,4 +11,5 @@ pub struct OpMut<'s, D: Dialect> {
     pub returns: &'s mut SmallVec<ValId>,
     pub state: &'s mut State,
     pub depth: &'s mut Depth,
+    pub comment: &'s mut Option<String>,
 }

@@ -37,6 +37,7 @@ pub struct IR<D: Dialect> {
     pub(super) op_returns: Store<OpId, SmallVec<ValId>>,
     pub(super) op_states: Store<OpId, State>,
     pub(super) op_depth: Store<OpId, Depth>,
+    pub(super) op_comments: Store<OpId, Option<String>>,
     pub(super) op_count: OpIdRaw,
     pub(super) val_users: Store<ValId, SmallVec<ValUse>>,
     pub(super) val_origins: Store<ValId, ValOrigin>,
@@ -94,6 +95,7 @@ impl<D: Dialect> IR<D> {
             id: opid,
             state: &self.op_states[opid],
             depth: &self.op_depth[opid],
+            comment: &self.op_comments[opid],
         }
     }
 
@@ -107,6 +109,7 @@ impl<D: Dialect> IR<D> {
             id: opid,
             state: &mut self.op_states[opid],
             depth: &mut self.op_depth[opid],
+            comment: &mut self.op_comments[opid],
         }
     }
 
@@ -199,6 +202,7 @@ impl<D: Dialect> IR<D> {
             returns,
             state,
             depth,
+            comment,
         } = op;
         self.op_operations.push(operation);
         self.op_signatures.push(signature);
@@ -206,6 +210,7 @@ impl<D: Dialect> IR<D> {
         self.op_returns.push(returns);
         self.op_states.push(state);
         self.op_depth.push(depth);
+        self.op_comments.push(comment);
         self.op_count += 1;
         opid
     }
@@ -268,6 +273,7 @@ impl<D: Dialect> IR<D> {
             op_returns: Store::empty(),
             op_states: Store::empty(),
             op_depth: Store::empty(),
+            op_comments: Store::empty(),
             op_count: 0,
             val_users: Store::empty(),
             val_origins: Store::empty(),
@@ -404,6 +410,27 @@ impl<D: Dialect> IR<D> {
         op: D::InstructionSet,
         args: SmallVec<ValId>,
     ) -> Result<(OpId, SmallVec<ValId>), IRError<D>> {
+        self.add_op_impl(op, args, None)
+    }
+
+    /// Adds a new operation to the IR with the specified arguments and a comment.
+    ///
+    /// Same as `add_op`, but attaches a comment to the operation for debugging.
+    pub fn add_op_with_comment(
+        &mut self,
+        op: D::InstructionSet,
+        args: SmallVec<ValId>,
+        comment: String,
+    ) -> Result<(OpId, SmallVec<ValId>), IRError<D>> {
+        self.add_op_impl(op, args, Some(comment))
+    }
+
+    fn add_op_impl(
+        &mut self,
+        op: D::InstructionSet,
+        args: SmallVec<ValId>,
+        comment: Option<String>,
+    ) -> Result<(OpId, SmallVec<ValId>), IRError<D>> {
         // Check that the args are live.
         args.iter().for_each(|valid| {
             assert!(self.has_valid(*valid), "Unknown valid");
@@ -448,6 +475,7 @@ impl<D: Dialect> IR<D> {
             returns: svec![],
             state: State::Active(()),
             depth,
+            comment,
         };
         let opid = self.raw_insert_op(op);
 

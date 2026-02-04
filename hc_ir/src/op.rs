@@ -20,4 +20,6 @@ pub struct Op<D: Dialect> {
     pub state: State,
     /// Scheduling depth for operation ordering.
     pub depth: Depth,
+    /// Optional comment for debugging purposes.
+    pub comment: Option<String>,
 }

@@ -20,6 +20,7 @@ pub struct Builder {
     pub(crate) ir: RefCell<IR<IopLang>>,
     pub(crate) input_ctr: RefCell<usize>,
     pub(crate) output_ctr: RefCell<usize>,
+    pub(crate) comment_stack: RefCell<Vec<String>>,
 }
 
 impl Builder {
@@ -46,6 +47,40 @@ impl Builder {
             ir: RefCell::new(IR::empty()),
             input_ctr: RefCell::new(0),
             output_ctr: RefCell::new(0),
+            comment_stack: RefCell::new(Vec::new()),
+        }
+    }
+
+    /// Returns the current comment by joining the comment stack, or `None` if empty.
+    fn current_comment(&self) -> Option<String> {
+        let stack = self.comment_stack.borrow();
+        if stack.is_empty() {
+            None
+        } else {
+            Some(stack.join(" / "))
+        }
+    }
+
+    /// Executes `f` with `comment` pushed onto the comment stack.
+    ///
+    /// All operations added within `f` will have the stacked comments attached.
+    pub fn with_comment<R>(&self, comment: impl Into<String>, f: impl FnOnce(&Self) -> R) -> R {
+        self.comment_stack.borrow_mut().push(comment.into());
+        let result = f(self);
+        self.comment_stack.borrow_mut().pop();
+        result
+    }
+
+    /// Adds an operation to the IR, attaching the current comment if any.
+    pub(crate) fn add_op(
+        &self,
+        op: IopInstructionSet,
+        args: SmallVec<hc_ir::ValId>,
+    ) -> (hc_ir::OpId, SmallVec<hc_ir::ValId>) {
+        let mut ir = self.ir.borrow_mut();
+        match self.current_comment() {
+            Some(comment) => ir.add_op_with_comment(op, args, comment).unwrap(),
+            None => ir.add_op(op, args).unwrap(),
         }
     }
 
@@ -100,25 +135,17 @@ impl Builder {
     /// Creates a ciphertext input and returns its blocks.
     pub fn eint_input(&self, int_size: u16) -> Ciphertext {
         let pos = self.get_input_ctr();
-        let (_, inp) = self
-            .ir
-            .borrow_mut()
-            .add_op(
-                IopInstructionSet::Input {
-                    pos,
-                    typ: IopTypeSystem::Ciphertext,
-                },
-                svec![],
-            )
-            .unwrap();
+        let (_, inp) = self.add_op(
+            IopInstructionSet::Input {
+                pos,
+                typ: IopTypeSystem::Ciphertext,
+            },
+            svec![],
+        );
         let mut output = SmallVec::new();
         let ct_spec = self.spec.ciphertext_spec(int_size);
         for index in 0..ct_spec.block_count() {
-            let (_, ret) = self
-                .ir
-                .borrow_mut()
-                .add_op(IopInstructionSet::ExtractCtBlock { index }, svec![inp[0]])
-                .unwrap();
+            let (_, ret) = self.add_op(IopInstructionSet::ExtractCtBlock { index }, svec![inp[0]]);
             output.push(CiphertextBlock {
                 valid: ret[0],
                 spec: self.spec,
@@ -130,28 +157,20 @@ impl Builder {
     /// Creates a plaintext input and returns its blocks.
     pub fn int_input(&self, int_size: u16) -> Plaintext {
         let pos = self.get_input_ctr();
-        let (_, inp) = self
-            .ir
-            .borrow_mut()
-            .add_op(
-                IopInstructionSet::Input {
-                    pos,
-                    typ: IopTypeSystem::Plaintext,
-                },
-                svec![],
-            )
-            .unwrap();
+        let (_, inp) = self.add_op(
+            IopInstructionSet::Input {
+                pos,
+                typ: IopTypeSystem::Plaintext,
+            },
+            svec![],
+        );
         let mut output = SmallVec::new();
         let pt_spec = self
             .spec()
             .matching_plaintext_block_spec()
             .plaintext_spec(int_size);
         for index in 0..pt_spec.block_count() {
-            let (_, ret) = self
-                .ir
-                .borrow_mut()
-                .add_op(IopInstructionSet::ExtractPtBlock { index }, svec![inp[0]])
-                .unwrap();
+            let (_, ret) = self.add_op(IopInstructionSet::ExtractPtBlock { index }, svec![inp[0]]);
             output.push(PlaintextBlock {
                 valid: ret[0],
                 spec: self.spec.matching_plaintext_block_spec(),
@@ -162,48 +181,33 @@ impl Builder {
 
     /// Creates a ciphertext output from the given `blocks`.
     pub fn eint_output(&self, ct: Ciphertext) {
-        let (_, acc) = self
-            .ir
-            .borrow_mut()
-            .add_op(IopInstructionSet::ZeroCiphertext, svec![])
-            .unwrap();
+        let (_, acc) = self.add_op(IopInstructionSet::ZeroCiphertext, svec![]);
         let mut acc = acc[0];
         for index in 0..TryInto::<u8>::try_into(ct.len()).unwrap() {
-            let (_, ret) = self
-                .ir
-                .borrow_mut()
-                .add_op(
-                    IopInstructionSet::StoreCtBlock { index },
-                    svec![ct.blocks()[index as usize].valid, acc],
-                )
-                .unwrap();
+            let (_, ret) = self.add_op(
+                IopInstructionSet::StoreCtBlock { index },
+                svec![ct.blocks()[index as usize].valid, acc],
+            );
             acc = ret[0];
         }
         let pos = self.get_output_ctr();
-        self.ir
-            .borrow_mut()
-            .add_op(
-                IopInstructionSet::Output {
-                    pos,
-                    typ: IopTypeSystem::Ciphertext,
-                },
-                svec![acc],
-            )
-            .unwrap();
+        self.add_op(
+            IopInstructionSet::Output {
+                pos,
+                typ: IopTypeSystem::Ciphertext,
+            },
+            svec![acc],
+        );
     }
 
     /// Creates a plaintext block containing the specified `constant`.
     pub fn block_constant(&self, constant: u8) -> PlaintextBlock {
-        let (_node, ret) = self
-            .ir
-            .borrow_mut()
-            .add_op(
-                IopInstructionSet::LetPlaintextBlock {
-                    value: constant as PlaintextBlockStorage,
-                },
-                svec![],
-            )
-            .unwrap();
+        let (_node, ret) = self.add_op(
+            IopInstructionSet::LetPlaintextBlock {
+                value: constant as PlaintextBlockStorage,
+            },
+            svec![],
+        );
         PlaintextBlock {
             valid: ret[0],
             spec: self.spec.matching_plaintext_block_spec(),
@@ -212,11 +216,7 @@ impl Builder {
 
     /// Adds two ciphertext blocks `src_a` and `src_b`.
     pub fn block_add(&self, src_a: &CiphertextBlock, src_b: &CiphertextBlock) -> CiphertextBlock {
-        let (_node, ret) = self
-            .ir
-            .borrow_mut()
-            .add_op(IopInstructionSet::AddCt, svec![src_a.valid, src_b.valid])
-            .unwrap();
+        let (_node, ret) = self.add_op(IopInstructionSet::AddCt, svec![src_a.valid, src_b.valid]);
         CiphertextBlock {
             valid: ret[0],
             spec: self.spec,
@@ -225,11 +225,7 @@ impl Builder {
 
     /// Adds a ciphertext block `src_a` and a plaintext block `src_b`.
     pub fn block_adds(&self, src_a: &CiphertextBlock, src_b: &PlaintextBlock) -> CiphertextBlock {
-        let (_node, ret) = self
-            .ir
-            .borrow_mut()
-            .add_op(IopInstructionSet::AddPt, svec![src_a.valid, src_b.valid])
-            .unwrap();
+        let (_node, ret) = self.add_op(IopInstructionSet::AddPt, svec![src_a.valid, src_b.valid]);
         CiphertextBlock {
             valid: ret[0],
             spec: self.spec,
@@ -238,11 +234,7 @@ impl Builder {
 
     /// Subtracts ciphertext block `src_b` from `src_a`.
     pub fn block_sub(&self, src_a: &CiphertextBlock, src_b: &CiphertextBlock) -> CiphertextBlock {
-        let (_node, ret) = self
-            .ir
-            .borrow_mut()
-            .add_op(IopInstructionSet::SubCt, svec![src_a.valid, src_b.valid])
-            .unwrap();
+        let (_node, ret) = self.add_op(IopInstructionSet::SubCt, svec![src_a.valid, src_b.valid]);
         CiphertextBlock {
             valid: ret[0],
             spec: self.spec,
@@ -251,11 +243,7 @@ impl Builder {
 
     /// Subtracts plaintext block `src_b` from ciphertext block `src_a`.
     pub fn block_subs(&self, src_a: &CiphertextBlock, src_b: &PlaintextBlock) -> CiphertextBlock {
-        let (_node, ret) = self
-            .ir
-            .borrow_mut()
-            .add_op(IopInstructionSet::SubPt, svec![src_a.valid, src_b.valid])
-            .unwrap();
+        let (_node, ret) = self.add_op(IopInstructionSet::SubPt, svec![src_a.valid, src_b.valid]);
         CiphertextBlock {
             valid: ret[0],
             spec: self.spec,
@@ -264,11 +252,7 @@ impl Builder {
 
     /// Subtracts ciphertext block `src_b` from plaintext block `src_a`.
     pub fn block_ssub(&self, src_a: &PlaintextBlock, src_b: &CiphertextBlock) -> CiphertextBlock {
-        let (_node, ret) = self
-            .ir
-            .borrow_mut()
-            .add_op(IopInstructionSet::PtSub, svec![src_a.valid, src_b.valid])
-            .unwrap();
+        let (_node, ret) = self.add_op(IopInstructionSet::PtSub, svec![src_a.valid, src_b.valid]);
         CiphertextBlock {
             valid: ret[0],
             spec: self.spec,
@@ -280,16 +264,12 @@ impl Builder {
         src_a: &CiphertextBlock,
         src_b: &CiphertextBlock,
     ) -> CiphertextBlock {
-        let (_node, ret) = self
-            .ir
-            .borrow_mut()
-            .add_op(
-                IopInstructionSet::PackCt {
-                    mul: 2u8.pow(self.spec().message_size() as u32) as PlaintextBlockStorage,
-                },
-                svec![src_a.valid, src_b.valid],
-            )
-            .unwrap();
+        let (_node, ret) = self.add_op(
+            IopInstructionSet::PackCt {
+                mul: 2u8.pow(self.spec().message_size() as u32) as PlaintextBlockStorage,
+            },
+            svec![src_a.valid, src_b.valid],
+        );
         CiphertextBlock {
             valid: ret[0],
             spec: self.spec,
@@ -308,11 +288,7 @@ impl Builder {
 
     /// Applies a 1-PBS to `src` using `lut`.
     pub fn block_pbs(&self, src: &CiphertextBlock, lut: Lut1Def) -> CiphertextBlock {
-        let (_node, ret) = self
-            .ir
-            .borrow_mut()
-            .add_op(IopInstructionSet::Pbs { lut }, svec![src.valid])
-            .unwrap();
+        let (_node, ret) = self.add_op(IopInstructionSet::Pbs { lut }, svec![src.valid]);
         CiphertextBlock {
             valid: ret[0],
             spec: self.spec,
@@ -325,11 +301,7 @@ impl Builder {
         src: &CiphertextBlock,
         lut: Lut2Def,
     ) -> (CiphertextBlock, CiphertextBlock) {
-        let (_node, ret) = self
-            .ir
-            .borrow_mut()
-            .add_op(IopInstructionSet::Pbs2 { lut }, svec![src.valid])
-            .unwrap();
+        let (_node, ret) = self.add_op(IopInstructionSet::Pbs2 { lut }, svec![src.valid]);
         (
             CiphertextBlock {
                 valid: ret[0],
