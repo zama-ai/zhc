@@ -1,9 +1,11 @@
 use hc_crypto::integer_semantics::{
-    CiphertextBlockSpec, CiphertextSpec, PlaintextBlockSpec, PlaintextSpec,
+    CiphertextBlockSpec, CiphertextSpec, CiphertextStorage, PlaintextBlockSpec, PlaintextSpec,
 };
 use hc_ir::ValId;
+use hc_langs::ioplang::IopValue;
 use hc_utils::iter::AllEq;
 use hc_utils::small::SmallVec;
+use std::fmt::Debug;
 
 /// A handle to an encrypted message block in the IR.
 #[derive(Clone, Copy)]
@@ -12,6 +14,13 @@ pub struct CiphertextBlock {
     pub spec: CiphertextBlockSpec,
 }
 
+impl Debug for CiphertextBlock {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.valid)
+    }
+}
+
+#[derive(Clone)]
 pub struct Ciphertext {
     pub blocks: SmallVec<CiphertextBlock>,
     pub spec: CiphertextSpec,
@@ -45,6 +54,10 @@ impl Ciphertext {
             blocks[0].spec.message_size(),
         );
         Self { blocks, spec }
+    }
+
+    pub fn value(&self, val: CiphertextStorage) -> IopValue {
+        IopValue::Ciphertext(self.spec.from_int(val))
     }
 }
 
