@@ -727,22 +727,31 @@ fn format_ann_opref<D: Dialect, OpAnn: Annotation, ValAnn: Annotation>(
     // Add operation annotation (skip if OpAnn is ())
     if show_op_ann && TypeId::of::<OpAnn>() != TypeId::of::<()>() {
         writeln!(f)?;
+
+        // Write indent
+        write!(f, "{:indent$}", "", indent = indent)?;
+
+        // Add column spacing to align with operation content
+        if show_opid {
+            let has_comments = show_comments && max_comment_len > 0;
+            if has_comments {
+                // No separator between opid and comment
+                write!(f, "{:width$}   ", "", width = opid_width)?;
+            } else {
+                write!(f, "{:width$}   |  ", "", width = opid_width)?;
+            }
+        }
+
+        if show_comments && max_comment_len > 0 {
+            // "// " prefix is 3 chars
+            let comment_col_width = max_comment_len + 3;
+            write!(f, "{:width$}   | ", "", width = comment_col_width)?;
+        }
+
         if show_op_ann_alternate {
-            write!(
-                f,
-                "{:indent$}    operation -> {:#?}",
-                "",
-                opref.get_annotation(),
-                indent = indent
-            )?;
+            write!(f, "    operation -> {:#?}", opref.get_annotation())?;
         } else {
-            write!(
-                f,
-                "{:indent$}    operation -> {:?}",
-                "",
-                opref.get_annotation(),
-                indent = indent
-            )?;
+            write!(f, "    operation -> {:?}", opref.get_annotation())?;
         }
     }
 
@@ -752,17 +761,38 @@ fn format_ann_opref<D: Dialect, OpAnn: Annotation, ValAnn: Annotation>(
             writeln!(f)?;
             let id = ret.get_id().0;
             let ann = ret.get_annotation();
+
+            // Write indent
+            write!(f, "{:indent$}", "", indent = indent)?;
+
+            // Add column spacing to align with operation content
+            if show_opid {
+                let has_comments = show_comments && max_comment_len > 0;
+                if has_comments {
+                    // No separator between opid and comment
+                    write!(f, "{:width$}   ", "", width = opid_width)?;
+                } else {
+                    write!(f, "{:width$}   |  ", "", width = opid_width)?;
+                }
+            }
+
+            if show_comments && max_comment_len > 0 {
+                // "// " prefix is 3 chars
+                let comment_col_width = max_comment_len + 3;
+                write!(f, "{:width$}   | ", "", width = comment_col_width)?;
+            }
+
             if ret.is_inactive() {
                 if show_val_ann_alternate {
-                    write!(f, "{:indent$}    %_{id} -> {ann:#?}", "", indent = indent)?;
+                    write!(f, "    %_{id} -> {ann:#?}")?;
                 } else {
-                    write!(f, "{:indent$}    %_{id} -> {ann:?}", "", indent = indent)?;
+                    write!(f, "    %_{id} -> {ann:?}")?;
                 }
             } else {
                 if show_val_ann_alternate {
-                    write!(f, "{:indent$}    %{id} -> {ann:#?}", "", indent = indent)?;
+                    write!(f, "    %{id} -> {ann:#?}")?;
                 } else {
-                    write!(f, "{:indent$}    %{id} -> {ann:?}", "", indent = indent)?;
+                    write!(f, "    %{id} -> {ann:?}")?;
                 }
             }
         }
