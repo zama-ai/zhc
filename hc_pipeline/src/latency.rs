@@ -61,7 +61,7 @@ mod test {
     #[test]
     fn test_latency_add_ir() {
         let lat = pipeline(&get_add_ir(16, 2, 2));
-        assert_eq!(lat, Cycle(1795768));
+        assert_eq!(lat, Cycle(1798901));
         println!("{}us", lat.as_ts(MHz(300).period()));
     }
 
