@@ -1,0 +1,16 @@
+.PHONY: test update-expects fmt fmt-check check
+
+test:
+	cargo test
+
+update-expects:
+	cargo run --bin update-expects
+
+fmt:
+	cargo +nightly fmt
+
+fmt-check:
+	cargo +nightly fmt --check
+
+check:
+	RUSTFLAGS="-D warnings" cargo check
