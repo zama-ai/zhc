@@ -4,6 +4,7 @@
 //! compiler workloads, including stack-allocated containers for small data,
 //! type-safe indices, and iterator extensions.
 
+pub mod assert_display;
 pub mod graphics;
 pub mod iter;
 pub mod small;
@@ -20,5 +21,6 @@ pub use change_guard::*;
 pub use erasable::*;
 pub use fast_hash::*;
 pub use fifo::*;
+pub use hc_utils_macro::assert_display_is;
 pub use store::*;
 pub use type_name::*;

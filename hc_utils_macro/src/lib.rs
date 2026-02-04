@@ -2,6 +2,47 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{Data, DeriveInput, Fields, Ident, Variant, parse_macro_input};
 
+/// Inline snapshot testing macro.
+///
+/// Compares `actual.to_string()` against `expected` (normalized).
+/// On mismatch, records the update to `target/expect_updates/` and panics.
+/// Run `cargo run --bin update-expects` to apply recorded updates.
+///
+/// The expected string must be a raw string literal `r#"..."#`.
+#[proc_macro]
+pub fn assert_display_is(input: TokenStream) -> TokenStream {
+    let args = parse_macro_input!(input with syn::punctuated::Punctuated::<syn::Expr, syn::Token![,]>::parse_terminated);
+    let mut iter = args.into_iter();
+
+    let actual = iter
+        .next()
+        .expect("assert_display_is! requires two arguments: actual, expected");
+    let expected = iter
+        .next()
+        .expect("assert_display_is! requires two arguments: actual, expected");
+
+    if iter.next().is_some() {
+        panic!("assert_display_is! takes exactly two arguments");
+    }
+
+    let expanded = quote! {
+        {
+            let actual_val: String = (#actual).to_string();
+            let expected_val: &str = #expected;
+            ::hc_utils::assert_display::check(
+                &actual_val,
+                expected_val,
+                file!(),
+                line!(),
+                column!(),
+                env!("CARGO_MANIFEST_DIR"),
+            );
+        }
+    };
+
+    expanded.into()
+}
+
 #[proc_macro_attribute]
 pub fn fsm(_args: TokenStream, input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
