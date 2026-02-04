@@ -1,7 +1,7 @@
 use std::cell::{Ref, RefCell};
 
 use hc_crypto::integer_semantics::{CiphertextBlockSpec, PlaintextBlockStorage};
-use hc_ir::{IR, cse::eliminate_common_subexpressions, dce::eliminate_dead_code};
+use hc_ir::{IR, PrintWalker, cse::eliminate_common_subexpressions, dce::eliminate_dead_code};
 use hc_langs::ioplang::{
     IopInstructionSet, IopInterepreterContext, IopLang, IopTypeSystem, IopValue, Lut1Def, Lut2Def,
 };
@@ -127,9 +127,28 @@ impl Builder {
             outputs: FastMap::new(),
         };
         let ir = self.ir.borrow();
-        let (interpreted, _) = ir.interpret(context);
-        println!("{:#}", interpreted.format());
-        panic!()
+        match ir.interpret(context) {
+            Ok((interpreted, _)) => {
+                println!(
+                    "{:#}",
+                    interpreted
+                        .format()
+                        .with_walker(PrintWalker::Linear)
+                        .show_comments(true)
+                );
+                panic!("dump_eval_panic: interpretation succeeded")
+            }
+            Err((partial, _)) => {
+                println!(
+                    "{:#}",
+                    partial
+                        .format()
+                        .with_walker(PrintWalker::Linear)
+                        .show_comments(true)
+                );
+                panic!("dump_eval_panic: interpretation failed")
+            }
+        }
     }
 
     /// Creates a ciphertext input and returns its blocks.

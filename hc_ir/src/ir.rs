@@ -1,4 +1,6 @@
-use crate::interpretation::{Interpretable, Interpretation, InterpretsTo, interpret_ir};
+use crate::interpretation::{
+    InterpState, Interpretable, Interpretation, InterpretsTo, interpret_ir,
+};
 use crate::val_ref::ValRef;
 use crate::visualization::draw_ir;
 use crate::{AnnIR, Annotation, IRFormatter, ValMap, ValOrigin, ValUse};
@@ -725,19 +727,31 @@ impl<D: Dialect> IR<D> {
     }
 
     /// Interprets the IR with the given context and returns the annotated result.
+    ///
+    /// Returns `Ok` with the fully interpreted IR and context on success, or `Err`
+    /// with partial interpretation state (containing `Panicked` and `Poisoned` markers)
+    /// and context on failure.
     pub fn interpret<I: Interpretation>(
         &self,
         mut context: <D::InstructionSet as Interpretable<I>>::Context,
-    ) -> (
-        AnnIR<'_, D, (), I>,
-        <D::InstructionSet as Interpretable<I>>::Context,
-    )
+    ) -> Result<
+        (
+            AnnIR<'_, D, (), I>,
+            <D::InstructionSet as Interpretable<I>>::Context,
+        ),
+        (
+            AnnIR<'_, D, (), InterpState<I>>,
+            <D::InstructionSet as Interpretable<I>>::Context,
+        ),
+    >
     where
         D::InstructionSet: Interpretable<I>,
         D::TypeSystem: InterpretsTo<I>,
     {
-        let interpreted = interpret_ir(self, &mut context);
-        (interpreted, context)
+        match interpret_ir(self, &mut context) {
+            Ok(interpreted) => Ok((interpreted, context)),
+            Err(partial) => Err((partial, context)),
+        }
     }
 
     pub fn format(&self) -> IRFormatter<'_, D> {
