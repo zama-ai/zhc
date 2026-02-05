@@ -133,6 +133,18 @@ impl Interpretable<IopValue> for super::IopInstructionSet {
                 };
                 svec![IopValue::CiphertextBlock(left.protect_add_pt(right))]
             }
+            AddPtWrapping => {
+                let (IopValue::CiphertextBlock(left), IopValue::PlaintextBlock(right)) =
+                    (arguments[0].clone(), arguments[1].clone())
+                else {
+                    panic!(
+                        "AddPtWrapping: expected (CiphertextBlock, PlaintextBlock), got:\n{:#?}",
+                        arguments
+                    )
+                };
+                svec![IopValue::CiphertextBlock(left.wrapping_add_pt(right))]
+            }
+
             SubPt => {
                 let (IopValue::CiphertextBlock(left), IopValue::PlaintextBlock(right)) =
                     (arguments[0].clone(), arguments[1].clone())

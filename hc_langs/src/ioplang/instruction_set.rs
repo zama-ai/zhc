@@ -21,6 +21,7 @@ pub enum IopInstructionSet {
     SubCt,
     PackCt { mul: PlaintextBlockStorage },
     AddPt,
+    AddPtWrapping,
     SubPt,
     PtSub,
     MulPt,
@@ -42,6 +43,7 @@ impl Display for IopInstructionSet {
             IopInstructionSet::LetPlaintextBlock { value } => write!(f, "let_pt_block<{value}>"),
             IopInstructionSet::PackCt { mul } => write!(f, "pack_ct<{mul}>"),
             IopInstructionSet::AddCt => write!(f, "add_ct"),
+            IopInstructionSet::AddPtWrapping => write!(f, "add_pt_wrapping"),
             IopInstructionSet::SubCt => write!(f, "sub_ct"),
             IopInstructionSet::AddPt => write!(f, "add_pt"),
             IopInstructionSet::SubPt => write!(f, "sub_pt"),
@@ -78,6 +80,9 @@ impl DialectInstructionSet for IopInstructionSet {
                 sig![(CiphertextBlock, CiphertextBlock) -> (CiphertextBlock)]
             }
             IopInstructionSet::AddPt => {
+                sig![(CiphertextBlock, PlaintextBlock) -> (CiphertextBlock)]
+            }
+            IopInstructionSet::AddPtWrapping => {
                 sig![(CiphertextBlock, PlaintextBlock) -> (CiphertextBlock)]
             }
             IopInstructionSet::SubPt => {

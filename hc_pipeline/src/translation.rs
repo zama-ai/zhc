@@ -190,7 +190,7 @@ impl Translator for IoplangToHpulang {
                         .unwrap();
                     map.insert(op.get_return_valids()[0], valids[0]);
                 }
-                IopInstructionSet::AddPt => {
+                IopInstructionSet::AddPt | IopInstructionSet::AddPtWrapping => {
                     let (_, valids) = if map.contains_key(&op.get_arg_valids()[1]) {
                         // The plaintext input is not constant.
                         output
