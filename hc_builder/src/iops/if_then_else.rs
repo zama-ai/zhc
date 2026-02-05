@@ -8,22 +8,22 @@ use crate::builder::{Builder, Ciphertext};
 pub fn if_then_else(spec: CiphertextSpec) -> IR<IopLang> {
     let builder = Builder::new(spec.block_spec());
 
-    let src_a = builder.eint_input(spec.int_size());
-    let src_b = builder.eint_input(spec.int_size());
-    let cond = builder.eint_input(spec.block_spec().message_size() as u16);
+    let src_a = builder.ciphertext_input(spec.int_size());
+    let src_b = builder.ciphertext_input(spec.int_size());
+    let cond = builder.ciphertext_input(spec.block_spec().message_size() as u16);
 
     let output_blocks = (src_a.blocks().iter(), src_b.blocks().iter())
         .mzip()
         .map(|(a, b)| {
-            let cond_a = builder.block_pack_ct(&cond.blocks()[0], a);
-            let cond_a = builder.block_pbs(&cond_a, Lut1Def::IfFalseZeroed);
-            let cond_b = builder.block_pack_ct(&cond.blocks()[0], b);
-            let cond_b = builder.block_pbs(&cond_b, Lut1Def::IfTrueZeroed);
+            let cond_a = builder.block_pack(&cond.blocks()[0], a);
+            let cond_a = builder.block_lookup(&cond_a, Lut1Def::IfFalseZeroed);
+            let cond_b = builder.block_pack(&cond.blocks()[0], b);
+            let cond_b = builder.block_lookup(&cond_b, Lut1Def::IfTrueZeroed);
             builder.block_add(&cond_a, &cond_b)
         })
         .cosvec();
 
-    builder.eint_output(Ciphertext::from_blocks(output_blocks));
+    builder.ciphertext_output(Ciphertext::from_blocks(output_blocks));
 
     builder.into_ir()
 }

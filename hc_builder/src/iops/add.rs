@@ -21,10 +21,10 @@ pub fn add(spec: CiphertextSpec) -> IR<IopLang> {
     // has increased by 2 additions, compared to the input.
 
     let mut builder = Builder::new(spec.block_spec());
-    let src_a = builder.eint_input(spec.int_size());
-    let src_b = builder.eint_input(spec.int_size());
+    let src_a = builder.ciphertext_input(spec.int_size());
+    let src_b = builder.ciphertext_input(spec.int_size());
     let res = builder.iop_add_hillis_steele(&src_a, &src_b);
-    builder.eint_output(res);
+    builder.ciphertext_output(res);
     builder.into_ir()
 }
 
@@ -59,20 +59,20 @@ impl Builder {
             .map_first(|(_, chunk)| {
                 self.with_comment("Special first", || {
                     [
-                        self.block_pbs2(&chunk[0], Lut2Def::ManyCarryMsg).1,
-                        self.block_pbs(&sums[1], Lut1Def::ExtractPropGroup0),
-                        self.block_pbs(&sums[2], Lut1Def::ExtractPropGroup1),
-                        self.block_pbs(&sums[3], Lut1Def::ExtractPropGroup2),
+                        self.block_lookup2(&chunk[0], Lut2Def::ManyCarryMsg).1,
+                        self.block_lookup(&sums[1], Lut1Def::ExtractPropGroup0),
+                        self.block_lookup(&sums[2], Lut1Def::ExtractPropGroup1),
+                        self.block_lookup(&sums[3], Lut1Def::ExtractPropGroup2),
                     ]
                 })
             })
             .map_rest(|(i, chunk)| {
                 self.with_comment(format!("{i}-th group"), || {
                     [
-                        self.block_pbs(chunk[0], Lut1Def::ExtractPropGroup0),
-                        self.block_pbs(chunk[1], Lut1Def::ExtractPropGroup1),
-                        self.block_pbs(chunk[2], Lut1Def::ExtractPropGroup2),
-                        self.block_pbs(chunk[3], Lut1Def::ExtractPropGroup3),
+                        self.block_lookup(chunk[0], Lut1Def::ExtractPropGroup0),
+                        self.block_lookup(chunk[1], Lut1Def::ExtractPropGroup1),
+                        self.block_lookup(chunk[2], Lut1Def::ExtractPropGroup2),
+                        self.block_lookup(chunk[3], Lut1Def::ExtractPropGroup3),
                     ]
                 })
             })
@@ -95,7 +95,7 @@ impl Builder {
                     let s1 = self.block_add(&s0, &chunk[1]);
                     let s2 = self.block_add(&s1, &chunk[2]);
                     let _s3 = self.block_add(&s2, &chunk[3]);
-                    let s3 = self.block_pbs(&_s3, Lut1Def::SolvePropGroupFinal2);
+                    let s3 = self.block_lookup(&_s3, Lut1Def::SolvePropGroupFinal2);
                     [s0, s1, s2, s3]
                 })
             })
@@ -104,9 +104,9 @@ impl Builder {
                     let s0 = chunk[0];
                     let s1 = self.block_add(&s0, &chunk[1]);
                     let s2 = self.block_add(&s1, &chunk[2]);
-                    let cst_1 = self.block_constant(1);
                     let _s3 = self.block_add(&s2, &chunk[3]);
-                    let _s3 = self.block_pbs(&_s3, Lut1Def::ReduceCarryPad);
+                    let _s3 = self.block_lookup(&_s3, Lut1Def::ReduceCarryPad);
+                    let cst_1 = self.block_constant(1);
                     let s3 = self.block_add_plaintext_wrapping(&_s3, &cst_1);
                     [s0, s1, s2, s3]
                 })
@@ -148,7 +148,7 @@ impl Builder {
                     assert_eq!(sv[0].len(), sv[1].len());
                     (sv[0].iter(), sv[1].iter())
                         .mzip()
-                        .map(|(li, ri)| self.block_pack_lut(ri, li, Lut1Def::SolvePropCarry))
+                        .map(|(li, ri)| self.block_pack_lookup(ri, li, Lut1Def::SolvePropCarry))
                         .intermediate()
                 })
                 // The rest of the chunks combine chunks of the previous stage with the prop lut.
@@ -157,7 +157,7 @@ impl Builder {
                     assert_eq!(sv[0].len(), sv[1].len());
                     (sv[0].iter(), sv[1].iter())
                         .mzip()
-                        .map(|(li, ri)| self.block_pack_lut(ri, li, Lut1Def::SolveProp))
+                        .map(|(li, ri)| self.block_pack_lookup(ri, li, Lut1Def::SolveProp))
                         .intermediate()
                 })
                 .flatten()
@@ -183,8 +183,8 @@ impl Builder {
                     let (spread_pgn, chunk_gn) = slider.unwrap_prelude()[0];
                     [
                         spread_pgn[0],
-                        self.block_pbs(&spread_pgn[1], Lut1Def::SolvePropGroupFinal0),
-                        self.block_pbs(&spread_pgn[2], Lut1Def::SolvePropGroupFinal1),
+                        self.block_lookup(&spread_pgn[1], Lut1Def::SolvePropGroupFinal0),
+                        self.block_lookup(&spread_pgn[2], Lut1Def::SolvePropGroupFinal1),
                         chunk_gn,
                     ]
                 })
@@ -195,11 +195,11 @@ impl Builder {
                     let (_, prev_chunk_gn) = sv[0];
                     let (spread_pgn, chunk_gn) = sv[1];
                     let s0 = self.block_add(&spread_pgn[0], &prev_chunk_gn);
-                    let s0 = self.block_pbs(&s0, Lut1Def::SolvePropGroupFinal0);
+                    let s0 = self.block_lookup(&s0, Lut1Def::SolvePropGroupFinal0);
                     let s1 = self.block_add(&spread_pgn[1], &prev_chunk_gn);
-                    let s1 = self.block_pbs(&s1, Lut1Def::SolvePropGroupFinal1);
+                    let s1 = self.block_lookup(&s1, Lut1Def::SolvePropGroupFinal1);
                     let s2 = self.block_add(&spread_pgn[2], &prev_chunk_gn);
-                    let s2 = self.block_pbs(&s2, Lut1Def::SolvePropGroupFinal2);
+                    let s2 = self.block_lookup(&s2, Lut1Def::SolvePropGroupFinal2);
                     [s0, s1, s2, chunk_gn]
                 })
             })
@@ -210,7 +210,7 @@ impl Builder {
         // Step 6 =================================================================
         // Carry is known now, propagate them in sum
         self.push_comment("Carry propagation");
-        let mut result = svec![self.block_pbs2(&sums[0], Lut2Def::ManyCarryMsg).0];
+        let mut result = svec![self.block_lookup2(&sums[0], Lut2Def::ManyCarryMsg).0];
         result.extend(
             (sums.into_iter().skip(1), carries.into_iter())
                 .mzip()
@@ -223,7 +223,7 @@ impl Builder {
         self.push_comment("Cleanup");
         let result = result
             .into_iter()
-            .map(|ct| self.block_pbs(&ct, Lut1Def::MsgOnly))
+            .map(|ct| self.block_lookup(&ct, Lut1Def::MsgOnly))
             .cosvec();
         self.pop_comment();
 

@@ -75,8 +75,8 @@ fn cmp(spec: CiphertextSpec, kind: Kind) -> IR<IopLang> {
     let builder = Builder::new(spec.block_spec());
 
     // get input as array of blk
-    let src_a = builder.eint_input(spec.int_size());
-    let src_b = builder.eint_input(spec.int_size());
+    let src_a = builder.ciphertext_input(spec.int_size());
+    let src_b = builder.ciphertext_input(spec.int_size());
 
     // pack a by pairs
     let packed_a = builder.with_comment("Pack A", || builder.vector_pack_one_clean(src_a.blocks()));
@@ -91,9 +91,9 @@ fn cmp(spec: CiphertextSpec, kind: Kind) -> IR<IopLang> {
             .map(|(i, (l, r))| {
                 builder.with_comment(format!("{i}-th"), || {
                     let sub_lr = builder.block_sub(l, r);
-                    let pbsed = builder.block_pbs(&sub_lr, Lut1Def::CmpSign);
+                    let pbsed = builder.block_lookup(&sub_lr, Lut1Def::CmpSign);
                     let cst = builder.block_constant(1);
-                    builder.block_adds(&pbsed, &cst)
+                    builder.block_add_plaintext(&pbsed, &cst)
                 })
             })
             .cosvec()
@@ -105,7 +105,7 @@ fn cmp(spec: CiphertextSpec, kind: Kind) -> IR<IopLang> {
             let packed = builder.vector_pack_one(merged.as_slice());
             let reduced = packed
                 .iter()
-                .map(|x| builder.block_pbs(x, Lut1Def::CmpReduce))
+                .map(|x| builder.block_lookup(x, Lut1Def::CmpReduce))
                 .cosvec();
             // prepare next iter
             merged = reduced;
@@ -116,15 +116,15 @@ fn cmp(spec: CiphertextSpec, kind: Kind) -> IR<IopLang> {
     let cmp_res = match merged.len() {
         2 => {
             let p = builder.vector_pack_one(merged.as_slice());
-            builder.block_pbs(&p[0], kind.merge())
+            builder.block_lookup(&p[0], kind.merge())
         }
-        1 => builder.block_pbs(&merged[0], kind.compare()),
+        1 => builder.block_lookup(&merged[0], kind.compare()),
         _ => unreachable!(),
     };
 
     // store result in slot 0 of output 0
     let output = Ciphertext::from_blocks(svec![cmp_res]);
-    builder.eint_output(output);
+    builder.ciphertext_output(output);
 
     builder.into_ir()
 }
