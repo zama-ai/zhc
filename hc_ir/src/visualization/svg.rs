@@ -1,13 +1,13 @@
 use hc_utils::{
-    graphics::{Delta, HAlign, Position, VAlign},
+    graphics::{Delta, HAlign, Position, VAlign, X, Y},
     iter::{Slide, Slider},
 };
 
 use crate::visualization::{
     spatial::{self, Diagram, Element},
     stylesheet::{
-        BodyClass, EffectOperationClass, InputOperationClass, InputPortClass, InputsClass,
-        LinkClass, OperationClass, OutputPortClass, OutputsClass, StyleSheet,
+        BodyClass, CommentClass, EffectOperationClass, InputOperationClass, InputPortClass,
+        InputsClass, LinkClass, OperationClass, OutputPortClass, OutputsClass, StyleSheet,
     },
 };
 
@@ -66,6 +66,15 @@ pub enum SvgElement {
 pub enum PathCommand {
     MoveTo(Position),
     CubicTo(Position, Position, Position),
+    EllipticalArc {
+        rx: f64,
+        ry: f64,
+        x_axis_rotation: f64,
+        large_arc: bool,
+        sweep: bool,
+        end: Position,
+    },
+    ClosePath,
 }
 
 #[derive(Debug, Clone)]
@@ -292,6 +301,17 @@ impl std::fmt::Display for PathCommand {
                     cp1.x.0, cp1.y.0, cp2.x.0, cp2.y.0, pos.x.0, pos.y.0
                 )
             }
+            PathCommand::EllipticalArc { rx, ry, x_axis_rotation, large_arc, sweep, end } => {
+                write!(
+                    f,
+                    "A {} {} {} {} {} {} {} ",
+                    rx, ry, x_axis_rotation,
+                    if *large_arc { 1 } else { 0 },
+                    if *sweep { 1 } else { 0 },
+                    end.x.0, end.y.0
+                )
+            }
+            PathCommand::ClosePath => write!(f, "Z "),
         }
     }
 }
@@ -418,10 +438,89 @@ fn gen_hole(_hole: &spatial::Hole, _stylesheet: &StyleSheet) -> SvgElement {
     }
 }
 
+fn gen_hseparator(x: f64, y: f64, width: f64, color: &str, thickness: f64) -> SvgElement {
+    SvgElement::Rect {
+        x,
+        y,
+        width,
+        height: thickness,
+        fill: Some(color.into()),
+        stroke: None,
+        stroke_width: None,
+        class: None,
+        id: None,
+    }
+}
+
+/// Generates a half-ellipse (dome) on top of a rectangle at (x, y) with given width.
+/// The flat base is at y, curving upward.
+fn gen_hat_top(x: f64, y: f64, width: f64, height: f64, fill: &str, stroke: &str, stroke_width: f64) -> SvgElement {
+    let rx = width / 2.0;
+    let ry = height;
+    SvgElement::Path {
+        commands: vec![
+            PathCommand::MoveTo(Position { x: X::new(x), y: Y::new(y) }),
+            PathCommand::EllipticalArc {
+                rx,
+                ry,
+                x_axis_rotation: 0.0,
+                large_arc: false,
+                sweep: true,  // clockwise in SVG coords = upward curve
+                end: Position { x: X::new(x + width), y: Y::new(y) },
+            },
+            PathCommand::ClosePath,
+        ],
+        fill: Some(fill.into()),
+        stroke: Some(stroke.into()),
+        stroke_width: Some(stroke_width),
+        class: None,
+        id: None,
+        title: None,
+    }
+}
+
+/// Generates a half-ellipse (bowl) below a rectangle at (x, y) with given width.
+/// The flat base is at y, curving downward.
+fn gen_hat_bottom(x: f64, y: f64, width: f64, height: f64, fill: &str, stroke: &str, stroke_width: f64) -> SvgElement {
+    let rx = width / 2.0;
+    let ry = height;
+    SvgElement::Path {
+        commands: vec![
+            PathCommand::MoveTo(Position { x: X::new(x), y: Y::new(y) }),
+            PathCommand::EllipticalArc {
+                rx,
+                ry,
+                x_axis_rotation: 0.0,
+                large_arc: false,
+                sweep: false,  // counter-clockwise in SVG coords = downward curve
+                end: Position { x: X::new(x + width), y: Y::new(y) },
+            },
+            PathCommand::ClosePath,
+        ],
+        fill: Some(fill.into()),
+        stroke: Some(stroke.into()),
+        stroke_width: Some(stroke_width),
+        class: None,
+        id: None,
+        title: None,
+    }
+}
+
 fn gen_input_operation(operation: &spatial::InputOperation, stylesheet: &StyleSheet) -> SvgElement {
     let frame = operation.get_frame();
     let mut elements = Vec::new();
     let style = stylesheet.get::<InputOperationClass>();
+    let hat_height = 10.0;
+    // Top hat (triangle pointing up)
+    elements.push(gen_hat_top(
+        frame.position.x.0,
+        frame.position.y.0,
+        frame.size.width.0.0,
+        hat_height,
+        &style.fill_color.to_string(),
+        &style.border_color.to_string(),
+        style.border_width.0,
+    ));
     elements.push(SvgElement::Rect {
         x: frame.position.x.0,
         y: frame.position.y.0,
@@ -433,8 +532,25 @@ fn gen_input_operation(operation: &spatial::InputOperation, stylesheet: &StyleSh
         class: None,
         id: None,
     });
-    elements.push(gen_body(&operation.e1, stylesheet));
-    elements.push(gen_outputs(&operation.e2, stylesheet));
+    let sep_color = style.border_color.to_string();
+    let sep_thick = style.border_width.0;
+    match operation {
+        spatial::D2::E1(op) => {
+            elements.push(gen_body(&op.e1, stylesheet));
+            let sep_y = (op.e1.get_frame().bottom_left().y.0 + op.e2.get_frame().top_left().y.0) / 2.0;
+            elements.push(gen_hseparator(frame.position.x.0, sep_y, frame.size.width.0.0, &sep_color, sep_thick));
+            elements.push(gen_outputs(&op.e2, stylesheet));
+        }
+        spatial::D2::E2(op) => {
+            elements.push(gen_body(&op.e1, stylesheet));
+            let sep_y1 = (op.e1.get_frame().bottom_left().y.0 + op.e2.get_frame().top_left().y.0) / 2.0;
+            elements.push(gen_hseparator(frame.position.x.0, sep_y1, frame.size.width.0.0, &sep_color, sep_thick));
+            elements.push(gen_comment(&op.e2, stylesheet));
+            let sep_y2 = (op.e2.get_frame().bottom_left().y.0 + op.e3.get_frame().top_left().y.0) / 2.0;
+            elements.push(gen_hseparator(frame.position.x.0, sep_y2, frame.size.width.0.0, &sep_color, sep_thick));
+            elements.push(gen_outputs(&op.e3, stylesheet));
+        }
+    }
     SvgElement::Group {
         elements,
         transform: None,
@@ -458,9 +574,35 @@ fn gen_operation(operation: &spatial::Operation, stylesheet: &StyleSheet) -> Svg
         class: None,
         id: None,
     });
-    elements.push(gen_inputs(&operation.e1, stylesheet));
-    elements.push(gen_body(&operation.e2, stylesheet));
-    elements.push(gen_outputs(&operation.e3, stylesheet));
+    let sep_color = style.border_color.to_string();
+    let sep_thick = style.border_width.0;
+    match operation {
+        spatial::D2::E1(op) => {
+            elements.push(gen_inputs(&op.e1, stylesheet));
+            if !op.e1.content.is_empty() {
+                let sep_y = (op.e1.get_frame().bottom_left().y.0 + op.e2.get_frame().top_left().y.0) / 2.0;
+                elements.push(gen_hseparator(frame.position.x.0, sep_y, frame.size.width.0.0, &sep_color, sep_thick));
+            }
+            elements.push(gen_body(&op.e2, stylesheet));
+            let sep_y = (op.e2.get_frame().bottom_left().y.0 + op.e3.get_frame().top_left().y.0) / 2.0;
+            elements.push(gen_hseparator(frame.position.x.0, sep_y, frame.size.width.0.0, &sep_color, sep_thick));
+            elements.push(gen_outputs(&op.e3, stylesheet));
+        }
+        spatial::D2::E2(op) => {
+            elements.push(gen_inputs(&op.e1, stylesheet));
+            if !op.e1.content.is_empty() {
+                let sep_y = (op.e1.get_frame().bottom_left().y.0 + op.e2.get_frame().top_left().y.0) / 2.0;
+                elements.push(gen_hseparator(frame.position.x.0, sep_y, frame.size.width.0.0, &sep_color, sep_thick));
+            }
+            elements.push(gen_body(&op.e2, stylesheet));
+            let sep_y = (op.e2.get_frame().bottom_left().y.0 + op.e3.get_frame().top_left().y.0) / 2.0;
+            elements.push(gen_hseparator(frame.position.x.0, sep_y, frame.size.width.0.0, &sep_color, sep_thick));
+            elements.push(gen_comment(&op.e3, stylesheet));
+            let sep_y = (op.e3.get_frame().bottom_left().y.0 + op.e4.get_frame().top_left().y.0) / 2.0;
+            elements.push(gen_hseparator(frame.position.x.0, sep_y, frame.size.width.0.0, &sep_color, sep_thick));
+            elements.push(gen_outputs(&op.e4, stylesheet));
+        }
+    }
     SvgElement::Group {
         elements,
         transform: None,
@@ -476,6 +618,7 @@ fn gen_effect_operation(
     let frame = operation.get_frame();
     let mut elements = Vec::new();
     let style = stylesheet.get::<EffectOperationClass>();
+    let hat_height = 10.0;
     elements.push(SvgElement::Rect {
         x: frame.position.x.0,
         y: frame.position.y.0,
@@ -487,8 +630,39 @@ fn gen_effect_operation(
         class: None,
         id: None,
     });
-    elements.push(gen_inputs(&operation.e1, stylesheet));
-    elements.push(gen_body(&operation.e2, stylesheet));
+    let sep_color = style.border_color.to_string();
+    let sep_thick = style.border_width.0;
+    match operation {
+        spatial::D2::E1(op) => {
+            elements.push(gen_inputs(&op.e1, stylesheet));
+            if !op.e1.content.is_empty() {
+                let sep_y = (op.e1.get_frame().bottom_left().y.0 + op.e2.get_frame().top_left().y.0) / 2.0;
+                elements.push(gen_hseparator(frame.position.x.0, sep_y, frame.size.width.0.0, &sep_color, sep_thick));
+            }
+            elements.push(gen_body(&op.e2, stylesheet));
+        }
+        spatial::D2::E2(op) => {
+            elements.push(gen_inputs(&op.e1, stylesheet));
+            if !op.e1.content.is_empty() {
+                let sep_y = (op.e1.get_frame().bottom_left().y.0 + op.e2.get_frame().top_left().y.0) / 2.0;
+                elements.push(gen_hseparator(frame.position.x.0, sep_y, frame.size.width.0.0, &sep_color, sep_thick));
+            }
+            elements.push(gen_body(&op.e2, stylesheet));
+            let sep_y = (op.e2.get_frame().bottom_left().y.0 + op.e3.get_frame().top_left().y.0) / 2.0;
+            elements.push(gen_hseparator(frame.position.x.0, sep_y, frame.size.width.0.0, &sep_color, sep_thick));
+            elements.push(gen_comment(&op.e3, stylesheet));
+        }
+    }
+    // Bottom hat (triangle pointing down)
+    elements.push(gen_hat_bottom(
+        frame.position.x.0,
+        frame.position.y.0 + frame.size.height.0.0,
+        frame.size.width.0.0,
+        hat_height,
+        &style.fill_color.to_string(),
+        &style.border_color.to_string(),
+        style.border_width.0,
+    ));
     SvgElement::Group {
         elements,
         transform: None,
@@ -617,6 +791,45 @@ fn gen_input_port(input_port: &spatial::InputPort, stylesheet: &StyleSheet) -> S
                 id: None,
             },
         ],
+        transform: None,
+        id: None,
+        class: None,
+    }
+}
+
+fn gen_comment(comment: &spatial::Comment, stylesheet: &StyleSheet) -> SvgElement {
+    let frame = comment.get_frame();
+    let style = stylesheet.get::<CommentClass>();
+
+    let mut elements = vec![SvgElement::Rect {
+        x: frame.position.x.0,
+        y: frame.position.y.0,
+        width: frame.size.width.0.0,
+        height: frame.size.height.0.0,
+        fill: Some(style.fill_color.to_string()),
+        stroke: Some(style.border_color.to_string()),
+        stroke_width: Some(style.border_width.0),
+        class: None,
+        id: None,
+    }];
+
+    for (line_index, line) in comment.content.lines().enumerate() {
+        elements.push(SvgElement::Text {
+            x: frame.position.x.0 + style.padding.0,
+            y: frame.position.y.0 + style.padding.0 + (line_index as f64 * style.font_size.0 * 1.2),
+            content: line.to_string(),
+            font_size: style.font_size.0,
+            font_family: Some(style.font.0.into()),
+            fill: Some(style.font_color.to_string()),
+            text_anchor: style.font_halign.into(),
+            dominant_baseline: style.font_valign.into(),
+            class: None,
+            id: None,
+        });
+    }
+
+    SvgElement::Group {
+        elements,
         transform: None,
         id: None,
         class: None,

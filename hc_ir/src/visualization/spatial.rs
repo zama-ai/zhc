@@ -30,8 +30,9 @@ use crate::{
     visualization::{
         layout::{CoordinatesSpec, Link, Vertex},
         stylesheet::{
-            BodyClass, EffectOperationClass, HoleClass, InputOperationClass, InputPortClass,
-            InputsClass, LayerClass, OperationClass, OutputPortClass, OutputsClass, VerticesClass,
+            BodyClass, CommentClass, EffectOperationClass, HoleClass, InputOperationClass,
+            InputPortClass, InputsClass, LayerClass, OperationClass, OutputPortClass, OutputsClass,
+            VerticesClass,
         },
     },
 };
@@ -409,6 +410,7 @@ macro_rules! vstack_fixed {
 
 vstack_fixed!(V2, 2, [E1, e1, E2, e2]);
 vstack_fixed!(V3, 3, [E1, e1, E2, e2, E3, e3]);
+vstack_fixed!(V4, 4, [E1, e1, E2, e2, E3, e3, E4, e4]);
 
 macro_rules! discriminated_union {
     ($name:ident, [$($etype:ident),*]) => {
@@ -445,6 +447,7 @@ macro_rules! discriminated_union {
     };
 }
 
+discriminated_union!(D2, [E1, E2]);
 discriminated_union!(D4, [E1, E2, E3, E4]);
 
 /// Text element representing an operation input port.
@@ -456,18 +459,28 @@ pub type Inputs = HStack<InputPort, InputsClass>;
 /// Text element representing an operation body.
 pub type Body = TextBox<BodyClass>;
 
+/// Text element representing an operation comment.
+pub type Comment = TextBox<CommentClass>;
+
 /// Text element representing an operation output port.
 pub type OutputPort = TextBox<OutputPortClass>;
 
 /// Horizontal collection of output ports.
 pub type Outputs = HStack<OutputPort, OutputsClass>;
 
-pub type InputOperation = V2<Body, Outputs, InputOperationClass>;
+/// Input operation: either without comment (Body, Outputs) or with comment (Body, Comment, Outputs).
+pub type InputOperation =
+    D2<V2<Body, Outputs, InputOperationClass>, V3<Body, Comment, Outputs, InputOperationClass>>;
 
-/// Complete operation node with inputs, body, and outputs arranged vertically.
-pub type Operation = V3<Inputs, Body, Outputs, OperationClass>;
+/// Standard operation: either without comment or with comment.
+pub type Operation = D2<
+    V3<Inputs, Body, Outputs, OperationClass>,
+    V4<Inputs, Body, Comment, Outputs, OperationClass>,
+>;
 
-pub type EffectOperation = V2<Inputs, Body, EffectOperationClass>;
+/// Effect operation: either without comment or with comment.
+pub type EffectOperation =
+    D2<V2<Inputs, Body, EffectOperationClass>, V3<Inputs, Body, Comment, EffectOperationClass>>;
 
 /// Empty placeholder element for missing nodes.
 pub type Hole = Empty<HoleClass>;
@@ -516,8 +529,10 @@ pub fn layout_to_diagram<D: Dialect>(
                         let layer = &vertices.content[coord.layer as usize];
                         let node = &layer.content[coord.node as usize];
                         let arg = match node {
-                            D4::E2(op) => &op.e1.content[arg_i as usize],
-                            D4::E3(eff) => &eff.e1.content[arg_i as usize],
+                            D4::E2(D2::E1(op)) => &op.e1.content[arg_i as usize],
+                            D4::E2(D2::E2(op)) => &op.e1.content[arg_i as usize],
+                            D4::E3(D2::E1(eff)) => &eff.e1.content[arg_i as usize],
+                            D4::E3(D2::E2(eff)) => &eff.e1.content[arg_i as usize],
                             _ => unreachable!(),
                         };
                         arg.get_frame().center()
@@ -526,8 +541,10 @@ pub fn layout_to_diagram<D: Dialect>(
                         let layer = &vertices.content[coord.layer as usize];
                         let node = &layer.content[coord.node as usize];
                         let ret = match node {
-                            D4::E1(inp) => &inp.e2.content[ret_i as usize],
-                            D4::E2(op) => &op.e3.content[ret_i as usize],
+                            D4::E1(D2::E1(inp)) => &inp.e2.content[ret_i as usize],
+                            D4::E1(D2::E2(inp)) => &inp.e3.content[ret_i as usize],
+                            D4::E2(D2::E1(op)) => &op.e3.content[ret_i as usize],
+                            D4::E2(D2::E2(op)) => &op.e4.content[ret_i as usize],
                             _ => unreachable!(),
                         };
                         ret.get_frame().center()
@@ -568,48 +585,56 @@ fn gen_node<D: Dialect>(ir: &IR<D>, inp: &Vertex) -> Node {
     match inp {
         layout::Vertex::Operation(opid) => {
             let op_ref = ir.get_op(*opid);
+            let body = Body::new(op_ref.operation.to_string());
+            let comment = op_ref
+                .get_comment()
+                .map(|c| Comment::new(format!("// {}", c)));
+
             if op_ref.is_input() {
-                Node::E1(InputOperation::new(
-                    Body::new(op_ref.operation.to_string()),
-                    Outputs::new(
-                        op_ref
-                            .get_returns_iter()
-                            .map(|ret| format!("{}: {}", ret.to_string(), ret.get_type()))
-                            .map(TextBox::new)
-                            .collect(),
-                    ),
-                ))
+                let outputs = Outputs::new(
+                    op_ref
+                        .get_returns_iter()
+                        .map(|ret| format!("{}: {}", ret.to_string(), ret.get_type()))
+                        .map(TextBox::new)
+                        .collect(),
+                );
+                Node::E1(match comment {
+                    None => D2::E1(V2::new(body, outputs)),
+                    Some(c) => D2::E2(V3::new(body, c, outputs)),
+                })
             } else if op_ref.is_effect() {
-                Node::E3(EffectOperation::new(
-                    Inputs::new(
-                        op_ref
-                            .get_args_iter()
-                            .map(|arg| format!("{}: {}", arg.to_string(), arg.get_type()))
-                            .map(TextBox::new)
-                            .collect(),
-                    ),
-                    Body::new(op_ref.operation.to_string()),
-                ))
+                let inputs = Inputs::new(
+                    op_ref
+                        .get_args_iter()
+                        .map(|arg| format!("{}: {}", arg.to_string(), arg.get_type()))
+                        .map(TextBox::new)
+                        .collect(),
+                );
+                Node::E3(match comment {
+                    None => D2::E1(V2::new(inputs, body)),
+                    Some(c) => D2::E2(V3::new(inputs, body, c)),
+                })
             } else {
-                Node::E2(Operation::new(
-                    Inputs::new(
-                        op_ref
-                            .get_args_iter()
-                            .map(|arg| format!("{}: {}", arg.to_string(), arg.get_type()))
-                            .map(TextBox::new)
-                            .collect(),
-                    ),
-                    Body::new(op_ref.operation.to_string()),
-                    Outputs::new(
-                        op_ref
-                            .get_returns_iter()
-                            .map(|ret| format!("{}: {}", ret.to_string(), ret.get_type()))
-                            .map(TextBox::new)
-                            .collect(),
-                    ),
-                ))
+                let inputs = Inputs::new(
+                    op_ref
+                        .get_args_iter()
+                        .map(|arg| format!("{}: {}", arg.to_string(), arg.get_type()))
+                        .map(TextBox::new)
+                        .collect(),
+                );
+                let outputs = Outputs::new(
+                    op_ref
+                        .get_returns_iter()
+                        .map(|ret| format!("{}: {}", ret.to_string(), ret.get_type()))
+                        .map(TextBox::new)
+                        .collect(),
+                );
+                Node::E2(match comment {
+                    None => D2::E1(V3::new(inputs, body, outputs)),
+                    Some(c) => D2::E2(V4::new(inputs, body, c, outputs)),
+                })
             }
         }
-        layout::Vertex::Value(..) => Node::E4(Hole::new()),
+        layout::Vertex::Value(..) | layout::Vertex::Slack => Node::E4(Hole::new()),
     }
 }

@@ -96,7 +96,11 @@ pub fn gen_complex_ir() -> Result<IR<TestDialect>, IRError<TestDialect>> {
     // Create a diamond pattern: add0 -> inc2, inc3 -> add2
     let (_, inc2) = ir.add_op(Operations::Inc, svec![add0[0]])?;
     let (_, inc3) = ir.add_op(Operations::Inc, svec![add0[0]])?;
-    let (_, add2) = ir.add_op(Operations::Add, svec![inc2[0], inc3[0]])?;
+    let (_, add2) = ir.add_op_with_comment(
+        Operations::Add,
+        svec![inc2[0], inc3[0]],
+        "diamond convergence".into(),
+    )?;
 
     // Create a deeper chain from inp2
     let (_, chain0) = ir.add_op(Operations::Inc, svec![inp2[0]])?;
@@ -106,7 +110,11 @@ pub fn gen_complex_ir() -> Result<IR<TestDialect>, IRError<TestDialect>> {
     let (_, chain4) = ir.add_op(Operations::Inc, svec![chain3[0]])?;
 
     // Multi-output operation creating branching
-    let (_, divrem0) = ir.add_op(Operations::DivRem, svec![add1[0], inc0[0]])?;
+    let (_, divrem0) = ir.add_op_with_comment(
+        Operations::DivRem,
+        svec![add1[0], inc0[0]],
+        "first divrem".into(),
+    )?;
     let (_, divrem1) = ir.add_op(Operations::DivRem, svec![chain4[0], inp3[0]])?;
 
     // Fan-out: use both outputs of divrem operations
@@ -136,7 +144,11 @@ pub fn gen_complex_ir() -> Result<IR<TestDialect>, IRError<TestDialect>> {
     // Final convergence layer
     let (_, final0) = ir.add_op(Operations::Add, svec![divrem2[0], divrem3[0]])?;
     let (_, final1) = ir.add_op(Operations::Add, svec![divrem2[1], divrem3[1]])?;
-    let (_, final2) = ir.add_op(Operations::Add, svec![final0[0], final1[0]])?;
+    let (_, final2) = ir.add_op_with_comment(
+        Operations::Add,
+        svec![final0[0], final1[0]],
+        "final merge".into(),
+    )?;
 
     // Independent subgraph that eventually merges
     let (_, indep0) = ir.add_op(Operations::Inc, svec![inp0[0]])?;

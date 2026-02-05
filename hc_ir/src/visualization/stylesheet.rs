@@ -49,7 +49,7 @@ impl Style {
         padding: Thickness::new(2.),
         spacing: Thickness::new(2.),
         border_width: Thickness::new(0.1),
-        border_color: Color::BLACK,
+        border_color: Color::TRANSPARENT,
         fill_color: Color::TRANSPARENT,
         halign: HAlign::Center,
         valign: VAlign::Center,
@@ -73,41 +73,53 @@ impl StyleSheet {
 
         output.insert::<InputPortClass>(Style {
             fill_color: Color::AQUAMARINE,
+            border_color: Color::BLACK,
             padding: Thickness::new(2.),
             ..Default::default()
         });
         output.insert::<InputsClass>(Style {
-            fill_color: Color::AQUA,
-            spacing: Thickness::new(10.),
+            fill_color: Color::TRANSPARENT,
+            border_color: Color::TRANSPARENT,
+            padding: Thickness::new(2.),
             ..Default::default()
         });
         output.insert::<BodyClass>(Style {
             padding: Thickness::new(4.),
             ..Default::default()
         });
+        output.insert::<CommentClass>(Style {
+            padding: Thickness::new(4.),
+            font_color: Color::GRAY,
+            ..Default::default()
+        });
         output.insert::<OutputPortClass>(Style {
             fill_color: Color::AQUAMARINE,
+            border_color: Color::BLACK,
             padding: Thickness::new(2.),
             ..Default::default()
         });
         output.insert::<OutputsClass>(Style {
-            fill_color: Color::AQUA,
+            fill_color: Color::TRANSPARENT,
+            border_color: Color::TRANSPARENT,
             padding: Thickness::new(2.),
             ..Default::default()
         });
         output.insert::<InputOperationClass>(Style {
             fill_color: Color::SEASHELL,
             valign: VAlign::Top,
+            border_color: Color::BLACK,
             ..Default::default()
         });
         output.insert::<OperationClass>(Style {
             fill_color: Color::ALICEBLUE,
             valign: VAlign::Top,
+            border_color: Color::BLACK,
             ..Default::default()
         });
         output.insert::<EffectOperationClass>(Style {
             fill_color: Color::HONEYDEW,
             valign: VAlign::Top,
+            border_color: Color::BLACK,
             ..Default::default()
         });
         output.insert::<HoleClass>(Style {
@@ -155,6 +167,9 @@ impl Class for InputsClass {}
 
 pub struct BodyClass;
 impl Class for BodyClass {}
+
+pub struct CommentClass;
+impl Class for CommentClass {}
 
 pub struct OutputPortClass;
 impl Class for OutputPortClass {}

@@ -41,6 +41,7 @@ impl FracPos {
 enum LayeredNode<'ir, 'ann, D: Dialect> {
     Operation(AnnOpRef<'ir, 'ann, D, Layer, ()>),
     Value(AnnValRef<'ir, 'ann, D, Layer, ()>, Layer),
+    Slack(usize),
 }
 
 impl<'ir, 'ann, D: Dialect> std::fmt::Debug for LayeredNode<'ir, 'ann, D> {
@@ -50,11 +51,29 @@ impl<'ir, 'ann, D: Dialect> std::fmt::Debug for LayeredNode<'ir, 'ann, D> {
             LayeredNode::Value(val_ref, layer) => {
                 write!(f, "Val(\"{}\", {:?})", val_ref.format(), layer)
             }
+            LayeredNode::Slack(id) => write!(f, "Slack({})", id),
         }
     }
 }
 
 impl<'ir, 'ann, D: Dialect> LayeredNode<'ir, 'ann, D> {
+
+    fn is_not_slack(&self) -> bool {
+        !matches!(self, LayeredNode::Slack(_))
+    }
+
+    fn slack() -> Self {
+        thread_local! {
+            static COUNTER: std::cell::Cell<usize> = std::cell::Cell::new(0);
+        }
+        let id = COUNTER.with(|c| {
+            let val = c.get();
+            c.set(val + 1);
+            val
+        });
+        LayeredNode::Slack(id)
+    }
+
     fn above(&self) -> impl Iterator<Item = (LayeredNode<'ir, 'ann, D>, FracPos)> {
         match self {
             LayeredNode::Operation(op_ref) => op_ref
@@ -93,6 +112,7 @@ impl<'ir, 'ann, D: Dialect> LayeredNode<'ir, 'ann, D> {
                 }
                 .reconcile_2_of_2()
             }
+            LayeredNode::Slack(_) => std::iter::empty().merge_3_of_3(),
         }
     }
 
@@ -180,7 +200,7 @@ struct LayoutBuilder<'ir, 'ann, D: Dialect> {
     // Layout is a vertical stack (top-to-bottom ordered) of horizontal stacks (left-to-right
     // ordered) of nodes.
     layout: VStack<HStack<LayeredNode<'ir, 'ann, D>>>,
-    position_buffer: FastMap<LayeredNode<'ir, 'ann, D>, Position>,
+    position_buffer: FastMap<LayeredNode<'ir, 'ann, D>, usize>,
 }
 
 impl<'ir, 'ann, D: Dialect> LayoutBuilder<'ir, 'ann, D> {
@@ -193,7 +213,7 @@ impl<'ir, 'ann, D: Dialect> LayoutBuilder<'ir, 'ann, D> {
         for op in ann_ir.walk_ops_linear() {
             let layer = op.get_annotation().to_usize();
             let node = LayeredNode::Operation(op);
-            position_buffer.insert(node.clone(), Position::Index(layout[layer].len()));
+            position_buffer.insert(node.clone(), layout[layer].len());
             layout[layer].push(node);
         }
 
@@ -211,11 +231,18 @@ impl<'ir, 'ann, D: Dialect> LayoutBuilder<'ir, 'ann, D> {
                 let node = LayeredNode::Value(val.clone(), layer);
                 position_buffer.insert(
                     node.clone(),
-                    Position::Index(layout[layer.to_usize()].len()),
+                    layout[layer.to_usize()].len(),
                 );
                 layout[layer.to_usize()].push(node)
             }
         }
+
+        // Pad all layers to equal width with slack nodes
+        let max_width = layout.iter().map(|l| l.len()).max().unwrap_or(0);
+        for layer in layout.iter_mut() {
+            layer.extend(std::iter::repeat_with(LayeredNode::slack).take(max_width - layer.len()));
+        }
+
         // We create the builder object
         let mut builder = Self {
             layout,
@@ -223,91 +250,73 @@ impl<'ir, 'ann, D: Dialect> LayoutBuilder<'ir, 'ann, D> {
         };
 
         for _ in 0..10 {
-            builder.reorder_bottom_up();
             builder.reorder_top_down();
+            builder.reorder_bottom_up();
         }
 
         builder
     }
 
-    fn depth(&self) -> usize {
-        self.layout.len()
-    }
-
     fn reorder_bottom_up(&mut self) {
-        for layer in (0..self.depth()).rev() {
-            for node in self.layout[layer].iter() {
-                let maybe_median = node
+        let mut buffer = Vec::new();
+        for layer in self.layout.iter_mut().rev() {
+            for node in layer.iter().filter(|a| LayeredNode::is_not_slack(&a)) {
+                let median = node
                     .below()
                     .map(|(n, frac)| {
-                        self.position_buffer.get(&n).unwrap().unwrap_index() as f64 + frac.0
+                        *self.position_buffer.get(&n).unwrap() as f64 + frac.0
                     })
-                    .median();
-                let Some(pos) = self.position_buffer.get_mut(node) else {
-                    unreachable!()
-                };
-                match maybe_median {
-                    Some(median) => {
-                        *pos = Position::Approximate(median);
-                    }
-                    None => {
-                        *pos = Position::Approximate(pos.unwrap_index() as f64);
-                    }
-                }
+                    .median()
+                    // .unwrap_or(0.);
+                    .unwrap_or(*self.position_buffer.get(&node).unwrap() as f64);
+                buffer.push((node.clone(), median));
             }
-            self.layout[layer].as_mut_slice().sort_unstable_by(|a, b| {
-                self.position_buffer
-                    .get(a)
-                    .unwrap()
-                    .unwrap_average()
-                    .total_cmp(&self.position_buffer.get(b).unwrap().unwrap_average())
-            });
-            for (i, node) in self.layout[layer].iter().enumerate() {
-                let Some(pos) = self.position_buffer.get_mut(node) else {
-                    unreachable!()
-                };
-                *pos = Position::Index(i);
+            buffer.as_mut_slice().sort_unstable_by(|a, b| a.1.total_cmp(&b.1));
+            layer.clear();
+            for (node, med) in buffer.iter() {
+                let exp_pos = med.round() as usize;
+                while layer.len() < exp_pos {
+                    layer.push(LayeredNode::slack());
+                }
+                layer.push(node.clone());
+            }
+            buffer.clear();
+            for (i, node) in layer.iter().enumerate().filter(|(_, node)| node.is_not_slack()) {
+                self.position_buffer.insert(node.clone(), i);
             }
         }
     }
 
     fn reorder_top_down(&mut self) {
-        for layer in 0..self.depth() {
-            for node in self.layout[layer].iter() {
-                let maybe_median = node
+        let mut buffer = Vec::new();
+        for layer in self.layout.iter_mut() {
+            for node in layer.iter().filter(|a| LayeredNode::is_not_slack(&a)) {
+                let median = node
                     .above()
                     .map(|(n, frac)| {
-                        self.position_buffer.get(&n).unwrap().unwrap_index() as f64 + frac.0
+                        *self.position_buffer.get(&n).unwrap() as f64 + frac.0
                     })
-                    .median();
-                let Some(pos) = self.position_buffer.get_mut(node) else {
-                    unreachable!()
-                };
-                match maybe_median {
-                    Some(median) => {
-                        *pos = Position::Approximate(median);
-                    }
-                    None => {
-                        *pos = Position::Approximate(pos.unwrap_index() as f64);
-                    }
+                    .median()
+                    .unwrap_or(0.);
+                    // .unwrap_or(*self.position_buffer.get(&node).unwrap() as f64);
+                buffer.push((node.clone(), median));
+            }
+            buffer.as_mut_slice().sort_unstable_by(|a, b| a.1.total_cmp(&b.1));
+            layer.clear();
+            for (node, med) in buffer.iter() {
+                let exp_pos = med.round() as usize;
+                while layer.len() < exp_pos {
+                    layer.push(LayeredNode::slack());
                 }
+                layer.push(node.clone());
             }
-            self.layout[layer].as_mut_slice().sort_unstable_by(|a, b| {
-                self.position_buffer
-                    .get(a)
-                    .unwrap()
-                    .unwrap_average()
-                    .total_cmp(&self.position_buffer.get(b).unwrap().unwrap_average())
-            });
-            for (i, node) in self.layout[layer].iter().enumerate() {
-                let Some(pos) = self.position_buffer.get_mut(node) else {
-                    unreachable!()
-                };
-                *pos = Position::Index(i);
+            buffer.clear();
+            for (i, node) in layer.iter().enumerate().filter(|(_, node)| node.is_not_slack()) {
+                self.position_buffer.insert(node.clone(), i);
             }
+
         }
     }
-
     fn into_vertices(self) -> VStack<HStack<Vertex>> {
         self.layout
             .into_iter()
@@ -319,6 +328,7 @@ impl<'ir, 'ann, D: Dialect> LayoutBuilder<'ir, 'ann, D> {
                             Vertex::Operation(ann_op_ref.get_id())
                         }
                         LayeredNode::Value(ann_val_ref, _) => Vertex::Value(ann_val_ref.get_id()),
+                        LayeredNode::Slack(_) => Vertex::Slack,
                     })
                     .collect()
             })
@@ -345,6 +355,7 @@ pub enum CoordinatesSpec {
 pub enum Vertex {
     Operation(OpId),
     Value(ValId),
+    Slack,
 }
 
 #[derive(Debug, Clone)]
@@ -390,6 +401,7 @@ impl Layout {
                         Vertex::Value(valid) => {
                             val_map.insert(valid, node_i as u16);
                         }
+                        Vertex::Slack => {}
                     });
                 (val_map, op_map)
             };
