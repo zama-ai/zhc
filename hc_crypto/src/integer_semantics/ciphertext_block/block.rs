@@ -1,52 +1,52 @@
-use super::{CiphertextBlockSpec, CiphertextBlockStorage};
+use super::{CiphertextBlockSpec, EmulatedCiphertextBlockStorage};
 use std::fmt::Debug;
 
 /// A semantic equivalent to a ciphertext block.
 #[derive(Clone, Copy)]
-pub struct CiphertextBlock {
-    pub(crate) storage: CiphertextBlockStorage,
+pub struct EmulatedCiphertextBlock {
+    pub(crate) storage: EmulatedCiphertextBlockStorage,
     pub(crate) spec: CiphertextBlockSpec,
 }
 
-impl CiphertextBlock {
-    pub(crate) fn raw_mask_message(&self) -> CiphertextBlockStorage {
+impl EmulatedCiphertextBlock {
+    pub(crate) fn raw_mask_message(&self) -> EmulatedCiphertextBlockStorage {
         self.storage & self.spec.message_mask()
     }
 
-    pub(crate) fn raw_mask_carry(&self) -> CiphertextBlockStorage {
+    pub(crate) fn raw_mask_carry(&self) -> EmulatedCiphertextBlockStorage {
         self.storage & self.spec.carry_mask()
     }
 
-    pub(crate) fn raw_mask_padding(&self) -> CiphertextBlockStorage {
+    pub(crate) fn raw_mask_padding(&self) -> EmulatedCiphertextBlockStorage {
         self.storage & self.spec.padding_mask()
     }
 
-    pub(crate) fn raw_mask_data(&self) -> CiphertextBlockStorage {
+    pub(crate) fn raw_mask_data(&self) -> EmulatedCiphertextBlockStorage {
         self.storage & self.spec.data_mask()
     }
 
-    pub(crate) fn raw_mask_complete(&self) -> CiphertextBlockStorage {
+    pub(crate) fn raw_mask_complete(&self) -> EmulatedCiphertextBlockStorage {
         self.storage & self.spec.complete_mask()
     }
 
-    pub(crate) fn raw_message_bits(&self) -> CiphertextBlockStorage {
+    pub(crate) fn raw_message_bits(&self) -> EmulatedCiphertextBlockStorage {
         self.raw_mask_message()
     }
 
-    pub(crate) fn raw_carry_bits(&self) -> CiphertextBlockStorage {
+    pub(crate) fn raw_carry_bits(&self) -> EmulatedCiphertextBlockStorage {
         self.raw_mask_carry() >> self.spec.message_size()
     }
 
-    pub(crate) fn raw_padding_bits(&self) -> CiphertextBlockStorage {
+    pub(crate) fn raw_padding_bits(&self) -> EmulatedCiphertextBlockStorage {
         self.raw_mask_padding() >> self.spec.data_size()
     }
 
     #[allow(unused)]
-    pub(crate) fn raw_data_bits(&self) -> CiphertextBlockStorage {
+    pub(crate) fn raw_data_bits(&self) -> EmulatedCiphertextBlockStorage {
         self.raw_mask_data()
     }
 
-    pub(crate) fn raw_complete_bits(&self) -> CiphertextBlockStorage {
+    pub(crate) fn raw_complete_bits(&self) -> EmulatedCiphertextBlockStorage {
         self.raw_mask_complete()
     }
 
@@ -54,22 +54,22 @@ impl CiphertextBlock {
         self.spec
     }
 
-    pub fn mask_message(&self) -> CiphertextBlock {
-        CiphertextBlock {
+    pub fn mask_message(&self) -> EmulatedCiphertextBlock {
+        EmulatedCiphertextBlock {
             storage: self.raw_mask_message(),
             spec: self.spec,
         }
     }
 
-    pub fn mask_carry(&self) -> CiphertextBlock {
-        CiphertextBlock {
+    pub fn mask_carry(&self) -> EmulatedCiphertextBlock {
+        EmulatedCiphertextBlock {
             storage: self.raw_mask_carry(),
             spec: self.spec,
         }
     }
 
-    pub fn move_carry_to_message(&self) -> CiphertextBlock {
-        CiphertextBlock {
+    pub fn move_carry_to_message(&self) -> EmulatedCiphertextBlock {
+        EmulatedCiphertextBlock {
             storage: self.raw_mask_carry() >> self.spec.message_size(),
             spec: self.spec,
         }
@@ -80,7 +80,7 @@ impl CiphertextBlock {
     }
 }
 
-impl Debug for CiphertextBlock {
+impl Debug for EmulatedCiphertextBlock {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if f.alternate() {
             write!(
@@ -105,15 +105,15 @@ impl Debug for CiphertextBlock {
     }
 }
 
-impl PartialEq for CiphertextBlock {
+impl PartialEq for EmulatedCiphertextBlock {
     fn eq(&self, other: &Self) -> bool {
         self.raw_complete_bits() == other.raw_complete_bits() && self.spec == other.spec
     }
 }
 
-impl Eq for CiphertextBlock {}
+impl Eq for EmulatedCiphertextBlock {}
 
-impl PartialOrd for CiphertextBlock {
+impl PartialOrd for EmulatedCiphertextBlock {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         if self.spec == other.spec {
             self.raw_complete_bits()
@@ -124,7 +124,7 @@ impl PartialOrd for CiphertextBlock {
     }
 }
 
-impl std::hash::Hash for CiphertextBlock {
+impl std::hash::Hash for EmulatedCiphertextBlock {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.raw_complete_bits().hash(state);
         self.spec.hash(state);

@@ -1,13 +1,15 @@
-use super::{CiphertextBlock, CiphertextBlockSpec, PlaintextBlock, PlaintextBlockSpec};
+use super::{
+    CiphertextBlockSpec, EmulatedCiphertextBlock, EmulatedPlaintextBlock, PlaintextBlockSpec,
+};
 
 #[test]
 fn protect_add_ct_ct_basic() {
     let spec = CiphertextBlockSpec(2, 3);
-    let lhs = CiphertextBlock {
+    let lhs = EmulatedCiphertextBlock {
         storage: 0b0_01_010,
         spec,
     };
-    let rhs = CiphertextBlock {
+    let rhs = EmulatedCiphertextBlock {
         storage: 0b0_10_011,
         spec,
     };
@@ -20,11 +22,11 @@ fn protect_add_ct_ct_basic() {
 #[test]
 fn protect_add_ct_ct_max_values() {
     let spec = CiphertextBlockSpec(2, 3);
-    let lhs = CiphertextBlock {
+    let lhs = EmulatedCiphertextBlock {
         storage: 0b0_01_111,
         spec,
     };
-    let rhs = CiphertextBlock {
+    let rhs = EmulatedCiphertextBlock {
         storage: 0b0_10_000,
         spec,
     };
@@ -36,11 +38,11 @@ fn protect_add_ct_ct_max_values() {
 #[test]
 #[should_panic(expected = "Spec mismatch")]
 fn protect_add_ct_ct_spec_mismatch_panics() {
-    let lhs = CiphertextBlock {
+    let lhs = EmulatedCiphertextBlock {
         storage: 0b0_01_010,
         spec: CiphertextBlockSpec(2, 3),
     };
-    let rhs = CiphertextBlock {
+    let rhs = EmulatedCiphertextBlock {
         storage: 0b0_10_011,
         spec: CiphertextBlockSpec(3, 3),
     };
@@ -52,11 +54,11 @@ fn protect_add_ct_ct_spec_mismatch_panics() {
 #[should_panic(expected = "lhs has active padding bit")]
 fn protect_add_ct_ct_lhs_padding_panics() {
     let spec = CiphertextBlockSpec(2, 3);
-    let lhs = CiphertextBlock {
+    let lhs = EmulatedCiphertextBlock {
         storage: 0b1_01_010,
         spec,
     };
-    let rhs = CiphertextBlock {
+    let rhs = EmulatedCiphertextBlock {
         storage: 0b0_10_011,
         spec,
     };
@@ -68,11 +70,11 @@ fn protect_add_ct_ct_lhs_padding_panics() {
 #[should_panic(expected = "rhs has active padding bit")]
 fn protect_add_ct_ct_rhs_padding_panics() {
     let spec = CiphertextBlockSpec(2, 3);
-    let lhs = CiphertextBlock {
+    let lhs = EmulatedCiphertextBlock {
         storage: 0b0_01_010,
         spec,
     };
-    let rhs = CiphertextBlock {
+    let rhs = EmulatedCiphertextBlock {
         storage: 0b1_10_011,
         spec,
     };
@@ -84,11 +86,11 @@ fn protect_add_ct_ct_rhs_padding_panics() {
 #[should_panic(expected = "Overflow occured while performing protect-add")]
 fn protect_add_ct_ct_carry_overflow_panics() {
     let spec = CiphertextBlockSpec(2, 3);
-    let lhs = CiphertextBlock {
+    let lhs = EmulatedCiphertextBlock {
         storage: 0b0_11_111,
         spec,
     };
-    let rhs = CiphertextBlock {
+    let rhs = EmulatedCiphertextBlock {
         storage: 0b0_00_001,
         spec,
     };
@@ -99,11 +101,11 @@ fn protect_add_ct_ct_carry_overflow_panics() {
 #[test]
 fn temper_add_ct_ct_basic() {
     let spec = CiphertextBlockSpec(2, 3);
-    let lhs = CiphertextBlock {
+    let lhs = EmulatedCiphertextBlock {
         storage: 0b0_01_010,
         spec,
     };
-    let rhs = CiphertextBlock {
+    let rhs = EmulatedCiphertextBlock {
         storage: 0b1_10_011,
         spec,
     };
@@ -116,11 +118,11 @@ fn temper_add_ct_ct_basic() {
 #[should_panic(expected = "Overflow occured while performing temper-add")]
 fn temper_add_ct_ct_padding_overflow_panics() {
     let spec = CiphertextBlockSpec(2, 3);
-    let lhs = CiphertextBlock {
+    let lhs = EmulatedCiphertextBlock {
         storage: 0b1_11_111,
         spec,
     };
-    let rhs = CiphertextBlock {
+    let rhs = EmulatedCiphertextBlock {
         storage: 0b0_00_001,
         spec,
     };
@@ -131,11 +133,11 @@ fn temper_add_ct_ct_padding_overflow_panics() {
 #[test]
 fn wrapping_add_ct_ct_basic() {
     let spec = CiphertextBlockSpec(2, 3);
-    let lhs = CiphertextBlock {
+    let lhs = EmulatedCiphertextBlock {
         storage: 0b0_01_010,
         spec,
     };
-    let rhs = CiphertextBlock {
+    let rhs = EmulatedCiphertextBlock {
         storage: 0b1_10_011,
         spec,
     };
@@ -147,11 +149,11 @@ fn wrapping_add_ct_ct_basic() {
 #[test]
 fn wrapping_add_ct_ct_overflow_wraps() {
     let spec = CiphertextBlockSpec(2, 3);
-    let lhs = CiphertextBlock {
+    let lhs = EmulatedCiphertextBlock {
         storage: 0b1_11_111,
         spec,
     };
-    let rhs = CiphertextBlock {
+    let rhs = EmulatedCiphertextBlock {
         storage: 0b0_00_001,
         spec,
     };
@@ -163,11 +165,11 @@ fn wrapping_add_ct_ct_overflow_wraps() {
 #[test]
 fn wrapping_add_ct_ct_masks_extra_bits() {
     let spec = CiphertextBlockSpec(2, 3);
-    let lhs = CiphertextBlock {
+    let lhs = EmulatedCiphertextBlock {
         storage: 0b11111_11_111,
         spec,
     };
-    let rhs = CiphertextBlock {
+    let rhs = EmulatedCiphertextBlock {
         storage: 0b00000_00_001,
         spec,
     };
@@ -180,11 +182,11 @@ fn wrapping_add_ct_ct_masks_extra_bits() {
 fn protect_add_ct_pt_basic() {
     let ct_spec = CiphertextBlockSpec(2, 3);
     let pt_spec = PlaintextBlockSpec(3);
-    let lhs = CiphertextBlock {
+    let lhs = EmulatedCiphertextBlock {
         storage: 0b0_01_010,
         spec: ct_spec,
     };
-    let rhs = PlaintextBlock {
+    let rhs = EmulatedPlaintextBlock {
         storage: 0b011,
         spec: pt_spec,
     };
@@ -196,11 +198,11 @@ fn protect_add_ct_pt_basic() {
 #[test]
 #[should_panic(expected = "Spec mismatch")]
 fn protect_add_ct_pt_spec_mismatch_panics() {
-    let lhs = CiphertextBlock {
+    let lhs = EmulatedCiphertextBlock {
         storage: 0b0_01_010,
         spec: CiphertextBlockSpec(2, 3),
     };
-    let rhs = PlaintextBlock {
+    let rhs = EmulatedPlaintextBlock {
         storage: 0b011,
         spec: PlaintextBlockSpec(4),
     };
@@ -213,11 +215,11 @@ fn protect_add_ct_pt_spec_mismatch_panics() {
 fn protect_add_ct_pt_padding_panics() {
     let ct_spec = CiphertextBlockSpec(2, 3);
     let pt_spec = PlaintextBlockSpec(3);
-    let lhs = CiphertextBlock {
+    let lhs = EmulatedCiphertextBlock {
         storage: 0b1_01_010,
         spec: ct_spec,
     };
-    let rhs = PlaintextBlock {
+    let rhs = EmulatedPlaintextBlock {
         storage: 0b011,
         spec: pt_spec,
     };
@@ -229,11 +231,11 @@ fn protect_add_ct_pt_padding_panics() {
 fn temper_add_ct_pt_basic() {
     let ct_spec = CiphertextBlockSpec(2, 3);
     let pt_spec = PlaintextBlockSpec(3);
-    let lhs = CiphertextBlock {
+    let lhs = EmulatedCiphertextBlock {
         storage: 0b1_01_010,
         spec: ct_spec,
     };
-    let rhs = PlaintextBlock {
+    let rhs = EmulatedPlaintextBlock {
         storage: 0b011,
         spec: pt_spec,
     };
@@ -246,11 +248,11 @@ fn temper_add_ct_pt_basic() {
 fn wrapping_add_ct_pt_basic() {
     let ct_spec = CiphertextBlockSpec(2, 3);
     let pt_spec = PlaintextBlockSpec(3);
-    let lhs = CiphertextBlock {
+    let lhs = EmulatedCiphertextBlock {
         storage: 0b1_11_111,
         spec: ct_spec,
     };
-    let rhs = PlaintextBlock {
+    let rhs = EmulatedPlaintextBlock {
         storage: 0b001,
         spec: pt_spec,
     };
@@ -262,11 +264,11 @@ fn wrapping_add_ct_pt_basic() {
 #[test]
 fn protect_sub_ct_ct_basic() {
     let spec = CiphertextBlockSpec(2, 3);
-    let lhs = CiphertextBlock {
+    let lhs = EmulatedCiphertextBlock {
         storage: 0b0_11_101,
         spec,
     };
-    let rhs = CiphertextBlock {
+    let rhs = EmulatedCiphertextBlock {
         storage: 0b0_01_010,
         spec,
     };
@@ -279,11 +281,11 @@ fn protect_sub_ct_ct_basic() {
 #[should_panic(expected = "lhs has active padding bit")]
 fn protect_sub_ct_ct_lhs_padding_panics() {
     let spec = CiphertextBlockSpec(2, 3);
-    let lhs = CiphertextBlock {
+    let lhs = EmulatedCiphertextBlock {
         storage: 0b1_11_101,
         spec,
     };
-    let rhs = CiphertextBlock {
+    let rhs = EmulatedCiphertextBlock {
         storage: 0b0_01_010,
         spec,
     };
@@ -295,11 +297,11 @@ fn protect_sub_ct_ct_lhs_padding_panics() {
 #[should_panic(expected = "rhs has active padding bit")]
 fn protect_sub_ct_ct_rhs_padding_panics() {
     let spec = CiphertextBlockSpec(2, 3);
-    let lhs = CiphertextBlock {
+    let lhs = EmulatedCiphertextBlock {
         storage: 0b0_11_101,
         spec,
     };
-    let rhs = CiphertextBlock {
+    let rhs = EmulatedCiphertextBlock {
         storage: 0b1_01_010,
         spec,
     };
@@ -311,11 +313,11 @@ fn protect_sub_ct_ct_rhs_padding_panics() {
 #[should_panic(expected = "Underflow occured while performing protect-sub")]
 fn protect_sub_ct_ct_underflow_panics() {
     let spec = CiphertextBlockSpec(2, 3);
-    let lhs = CiphertextBlock {
+    let lhs = EmulatedCiphertextBlock {
         storage: 0b0_01_010,
         spec,
     };
-    let rhs = CiphertextBlock {
+    let rhs = EmulatedCiphertextBlock {
         storage: 0b0_11_101,
         spec,
     };
@@ -326,11 +328,11 @@ fn protect_sub_ct_ct_underflow_panics() {
 #[test]
 fn temper_sub_ct_ct_basic() {
     let spec = CiphertextBlockSpec(2, 3);
-    let lhs = CiphertextBlock {
+    let lhs = EmulatedCiphertextBlock {
         storage: 0b1_11_101,
         spec,
     };
-    let rhs = CiphertextBlock {
+    let rhs = EmulatedCiphertextBlock {
         storage: 0b1_01_010,
         spec,
     };
@@ -343,11 +345,11 @@ fn temper_sub_ct_ct_basic() {
 #[should_panic(expected = "Underflow occured while performing temper-sub")]
 fn temper_sub_ct_ct_underflow_panics() {
     let spec = CiphertextBlockSpec(2, 3);
-    let lhs = CiphertextBlock {
+    let lhs = EmulatedCiphertextBlock {
         storage: 0b0_01_010,
         spec,
     };
-    let rhs = CiphertextBlock {
+    let rhs = EmulatedCiphertextBlock {
         storage: 0b1_11_101,
         spec,
     };
@@ -358,11 +360,11 @@ fn temper_sub_ct_ct_underflow_panics() {
 #[test]
 fn wrapping_sub_ct_ct_basic() {
     let spec = CiphertextBlockSpec(2, 3);
-    let lhs = CiphertextBlock {
+    let lhs = EmulatedCiphertextBlock {
         storage: 0b0_11_101,
         spec,
     };
-    let rhs = CiphertextBlock {
+    let rhs = EmulatedCiphertextBlock {
         storage: 0b0_01_010,
         spec,
     };
@@ -374,11 +376,11 @@ fn wrapping_sub_ct_ct_basic() {
 #[test]
 fn wrapping_sub_ct_ct_underflow_wraps() {
     let spec = CiphertextBlockSpec(2, 3);
-    let lhs = CiphertextBlock {
+    let lhs = EmulatedCiphertextBlock {
         storage: 0b0_01_010,
         spec,
     };
-    let rhs = CiphertextBlock {
+    let rhs = EmulatedCiphertextBlock {
         storage: 0b0_11_101,
         spec,
     };
@@ -391,11 +393,11 @@ fn wrapping_sub_ct_ct_underflow_wraps() {
 fn protect_sub_ct_pt_basic() {
     let ct_spec = CiphertextBlockSpec(2, 3);
     let pt_spec = PlaintextBlockSpec(3);
-    let lhs = CiphertextBlock {
+    let lhs = EmulatedCiphertextBlock {
         storage: 0b0_01_101,
         spec: ct_spec,
     };
-    let rhs = PlaintextBlock {
+    let rhs = EmulatedPlaintextBlock {
         storage: 0b010,
         spec: pt_spec,
     };
@@ -409,11 +411,11 @@ fn protect_sub_ct_pt_basic() {
 fn protect_sub_ct_pt_padding_panics() {
     let ct_spec = CiphertextBlockSpec(2, 3);
     let pt_spec = PlaintextBlockSpec(3);
-    let lhs = CiphertextBlock {
+    let lhs = EmulatedCiphertextBlock {
         storage: 0b1_01_101,
         spec: ct_spec,
     };
-    let rhs = PlaintextBlock {
+    let rhs = EmulatedPlaintextBlock {
         storage: 0b010,
         spec: pt_spec,
     };
@@ -425,11 +427,11 @@ fn protect_sub_ct_pt_padding_panics() {
 fn temper_sub_ct_pt_basic() {
     let ct_spec = CiphertextBlockSpec(2, 3);
     let pt_spec = PlaintextBlockSpec(3);
-    let lhs = CiphertextBlock {
+    let lhs = EmulatedCiphertextBlock {
         storage: 0b1_01_101,
         spec: ct_spec,
     };
-    let rhs = PlaintextBlock {
+    let rhs = EmulatedPlaintextBlock {
         storage: 0b010,
         spec: pt_spec,
     };
@@ -442,11 +444,11 @@ fn temper_sub_ct_pt_basic() {
 fn wrapping_sub_ct_pt_underflow_wraps() {
     let ct_spec = CiphertextBlockSpec(2, 3);
     let pt_spec = PlaintextBlockSpec(3);
-    let lhs = CiphertextBlock {
+    let lhs = EmulatedCiphertextBlock {
         storage: 0b0_00_001,
         spec: ct_spec,
     };
-    let rhs = PlaintextBlock {
+    let rhs = EmulatedPlaintextBlock {
         storage: 0b101,
         spec: pt_spec,
     };
@@ -458,7 +460,7 @@ fn wrapping_sub_ct_pt_underflow_wraps() {
 #[test]
 fn protect_shl_basic() {
     let spec = CiphertextBlockSpec(2, 3);
-    let block = CiphertextBlock {
+    let block = EmulatedCiphertextBlock {
         storage: 0b0_01_010,
         spec,
     };
@@ -471,7 +473,7 @@ fn protect_shl_basic() {
 #[should_panic(expected = "lhs has active padding bit")]
 fn protect_shl_padding_panics() {
     let spec = CiphertextBlockSpec(2, 3);
-    let block = CiphertextBlock {
+    let block = EmulatedCiphertextBlock {
         storage: 0b1_01_010,
         spec,
     };
@@ -483,7 +485,7 @@ fn protect_shl_padding_panics() {
 #[should_panic(expected = "Overflow occured while performing protect-shl")]
 fn protect_shl_carry_overflow_panics() {
     let spec = CiphertextBlockSpec(2, 3);
-    let block = CiphertextBlock {
+    let block = EmulatedCiphertextBlock {
         storage: 0b0_10_000,
         spec,
     };
@@ -494,7 +496,7 @@ fn protect_shl_carry_overflow_panics() {
 #[test]
 fn wrapping_shl_basic() {
     let spec = CiphertextBlockSpec(2, 3);
-    let block = CiphertextBlock {
+    let block = EmulatedCiphertextBlock {
         storage: 0b1_10_100,
         spec,
     };
@@ -506,7 +508,7 @@ fn wrapping_shl_basic() {
 #[test]
 fn wrapping_shl_overflow_wraps() {
     let spec = CiphertextBlockSpec(2, 3);
-    let block = CiphertextBlock {
+    let block = EmulatedCiphertextBlock {
         storage: 0b0_11_100,
         spec,
     };
@@ -518,7 +520,7 @@ fn wrapping_shl_overflow_wraps() {
 #[test]
 fn protect_shr_basic() {
     let spec = CiphertextBlockSpec(2, 3);
-    let block = CiphertextBlock {
+    let block = EmulatedCiphertextBlock {
         storage: 0b0_10_100,
         spec,
     };
@@ -531,7 +533,7 @@ fn protect_shr_basic() {
 #[should_panic(expected = "lhs has active padding bit")]
 fn protect_shr_padding_panics() {
     let spec = CiphertextBlockSpec(2, 3);
-    let block = CiphertextBlock {
+    let block = EmulatedCiphertextBlock {
         storage: 0b1_10_100,
         spec,
     };
@@ -542,7 +544,7 @@ fn protect_shr_padding_panics() {
 #[test]
 fn wrapping_shr_basic() {
     let spec = CiphertextBlockSpec(2, 3);
-    let block = CiphertextBlock {
+    let block = EmulatedCiphertextBlock {
         storage: 0b1_10_100,
         spec,
     };
@@ -555,11 +557,11 @@ fn wrapping_shr_basic() {
 fn protect_sub_pt_ct_basic() {
     let ct_spec = CiphertextBlockSpec(2, 3);
     let pt_spec = PlaintextBlockSpec(3);
-    let lhs = PlaintextBlock {
+    let lhs = EmulatedPlaintextBlock {
         storage: 0b111,
         spec: pt_spec,
     };
-    let rhs = CiphertextBlock {
+    let rhs = EmulatedCiphertextBlock {
         storage: 0b0_00_010,
         spec: ct_spec,
     };
@@ -572,11 +574,11 @@ fn protect_sub_pt_ct_basic() {
 #[test]
 #[should_panic(expected = "Spec mismatch")]
 fn protect_sub_pt_ct_spec_mismatch_panics() {
-    let lhs = PlaintextBlock {
+    let lhs = EmulatedPlaintextBlock {
         storage: 0b111,
         spec: PlaintextBlockSpec(4),
     };
-    let rhs = CiphertextBlock {
+    let rhs = EmulatedCiphertextBlock {
         storage: 0b0_01_010,
         spec: CiphertextBlockSpec(2, 3),
     };
@@ -589,11 +591,11 @@ fn protect_sub_pt_ct_spec_mismatch_panics() {
 fn protect_sub_pt_ct_rhs_padding_panics() {
     let ct_spec = CiphertextBlockSpec(2, 3);
     let pt_spec = PlaintextBlockSpec(3);
-    let lhs = PlaintextBlock {
+    let lhs = EmulatedPlaintextBlock {
         storage: 0b111,
         spec: pt_spec,
     };
-    let rhs = CiphertextBlock {
+    let rhs = EmulatedCiphertextBlock {
         storage: 0b1_01_010,
         spec: ct_spec,
     };
@@ -606,11 +608,11 @@ fn protect_sub_pt_ct_rhs_padding_panics() {
 fn protect_sub_pt_ct_underflow_panics() {
     let ct_spec = CiphertextBlockSpec(2, 3);
     let pt_spec = PlaintextBlockSpec(3);
-    let lhs = PlaintextBlock {
+    let lhs = EmulatedPlaintextBlock {
         storage: 0b010,
         spec: pt_spec,
     };
-    let rhs = CiphertextBlock {
+    let rhs = EmulatedCiphertextBlock {
         storage: 0b0_01_101,
         spec: ct_spec,
     };
@@ -622,11 +624,11 @@ fn protect_sub_pt_ct_underflow_panics() {
 fn wrapping_sub_pt_ct_basic() {
     let ct_spec = CiphertextBlockSpec(2, 3);
     let pt_spec = PlaintextBlockSpec(3);
-    let lhs = PlaintextBlock {
+    let lhs = EmulatedPlaintextBlock {
         storage: 0b111,
         spec: pt_spec,
     };
-    let rhs = CiphertextBlock {
+    let rhs = EmulatedCiphertextBlock {
         storage: 0b1_01_010,
         spec: ct_spec,
     };
@@ -640,11 +642,11 @@ fn wrapping_sub_pt_ct_basic() {
 fn wrapping_sub_pt_ct_underflow_wraps() {
     let ct_spec = CiphertextBlockSpec(2, 3);
     let pt_spec = PlaintextBlockSpec(3);
-    let lhs = PlaintextBlock {
+    let lhs = EmulatedPlaintextBlock {
         storage: 0b010,
         spec: pt_spec,
     };
-    let rhs = CiphertextBlock {
+    let rhs = EmulatedCiphertextBlock {
         storage: 0b0_01_101,
         spec: ct_spec,
     };
@@ -656,11 +658,11 @@ fn wrapping_sub_pt_ct_underflow_wraps() {
 #[test]
 fn protect_operations_preserve_spec() {
     let spec = CiphertextBlockSpec(2, 3);
-    let lhs = CiphertextBlock {
+    let lhs = EmulatedCiphertextBlock {
         storage: 0b0_00_011,
         spec,
     };
-    let rhs = CiphertextBlock {
+    let rhs = EmulatedCiphertextBlock {
         storage: 0b0_00_011,
         spec,
     };
@@ -672,11 +674,11 @@ fn protect_operations_preserve_spec() {
 #[test]
 fn temper_operations_preserve_spec() {
     let spec = CiphertextBlockSpec(2, 3);
-    let lhs = CiphertextBlock {
+    let lhs = EmulatedCiphertextBlock {
         storage: 0b1_01_010,
         spec,
     };
-    let rhs = CiphertextBlock {
+    let rhs = EmulatedCiphertextBlock {
         storage: 0b0_10_011,
         spec,
     };
@@ -688,11 +690,11 @@ fn temper_operations_preserve_spec() {
 #[test]
 fn wrapping_operations_preserve_spec() {
     let spec = CiphertextBlockSpec(2, 3);
-    let lhs = CiphertextBlock {
+    let lhs = EmulatedCiphertextBlock {
         storage: 0b1_11_111,
         spec,
     };
-    let rhs = CiphertextBlock {
+    let rhs = EmulatedCiphertextBlock {
         storage: 0b0_00_001,
         spec,
     };
@@ -704,7 +706,7 @@ fn wrapping_operations_preserve_spec() {
 #[test]
 fn shift_operations_preserve_spec() {
     let spec = CiphertextBlockSpec(2, 3);
-    let block = CiphertextBlock {
+    let block = EmulatedCiphertextBlock {
         storage: 0b0_01_010,
         spec,
     };
@@ -719,11 +721,11 @@ fn shift_operations_preserve_spec() {
 fn plaintext_ct_operations_return_ct_spec() {
     let ct_spec = CiphertextBlockSpec(2, 3);
     let pt_spec = PlaintextBlockSpec(3);
-    let pt = PlaintextBlock {
+    let pt = EmulatedPlaintextBlock {
         storage: 0b111,
         spec: pt_spec,
     };
-    let ct = CiphertextBlock {
+    let ct = EmulatedCiphertextBlock {
         storage: 0b0_00_010,
         spec: ct_spec,
     };

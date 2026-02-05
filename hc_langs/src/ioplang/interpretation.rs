@@ -1,5 +1,6 @@
 use hc_crypto::integer_semantics::{
-    Ciphertext, CiphertextBlock, CiphertextSpec, Plaintext, PlaintextBlock, PlaintextBlockStorage,
+    CiphertextSpec, EmulatedCiphertext, EmulatedCiphertextBlock, EmulatedPlaintext,
+    EmulatedPlaintextBlock, EmulatedPlaintextBlockStorage,
 };
 use hc_ir::interpretation::{Interpretable, Interpretation, InterpretsTo};
 use hc_utils::small::SmallVec;
@@ -8,35 +9,35 @@ use std::fmt::Debug;
 
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub enum IopValue {
-    Ciphertext(Ciphertext),
-    Plaintext(Plaintext),
-    CiphertextBlock(CiphertextBlock),
-    PlaintextBlock(PlaintextBlock),
+    Ciphertext(EmulatedCiphertext),
+    Plaintext(EmulatedPlaintext),
+    CiphertextBlock(EmulatedCiphertextBlock),
+    PlaintextBlock(EmulatedPlaintextBlock),
 }
 
 impl IopValue {
-    pub fn unwrap_ciphertext(self) -> Ciphertext {
+    pub fn unwrap_ciphertext(self) -> EmulatedCiphertext {
         match self {
             Self::Ciphertext(v) => v,
             _ => panic!("Expected Ciphertext, got {:?}", self),
         }
     }
 
-    pub fn unwrap_plaintext(self) -> Plaintext {
+    pub fn unwrap_plaintext(self) -> EmulatedPlaintext {
         match self {
             Self::Plaintext(v) => v,
             _ => panic!("Expected Plaintext, got {:?}", self),
         }
     }
 
-    pub fn unwrap_ciphertext_block(self) -> CiphertextBlock {
+    pub fn unwrap_ciphertext_block(self) -> EmulatedCiphertextBlock {
         match self {
             Self::CiphertextBlock(v) => v,
             _ => panic!("Expected CiphertextBlock, got {:?}", self),
         }
     }
 
-    pub fn unwrap_plaintext_block(self) -> PlaintextBlock {
+    pub fn unwrap_plaintext_block(self) -> EmulatedPlaintextBlock {
         match self {
             Self::PlaintextBlock(v) => v,
             _ => panic!("Expected PlaintextBlock, got {:?}", self),
@@ -137,7 +138,7 @@ impl Interpretable<IopValue> for super::IopInstructionSet {
             PackCt { mul } => {
                 assert_eq!(
                     *mul,
-                    (2 as PlaintextBlockStorage)
+                    (2 as EmulatedPlaintextBlockStorage)
                         .pow(context.spec.block_spec().message_size() as u32)
                 );
                 let (IopValue::CiphertextBlock(left), IopValue::CiphertextBlock(right)) =

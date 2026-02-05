@@ -1,6 +1,6 @@
 use crate::integer_semantics::PlaintextSpec;
 
-use super::super::{Ciphertext, CiphertextBlockSpec, CiphertextStorage};
+use super::super::{CiphertextBlockSpec, EmulatedCiphertext, EmulatedCiphertextStorage};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CiphertextSpec {
@@ -11,7 +11,7 @@ pub struct CiphertextSpec {
 impl CiphertextSpec {
     pub fn new(int_size: u16, block_carry_size: u8, block_message_size: u8) -> Self {
         assert!(
-            int_size <= CiphertextStorage::BITS as u16,
+            int_size <= EmulatedCiphertextStorage::BITS as u16,
             "Tried to create malformed ciphertext spec."
         );
         assert_ne!(
@@ -37,7 +37,7 @@ impl CiphertextSpec {
         self.int_size
     }
 
-    pub fn int_mask(&self) -> CiphertextStorage {
+    pub fn int_mask(&self) -> EmulatedCiphertextStorage {
         (1 << (self.block_count() * self.block.message_size())) - 1
     }
 
@@ -49,15 +49,16 @@ impl CiphertextSpec {
         self.int_size.div_euclid(self.block.1 as u16) as u8
     }
 
-    pub fn block_mask(&self, ith: u8) -> CiphertextStorage {
+    pub fn block_mask(&self, ith: u8) -> EmulatedCiphertextStorage {
         assert!(
             ith < self.block_count(),
             "Tried to get block mask for nonexistent block"
         );
-        (self.block.message_mask() as CiphertextStorage) << (ith * self.block.message_size())
+        (self.block.message_mask() as EmulatedCiphertextStorage)
+            << (ith * self.block.message_size())
     }
 
-    pub fn from_int(&self, int: CiphertextStorage) -> Ciphertext {
+    pub fn from_int(&self, int: EmulatedCiphertextStorage) -> EmulatedCiphertext {
         let storage = int;
         if self.overflows_int(storage) {
             panic!(
@@ -66,13 +67,13 @@ impl CiphertextSpec {
                 self.int_size()
             );
         }
-        Ciphertext {
+        EmulatedCiphertext {
             storage,
             spec: *self,
         }
     }
 
-    pub fn overflows_int(&self, storage: CiphertextStorage) -> bool {
+    pub fn overflows_int(&self, storage: EmulatedCiphertextStorage) -> bool {
         let shift = self.int_size();
         storage >= (1 << shift)
     }

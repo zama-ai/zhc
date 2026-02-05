@@ -1,5 +1,5 @@
 use super::super::{
-    CiphertextBlock, CiphertextBlockSpec, CiphertextBlockStorage,
+    CiphertextBlockSpec, EmulatedCiphertextBlock, EmulatedCiphertextBlockStorage,
     lut::{
         legacy::{self, DigitParameters},
         lut,
@@ -10,12 +10,12 @@ use super::super::{
 fn compare_legacy_vs_lut<F, G>(legacy_fn: F, lut_fn: G, spec: CiphertextBlockSpec)
 where
     F: Fn(&DigitParameters, usize) -> usize,
-    G: Fn(CiphertextBlock) -> CiphertextBlock,
+    G: Fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
 {
     // Generate test blocks for the given spec
     let max_storage = (1 << spec.complete_size()) - 1;
     for storage in 0..=max_storage {
-        let block = CiphertextBlock { storage, spec };
+        let block = EmulatedCiphertextBlock { storage, spec };
         let (params, val) = {
             let params = {
                 let spec = block.spec;
@@ -31,8 +31,8 @@ where
         let legacy_output = legacy_fn(&params, val);
         let legacy_result = {
             let spec = block.spec;
-            CiphertextBlock {
-                storage: legacy_output as CiphertextBlockStorage,
+            EmulatedCiphertextBlock {
+                storage: legacy_output as EmulatedCiphertextBlockStorage,
                 spec,
             }
         };

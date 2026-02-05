@@ -6,12 +6,12 @@
 //! This module contains an algebra of objects that emulates the TFHE large integer semantics. To
 //! operate on large integers, TFHE decomposes encrypted values of arbitrary size in multiple LWE
 //! ciphertexts using a fixed radix decomposition. The elements of this decomposition are referred
-//! to as __blocks__, and are emulated by [CiphertextBlock]. Those blocks are then assembled in
-//! an __integer__ emulated by [Ciphertext].
+//! to as __blocks__, and are emulated by [EmulatedCiphertextBlock]. Those blocks are then assembled
+//! in an __integer__ emulated by [EmulatedCiphertext].
 //!
-//! A [CiphertextBlock] can be modelled by a fixed-precision integer separated in different
+//! A __block__ can be modelled by a fixed-precision integer separated in different
 //! contiguous regions `[ padding_bit | carry_bits | message_bits ]`:
-//! + The `message_size` LSBs encode the message bits. A 128-bits [Ciphertext] would need
+//! + The `message_size` LSBs encode the message bits. A 128-bits __block__ would need
 //!   `128.div_ceil(message_size)` blocks to encode values.
 //! + The `carry_size` bits above encode the carry bits. Those carry bits allow to store the carries
 //!   of intermediate computations.
@@ -19,14 +19,14 @@
 //!   lookups can be performed, at the cost of an extra padding bit set to zero to ensure only the
 //!   first half of the table is reached.
 //!
-//! A [Ciphertext] is then, just a sequence of [CiphertextBlock], whose `message_bits` regions
+//! An __integer__ is then, just a sequence of __blocks__, whose `message_bits` regions
 //! can be aggregated in order to reconstruct the large encoded value. Of paramount importance is
-//! the fact that only _clean_ blocks can be set in a [Ciphertext]. Indeed, the encoding does not
+//! the fact that only __clean__ blocks can be set in an __integer__. Indeed, the encoding does not
 //! automatically propagate the carries: It is up to the users to propagates carries between blocks
 //! before aggregating the ciphertext.
 //!
-//! Operations with plaintext values can be emulated as well. The [Plaintext] and
-//! [PlaintextBlock] structures mirror the radix decomposition of ciphertexts.
+//! Operations with plaintext values can be emulated as well. The [EmulatedPlaintext] and
+//! [EmulatedPlaintextBlock] structures mirror the radix decomposition of ciphertexts.
 //!
 //! Operation flavors
 //! =================

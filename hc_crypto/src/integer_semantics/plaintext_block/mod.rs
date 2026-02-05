@@ -1,4 +1,4 @@
-pub type PlaintextBlockStorage = u16;
+pub type EmulatedPlaintextBlockStorage = u16;
 
 mod block;
 mod spec;

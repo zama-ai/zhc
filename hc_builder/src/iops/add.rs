@@ -1,5 +1,3 @@
-use std::cmp::max;
-
 use hc_crypto::integer_semantics::CiphertextSpec;
 use hc_ir::IR;
 use hc_langs::ioplang::{IopLang, Lut1Def, Lut2Def};
@@ -21,21 +19,25 @@ pub fn add(spec: CiphertextSpec) -> IR<IopLang> {
     // has increased by 2 additions, compared to the input.
 
     let mut builder = Builder::new(spec.block_spec());
-    let src_a = builder.ciphertext_input(spec.int_size());
-    let src_b = builder.ciphertext_input(spec.int_size());
+    let src_a = builder.declare_ciphertext_input(spec.int_size());
+    let src_b = builder.declare_ciphertext_input(spec.int_size());
     let res = builder.iop_add_hillis_steele(&src_a, &src_b);
-    builder.ciphertext_output(res);
+    builder.declare_ciphertext_output(res);
     builder.into_ir()
 }
 
 impl Builder {
     pub fn iop_add_hillis_steele(&mut self, lhs: &Ciphertext, rhs: &Ciphertext) -> Ciphertext {
+        // Step 0 =================================================================
+        let lhs_blocks = self.split_ciphertext(lhs);
+        let rhs_blocks = self.split_ciphertext(rhs);
+
         // Step 1 =================================================================
         // Add blocks together, no fancy stuff here. Just pack two input vector (with msg only)
         // into one vector with msg + [1b of carry]
         // Also handle src of different sizes.
         self.push_comment("Raw sum");
-        let sums = self.vector_add(&lhs, &rhs, ExtensionBehavior::Passthrough);
+        let sums = self.vector_add(&lhs_blocks, &rhs_blocks, ExtensionBehavior::Passthrough);
         assert!(
             sums.len().is_multiple_of(4),
             "Addition for non-multiple-of-4 integers is not supported yet."
@@ -106,8 +108,8 @@ impl Builder {
                     let s2 = self.block_add(&s1, &chunk[2]);
                     let _s3 = self.block_add(&s2, &chunk[3]);
                     let _s3 = self.block_lookup(&_s3, Lut1Def::ReduceCarryPad);
-                    let cst_1 = self.block_constant(1);
-                    let s3 = self.block_add_plaintext_wrapping(&_s3, &cst_1);
+                    let cst_1 = self.block_const_plaintext(1);
+                    let s3 = self.block_wrapping_add_plaintext(&_s3, &cst_1);
                     [s0, s1, s2, s3]
                 })
             })
@@ -148,7 +150,9 @@ impl Builder {
                     assert_eq!(sv[0].len(), sv[1].len());
                     (sv[0].iter(), sv[1].iter())
                         .mzip()
-                        .map(|(li, ri)| self.block_pack_lookup(ri, li, Lut1Def::SolvePropCarry))
+                        .map(|(li, ri)| {
+                            self.block_pack_then_lookup(ri, li, Lut1Def::SolvePropCarry)
+                        })
                         .intermediate()
                 })
                 // The rest of the chunks combine chunks of the previous stage with the prop lut.
@@ -157,7 +161,7 @@ impl Builder {
                     assert_eq!(sv[0].len(), sv[1].len());
                     (sv[0].iter(), sv[1].iter())
                         .mzip()
-                        .map(|(li, ri)| self.block_pack_lookup(ri, li, Lut1Def::SolveProp))
+                        .map(|(li, ri)| self.block_pack_then_lookup(ri, li, Lut1Def::SolveProp))
                         .intermediate()
                 })
                 .flatten()
@@ -227,12 +231,7 @@ impl Builder {
             .cosvec();
         self.pop_comment();
 
-        Ciphertext {
-            blocks: result,
-            spec: self
-                .spec()
-                .ciphertext_spec(max(lhs.int_size(), rhs.int_size())),
-        }
+        self.join_ciphertext(result)
     }
 }
 
@@ -252,31 +251,31 @@ mod test {
                 .show_types(false),
             r#"
                                                                | %0 = input<0, CtInt>();
-                                                               | %1 = extract_ct_block<0>(%0);
-                                                               | %2 = extract_ct_block<1>(%0);
-                                                               | %3 = extract_ct_block<2>(%0);
-                                                               | %4 = extract_ct_block<3>(%0);
-                                                               | %5 = extract_ct_block<4>(%0);
-                                                               | %6 = extract_ct_block<5>(%0);
-                                                               | %7 = extract_ct_block<6>(%0);
-                                                               | %8 = extract_ct_block<7>(%0);
-                                                               | %9 = input<1, CtInt>();
-                                                               | %10 = extract_ct_block<0>(%9);
-                                                               | %11 = extract_ct_block<1>(%9);
-                                                               | %12 = extract_ct_block<2>(%9);
-                                                               | %13 = extract_ct_block<3>(%9);
-                                                               | %14 = extract_ct_block<4>(%9);
-                                                               | %15 = extract_ct_block<5>(%9);
-                                                               | %16 = extract_ct_block<6>(%9);
-                                                               | %17 = extract_ct_block<7>(%9);
-                // Raw sum                                     | %18 = add_ct(%1, %10);
-                // Raw sum                                     | %19 = add_ct(%2, %11);
-                // Raw sum                                     | %20 = add_ct(%3, %12);
-                // Raw sum                                     | %21 = add_ct(%4, %13);
-                // Raw sum                                     | %22 = add_ct(%5, %14);
-                // Raw sum                                     | %23 = add_ct(%6, %15);
-                // Raw sum                                     | %24 = add_ct(%7, %16);
-                // Raw sum                                     | %25 = add_ct(%8, %17);
+                                                               | %1 = input<1, CtInt>();
+                                                               | %2 = extract_ct_block<0>(%0);
+                                                               | %3 = extract_ct_block<1>(%0);
+                                                               | %4 = extract_ct_block<2>(%0);
+                                                               | %5 = extract_ct_block<3>(%0);
+                                                               | %6 = extract_ct_block<4>(%0);
+                                                               | %7 = extract_ct_block<5>(%0);
+                                                               | %8 = extract_ct_block<6>(%0);
+                                                               | %9 = extract_ct_block<7>(%0);
+                                                               | %10 = extract_ct_block<0>(%1);
+                                                               | %11 = extract_ct_block<1>(%1);
+                                                               | %12 = extract_ct_block<2>(%1);
+                                                               | %13 = extract_ct_block<3>(%1);
+                                                               | %14 = extract_ct_block<4>(%1);
+                                                               | %15 = extract_ct_block<5>(%1);
+                                                               | %16 = extract_ct_block<6>(%1);
+                                                               | %17 = extract_ct_block<7>(%1);
+                // Raw sum                                     | %18 = add_ct(%2, %10);
+                // Raw sum                                     | %19 = add_ct(%3, %11);
+                // Raw sum                                     | %20 = add_ct(%4, %12);
+                // Raw sum                                     | %21 = add_ct(%5, %13);
+                // Raw sum                                     | %22 = add_ct(%6, %14);
+                // Raw sum                                     | %23 = add_ct(%7, %15);
+                // Raw sum                                     | %24 = add_ct(%8, %16);
+                // Raw sum                                     | %25 = add_ct(%9, %17);
                 // Computing PGNs / Special first              | %26, %27 = pbs2<ManyCarryMsg>(%18);
                 // Computing PGNs / Special first              | %28 = pbs<ExtractPropGroup0>(%19);
                 // Computing PGNs / Special first              | %29 = pbs<ExtractPropGroup1>(%20);

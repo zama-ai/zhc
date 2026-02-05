@@ -1,8 +1,5 @@
-use std::fmt::Display;
-
 use hc_utils::small::SmallVec;
-
-use super::DialectTypeSystem;
+use std::fmt::{Debug, Display};
 
 /// A function signature specifying argument and return types.
 ///
@@ -10,9 +7,21 @@ use super::DialectTypeSystem;
 /// types of input arguments and output values. This information is used for
 /// type checking during IR construction and optimization.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Signature<T: DialectTypeSystem>(pub SmallVec<T>, pub SmallVec<T>);
+pub struct Signature<T>(pub SmallVec<T>, pub SmallVec<T>);
 
-impl<T: DialectTypeSystem> Signature<T> {
+impl<T> Signature<T> {
+    pub fn empty() -> Self {
+        Signature(SmallVec::new(), SmallVec::new())
+    }
+
+    pub fn push_arg(&mut self, typ: T) {
+        self.0.push(typ);
+    }
+
+    pub fn push_ret(&mut self, typ: T) {
+        self.1.push(typ);
+    }
+
     /// Returns the argument types as a slice.
     pub fn get_args(&self) -> &[T] {
         self.0.as_slice()
@@ -44,7 +53,7 @@ impl<T: DialectTypeSystem> Signature<T> {
     }
 }
 
-impl<T: DialectTypeSystem> Display for Signature<T> {
+impl<T: Debug> Display for Signature<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.get_args_arity() {
             0 => write!(f, "()"),

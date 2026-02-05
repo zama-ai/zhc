@@ -3,27 +3,30 @@ use hc_ir::IR;
 use hc_langs::ioplang::{IopLang, Lut1Def};
 use hc_utils::iter::{CollectInSmallVec, MultiZip};
 
-use crate::builder::{Builder, Ciphertext};
+use crate::builder::Builder;
 
 pub fn if_then_else(spec: CiphertextSpec) -> IR<IopLang> {
     let builder = Builder::new(spec.block_spec());
 
-    let src_a = builder.ciphertext_input(spec.int_size());
-    let src_b = builder.ciphertext_input(spec.int_size());
-    let cond = builder.ciphertext_input(spec.block_spec().message_size() as u16);
+    let src_a = builder.declare_ciphertext_input(spec.int_size());
+    let src_a_blocks = builder.split_ciphertext(&src_a);
+    let src_b = builder.declare_ciphertext_input(spec.int_size());
+    let src_b_blocks = builder.split_ciphertext(&src_b);
+    let cond = builder.declare_ciphertext_input(spec.block_spec().message_size() as u16);
+    let cond_blocks = builder.split_ciphertext(&cond);
 
-    let output_blocks = (src_a.blocks().iter(), src_b.blocks().iter())
+    let output_blocks = (src_a_blocks.iter(), src_b_blocks.iter())
         .mzip()
         .map(|(a, b)| {
-            let cond_a = builder.block_pack(&cond.blocks()[0], a);
+            let cond_a = builder.block_pack(&cond_blocks[0], a);
             let cond_a = builder.block_lookup(&cond_a, Lut1Def::IfFalseZeroed);
-            let cond_b = builder.block_pack(&cond.blocks()[0], b);
+            let cond_b = builder.block_pack(&cond_blocks[0], b);
             let cond_b = builder.block_lookup(&cond_b, Lut1Def::IfTrueZeroed);
             builder.block_add(&cond_a, &cond_b)
         })
         .cosvec();
 
-    builder.ciphertext_output(Ciphertext::from_blocks(output_blocks));
+    builder.declare_ciphertext_output(builder.join_ciphertext(output_blocks));
 
     builder.into_ir()
 }

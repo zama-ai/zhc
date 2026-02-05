@@ -1,12 +1,8 @@
+use crate::builder::Builder;
 use hc_crypto::integer_semantics::CiphertextSpec;
 use hc_ir::IR;
 use hc_langs::ioplang::{IopLang, Lut1Def};
-use hc_utils::{
-    iter::{CollectInSmallVec, MultiZip},
-    svec,
-};
-
-use crate::builder::{Builder, Ciphertext};
+use hc_utils::iter::{CollectInSmallVec, MultiZip};
 
 /// Creates an IR for greater-than comparison between two encrypted integers.
 pub fn cmp_gt(spec: CiphertextSpec) -> IR<IopLang> {
@@ -75,13 +71,15 @@ fn cmp(spec: CiphertextSpec, kind: Kind) -> IR<IopLang> {
     let builder = Builder::new(spec.block_spec());
 
     // get input as array of blk
-    let src_a = builder.ciphertext_input(spec.int_size());
-    let src_b = builder.ciphertext_input(spec.int_size());
+    let src_a = builder.declare_ciphertext_input(spec.int_size());
+    let src_a_blocks = builder.split_ciphertext(&src_a);
+    let src_b = builder.declare_ciphertext_input(spec.int_size());
+    let src_b_blocks = builder.split_ciphertext(&src_b);
 
     // pack a by pairs
-    let packed_a = builder.with_comment("Pack A", || builder.vector_pack_one_clean(src_a.blocks()));
+    let packed_a = builder.with_comment("Pack A", || builder.vector_pack_then_clean(src_a_blocks));
     // pack b by pairs
-    let packed_b = builder.with_comment("Pack B", || builder.vector_pack_one_clean(src_b.blocks()));
+    let packed_b = builder.with_comment("Pack B", || builder.vector_pack_then_clean(src_b_blocks));
 
     // merge a /b and get sign
     let mut merged = builder.with_comment("Compare blocks", || {
@@ -92,7 +90,7 @@ fn cmp(spec: CiphertextSpec, kind: Kind) -> IR<IopLang> {
                 builder.with_comment(format!("{i}-th"), || {
                     let sub_lr = builder.block_sub(l, r);
                     let pbsed = builder.block_lookup(&sub_lr, Lut1Def::CmpSign);
-                    let cst = builder.block_constant(1);
+                    let cst = builder.block_const_plaintext(1);
                     builder.block_add_plaintext(&pbsed, &cst)
                 })
             })
@@ -102,7 +100,7 @@ fn cmp(spec: CiphertextSpec, kind: Kind) -> IR<IopLang> {
     // reduce (tree-based reduce)
     builder.with_comment("Reduce comparison", || {
         while merged.len() > 2 {
-            let packed = builder.vector_pack_one(merged.as_slice());
+            let packed = builder.vector_pack(merged.as_slice());
             let reduced = packed
                 .iter()
                 .map(|x| builder.block_lookup(x, Lut1Def::CmpReduce))
@@ -115,7 +113,7 @@ fn cmp(spec: CiphertextSpec, kind: Kind) -> IR<IopLang> {
     // last reduce and cast based on user required cmp
     let cmp_res = match merged.len() {
         2 => {
-            let p = builder.vector_pack_one(merged.as_slice());
+            let p = builder.vector_pack(merged.as_slice());
             builder.block_lookup(&p[0], kind.merge())
         }
         1 => builder.block_lookup(&merged[0], kind.compare()),
@@ -123,8 +121,9 @@ fn cmp(spec: CiphertextSpec, kind: Kind) -> IR<IopLang> {
     };
 
     // store result in slot 0 of output 0
-    let output = Ciphertext::from_blocks(svec![cmp_res]);
-    builder.ciphertext_output(output);
+    let output = builder.join_ciphertext([cmp_res]);
+
+    builder.declare_ciphertext_output(output);
 
     builder.into_ir()
 }

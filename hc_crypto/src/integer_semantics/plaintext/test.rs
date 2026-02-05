@@ -1,5 +1,5 @@
 use super::super::PlaintextBlockSpec;
-use super::{Plaintext, PlaintextSpec};
+use super::{EmulatedPlaintext, PlaintextSpec};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
@@ -74,7 +74,7 @@ fn get_block_correct_spec() {
 #[test]
 fn raw_int_bits() {
     let spec = PlaintextSpec::new(8, 4);
-    let plaintext = Plaintext {
+    let plaintext = EmulatedPlaintext {
         storage: 0b1111_1111_1111_0101,
         spec,
     };
@@ -107,7 +107,7 @@ fn equality_different_spec() {
 fn equality_ignores_extra_bits() {
     let spec = PlaintextSpec::new(8, 4);
     let plaintext1 = spec.from_int(0b1111_0101);
-    let plaintext2 = Plaintext {
+    let plaintext2 = EmulatedPlaintext {
         storage: 0b1111_1111_1111_0101,
         spec,
     };
@@ -131,7 +131,7 @@ fn hash_consistency() {
     let spec = PlaintextSpec::new(8, 4);
     let plaintext1 = spec.from_int(0b1111_0101);
     let plaintext2 = spec.from_int(0b1111_0101);
-    let plaintext3 = Plaintext {
+    let plaintext3 = EmulatedPlaintext {
         storage: 0b1111_1111_1111_0101,
         spec,
     };

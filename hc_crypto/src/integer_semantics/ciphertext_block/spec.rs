@@ -1,7 +1,7 @@
 use crate::integer_semantics::CiphertextSpec;
 
 use super::super::PlaintextBlockSpec;
-use super::{CiphertextBlock, CiphertextBlockStorage};
+use super::{EmulatedCiphertextBlock, EmulatedCiphertextBlockStorage};
 
 /// Padding, carry, message
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -17,7 +17,7 @@ impl CiphertextBlockSpec {
         1
     }
 
-    pub(crate) fn padding_mask(&self) -> CiphertextBlockStorage {
+    pub(crate) fn padding_mask(&self) -> EmulatedCiphertextBlockStorage {
         1 << (self.carry_size() + self.message_size())
     }
 
@@ -25,7 +25,7 @@ impl CiphertextBlockSpec {
         self.0
     }
 
-    pub(crate) fn carry_mask(&self) -> CiphertextBlockStorage {
+    pub(crate) fn carry_mask(&self) -> EmulatedCiphertextBlockStorage {
         ((1 << self.carry_size()) - 1) << self.message_size()
     }
 
@@ -33,7 +33,7 @@ impl CiphertextBlockSpec {
         self.1
     }
 
-    pub(crate) fn message_mask(&self) -> CiphertextBlockStorage {
+    pub(crate) fn message_mask(&self) -> EmulatedCiphertextBlockStorage {
         (1 << self.message_size()) - 1
     }
 
@@ -41,7 +41,7 @@ impl CiphertextBlockSpec {
         self.padding_size() + self.carry_size() + self.message_size()
     }
 
-    pub(crate) fn complete_mask(&self) -> CiphertextBlockStorage {
+    pub(crate) fn complete_mask(&self) -> EmulatedCiphertextBlockStorage {
         self.padding_mask() | self.data_mask()
     }
 
@@ -49,11 +49,11 @@ impl CiphertextBlockSpec {
         self.carry_size() + self.message_size()
     }
 
-    pub(crate) fn data_mask(&self) -> CiphertextBlockStorage {
+    pub(crate) fn data_mask(&self) -> EmulatedCiphertextBlockStorage {
         self.carry_mask() | self.message_mask()
     }
 
-    pub fn from_message(&self, message: CiphertextBlockStorage) -> CiphertextBlock {
+    pub fn from_message(&self, message: EmulatedCiphertextBlockStorage) -> EmulatedCiphertextBlock {
         let storage = message;
         if self.overflows_message(storage) {
             panic!(
@@ -62,13 +62,13 @@ impl CiphertextBlockSpec {
                 self.message_size()
             );
         }
-        CiphertextBlock {
+        EmulatedCiphertextBlock {
             storage,
             spec: *self,
         }
     }
 
-    pub fn from_carry(&self, carry: CiphertextBlockStorage) -> CiphertextBlock {
+    pub fn from_carry(&self, carry: EmulatedCiphertextBlockStorage) -> EmulatedCiphertextBlock {
         let storage = carry << self.message_size();
         if self.overflows_carry(storage) {
             panic!(
@@ -77,13 +77,13 @@ impl CiphertextBlockSpec {
                 self.carry_size()
             );
         }
-        CiphertextBlock {
+        EmulatedCiphertextBlock {
             storage,
             spec: *self,
         }
     }
 
-    pub fn from_data(&self, data: CiphertextBlockStorage) -> CiphertextBlock {
+    pub fn from_data(&self, data: EmulatedCiphertextBlockStorage) -> EmulatedCiphertextBlock {
         let storage = data;
         if self.overflows_carry(storage) {
             panic!(
@@ -92,13 +92,13 @@ impl CiphertextBlockSpec {
                 self.data_size()
             );
         }
-        CiphertextBlock {
+        EmulatedCiphertextBlock {
             storage,
             spec: *self,
         }
     }
 
-    pub fn from_complete(&self, data: CiphertextBlockStorage) -> CiphertextBlock {
+    pub fn from_complete(&self, data: EmulatedCiphertextBlockStorage) -> EmulatedCiphertextBlock {
         let storage = data;
         if self.overflows_padding(storage) {
             panic!(
@@ -107,23 +107,23 @@ impl CiphertextBlockSpec {
                 self.complete_size()
             );
         }
-        CiphertextBlock {
+        EmulatedCiphertextBlock {
             storage,
             spec: *self,
         }
     }
 
-    pub fn overflows_message(&self, storage: CiphertextBlockStorage) -> bool {
+    pub fn overflows_message(&self, storage: EmulatedCiphertextBlockStorage) -> bool {
         let shift = self.message_size();
         storage >= (1 << shift)
     }
 
-    pub fn overflows_carry(&self, storage: CiphertextBlockStorage) -> bool {
+    pub fn overflows_carry(&self, storage: EmulatedCiphertextBlockStorage) -> bool {
         let shift = self.message_size() + self.carry_size();
         storage >= (1 << shift)
     }
 
-    pub fn overflows_padding(&self, storage: CiphertextBlockStorage) -> bool {
+    pub fn overflows_padding(&self, storage: EmulatedCiphertextBlockStorage) -> bool {
         let shift = self.message_size() + self.carry_size() + self.padding_size();
         storage >= (1 << shift)
     }

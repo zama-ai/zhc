@@ -6,7 +6,7 @@
 //!
 //! The framework is structured around three traits:
 //! - [`Interpretation`] defines the semantic domain (what values look like)
-//! - [`Interprets`] connects dialect types to interpretation values (type semantics)
+//! - [`InterpretsTo`] connects dialect types to interpretation values (type semantics)
 //! - [`Interpretable`] defines how operations compute on interpretation values
 //!
 //! The main entry point is [`interpret_ir`], which executes an interpretation

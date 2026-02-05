@@ -1,4 +1,4 @@
-pub type CiphertextBlockStorage = u16;
+pub type EmulatedCiphertextBlockStorage = u16;
 
 mod block;
 mod spec;

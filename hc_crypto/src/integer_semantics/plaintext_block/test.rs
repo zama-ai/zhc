@@ -1,4 +1,4 @@
-use super::{PlaintextBlock, PlaintextBlockSpec};
+use super::{EmulatedPlaintextBlock, PlaintextBlockSpec};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
@@ -40,7 +40,7 @@ fn from_message() {
 #[test]
 fn raw_message_bits() {
     let spec = PlaintextBlockSpec(4);
-    let block = PlaintextBlock {
+    let block = EmulatedPlaintextBlock {
         storage: 0b1111_1010,
         spec,
     };
@@ -50,7 +50,7 @@ fn raw_message_bits() {
 #[test]
 fn raw_mask_message() {
     let spec = PlaintextBlockSpec(4);
-    let block = PlaintextBlock {
+    let block = EmulatedPlaintextBlock {
         storage: 0b1111_1010,
         spec,
     };
@@ -60,7 +60,7 @@ fn raw_mask_message() {
 #[test]
 fn raw_mask_message_ignores_high_bits() {
     let spec = PlaintextBlockSpec(3);
-    let block = PlaintextBlock {
+    let block = EmulatedPlaintextBlock {
         storage: 0b1111_1010,
         spec,
     };
@@ -70,15 +70,15 @@ fn raw_mask_message_ignores_high_bits() {
 #[test]
 fn equality_same_spec() {
     let spec = PlaintextBlockSpec(4);
-    let block1 = PlaintextBlock {
+    let block1 = EmulatedPlaintextBlock {
         storage: 0b1010,
         spec,
     };
-    let block2 = PlaintextBlock {
+    let block2 = EmulatedPlaintextBlock {
         storage: 0b1010,
         spec,
     };
-    let block3 = PlaintextBlock {
+    let block3 = EmulatedPlaintextBlock {
         storage: 0b1011,
         spec,
     };
@@ -91,11 +91,11 @@ fn equality_same_spec() {
 fn equality_different_spec() {
     let spec1 = PlaintextBlockSpec(4);
     let spec2 = PlaintextBlockSpec(3);
-    let block1 = PlaintextBlock {
+    let block1 = EmulatedPlaintextBlock {
         storage: 0b1010,
         spec: spec1,
     };
-    let block2 = PlaintextBlock {
+    let block2 = EmulatedPlaintextBlock {
         storage: 0b1010,
         spec: spec2,
     };
@@ -106,11 +106,11 @@ fn equality_different_spec() {
 #[test]
 fn equality_ignores_extra_bits() {
     let spec = PlaintextBlockSpec(4);
-    let block1 = PlaintextBlock {
+    let block1 = EmulatedPlaintextBlock {
         storage: 0b1010,
         spec,
     };
-    let block2 = PlaintextBlock {
+    let block2 = EmulatedPlaintextBlock {
         storage: 0b11111010,
         spec,
     };
@@ -121,15 +121,15 @@ fn equality_ignores_extra_bits() {
 #[test]
 fn partial_ordering() {
     let spec = PlaintextBlockSpec(4);
-    let block1 = PlaintextBlock {
+    let block1 = EmulatedPlaintextBlock {
         storage: 0b1010,
         spec,
     };
-    let block2 = PlaintextBlock {
+    let block2 = EmulatedPlaintextBlock {
         storage: 0b1100,
         spec,
     };
-    let block3 = PlaintextBlock {
+    let block3 = EmulatedPlaintextBlock {
         storage: 0b1010,
         spec: PlaintextBlockSpec(3),
     };
@@ -141,15 +141,15 @@ fn partial_ordering() {
 #[test]
 fn hash_consistency() {
     let spec = PlaintextBlockSpec(4);
-    let block1 = PlaintextBlock {
+    let block1 = EmulatedPlaintextBlock {
         storage: 0b1010,
         spec,
     };
-    let block2 = PlaintextBlock {
+    let block2 = EmulatedPlaintextBlock {
         storage: 0b1010,
         spec,
     };
-    let block3 = PlaintextBlock {
+    let block3 = EmulatedPlaintextBlock {
         storage: 0b1111_1010,
         spec,
     };
@@ -169,7 +169,7 @@ fn hash_consistency() {
 #[test]
 fn display_formatting() {
     let spec = PlaintextBlockSpec(4);
-    let block = PlaintextBlock {
+    let block = EmulatedPlaintextBlock {
         storage: 0b1010,
         spec,
     };

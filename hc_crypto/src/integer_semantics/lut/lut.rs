@@ -1,27 +1,27 @@
 #![allow(non_snake_case)]
-use super::super::{CiphertextBlock, CiphertextBlockStorage};
+use super::super::{EmulatedCiphertextBlock, EmulatedCiphertextBlockStorage};
 
-const CMP_INFERIOR: CiphertextBlockStorage = 0;
-const CMP_EQUAL: CiphertextBlockStorage = 1;
-const CMP_SUPERIOR: CiphertextBlockStorage = 2;
+const CMP_INFERIOR: EmulatedCiphertextBlockStorage = 0;
+const CMP_EQUAL: EmulatedCiphertextBlockStorage = 1;
+const CMP_SUPERIOR: EmulatedCiphertextBlockStorage = 2;
 
-pub fn None_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn None_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     block
 }
 
-pub fn MsgOnly_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn MsgOnly_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     block.mask_message()
 }
 
-pub fn CarryOnly_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn CarryOnly_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     block.mask_carry()
 }
 
-pub fn CarryInMsg_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn CarryInMsg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     block.move_carry_to_message()
 }
 
-pub fn MultCarryMsg_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn MultCarryMsg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let carry_val = block.move_carry_to_message().raw_mask_message();
     let msg_val = block.raw_mask_message();
     block
@@ -29,7 +29,7 @@ pub fn MultCarryMsg_0(block: CiphertextBlock) -> CiphertextBlock {
         .from_data((carry_val * msg_val) & block.spec.data_mask())
 }
 
-pub fn MultCarryMsgLsb_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn MultCarryMsgLsb_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let carry_val = block.move_carry_to_message().raw_mask_message();
     let msg_val = block.raw_mask_message();
     block
@@ -37,14 +37,14 @@ pub fn MultCarryMsgLsb_0(block: CiphertextBlock) -> CiphertextBlock {
         .from_message((carry_val * msg_val) & block.spec.message_mask())
 }
 
-pub fn MultCarryMsgMsb_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn MultCarryMsgMsb_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let carry_val = block.move_carry_to_message().raw_mask_message();
     let msg_val = block.raw_mask_message();
     let result = ((carry_val * msg_val) >> block.spec.message_size()) & block.spec.message_mask();
     block.spec.from_message(result)
 }
 
-pub fn BwAnd_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn BwAnd_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let carry_val = block.move_carry_to_message().raw_mask_message();
     let msg_val = block.raw_mask_message();
     block
@@ -52,7 +52,7 @@ pub fn BwAnd_0(block: CiphertextBlock) -> CiphertextBlock {
         .from_message((carry_val & msg_val) & block.spec.message_mask())
 }
 
-pub fn BwOr_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn BwOr_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let carry_val = block.move_carry_to_message().raw_mask_message();
     let msg_val = block.raw_mask_message();
     block
@@ -60,7 +60,7 @@ pub fn BwOr_0(block: CiphertextBlock) -> CiphertextBlock {
         .from_message((carry_val | msg_val) & block.spec.message_mask())
 }
 
-pub fn BwXor_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn BwXor_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let carry_val = block.move_carry_to_message().raw_mask_message();
     let msg_val = block.raw_mask_message();
     block
@@ -68,7 +68,7 @@ pub fn BwXor_0(block: CiphertextBlock) -> CiphertextBlock {
         .from_message((carry_val ^ msg_val) & block.spec.message_mask())
 }
 
-pub fn CmpSign_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn CmpSign_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Signed comparison with 0. Based on behavior of negacyclic function.
     // Example for Padding| 4bit digits (i.e 2msg2Carry)
     // 1|xxxx -> SignLut -> -1 -> 0|1111
@@ -83,7 +83,7 @@ pub fn CmpSign_0(block: CiphertextBlock) -> CiphertextBlock {
     // Not a perfect solution but the easiest to prevent degree error
 }
 
-pub fn CmpReduce_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn CmpReduce_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Carry contain MSB cmp result, msg LSB cmp result
     // Reduction is made from lsb to msb as follow
     // MSB      | LSB | Out
@@ -99,7 +99,7 @@ pub fn CmpReduce_0(block: CiphertextBlock) -> CiphertextBlock {
     block.spec.from_message(result)
 }
 
-pub fn CmpGt_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn CmpGt_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let result = match block.raw_mask_message() {
         CMP_SUPERIOR => 1,
         _ => 0,
@@ -107,7 +107,7 @@ pub fn CmpGt_0(block: CiphertextBlock) -> CiphertextBlock {
     block.spec.from_message(result)
 }
 
-pub fn CmpGte_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn CmpGte_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let result = match block.raw_mask_message() {
         CMP_SUPERIOR | CMP_EQUAL => 1,
         _ => 0,
@@ -116,7 +116,7 @@ pub fn CmpGte_0(block: CiphertextBlock) -> CiphertextBlock {
 }
 
 // Could be merge with Gt/Gte
-pub fn CmpLt_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn CmpLt_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let result = match block.raw_mask_message() {
         CMP_INFERIOR => 1,
         _ => 0,
@@ -124,7 +124,7 @@ pub fn CmpLt_0(block: CiphertextBlock) -> CiphertextBlock {
     block.spec.from_message(result)
 }
 
-pub fn CmpLte_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn CmpLte_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let result = match block.raw_mask_message() {
         CMP_INFERIOR | CMP_EQUAL => 1,
         _ => 0,
@@ -132,7 +132,7 @@ pub fn CmpLte_0(block: CiphertextBlock) -> CiphertextBlock {
     block.spec.from_message(result)
 }
 
-pub fn CmpEq_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn CmpEq_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let result = match block.raw_mask_message() {
         CMP_EQUAL => 1,
         _ => 0,
@@ -140,7 +140,7 @@ pub fn CmpEq_0(block: CiphertextBlock) -> CiphertextBlock {
     block.spec.from_message(result)
 }
 
-pub fn CmpNeq_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn CmpNeq_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let result = match block.raw_mask_message() {
         CMP_EQUAL => 0,
         _ => 1,
@@ -148,31 +148,31 @@ pub fn CmpNeq_0(block: CiphertextBlock) -> CiphertextBlock {
     block.spec.from_message(result)
 }
 
-pub fn ManyGenProp_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn ManyGenProp_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let carry_val = block.move_carry_to_message().raw_mask_message();
     let msg_val = block.raw_mask_message();
     let result = (carry_val << 1) |                                   // Generate
-                 ((msg_val == block.spec.message_mask()) as CiphertextBlockStorage); // Propagate
+                 ((msg_val == block.spec.message_mask()) as EmulatedCiphertextBlockStorage); // Propagate
     block.spec.from_data(result)
 }
 
-pub fn ManyGenProp_1(block: CiphertextBlock) -> CiphertextBlock {
+pub fn ManyGenProp_1(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     block.mask_message()
 }
 
-pub fn ReduceCarry2_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn ReduceCarry2_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let carry = block.storage >> 2;
-    let prop = (block.storage & 3 == 3) as CiphertextBlockStorage;
+    let prop = (block.storage & 3 == 3) as EmulatedCiphertextBlockStorage;
     block.spec.from_data((carry << 1) | prop)
 }
 
-pub fn ReduceCarry3_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn ReduceCarry3_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let carry = block.storage >> 3;
-    let prop = (block.storage & 7 == 7) as CiphertextBlockStorage;
+    let prop = (block.storage & 7 == 7) as EmulatedCiphertextBlockStorage;
     block.spec.from_data((carry << 1) | prop)
 }
 
-pub fn ReduceCarryPad_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn ReduceCarryPad_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // This corresponds to the accumulated propagation status
     // of 4 consecutive blocks.
     // !! The padding bit is used.
@@ -189,7 +189,7 @@ pub fn ReduceCarryPad_0(block: CiphertextBlock) -> CiphertextBlock {
     block.spec.from_complete(result)
 }
 
-pub fn GenPropAdd_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn GenPropAdd_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let lhs = block.raw_mask_message();
     let rhs = block.move_carry_to_message().raw_mask_message();
     let rhs_gen = rhs >> 1;
@@ -199,7 +199,7 @@ pub fn GenPropAdd_0(block: CiphertextBlock) -> CiphertextBlock {
         .from_message((lhs + rhs_gen) & block.spec.message_mask())
 }
 
-pub fn IfTrueZeroed_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn IfTrueZeroed_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let value = block.raw_mask_message();
     let cond = block.move_carry_to_message().raw_mask_message();
 
@@ -207,7 +207,7 @@ pub fn IfTrueZeroed_0(block: CiphertextBlock) -> CiphertextBlock {
     block.spec.from_message(result)
 }
 
-pub fn IfFalseZeroed_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn IfFalseZeroed_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let value = block.raw_mask_message();
     let cond = block.move_carry_to_message().raw_mask_message();
 
@@ -215,21 +215,21 @@ pub fn IfFalseZeroed_0(block: CiphertextBlock) -> CiphertextBlock {
     block.spec.from_message(result)
 }
 
-pub fn Ripple2GenProp_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn Ripple2GenProp_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let result = block.raw_mask_message() * 2;
     block.spec.from_data(result)
 }
 
-pub fn ManyCarryMsg_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn ManyCarryMsg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     block.spec.from_message(block.raw_mask_message())
 }
 
-pub fn ManyCarryMsg_1(block: CiphertextBlock) -> CiphertextBlock {
+pub fn ManyCarryMsg_1(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let result = block.storage >> block.spec.message_size();
     block.spec.from_data(result)
 }
 
-pub fn CmpGtMrg_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn CmpGtMrg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let carry_field = block.move_carry_to_message().raw_mask_message();
     let msg_field = block.raw_mask_message();
 
@@ -241,7 +241,7 @@ pub fn CmpGtMrg_0(block: CiphertextBlock) -> CiphertextBlock {
     block.spec.from_message(result)
 }
 
-pub fn CmpGteMrg_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn CmpGteMrg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let carry_field = block.move_carry_to_message().raw_mask_message();
     let msg_field = block.raw_mask_message();
 
@@ -253,7 +253,7 @@ pub fn CmpGteMrg_0(block: CiphertextBlock) -> CiphertextBlock {
     block.spec.from_message(result)
 }
 
-pub fn CmpLtMrg_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn CmpLtMrg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let carry_field = block.move_carry_to_message().raw_mask_message();
     let msg_field = block.raw_mask_message();
 
@@ -265,7 +265,7 @@ pub fn CmpLtMrg_0(block: CiphertextBlock) -> CiphertextBlock {
     block.spec.from_message(result)
 }
 
-pub fn CmpLteMrg_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn CmpLteMrg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let carry_field = block.move_carry_to_message().raw_mask_message();
     let msg_field = block.raw_mask_message();
 
@@ -277,7 +277,7 @@ pub fn CmpLteMrg_0(block: CiphertextBlock) -> CiphertextBlock {
     block.spec.from_message(result)
 }
 
-pub fn CmpEqMrg_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn CmpEqMrg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let carry_field = block.move_carry_to_message().raw_mask_message();
     let msg_field = block.raw_mask_message();
 
@@ -289,7 +289,7 @@ pub fn CmpEqMrg_0(block: CiphertextBlock) -> CiphertextBlock {
     block.spec.from_message(result)
 }
 
-pub fn CmpNeqMrg_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn CmpNeqMrg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let carry_field = block.move_carry_to_message().raw_mask_message();
     let msg_field = block.raw_mask_message();
 
@@ -301,24 +301,24 @@ pub fn CmpNeqMrg_0(block: CiphertextBlock) -> CiphertextBlock {
     block.spec.from_message(result)
 }
 
-pub fn IsSome_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn IsSome_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let result = if block.storage != 0 { 1 } else { 0 };
     block.spec.from_message(result)
 }
 
-pub fn CarryIsSome_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn CarryIsSome_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let carry_field = block.move_carry_to_message().raw_mask_message();
     let result = if carry_field != 0 { 1 } else { 0 };
     block.spec.from_message(result)
 }
 
-pub fn CarryIsNone_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn CarryIsNone_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let carry_field = block.move_carry_to_message().raw_mask_message();
     let result = if carry_field != 0 { 0 } else { 1 };
     block.spec.from_message(result)
 }
 
-pub fn MultCarryMsgIsSome_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn MultCarryMsgIsSome_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let carry_val = block.move_carry_to_message().raw_mask_message();
     let msg_val = block.raw_mask_message();
     let carry_x_msg = (carry_val * msg_val) & block.spec.data_mask();
@@ -327,7 +327,7 @@ pub fn MultCarryMsgIsSome_0(block: CiphertextBlock) -> CiphertextBlock {
     block.spec.from_message(result)
 }
 
-pub fn MultCarryMsgMsbIsSome_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn MultCarryMsgMsbIsSome_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let carry_val = block.move_carry_to_message().raw_mask_message();
     let msg_val = block.raw_mask_message();
     let mul_msb = ((carry_val * msg_val) >> block.spec.message_size()) & block.spec.message_mask();
@@ -336,7 +336,7 @@ pub fn MultCarryMsgMsbIsSome_0(block: CiphertextBlock) -> CiphertextBlock {
     block.spec.from_message(result)
 }
 
-pub fn IsNull_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn IsNull_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let carry_field = block.move_carry_to_message().raw_mask_message();
     let msg_field = block.raw_mask_message();
 
@@ -348,7 +348,7 @@ pub fn IsNull_0(block: CiphertextBlock) -> CiphertextBlock {
     block.spec.from_message(result)
 }
 
-pub fn IsNullPos1_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn IsNullPos1_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Output boolean at bit position 1 instead of 0
     let carry_field = block.move_carry_to_message().raw_mask_message();
     let msg_field = block.raw_mask_message();
@@ -361,7 +361,7 @@ pub fn IsNullPos1_0(block: CiphertextBlock) -> CiphertextBlock {
     block.spec.from_message(result)
 }
 
-pub fn NotNull_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn NotNull_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let carry_field = block.move_carry_to_message().raw_mask_message();
     let msg_field = block.raw_mask_message();
 
@@ -373,7 +373,7 @@ pub fn NotNull_0(block: CiphertextBlock) -> CiphertextBlock {
     block.spec.from_message(result)
 }
 
-pub fn MsgNotNull_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn MsgNotNull_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let msg_field = block.raw_mask_message();
 
     let result = match msg_field {
@@ -384,7 +384,7 @@ pub fn MsgNotNull_0(block: CiphertextBlock) -> CiphertextBlock {
     block.spec.from_message(result)
 }
 
-pub fn MsgNotNullPos1_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn MsgNotNullPos1_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Return the null (0) or not null (1)
     // status of the msg part.
     // Put the result at position 1.
@@ -398,7 +398,7 @@ pub fn MsgNotNullPos1_0(block: CiphertextBlock) -> CiphertextBlock {
     block.spec.from_message(result)
 }
 
-pub fn ManyMsgSplitShift1_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn ManyMsgSplitShift1_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Use manyLUT : split msg in halves, inverse their position
     // in the message, and  output them separately.
     let lsb_size = (block.spec.message_size()).div_ceil(2);
@@ -407,14 +407,14 @@ pub fn ManyMsgSplitShift1_0(block: CiphertextBlock) -> CiphertextBlock {
     block.spec.from_message(msg_lsb << lsb_size)
 }
 
-pub fn ManyMsgSplitShift1_1(block: CiphertextBlock) -> CiphertextBlock {
+pub fn ManyMsgSplitShift1_1(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let lsb_size = block.spec.message_size().div_ceil(2);
     let result = block.raw_mask_message() >> lsb_size; // msg_msb
 
     block.spec.from_message(result)
 }
 
-pub fn SolvePropGroupFinal0_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn SolvePropGroupFinal0_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Solve the propagation status of
     // of 4 blocks.
     // The input contains the sum of the propagate status
@@ -430,7 +430,7 @@ pub fn SolvePropGroupFinal0_0(block: CiphertextBlock) -> CiphertextBlock {
     block.spec.from_message(result)
 }
 
-pub fn SolvePropGroupFinal1_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn SolvePropGroupFinal1_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Solve the propagation status of
     // of 4 blocks.
     // The input contains the sum of the propagate status
@@ -446,7 +446,7 @@ pub fn SolvePropGroupFinal1_0(block: CiphertextBlock) -> CiphertextBlock {
     block.spec.from_message(result)
 }
 
-pub fn SolvePropGroupFinal2_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn SolvePropGroupFinal2_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Solve the propagation status of
     // of 4 blocks.
     // The input contains the sum of the propagate status
@@ -462,7 +462,7 @@ pub fn SolvePropGroupFinal2_0(block: CiphertextBlock) -> CiphertextBlock {
     block.spec.from_message(result)
 }
 
-pub fn ExtractPropGroup0_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn ExtractPropGroup0_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Extract propagation status and
     // set the value at the correct position location.
     // Here the position is 0.
@@ -481,7 +481,7 @@ pub fn ExtractPropGroup0_0(block: CiphertextBlock) -> CiphertextBlock {
     block.spec.from_message(result)
 }
 
-pub fn ExtractPropGroup1_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn ExtractPropGroup1_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Extract propagation status and
     // set the value at the correct position location.
     // Here the position is 1.
@@ -500,7 +500,7 @@ pub fn ExtractPropGroup1_0(block: CiphertextBlock) -> CiphertextBlock {
     block.spec.from_data(result)
 }
 
-pub fn ExtractPropGroup2_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn ExtractPropGroup2_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Extract propagation status and
     // set the value at the correct position location.
     // Here the position is 2.
@@ -519,7 +519,7 @@ pub fn ExtractPropGroup2_0(block: CiphertextBlock) -> CiphertextBlock {
     block.spec.from_data(result)
 }
 
-pub fn ExtractPropGroup3_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn ExtractPropGroup3_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Extract propagation status and
     // set the value at the correct position location.
     // Here the position is 3.
@@ -538,7 +538,7 @@ pub fn ExtractPropGroup3_0(block: CiphertextBlock) -> CiphertextBlock {
     block.spec.from_complete(result)
 }
 
-pub fn SolveProp_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn SolveProp_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Solve the propagation status.
     // 2 propagation status are stored in the input:
     // MSB : propagation to solved
@@ -556,7 +556,7 @@ pub fn SolveProp_0(block: CiphertextBlock) -> CiphertextBlock {
     block.spec.from_message(result)
 }
 
-pub fn SolvePropCarry_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn SolvePropCarry_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Solve the propagation status.
     // A propagation status and a carry are stored in the input:
     // Output a carry value.
@@ -575,7 +575,7 @@ pub fn SolvePropCarry_0(block: CiphertextBlock) -> CiphertextBlock {
     block.spec.from_message(result)
 }
 
-pub fn SolveQuotient_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn SolveQuotient_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Solve the quotient of a division.
     // The input contains the sum of 4 bits, representing the comparison of current remaining
     // and the different multiples of the divider.
@@ -599,7 +599,7 @@ pub fn SolveQuotient_0(block: CiphertextBlock) -> CiphertextBlock {
     block.spec.from_message(result)
 }
 
-pub fn SolveQuotientPos1_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn SolveQuotientPos1_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Solve the quotient of a division.
     // The input contains the sum of 4 bits, representing the comparison of current remaining
     // and the different multiples of the divider.
@@ -625,7 +625,7 @@ pub fn SolveQuotientPos1_0(block: CiphertextBlock) -> CiphertextBlock {
     block.spec.from_message(result)
 }
 
-pub fn IfPos1FalseZeroed_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn IfPos1FalseZeroed_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Ct must contain CondCt in Carry bit 1 and ValueCt in Msg. If condition it's *FALSE*, value ct
     // is forced to 0
     let value = block.raw_mask_message();
@@ -635,7 +635,7 @@ pub fn IfPos1FalseZeroed_0(block: CiphertextBlock) -> CiphertextBlock {
     block.spec.from_message(result)
 }
 
-pub fn IfPos1FalseZeroedMsgCarry1_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn IfPos1FalseZeroedMsgCarry1_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Ct must contain CondCt in Carry bit 1
     // and ValueCt in Msg + 1 carry bit. If condition it's *FALSE*, value ct is forced to 0
     let value = block.storage & (block.spec.message_mask() * 2 + 1);
@@ -646,7 +646,7 @@ pub fn IfPos1FalseZeroedMsgCarry1_0(block: CiphertextBlock) -> CiphertextBlock {
 }
 
 // Shift related Pbs
-pub fn ShiftLeftByCarryPos0Msg_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn ShiftLeftByCarryPos0Msg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Ct must contain shift amount only bit 1 considered
     let value = block.raw_mask_message();
     let shift = block.move_carry_to_message().raw_mask_message() & 0x1;
@@ -655,7 +655,7 @@ pub fn ShiftLeftByCarryPos0Msg_0(block: CiphertextBlock) -> CiphertextBlock {
     block.spec.from_message(result)
 }
 
-pub fn ShiftLeftByCarryPos0MsgNext_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn ShiftLeftByCarryPos0MsgNext_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Ct must contain shift amount only bit 1 considered
     let value = block.raw_mask_message();
     let shift = block.move_carry_to_message().raw_mask_message() & 0x1;
@@ -664,7 +664,7 @@ pub fn ShiftLeftByCarryPos0MsgNext_0(block: CiphertextBlock) -> CiphertextBlock 
     block.spec.from_message(result)
 }
 
-pub fn ShiftRightByCarryPos0Msg_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn ShiftRightByCarryPos0Msg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Ct must contain shift amount only bit 1 considered
     let value = block.raw_mask_message();
     let shift = block.move_carry_to_message().raw_mask_message() & 0x1;
@@ -673,7 +673,7 @@ pub fn ShiftRightByCarryPos0Msg_0(block: CiphertextBlock) -> CiphertextBlock {
     block.spec.from_message(result)
 }
 
-pub fn ShiftRightByCarryPos0MsgNext_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn ShiftRightByCarryPos0MsgNext_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Ct must contain shift amount only bit 1 considered
     // NB: MsgNext with right shift is the content of blk at the right position (i.e. LSB side)
     let value = block.raw_mask_message();
@@ -683,7 +683,7 @@ pub fn ShiftRightByCarryPos0MsgNext_0(block: CiphertextBlock) -> CiphertextBlock
     block.spec.from_message(result)
 }
 
-pub fn IfPos0TrueZeroed_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn IfPos0TrueZeroed_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Ct must contain CondCt in Carry[0] and ValueCt in Msg. If condition it's *TRUE*, value ct is
     // forced to 0
     let value = block.raw_mask_message();
@@ -693,7 +693,7 @@ pub fn IfPos0TrueZeroed_0(block: CiphertextBlock) -> CiphertextBlock {
     block.spec.from_message(result)
 }
 
-pub fn IfPos0FalseZeroed_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn IfPos0FalseZeroed_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Ct must contain CondCt in Carry[0] and ValueCt in Msg. If condition it's *FALSE*, value ct is
     // forced to 0
     let value = block.raw_mask_message();
@@ -704,7 +704,7 @@ pub fn IfPos0FalseZeroed_0(block: CiphertextBlock) -> CiphertextBlock {
 }
 
 // If then zero with condition in Carry0 or Carry1
-pub fn IfPos1TrueZeroed_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn IfPos1TrueZeroed_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Ct must contain CondCt in Carry[1] and ValueCt in Msg. If condition it's *TRUE*, value ct is
     // forced to 0
     let value = block.raw_mask_message();
@@ -715,7 +715,7 @@ pub fn IfPos1TrueZeroed_0(block: CiphertextBlock) -> CiphertextBlock {
 }
 
 // NB: Lut IfPos1FalseZeroed already defined earlier
-pub fn ManyInv1CarryMsg_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn ManyInv1CarryMsg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Proceed Inv - ct
     // Extract message and carry using many LUT.
     let inv = 1;
@@ -727,13 +727,13 @@ pub fn ManyInv1CarryMsg_0(block: CiphertextBlock) -> CiphertextBlock {
         value & block.spec.message_mask()
     };
 
-    CiphertextBlock {
+    EmulatedCiphertextBlock {
         storage: result,
         spec: block.spec,
     }
 }
 
-pub fn ManyInv1CarryMsg_1(block: CiphertextBlock) -> CiphertextBlock {
+pub fn ManyInv1CarryMsg_1(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let inv = 1;
     let mut value = block.storage & block.spec.data_mask();
     let result = if value > inv {
@@ -743,13 +743,13 @@ pub fn ManyInv1CarryMsg_1(block: CiphertextBlock) -> CiphertextBlock {
         value >> block.spec.message_size()
     };
 
-    CiphertextBlock {
+    EmulatedCiphertextBlock {
         storage: result,
         spec: block.spec,
     }
 }
 
-pub fn ManyInv2CarryMsg_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn ManyInv2CarryMsg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Proceed Inv - ct
     // Extract message and carry using many LUT.
     let inv = 2;
@@ -761,13 +761,13 @@ pub fn ManyInv2CarryMsg_0(block: CiphertextBlock) -> CiphertextBlock {
         value & block.spec.message_mask()
     };
 
-    CiphertextBlock {
+    EmulatedCiphertextBlock {
         storage: result,
         spec: block.spec,
     }
 }
 
-pub fn ManyInv2CarryMsg_1(block: CiphertextBlock) -> CiphertextBlock {
+pub fn ManyInv2CarryMsg_1(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let inv = 2;
     let mut value = block.storage & block.spec.data_mask();
     let result = if value > inv {
@@ -777,13 +777,13 @@ pub fn ManyInv2CarryMsg_1(block: CiphertextBlock) -> CiphertextBlock {
         value >> block.spec.message_size()
     };
 
-    CiphertextBlock {
+    EmulatedCiphertextBlock {
         storage: result,
         spec: block.spec,
     }
 }
 
-pub fn ManyInv3CarryMsg_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn ManyInv3CarryMsg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Proceed Inv - ct
     // Extract message and carry using many LUT.
     let inv = 3;
@@ -795,13 +795,13 @@ pub fn ManyInv3CarryMsg_0(block: CiphertextBlock) -> CiphertextBlock {
         value & block.spec.message_mask()
     };
 
-    CiphertextBlock {
+    EmulatedCiphertextBlock {
         storage: result,
         spec: block.spec,
     }
 }
 
-pub fn ManyInv3CarryMsg_1(block: CiphertextBlock) -> CiphertextBlock {
+pub fn ManyInv3CarryMsg_1(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let inv = 3;
     let mut value = block.storage & block.spec.data_mask();
     let result = if value > inv {
@@ -811,13 +811,13 @@ pub fn ManyInv3CarryMsg_1(block: CiphertextBlock) -> CiphertextBlock {
         value >> block.spec.message_size()
     };
 
-    CiphertextBlock {
+    EmulatedCiphertextBlock {
         storage: result,
         spec: block.spec,
     }
 }
 
-pub fn ManyInv4CarryMsg_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn ManyInv4CarryMsg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Proceed Inv - ct
     // Extract message and carry using many LUT.
     let inv = 4;
@@ -829,13 +829,13 @@ pub fn ManyInv4CarryMsg_0(block: CiphertextBlock) -> CiphertextBlock {
         value & block.spec.message_mask()
     };
 
-    CiphertextBlock {
+    EmulatedCiphertextBlock {
         storage: result,
         spec: block.spec,
     }
 }
 
-pub fn ManyInv4CarryMsg_1(block: CiphertextBlock) -> CiphertextBlock {
+pub fn ManyInv4CarryMsg_1(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let inv = 4;
     let mut value = block.storage & block.spec.data_mask();
     let result = if value > inv {
@@ -845,13 +845,13 @@ pub fn ManyInv4CarryMsg_1(block: CiphertextBlock) -> CiphertextBlock {
         value >> block.spec.message_size()
     };
 
-    CiphertextBlock {
+    EmulatedCiphertextBlock {
         storage: result,
         spec: block.spec,
     }
 }
 
-pub fn ManyInv5CarryMsg_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn ManyInv5CarryMsg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Proceed Inv - ct
     // Extract message and carry using many LUT.
     let inv = 5;
@@ -863,13 +863,13 @@ pub fn ManyInv5CarryMsg_0(block: CiphertextBlock) -> CiphertextBlock {
         value & block.spec.message_mask()
     };
 
-    CiphertextBlock {
+    EmulatedCiphertextBlock {
         storage: result,
         spec: block.spec,
     }
 }
 
-pub fn ManyInv5CarryMsg_1(block: CiphertextBlock) -> CiphertextBlock {
+pub fn ManyInv5CarryMsg_1(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let inv = 5;
     let mut value = block.storage & block.spec.data_mask();
     let result = if value > inv {
@@ -879,13 +879,13 @@ pub fn ManyInv5CarryMsg_1(block: CiphertextBlock) -> CiphertextBlock {
         value >> block.spec.message_size()
     };
 
-    CiphertextBlock {
+    EmulatedCiphertextBlock {
         storage: result,
         spec: block.spec,
     }
 }
 
-pub fn ManyInv6CarryMsg_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn ManyInv6CarryMsg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Proceed Inv - ct
     // Extract message and carry using many LUT.
     let inv = 6;
@@ -897,13 +897,13 @@ pub fn ManyInv6CarryMsg_0(block: CiphertextBlock) -> CiphertextBlock {
         value & block.spec.message_mask()
     };
 
-    CiphertextBlock {
+    EmulatedCiphertextBlock {
         storage: result,
         spec: block.spec,
     }
 }
 
-pub fn ManyInv6CarryMsg_1(block: CiphertextBlock) -> CiphertextBlock {
+pub fn ManyInv6CarryMsg_1(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let inv = 6;
     let mut value = block.storage & block.spec.data_mask();
     let result = if value > inv {
@@ -913,13 +913,13 @@ pub fn ManyInv6CarryMsg_1(block: CiphertextBlock) -> CiphertextBlock {
         value >> block.spec.message_size()
     };
 
-    CiphertextBlock {
+    EmulatedCiphertextBlock {
         storage: result,
         spec: block.spec,
     }
 }
 
-pub fn ManyInv7CarryMsg_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn ManyInv7CarryMsg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Proceed Inv - ct
     // Extract message and carry using many LUT.
     let inv = 7;
@@ -931,13 +931,13 @@ pub fn ManyInv7CarryMsg_0(block: CiphertextBlock) -> CiphertextBlock {
         value & block.spec.message_mask()
     };
 
-    CiphertextBlock {
+    EmulatedCiphertextBlock {
         storage: result,
         spec: block.spec,
     }
 }
 
-pub fn ManyInv7CarryMsg_1(block: CiphertextBlock) -> CiphertextBlock {
+pub fn ManyInv7CarryMsg_1(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let inv = 7;
     let mut value = block.storage & block.spec.data_mask();
     let result = if value > inv {
@@ -947,13 +947,13 @@ pub fn ManyInv7CarryMsg_1(block: CiphertextBlock) -> CiphertextBlock {
         value >> block.spec.message_size()
     };
 
-    CiphertextBlock {
+    EmulatedCiphertextBlock {
         storage: result,
         spec: block.spec,
     }
 }
 
-pub fn ManyMsgSplit_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn ManyMsgSplit_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Use manyLUT : split msg in halves
     let lsb_size = block.spec.message_size().div_ceil(2);
 
@@ -961,14 +961,14 @@ pub fn ManyMsgSplit_0(block: CiphertextBlock) -> CiphertextBlock {
     block.spec.from_message(result)
 }
 
-pub fn ManyMsgSplit_1(block: CiphertextBlock) -> CiphertextBlock {
+pub fn ManyMsgSplit_1(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let lsb_size = block.spec.message_size().div_ceil(2);
 
     let result = block.raw_mask_message() >> lsb_size; // msg_msb
     block.spec.from_message(result)
 }
 
-pub fn Manym2lPropBit1MsgSplit_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn Manym2lPropBit1MsgSplit_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Use ManyLut
     // In carry part, contains the info if neighbor has a bit=1 (not null)
     // or not (null).
@@ -991,13 +991,13 @@ pub fn Manym2lPropBit1MsgSplit_0(block: CiphertextBlock) -> CiphertextBlock {
     }
     let lsb_size = block.spec.message_size().div_ceil(2);
 
-    CiphertextBlock {
-        storage: exp & ((1 << lsb_size) - 1) as CiphertextBlockStorage, // msg_lsb
+    EmulatedCiphertextBlock {
+        storage: exp & ((1 << lsb_size) - 1) as EmulatedCiphertextBlockStorage, // msg_lsb
         spec: block.spec,
     }
 }
 
-pub fn Manym2lPropBit1MsgSplit_1(block: CiphertextBlock) -> CiphertextBlock {
+pub fn Manym2lPropBit1MsgSplit_1(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let mut c = block.storage & block.spec.carry_mask();
     let mut m = block.storage & block.spec.message_mask();
     let mut exp = 0;
@@ -1015,13 +1015,13 @@ pub fn Manym2lPropBit1MsgSplit_1(block: CiphertextBlock) -> CiphertextBlock {
     }
     let lsb_size = block.spec.message_size().div_ceil(2);
 
-    CiphertextBlock {
+    EmulatedCiphertextBlock {
         storage: (exp & block.spec.message_mask()) >> lsb_size, // msg_msb
         spec: block.spec,
     }
 }
 
-pub fn Manym2lPropBit0MsgSplit_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn Manym2lPropBit0MsgSplit_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Use ManyLut
     // In carry part, contains the info if neighbor has a bit=0 (not null)
     // or not (null).
@@ -1044,13 +1044,13 @@ pub fn Manym2lPropBit0MsgSplit_0(block: CiphertextBlock) -> CiphertextBlock {
     }
     let lsb_size = block.spec.message_size().div_ceil(2);
 
-    CiphertextBlock {
+    EmulatedCiphertextBlock {
         storage: exp & ((1 << lsb_size) - 1), // msg_lsb
         spec: block.spec,
     }
 }
 
-pub fn Manym2lPropBit0MsgSplit_1(block: CiphertextBlock) -> CiphertextBlock {
+pub fn Manym2lPropBit0MsgSplit_1(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let mut c = block.storage & block.spec.carry_mask();
     let mut m = block.storage & block.spec.message_mask();
     let mut exp = 0;
@@ -1068,13 +1068,13 @@ pub fn Manym2lPropBit0MsgSplit_1(block: CiphertextBlock) -> CiphertextBlock {
     }
     let lsb_size = block.spec.message_size().div_ceil(2);
 
-    CiphertextBlock {
+    EmulatedCiphertextBlock {
         storage: (exp & block.spec.message_mask()) >> lsb_size, // msg_msb
         spec: block.spec,
     }
 }
 
-pub fn Manyl2mPropBit1MsgSplit_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn Manyl2mPropBit1MsgSplit_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Use ManyLut
     // In carry part, contains the info if neighbor has a bit=1 (not null)
     // or not (null).
@@ -1097,13 +1097,13 @@ pub fn Manyl2mPropBit1MsgSplit_0(block: CiphertextBlock) -> CiphertextBlock {
     }
     let lsb_size = block.spec.message_size().div_ceil(2);
 
-    CiphertextBlock {
+    EmulatedCiphertextBlock {
         storage: exp & ((1 << lsb_size) - 1), // msg_lsb
         spec: block.spec,
     }
 }
 
-pub fn Manyl2mPropBit1MsgSplit_1(block: CiphertextBlock) -> CiphertextBlock {
+pub fn Manyl2mPropBit1MsgSplit_1(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let mut c = block.storage & block.spec.carry_mask();
     let mut m = block.storage & block.spec.message_mask();
     let mut exp = 0;
@@ -1121,13 +1121,13 @@ pub fn Manyl2mPropBit1MsgSplit_1(block: CiphertextBlock) -> CiphertextBlock {
     }
     let lsb_size = block.spec.message_size().div_ceil(2);
 
-    CiphertextBlock {
+    EmulatedCiphertextBlock {
         storage: (exp & block.spec.message_mask()) >> (lsb_size as u8), // msg_msb
         spec: block.spec,
     }
 }
 
-pub fn Manyl2mPropBit0MsgSplit_0(block: CiphertextBlock) -> CiphertextBlock {
+pub fn Manyl2mPropBit0MsgSplit_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Use ManyLut
     // In carry part, contains the info if neighbor has a bit=0 (not null)
     // or not (null).
@@ -1150,13 +1150,13 @@ pub fn Manyl2mPropBit0MsgSplit_0(block: CiphertextBlock) -> CiphertextBlock {
     }
     let lsb_size = block.spec.message_size().div_ceil(2);
 
-    CiphertextBlock {
+    EmulatedCiphertextBlock {
         storage: exp & ((1 << lsb_size) - 1), // msg_lsb
         spec: block.spec,
     }
 }
 
-pub fn Manyl2mPropBit0MsgSplit_1(block: CiphertextBlock) -> CiphertextBlock {
+pub fn Manyl2mPropBit0MsgSplit_1(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let mut c = block.storage & block.spec.carry_mask();
     let mut m = block.storage & block.spec.message_mask();
     let mut exp = 0;
@@ -1174,7 +1174,7 @@ pub fn Manyl2mPropBit0MsgSplit_1(block: CiphertextBlock) -> CiphertextBlock {
     }
     let lsb_size = block.spec.message_size().div_ceil(2);
 
-    CiphertextBlock {
+    EmulatedCiphertextBlock {
         storage: (exp & block.spec.message_mask()) >> (lsb_size as u8), // msg_msb
         spec: block.spec,
     }

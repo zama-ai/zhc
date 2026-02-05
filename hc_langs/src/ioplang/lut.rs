@@ -1,4 +1,4 @@
-use hc_crypto::integer_semantics::CiphertextBlock;
+use hc_crypto::integer_semantics::EmulatedCiphertextBlock;
 
 /// Enumeration of all available LUT1.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -67,7 +67,7 @@ pub enum Lut1Def {
 }
 
 impl Lut1Def {
-    pub(crate) fn get_fn(&self) -> fn(CiphertextBlock) -> CiphertextBlock {
+    pub(crate) fn get_fn(&self) -> fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
         use hc_crypto::integer_semantics::lut::*;
         match self {
             Lut1Def::None => None_0,
@@ -159,8 +159,8 @@ impl Lut2Def {
     pub(crate) fn get_fns(
         &self,
     ) -> (
-        fn(CiphertextBlock) -> CiphertextBlock,
-        fn(CiphertextBlock) -> CiphertextBlock,
+        fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
+        fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
     ) {
         use hc_crypto::integer_semantics::lut::*;
         match self {
@@ -199,10 +199,10 @@ impl Lut4Def {
     pub(crate) fn get_fns(
         &self,
     ) -> (
-        fn(CiphertextBlock) -> CiphertextBlock,
-        fn(CiphertextBlock) -> CiphertextBlock,
-        fn(CiphertextBlock) -> CiphertextBlock,
-        fn(CiphertextBlock) -> CiphertextBlock,
+        fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
+        fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
+        fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
+        fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
     ) {
         unreachable!()
     }
@@ -216,14 +216,14 @@ impl Lut8Def {
     pub(crate) fn get_fns(
         &self,
     ) -> (
-        fn(CiphertextBlock) -> CiphertextBlock,
-        fn(CiphertextBlock) -> CiphertextBlock,
-        fn(CiphertextBlock) -> CiphertextBlock,
-        fn(CiphertextBlock) -> CiphertextBlock,
-        fn(CiphertextBlock) -> CiphertextBlock,
-        fn(CiphertextBlock) -> CiphertextBlock,
-        fn(CiphertextBlock) -> CiphertextBlock,
-        fn(CiphertextBlock) -> CiphertextBlock,
+        fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
+        fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
+        fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
+        fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
+        fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
+        fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
+        fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
+        fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
     ) {
         unreachable!()
     }

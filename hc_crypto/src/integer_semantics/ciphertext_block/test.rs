@@ -1,4 +1,4 @@
-use super::{CiphertextBlock, CiphertextBlockSpec};
+use super::{CiphertextBlockSpec, EmulatedCiphertextBlock};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
@@ -75,7 +75,7 @@ fn from_complete() {
 #[test]
 fn raw_bit_extractors() {
     let spec = CiphertextBlockSpec(2, 3);
-    let block = CiphertextBlock {
+    let block = EmulatedCiphertextBlock {
         storage: 0b000_1_11_101,
         spec,
     };
@@ -90,7 +90,7 @@ fn raw_bit_extractors() {
 #[test]
 fn raw_bit_extractors_with_extra_bits() {
     let spec = CiphertextBlockSpec(2, 3);
-    let block = CiphertextBlock {
+    let block = EmulatedCiphertextBlock {
         storage: 0b011_1_11_111,
         spec,
     };
@@ -103,7 +103,7 @@ fn raw_bit_extractors_with_extra_bits() {
 #[test]
 fn move_carry_to_message() {
     let spec = CiphertextBlockSpec(2, 3);
-    let block = CiphertextBlock {
+    let block = EmulatedCiphertextBlock {
         storage: 0b000_0_11_000,
         spec,
     };
@@ -115,15 +115,15 @@ fn move_carry_to_message() {
 #[test]
 fn equality_same_spec() {
     let spec = CiphertextBlockSpec(2, 3);
-    let block1 = CiphertextBlock {
+    let block1 = EmulatedCiphertextBlock {
         storage: 0b1_11_101,
         spec,
     };
-    let block2 = CiphertextBlock {
+    let block2 = EmulatedCiphertextBlock {
         storage: 0b1_11_101,
         spec,
     };
-    let block3 = CiphertextBlock {
+    let block3 = EmulatedCiphertextBlock {
         storage: 0b1_11_111,
         spec,
     };
@@ -136,11 +136,11 @@ fn equality_same_spec() {
 fn equality_different_spec() {
     let spec1 = CiphertextBlockSpec(2, 3);
     let spec2 = CiphertextBlockSpec(3, 2);
-    let block1 = CiphertextBlock {
+    let block1 = EmulatedCiphertextBlock {
         storage: 0b1_11_101,
         spec: spec1,
     };
-    let block2 = CiphertextBlock {
+    let block2 = EmulatedCiphertextBlock {
         storage: 0b1_11_101,
         spec: spec2,
     };
@@ -151,11 +151,11 @@ fn equality_different_spec() {
 #[test]
 fn equality_ignores_extra_bits() {
     let spec = CiphertextBlockSpec(2, 3);
-    let block1 = CiphertextBlock {
+    let block1 = EmulatedCiphertextBlock {
         storage: 0b1_11_101,
         spec,
     };
-    let block2 = CiphertextBlock {
+    let block2 = EmulatedCiphertextBlock {
         storage: 0b11_1_11_101,
         spec,
     };
@@ -166,15 +166,15 @@ fn equality_ignores_extra_bits() {
 #[test]
 fn partial_ordering() {
     let spec = CiphertextBlockSpec(2, 3);
-    let block1 = CiphertextBlock {
+    let block1 = EmulatedCiphertextBlock {
         storage: 0b0_00_101,
         spec,
     };
-    let block2 = CiphertextBlock {
+    let block2 = EmulatedCiphertextBlock {
         storage: 0b0_00_110,
         spec,
     };
-    let block3 = CiphertextBlock {
+    let block3 = EmulatedCiphertextBlock {
         storage: 0b0_00_101,
         spec: CiphertextBlockSpec(3, 2),
     };
@@ -186,15 +186,15 @@ fn partial_ordering() {
 #[test]
 fn partial_ordering_ignore_extra_bits() {
     let spec = CiphertextBlockSpec(2, 3);
-    let block1 = CiphertextBlock {
+    let block1 = EmulatedCiphertextBlock {
         storage: 0b0_00_101,
         spec,
     };
-    let block2 = CiphertextBlock {
+    let block2 = EmulatedCiphertextBlock {
         storage: 0b11_0_00_101,
         spec,
     };
-    let block3 = CiphertextBlock {
+    let block3 = EmulatedCiphertextBlock {
         storage: 0b0_00_110,
         spec,
     };
@@ -207,15 +207,15 @@ fn partial_ordering_ignore_extra_bits() {
 #[test]
 fn hash_consistency() {
     let spec = CiphertextBlockSpec(2, 3);
-    let block1 = CiphertextBlock {
+    let block1 = EmulatedCiphertextBlock {
         storage: 0b1_11_101,
         spec,
     };
-    let block2 = CiphertextBlock {
+    let block2 = EmulatedCiphertextBlock {
         storage: 0b1_11_101,
         spec,
     };
-    let block3 = CiphertextBlock {
+    let block3 = EmulatedCiphertextBlock {
         storage: 0b11_1_11_101,
         spec,
     };
@@ -235,7 +235,7 @@ fn hash_consistency() {
 #[test]
 fn display_formatting() {
     let spec = CiphertextBlockSpec(2, 3);
-    let block = CiphertextBlock {
+    let block = EmulatedCiphertextBlock {
         storage: 0b1_11_101,
         spec,
     };

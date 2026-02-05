@@ -1,4 +1,4 @@
-pub type PlaintextStorage = u128;
+pub type EmulatedPlaintextStorage = u128;
 
 mod plaintext;
 mod spec;

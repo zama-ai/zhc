@@ -1,6 +1,6 @@
 use crate::integer_semantics::PlaintextSpec;
 
-use super::{PlaintextBlock, PlaintextBlockStorage};
+use super::{EmulatedPlaintextBlock, EmulatedPlaintextBlockStorage};
 
 /// Plaintext block specification with message bits only.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -16,12 +16,12 @@ impl PlaintextBlockSpec {
     }
 
     /// Returns the message mask for extracting message bits.
-    pub(crate) fn message_mask(&self) -> PlaintextBlockStorage {
+    pub(crate) fn message_mask(&self) -> EmulatedPlaintextBlockStorage {
         (1 << self.message_size()) - 1
     }
 
     /// Creates a plaintext block from a message value.
-    pub fn from_message(&self, message: PlaintextBlockStorage) -> PlaintextBlock {
+    pub fn from_message(&self, message: EmulatedPlaintextBlockStorage) -> EmulatedPlaintextBlock {
         if self.overflows_message(message) {
             panic!(
                 "Input value {} exceeds maximum value for message size of {} bits",
@@ -29,14 +29,14 @@ impl PlaintextBlockSpec {
                 self.message_size()
             );
         }
-        PlaintextBlock {
+        EmulatedPlaintextBlock {
             storage: message,
             spec: *self,
         }
     }
 
     /// Checks if the given storage value overflows the message size.
-    pub fn overflows_message(&self, storage: PlaintextBlockStorage) -> bool {
+    pub fn overflows_message(&self, storage: EmulatedPlaintextBlockStorage) -> bool {
         let shift = self.message_size();
         storage >= (1 << shift)
     }

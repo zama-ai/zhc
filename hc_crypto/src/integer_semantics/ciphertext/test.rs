@@ -1,5 +1,5 @@
 use super::super::CiphertextBlockSpec;
-use super::{Ciphertext, CiphertextSpec};
+use super::{CiphertextSpec, EmulatedCiphertext};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
@@ -94,7 +94,7 @@ fn set_block_preserves_other_blocks() {
 #[test]
 fn raw_int_bits() {
     let spec = CiphertextSpec::new(8, 2, 4);
-    let ciphertext = Ciphertext {
+    let ciphertext = EmulatedCiphertext {
         storage: 0b1111_1111_1111_0101,
         spec,
     };
@@ -127,7 +127,7 @@ fn equality_different_spec() {
 fn equality_ignores_extra_bits() {
     let spec = CiphertextSpec::new(8, 2, 4);
     let ciphertext1 = spec.from_int(0b1111_0101);
-    let ciphertext2 = Ciphertext {
+    let ciphertext2 = EmulatedCiphertext {
         storage: 0b1111_1111_1111_0101,
         spec,
     };
@@ -150,7 +150,7 @@ fn partial_ordering() {
 fn partial_ordering_ignore_extra_bits() {
     let spec = CiphertextSpec::new(8, 2, 4);
     let ciphertext1 = spec.from_int(0b1111_0110);
-    let ciphertext2 = Ciphertext {
+    let ciphertext2 = EmulatedCiphertext {
         storage: 0b1111_1111_0101,
         spec,
     };
@@ -166,7 +166,7 @@ fn hash_consistency() {
     let spec = CiphertextSpec::new(8, 2, 4);
     let ciphertext1 = spec.from_int(0b1111_0101);
     let ciphertext2 = spec.from_int(0b1111_0101);
-    let ciphertext3 = Ciphertext {
+    let ciphertext3 = EmulatedCiphertext {
         storage: 0b1111_1111_1111_0101,
         spec,
     };

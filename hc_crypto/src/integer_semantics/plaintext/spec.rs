@@ -1,4 +1,4 @@
-use super::super::{Plaintext, PlaintextBlockSpec, PlaintextStorage};
+use super::super::{EmulatedPlaintext, EmulatedPlaintextStorage, PlaintextBlockSpec};
 
 /// Specification for plaintext structure.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -10,7 +10,7 @@ pub struct PlaintextSpec {
 impl PlaintextSpec {
     pub fn new(int_size: u16, block_message_size: u8) -> Self {
         assert!(
-            int_size <= PlaintextStorage::BITS as u16,
+            int_size <= EmulatedPlaintextStorage::BITS as u16,
             "Tried to create malformed plaintext spec."
         );
         assert_ne!(
@@ -32,7 +32,7 @@ impl PlaintextSpec {
         self.int_size
     }
 
-    pub fn int_mask(&self) -> PlaintextStorage {
+    pub fn int_mask(&self) -> EmulatedPlaintextStorage {
         (1 << (self.block_count() * self.block.message_size())) - 1
     }
 
@@ -40,19 +40,19 @@ impl PlaintextSpec {
         self.block
     }
 
-    pub fn block_mask(&self, ith: u8) -> PlaintextStorage {
+    pub fn block_mask(&self, ith: u8) -> EmulatedPlaintextStorage {
         assert!(
             ith < self.block_count(),
             "Tried to get block mask for nonexistent block"
         );
-        (self.block.message_mask() as PlaintextStorage) << (ith * self.block.message_size())
+        (self.block.message_mask() as EmulatedPlaintextStorage) << (ith * self.block.message_size())
     }
 
     pub fn block_count(&self) -> u8 {
         self.int_size.div_euclid(self.block.0 as u16) as u8
     }
 
-    pub fn from_int(&self, int: PlaintextStorage) -> Plaintext {
+    pub fn from_int(&self, int: EmulatedPlaintextStorage) -> EmulatedPlaintext {
         let storage = int;
         if self.overflows_int(storage) {
             panic!(
@@ -61,13 +61,13 @@ impl PlaintextSpec {
                 self.int_size()
             );
         }
-        Plaintext {
+        EmulatedPlaintext {
             storage,
             spec: *self,
         }
     }
 
-    pub fn overflows_int(&self, storage: PlaintextStorage) -> bool {
+    pub fn overflows_int(&self, storage: EmulatedPlaintextStorage) -> bool {
         let shift = self.int_size();
         storage >= (1 << shift)
     }

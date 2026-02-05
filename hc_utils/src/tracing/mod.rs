@@ -1,6 +1,6 @@
 //! A module containing tools to generate traces in the TraceEvent json format.
 //!
-//! See [https://docs.google.com/document/d/1CvAClvFfyA5R-PhYUmn5OOQtYMH4h6I0nSsKchNAySU/preview] for a specification of the format.
+//! See <https://docs.google.com/document/d/1CvAClvFfyA5R-PhYUmn5OOQtYMH4h6I0nSsKchNAySU/preview> for a specification of the format.
 
 mod categories;
 mod events;

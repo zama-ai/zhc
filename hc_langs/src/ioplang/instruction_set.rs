@@ -3,7 +3,7 @@ use std::{
     hash::Hash,
 };
 
-use hc_crypto::integer_semantics::PlaintextBlockStorage;
+use hc_crypto::integer_semantics::EmulatedPlaintextBlockStorage;
 use hc_ir::{DialectInstructionSet, Signature, sig};
 
 use crate::ioplang::{
@@ -13,25 +13,49 @@ use crate::ioplang::{
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum IopInstructionSet {
-    Input { pos: usize, typ: IopTypeSystem },
-    Output { pos: usize, typ: IopTypeSystem },
+    Input {
+        pos: usize,
+        typ: IopTypeSystem,
+    },
+    Output {
+        pos: usize,
+        typ: IopTypeSystem,
+    },
     ZeroCiphertext,
-    LetPlaintextBlock { value: PlaintextBlockStorage },
+    LetPlaintextBlock {
+        value: EmulatedPlaintextBlockStorage,
+    },
     AddCt,
     SubCt,
-    PackCt { mul: PlaintextBlockStorage },
+    PackCt {
+        mul: EmulatedPlaintextBlockStorage,
+    },
     AddPt,
     AddPtWrapping,
     SubPt,
     PtSub,
     MulPt,
-    ExtractCtBlock { index: u8 },
-    ExtractPtBlock { index: u8 },
-    StoreCtBlock { index: u8 },
-    Pbs { lut: Lut1Def },
-    Pbs2 { lut: Lut2Def },
-    Pbs4 { lut: Lut4Def },
-    Pbs8 { lut: Lut8Def },
+    ExtractCtBlock {
+        index: u8,
+    },
+    ExtractPtBlock {
+        index: u8,
+    },
+    StoreCtBlock {
+        index: u8,
+    },
+    Pbs {
+        lut: Lut1Def,
+    },
+    Pbs2 {
+        lut: Lut2Def,
+    },
+    Pbs4 {
+        lut: Lut4Def,
+    },
+    Pbs8 {
+        lut: Lut8Def,
+    },
 }
 
 impl Display for IopInstructionSet {

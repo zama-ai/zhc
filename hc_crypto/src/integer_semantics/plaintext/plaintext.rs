@@ -2,35 +2,35 @@ use super::*;
 use hc_utils::iter::Separate;
 use std::fmt::Debug;
 
-use super::super::{PlaintextBlock, PlaintextBlockStorage};
+use super::super::{EmulatedPlaintextBlock, EmulatedPlaintextBlockStorage};
 
 #[derive(Clone, Copy)]
-pub struct Plaintext {
-    pub(crate) storage: PlaintextStorage,
+pub struct EmulatedPlaintext {
+    pub(crate) storage: EmulatedPlaintextStorage,
     pub(crate) spec: PlaintextSpec,
 }
 
-impl Plaintext {
+impl EmulatedPlaintext {
     pub fn len(&self) -> u8 {
         self.spec.block_count()
     }
 
-    pub fn get_block(&self, ith: u8) -> PlaintextBlock {
+    pub fn get_block(&self, ith: u8) -> EmulatedPlaintextBlock {
         assert!(ith < self.len(), "Tried to get nonexistent block.");
         let storage = (self.storage >> (ith * self.spec.block_spec().message_size()))
-            as PlaintextBlockStorage
+            as EmulatedPlaintextBlockStorage
             & self.spec.block_spec().message_mask();
-        PlaintextBlock {
+        EmulatedPlaintextBlock {
             storage,
             spec: self.spec.block_spec(),
         }
     }
 
-    pub(crate) fn raw_mask_int(&self) -> PlaintextStorage {
+    pub(crate) fn raw_mask_int(&self) -> EmulatedPlaintextStorage {
         self.storage & self.spec.int_mask()
     }
 
-    pub(crate) fn raw_int_bits(&self) -> PlaintextStorage {
+    pub(crate) fn raw_int_bits(&self) -> EmulatedPlaintextStorage {
         self.raw_mask_int()
     }
 
@@ -39,7 +39,7 @@ impl Plaintext {
     }
 }
 
-impl Debug for Plaintext {
+impl Debug for EmulatedPlaintext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let alternate = f.alternate();
         (0..self.len())
@@ -62,15 +62,15 @@ impl Debug for Plaintext {
     }
 }
 
-impl PartialEq for Plaintext {
+impl PartialEq for EmulatedPlaintext {
     fn eq(&self, other: &Self) -> bool {
         self.raw_int_bits() == other.raw_int_bits() && self.spec == other.spec
     }
 }
 
-impl Eq for Plaintext {}
+impl Eq for EmulatedPlaintext {}
 
-impl PartialOrd for Plaintext {
+impl PartialOrd for EmulatedPlaintext {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         if self.spec != other.spec {
             None
@@ -80,7 +80,7 @@ impl PartialOrd for Plaintext {
     }
 }
 
-impl std::hash::Hash for Plaintext {
+impl std::hash::Hash for EmulatedPlaintext {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.raw_int_bits().hash(state);
         self.spec.hash(state);

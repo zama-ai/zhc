@@ -1,8 +1,8 @@
 use std::ops::{Add, Mul, Shl, Shr, Sub};
 
-use super::{CiphertextBlock, PlaintextBlock};
+use super::{EmulatedCiphertextBlock, EmulatedPlaintextBlock};
 
-impl CiphertextBlock {
+impl EmulatedCiphertextBlock {
     /// Adds two ciphertext blocks while protecting the padding bit from writes.
     pub fn protect_add(self, rhs: Self) -> Self {
         assert_eq!(self.spec, rhs.spec, "Spec mismatch.");
@@ -53,7 +53,7 @@ impl CiphertextBlock {
     }
 
     /// Adds a plaintext block to a ciphertext block while protecting the padding bit.
-    pub fn protect_add_pt(self, rhs: PlaintextBlock) -> Self {
+    pub fn protect_add_pt(self, rhs: EmulatedPlaintextBlock) -> Self {
         assert_eq!(self.spec, rhs.spec, "Spec mismatch.");
         assert!(
             self.raw_padding_bits() == 0,
@@ -71,7 +71,7 @@ impl CiphertextBlock {
     }
 
     /// Adds a plaintext block to a ciphertext block while preventing padding overflow.
-    pub fn temper_add_pt(self, rhs: PlaintextBlock) -> Self {
+    pub fn temper_add_pt(self, rhs: EmulatedPlaintextBlock) -> Self {
         assert_eq!(self.spec, rhs.spec, "Spec mismatch.");
         let storage = self.raw_complete_bits().add(rhs.raw_message_bits());
         assert!(
@@ -85,7 +85,7 @@ impl CiphertextBlock {
     }
 
     /// Adds a plaintext block to a ciphertext block with overflow wrapping.
-    pub fn wrapping_add_pt(self, rhs: PlaintextBlock) -> Self {
+    pub fn wrapping_add_pt(self, rhs: EmulatedPlaintextBlock) -> Self {
         assert_eq!(self.spec, rhs.spec, "Spec mismatch.");
         let storage = self
             .raw_complete_bits()
@@ -147,7 +147,7 @@ impl CiphertextBlock {
     }
 
     /// Subtracts a plaintext block from a ciphertext block while protecting the padding bit.
-    pub fn protect_sub_pt(self, rhs: PlaintextBlock) -> Self {
+    pub fn protect_sub_pt(self, rhs: EmulatedPlaintextBlock) -> Self {
         assert_eq!(self.spec, rhs.spec, "Spec mismatch.");
         assert!(
             self.raw_padding_bits() == 0,
@@ -165,7 +165,7 @@ impl CiphertextBlock {
     }
 
     /// Subtracts a plaintext block from a ciphertext block while preventing underflow.
-    pub fn temper_sub_pt(self, rhs: PlaintextBlock) -> Self {
+    pub fn temper_sub_pt(self, rhs: EmulatedPlaintextBlock) -> Self {
         assert_eq!(self.spec, rhs.spec, "Spec mismatch.");
         assert!(
             self.raw_complete_bits() >= rhs.raw_message_bits(),
@@ -179,7 +179,7 @@ impl CiphertextBlock {
     }
 
     /// Subtracts a plaintext block from a ciphertext block with underflow wrapping.
-    pub fn wrapping_sub_pt(self, rhs: PlaintextBlock) -> Self {
+    pub fn wrapping_sub_pt(self, rhs: EmulatedPlaintextBlock) -> Self {
         assert_eq!(self.spec, rhs.spec, "Spec mismatch.");
         let storage = self
             .raw_complete_bits()
@@ -245,7 +245,7 @@ impl CiphertextBlock {
 
     /// Multiplies a ciphertext block by a plaintext block while protecting the padding bit from
     /// writes.
-    pub fn protect_mul_pt(&self, rhs: PlaintextBlock) -> Self {
+    pub fn protect_mul_pt(&self, rhs: EmulatedPlaintextBlock) -> Self {
         assert_eq!(self.spec, rhs.spec, "Spec mismatch.");
         assert!(
             self.raw_padding_bits() == 0,
@@ -263,7 +263,7 @@ impl CiphertextBlock {
     }
 
     /// Multiplies a ciphertext block by a plaintext block while preventing padding bit overflow.
-    pub fn temper_mul_pt(&self, rhs: PlaintextBlock) -> Self {
+    pub fn temper_mul_pt(&self, rhs: EmulatedPlaintextBlock) -> Self {
         assert_eq!(self.spec, rhs.spec, "Spec mismatch.");
         let storage = self.raw_complete_bits().mul(rhs.raw_message_bits());
         assert!(
@@ -278,7 +278,7 @@ impl CiphertextBlock {
 
     /// Multiplies a ciphertext block by a plaintext block with modular arithmetic and overflow
     /// wrapping.
-    pub fn wrapping_mul(&self, rhs: PlaintextBlock) -> Self {
+    pub fn wrapping_mul(&self, rhs: EmulatedPlaintextBlock) -> Self {
         assert_eq!(self.spec, rhs.spec, "Spec mismatch.");
         let storage = self
             .raw_complete_bits()
@@ -290,9 +290,9 @@ impl CiphertextBlock {
         }
     }
 }
-impl PlaintextBlock {
+impl EmulatedPlaintextBlock {
     /// Subtracts a ciphertext block from this plaintext block while protecting the padding bit.
-    pub fn protect_sub_ct(self, rhs: CiphertextBlock) -> CiphertextBlock {
+    pub fn protect_sub_ct(self, rhs: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
         assert_eq!(self.spec, rhs.spec, "Spec mismatch.");
         assert!(
             rhs.raw_padding_bits() == 0,
@@ -303,20 +303,20 @@ impl PlaintextBlock {
             "Underflow occured while performing protect-sub."
         );
         let storage = self.raw_message_bits().sub(rhs.raw_complete_bits());
-        CiphertextBlock {
+        EmulatedCiphertextBlock {
             storage,
             spec: rhs.spec,
         }
     }
 
     /// Subtracts a ciphertext block from this plaintext block with underflow wrapping.
-    pub fn wrapping_sub_ct(self, rhs: CiphertextBlock) -> CiphertextBlock {
+    pub fn wrapping_sub_ct(self, rhs: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
         assert_eq!(self.spec, rhs.spec, "Spec mismatch.");
         let storage = self
             .raw_message_bits()
             .wrapping_sub(rhs.raw_complete_bits())
             & rhs.spec.complete_mask();
-        CiphertextBlock {
+        EmulatedCiphertextBlock {
             storage,
             spec: rhs.spec,
         }
