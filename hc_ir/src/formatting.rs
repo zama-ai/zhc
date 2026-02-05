@@ -1,4 +1,5 @@
 use std::any::TypeId;
+use std::fmt::Write as _;
 
 use hc_utils::iter::{MergerOf2, Separate};
 
@@ -85,7 +86,6 @@ impl<'ir, D: Dialect> IRFormatter<'ir, D> {
 
 impl<D: Dialect> std::fmt::Display for IRFormatter<'_, D> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // Compute max comment length if showing comments
         let max_comment_len = if self.show_comments {
             self.ir
                 .walk_ops_linear()
@@ -95,7 +95,6 @@ impl<D: Dialect> std::fmt::Display for IRFormatter<'_, D> {
         } else {
             0
         };
-        // Compute opid width if showing opids
         let opid_width = if self.show_opid {
             self.ir.n_ops().checked_ilog10().map_or(1, |x| x + 1) as usize
         } else {
@@ -211,7 +210,6 @@ impl<D: Dialect, OpAnn: Annotation, ValAnn: Annotation> std::fmt::Display
     for AnnIRFormatter<'_, '_, D, OpAnn, ValAnn>
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // Compute max comment length if showing comments
         let max_comment_len = if self.show_comments {
             self.ann_ir
                 .walk_ops_linear()
@@ -221,7 +219,6 @@ impl<D: Dialect, OpAnn: Annotation, ValAnn: Annotation> std::fmt::Display
         } else {
             0
         };
-        // Compute opid width if showing opids
         let opid_width = if self.show_opid {
             self.ann_ir.n_ops().checked_ilog10().map_or(1, |x| x + 1) as usize
         } else {
@@ -301,13 +298,11 @@ impl<'r, 'ir, D: Dialect> OpRefFormatter<'r, 'ir, D> {
 
 impl<D: Dialect> std::fmt::Display for OpRefFormatter<'_, '_, D> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // For single op, max_comment_len is just this op's comment length (no alignment needed)
         let max_comment_len = if self.show_comments {
             self.opref.get_comment().map(|c| c.len()).unwrap_or(0)
         } else {
             0
         };
-        // For single op, use the opid's own width
         let opid_width = if self.show_opid {
             self.opref.get_id().0.checked_ilog10().map_or(1, |x| x + 1) as usize
         } else {
@@ -445,13 +440,11 @@ impl<D: Dialect, OpAnn: Annotation, ValAnn: Annotation> std::fmt::Display
     for AnnOpRefFormatter<'_, '_, '_, D, OpAnn, ValAnn>
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // For single op, max_comment_len is just this op's comment length (no alignment needed)
         let max_comment_len = if self.show_comments {
             self.opref.get_comment().map(|c| c.len()).unwrap_or(0)
         } else {
             0
         };
-        // For single op, use the opid's own width
         let opid_width = if self.show_opid {
             self.opref.get_id().0.checked_ilog10().map_or(1, |x| x + 1) as usize
         } else {
@@ -638,7 +631,6 @@ fn format_opref<D: Dialect>(
         return Ok(());
     }
 
-    // Write indent
     write!(f, "{:indent$}", "", indent = indent)?;
 
     if opref.is_inactive() {
@@ -648,16 +640,13 @@ fn format_opref<D: Dialect>(
     let has_comments = show_comments && max_comment_len > 0;
     if show_opid {
         if has_comments {
-            // No separator between opid and comment
             write!(f, "{:0width$}   ", opref.id, width = opid_width)?;
         } else {
             write!(f, "{:0width$}   |  ", opref.id, width = opid_width)?;
         }
     }
 
-    // Format comment column on the left if enabled
     if has_comments {
-        // "// " prefix is 3 chars
         let comment_col_width = max_comment_len + 3;
         if let Some(comment) = opref.get_comment() {
             write!(f, "// {:width$}   | ", comment, width = max_comment_len)?;
@@ -666,7 +655,6 @@ fn format_opref<D: Dialect>(
         }
     }
 
-    // Format return values
     opref
         .raw_get_returns_iter()
         .map(Separated::Content)
@@ -679,10 +667,8 @@ fn format_opref<D: Dialect>(
         write!(f, " = ")?;
     }
 
-    // Format operation
     write!(f, "{}(", opref.operation)?;
 
-    // Format arguments
     opref
         .raw_get_args_iter()
         .map(Separated::Content)
@@ -694,6 +680,45 @@ fn format_opref<D: Dialect>(
     write!(f, ");")?;
 
     Ok(())
+}
+
+fn write_multiline(
+    f: &mut std::fmt::Formatter<'_>,
+    content: &str,
+    continuation_prefix: &str,
+) -> std::fmt::Result {
+    let mut lines = content.lines();
+    if let Some(first) = lines.next() {
+        write!(f, "{first}")?;
+        for line in lines {
+            write!(f, "\n{continuation_prefix}{line}")?;
+        }
+    }
+    Ok(())
+}
+
+fn compute_ann_line_prefix(
+    indent: usize,
+    show_opid: bool,
+    opid_width: usize,
+    show_comments: bool,
+    max_comment_len: usize,
+) -> String {
+    let mut prefix = String::new();
+    write!(&mut prefix, "{:indent$}", "", indent = indent).unwrap();
+    if show_opid {
+        let has_comments = show_comments && max_comment_len > 0;
+        if has_comments {
+            write!(&mut prefix, "{:width$}   ", "", width = opid_width).unwrap();
+        } else {
+            write!(&mut prefix, "{:width$}   |  ", "", width = opid_width).unwrap();
+        }
+    }
+    if show_comments && max_comment_len > 0 {
+        let comment_col_width = max_comment_len + 3;
+        write!(&mut prefix, "{:width$}   | ", "", width = comment_col_width).unwrap();
+    }
+    prefix
 }
 
 fn format_ann_opref<D: Dialect, OpAnn: Annotation, ValAnn: Annotation>(
@@ -711,7 +736,6 @@ fn format_ann_opref<D: Dialect, OpAnn: Annotation, ValAnn: Annotation>(
     show_val_ann_alternate: bool,
     indent: usize,
 ) -> std::fmt::Result {
-    // Format base operation (reuse the inner OpRef)
     format_opref(
         f,
         opref,
@@ -723,78 +747,57 @@ fn format_ann_opref<D: Dialect, OpAnn: Annotation, ValAnn: Annotation>(
         max_comment_len,
         indent,
     )?;
-
-    // Add operation annotation (skip if OpAnn is ())
+    let line_prefix = compute_ann_line_prefix(
+        indent,
+        show_opid,
+        opid_width,
+        show_comments,
+        max_comment_len,
+    );
     if show_op_ann && TypeId::of::<OpAnn>() != TypeId::of::<()>() {
         writeln!(f)?;
+        write!(f, "{line_prefix}")?;
 
-        // Write indent
-        write!(f, "{:indent$}", "", indent = indent)?;
-
-        // Add column spacing to align with operation content
-        if show_opid {
-            let has_comments = show_comments && max_comment_len > 0;
-            if has_comments {
-                // No separator between opid and comment
-                write!(f, "{:width$}   ", "", width = opid_width)?;
-            } else {
-                write!(f, "{:width$}   |  ", "", width = opid_width)?;
-            }
-        }
-
-        if show_comments && max_comment_len > 0 {
-            // "// " prefix is 3 chars
-            let comment_col_width = max_comment_len + 3;
-            write!(f, "{:width$}   | ", "", width = comment_col_width)?;
-        }
-
-        if show_op_ann_alternate {
-            write!(f, "    operation -> {:#?}", opref.get_annotation())?;
+        let ann_str = if show_op_ann_alternate {
+            format!("{:#?}", opref.get_annotation())
         } else {
-            write!(f, "    operation -> {:?}", opref.get_annotation())?;
-        }
+            format!("{:?}", opref.get_annotation())
+        };
+        let continuation_prefix = format!("{line_prefix}    operation -> ");
+        write!(f, "    operation -> ")?;
+        write_multiline(f, &ann_str, &continuation_prefix)?;
     }
 
-    // Add value annotations for return values (skip if ValAnn is ())
     if show_val_ann && TypeId::of::<ValAnn>() != TypeId::of::<()>() {
         for ret in opref.get_returns_iter() {
             writeln!(f)?;
             let id = ret.get_id().0;
             let ann = ret.get_annotation();
 
-            // Write indent
-            write!(f, "{:indent$}", "", indent = indent)?;
+            write!(f, "{line_prefix}")?;
 
-            // Add column spacing to align with operation content
-            if show_opid {
-                let has_comments = show_comments && max_comment_len > 0;
-                if has_comments {
-                    // No separator between opid and comment
-                    write!(f, "{:width$}   ", "", width = opid_width)?;
+            let (val_prefix, ann_str) = if ret.is_inactive() {
+                let prefix = format!("    %_{id} -> ");
+                let ann_str = if show_val_ann_alternate {
+                    format!("{ann:#?}")
                 } else {
-                    write!(f, "{:width$}   |  ", "", width = opid_width)?;
-                }
-            }
-
-            if show_comments && max_comment_len > 0 {
-                // "// " prefix is 3 chars
-                let comment_col_width = max_comment_len + 3;
-                write!(f, "{:width$}   | ", "", width = comment_col_width)?;
-            }
-
-            if ret.is_inactive() {
-                if show_val_ann_alternate {
-                    write!(f, "    %_{id} -> {ann:#?}")?;
-                } else {
-                    write!(f, "    %_{id} -> {ann:?}")?;
-                }
+                    format!("{ann:?}")
+                };
+                (prefix, ann_str)
             } else {
-                if show_val_ann_alternate {
-                    write!(f, "    %{id} -> {ann:#?}")?;
+                let prefix = format!("    %{id} -> ");
+                let ann_str = if show_val_ann_alternate {
+                    format!("{ann:#?}")
                 } else {
-                    write!(f, "    %{id} -> {ann:?}")?;
-                }
-            }
+                    format!("{ann:?}")
+                };
+                (prefix, ann_str)
+            };
+
+            let continuation_prefix =
+                format!("{line_prefix}{:width$}", "", width = val_prefix.len());
+            write!(f, "{val_prefix}")?;
+            write_multiline(f, &ann_str, &continuation_prefix)?;
         }
     }
 
