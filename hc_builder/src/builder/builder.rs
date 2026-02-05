@@ -261,6 +261,22 @@ impl Builder {
         }
     }
 
+    /// Adds a ciphertext block `src_a` and a plaintext block `src_b` allowing wrapping.
+    pub fn block_add_plaintext_wrapping(
+        &self,
+        src_a: &CiphertextBlock,
+        src_b: &PlaintextBlock,
+    ) -> CiphertextBlock {
+        let (_node, ret) = self.add_op(
+            IopInstructionSet::AddPtWrapping,
+            svec![src_a.valid, src_b.valid],
+        );
+        CiphertextBlock {
+            valid: ret[0],
+            spec: self.spec,
+        }
+    }
+
     /// Subtracts ciphertext block `src_b` from `src_a`.
     pub fn block_sub(&self, src_a: &CiphertextBlock, src_b: &CiphertextBlock) -> CiphertextBlock {
         let (_node, ret) = self.add_op(IopInstructionSet::SubCt, svec![src_a.valid, src_b.valid]);
