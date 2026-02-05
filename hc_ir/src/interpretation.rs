@@ -13,6 +13,7 @@
 //! over an entire IR, producing an annotated IR with interpretation values
 //! attached to each SSA value.
 
+use std::fmt::Debug;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use hc_utils::{
@@ -116,7 +117,7 @@ where
     <Self as DialectInstructionSet>::TypeSystem: InterpretsTo<I>,
 {
     /// Mutable state threaded through the interpretation.
-    type Context;
+    type Context: Debug;
 
     /// Executes the operation on the given arguments.
     fn interpret(&self, context: &mut Self::Context, arguments: SmallVec<I>) -> SmallVec<I>;
