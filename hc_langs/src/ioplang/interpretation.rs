@@ -14,6 +14,36 @@ pub enum IopValue {
     PlaintextBlock(PlaintextBlock),
 }
 
+impl IopValue {
+    pub fn unwrap_ciphertext(self) -> Ciphertext {
+        match self {
+            Self::Ciphertext(v) => v,
+            _ => panic!("Expected Ciphertext, got {:?}", self),
+        }
+    }
+
+    pub fn unwrap_plaintext(self) -> Plaintext {
+        match self {
+            Self::Plaintext(v) => v,
+            _ => panic!("Expected Plaintext, got {:?}", self),
+        }
+    }
+
+    pub fn unwrap_ciphertext_block(self) -> CiphertextBlock {
+        match self {
+            Self::CiphertextBlock(v) => v,
+            _ => panic!("Expected CiphertextBlock, got {:?}", self),
+        }
+    }
+
+    pub fn unwrap_plaintext_block(self) -> PlaintextBlock {
+        match self {
+            Self::PlaintextBlock(v) => v,
+            _ => panic!("Expected PlaintextBlock, got {:?}", self),
+        }
+    }
+}
+
 impl Debug for IopValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -38,6 +68,7 @@ impl InterpretsTo<IopValue> for super::IopTypeSystem {
     }
 }
 
+#[derive(Debug)]
 pub struct IopInterepreterContext {
     pub spec: CiphertextSpec,
     pub inputs: FastMap<usize, IopValue>,

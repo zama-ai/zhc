@@ -46,6 +46,10 @@ impl Ciphertext {
     pub fn spec(&self) -> CiphertextSpec {
         self.spec
     }
+
+    pub fn as_storage(&self) -> CiphertextStorage {
+        self.storage
+    }
 }
 
 impl Debug for Ciphertext {
