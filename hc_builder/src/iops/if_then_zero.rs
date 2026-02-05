@@ -8,19 +8,19 @@ use crate::builder::{Builder, Ciphertext};
 pub fn if_then_zero(spec: CiphertextSpec) -> IR<IopLang> {
     let builder = Builder::new(spec.block_spec());
 
-    let src = builder.eint_input(spec.int_size());
-    let cond = builder.eint_input(spec.block_spec().message_size() as u16);
+    let src = builder.ciphertext_input(spec.int_size());
+    let cond = builder.ciphertext_input(spec.block_spec().message_size() as u16);
 
     let output_blocks = src
         .blocks()
         .iter()
         .map(|b| {
-            let out = builder.block_pack_ct(&cond.blocks()[0], b);
-            builder.block_pbs(&out, Lut1Def::IfFalseZeroed)
+            let out = builder.block_pack(&cond.blocks()[0], b);
+            builder.block_lookup(&out, Lut1Def::IfFalseZeroed)
         })
         .cosvec();
 
-    builder.eint_output(Ciphertext::from_blocks(output_blocks));
+    builder.ciphertext_output(Ciphertext::from_blocks(output_blocks));
 
     // builder.dump_eval_panic(svec![IopValue::Ciphertext(spec.from_int(6)),
     // IopValue::Ciphertext(spec.from_int(1))]);

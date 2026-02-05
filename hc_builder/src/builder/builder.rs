@@ -7,7 +7,7 @@ use hc_langs::ioplang::{
 };
 use hc_utils::{
     FastMap,
-    iter::{Chunk, ChunkIt},
+    iter::{Chunk, ChunkIt, CollectInSmallVec},
     small::SmallVec,
     svec,
 };
@@ -116,13 +116,13 @@ impl Builder {
     }
 
     /// Dumps the ir.
-    pub fn dump_panic(&self) {
+    pub fn dump(&self) {
         println!("{:#}", self.ir.borrow().format());
         panic!()
     }
 
     /// Evaluates the IR with given inputs and panics with the interpretation-annotated graph.
-    pub fn dump_eval_panic(&self, inputs: SmallVec<IopValue>) {
+    pub fn dump_eval(&self, inputs: SmallVec<IopValue>) {
         let max_int_size = inputs
             .iter()
             .filter_map(|a| match a {
@@ -140,29 +140,55 @@ impl Builder {
         match ir.interpret(context) {
             Ok((interpreted, _)) => {
                 println!(
-                    "{:#}",
+                    "{}",
                     interpreted
                         .format()
                         .with_walker(PrintWalker::Linear)
                         .show_comments(true)
+                        .show_types(false)
+                        .show_val_ann_alternate(true)
                 );
                 panic!("dump_eval_panic: interpretation succeeded")
             }
             Err((partial, _)) => {
                 println!(
-                    "{:#}",
+                    "{}",
                     partial
                         .format()
                         .with_walker(PrintWalker::Linear)
                         .show_comments(true)
+                        .show_types(false)
+                        .show_val_ann_alternate(true)
                 );
                 panic!("dump_eval_panic: interpretation failed")
             }
         }
     }
 
+    /// Evaluates the IR with given inputs and return the outputs.
+    pub fn eval(&self, inputs: SmallVec<IopValue>) -> SmallVec<IopValue> {
+        let max_int_size = inputs
+            .iter()
+            .filter_map(|a| match a {
+                IopValue::Ciphertext(ciphertext) => Some(ciphertext.spec().int_size()),
+                _ => None,
+            })
+            .max()
+            .unwrap();
+        let context = IopInterepreterContext {
+            spec: self.spec.ciphertext_spec(max_int_size),
+            inputs: inputs.into_iter().enumerate().collect(),
+            outputs: FastMap::new(),
+        };
+        let ir = self.ir.borrow();
+        let (_, context) = ir.interpret(context).unwrap();
+        let mut output = context.outputs.into_iter().cosvec();
+        output.sort_unstable_by_key(|a| a.0);
+        output.into_iter().map(|a| a.1).cosvec()
+    }
+
     /// Creates a ciphertext input and returns its blocks.
-    pub fn eint_input(&self, int_size: u16) -> Ciphertext {
+    pub fn ciphertext_input(&self, int_size: u16) -> Ciphertext {
         let pos = self.get_input_ctr();
         let (_, inp) = self.add_op(
             IopInstructionSet::Input {
@@ -184,7 +210,7 @@ impl Builder {
     }
 
     /// Creates a plaintext input and returns its blocks.
-    pub fn int_input(&self, int_size: u16) -> Plaintext {
+    pub fn plaintext_input(&self, int_size: u16) -> Plaintext {
         let pos = self.get_input_ctr();
         let (_, inp) = self.add_op(
             IopInstructionSet::Input {
@@ -209,7 +235,7 @@ impl Builder {
     }
 
     /// Creates a ciphertext output from the given `blocks`.
-    pub fn eint_output(&self, ct: Ciphertext) {
+    pub fn ciphertext_output(&self, ct: Ciphertext) {
         let (_, acc) = self.add_op(IopInstructionSet::ZeroCiphertext, svec![]);
         let mut acc = acc[0];
         for index in 0..TryInto::<u8>::try_into(ct.len()).unwrap() {
@@ -253,7 +279,11 @@ impl Builder {
     }
 
     /// Adds a ciphertext block `src_a` and a plaintext block `src_b`.
-    pub fn block_adds(&self, src_a: &CiphertextBlock, src_b: &PlaintextBlock) -> CiphertextBlock {
+    pub fn block_add_plaintext(
+        &self,
+        src_a: &CiphertextBlock,
+        src_b: &PlaintextBlock,
+    ) -> CiphertextBlock {
         let (_node, ret) = self.add_op(IopInstructionSet::AddPt, svec![src_a.valid, src_b.valid]);
         CiphertextBlock {
             valid: ret[0],
@@ -287,7 +317,11 @@ impl Builder {
     }
 
     /// Subtracts plaintext block `src_b` from ciphertext block `src_a`.
-    pub fn block_subs(&self, src_a: &CiphertextBlock, src_b: &PlaintextBlock) -> CiphertextBlock {
+    pub fn block_sub_plaintext(
+        &self,
+        src_a: &CiphertextBlock,
+        src_b: &PlaintextBlock,
+    ) -> CiphertextBlock {
         let (_node, ret) = self.add_op(IopInstructionSet::SubPt, svec![src_a.valid, src_b.valid]);
         CiphertextBlock {
             valid: ret[0],
@@ -296,7 +330,11 @@ impl Builder {
     }
 
     /// Subtracts ciphertext block `src_b` from plaintext block `src_a`.
-    pub fn block_ssub(&self, src_a: &PlaintextBlock, src_b: &CiphertextBlock) -> CiphertextBlock {
+    pub fn block_plaintext_sub(
+        &self,
+        src_a: &PlaintextBlock,
+        src_b: &CiphertextBlock,
+    ) -> CiphertextBlock {
         let (_node, ret) = self.add_op(IopInstructionSet::PtSub, svec![src_a.valid, src_b.valid]);
         CiphertextBlock {
             valid: ret[0],
@@ -304,11 +342,7 @@ impl Builder {
         }
     }
 
-    pub fn block_pack_ct(
-        &self,
-        src_a: &CiphertextBlock,
-        src_b: &CiphertextBlock,
-    ) -> CiphertextBlock {
+    pub fn block_pack(&self, src_a: &CiphertextBlock, src_b: &CiphertextBlock) -> CiphertextBlock {
         let (_node, ret) = self.add_op(
             IopInstructionSet::PackCt {
                 mul: 2u8.pow(self.spec().message_size() as u32) as PlaintextBlockStorage,
@@ -321,18 +355,18 @@ impl Builder {
         }
     }
 
-    pub fn block_pack_lut(
+    pub fn block_pack_lookup(
         &self,
         src_a: &CiphertextBlock,
         src_b: &CiphertextBlock,
         lut: Lut1Def,
     ) -> CiphertextBlock {
-        let packed = self.block_pack_ct(src_a, src_b);
-        self.block_pbs(&packed, lut)
+        let packed = self.block_pack(src_a, src_b);
+        self.block_lookup(&packed, lut)
     }
 
     /// Applies a 1-PBS to `src` using `lut`.
-    pub fn block_pbs(&self, src: &CiphertextBlock, lut: Lut1Def) -> CiphertextBlock {
+    pub fn block_lookup(&self, src: &CiphertextBlock, lut: Lut1Def) -> CiphertextBlock {
         let (_node, ret) = self.add_op(IopInstructionSet::Pbs { lut }, svec![src.valid]);
         CiphertextBlock {
             valid: ret[0],
@@ -341,7 +375,7 @@ impl Builder {
     }
 
     /// Applies a 2-PBS to `src` using `lut`.
-    pub fn block_pbs2(
+    pub fn block_lookup2(
         &self,
         src: &CiphertextBlock,
         lut: Lut2Def,
@@ -370,7 +404,7 @@ impl Builder {
             .iter()
             .chunk(2)
             .map(|a| match a {
-                Chunk::Complete(sv) => self.block_pack_ct(sv[1], sv[0]),
+                Chunk::Complete(sv) => self.block_pack(sv[1], sv[0]),
                 Chunk::Rest(sv) => *sv[0],
             })
             .collect()
@@ -380,10 +414,10 @@ impl Builder {
         &self,
         blocks: impl AsRef<[CiphertextBlock]>,
     ) -> SmallVec<CiphertextBlock> {
-        self.vector_pack_one_lut(blocks, Lut1Def::None)
+        self.vector_pack_one_lookup(blocks, Lut1Def::None)
     }
 
-    pub fn vector_pack_one_lut(
+    pub fn vector_pack_one_lookup(
         &self,
         blocks: impl AsRef<[CiphertextBlock]>,
         lut: Lut1Def,
@@ -394,15 +428,15 @@ impl Builder {
             .chunk(2)
             .map(|a| match a {
                 Chunk::Complete(sv) => {
-                    let packed = self.block_pack_ct(sv[1], sv[0]);
-                    self.block_pbs(&packed, lut)
+                    let packed = self.block_pack(sv[1], sv[0]);
+                    self.block_lookup(&packed, lut)
                 }
                 Chunk::Rest(sv) => *sv[0],
             })
             .collect()
     }
 
-    pub fn vector_pbs(
+    pub fn vector_lookup(
         &self,
         blocks: impl AsRef<[CiphertextBlock]>,
         lut: Lut1Def,
@@ -410,7 +444,7 @@ impl Builder {
         blocks
             .as_ref()
             .iter()
-            .map(|b| self.block_pbs(b, lut))
+            .map(|b| self.block_lookup(b, lut))
             .collect()
     }
 
