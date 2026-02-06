@@ -14,3 +14,4 @@ fmt-check:
 
 check:
 	RUSTFLAGS="-D warnings" cargo check
+	RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
