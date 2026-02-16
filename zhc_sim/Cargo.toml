@@ -1,0 +1,13 @@
+[package]
+name = "zhc_sim"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+zhc_utils.workspace = true
+zhc_langs.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true

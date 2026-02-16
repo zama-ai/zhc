@@ -1,0 +1,15 @@
+[package]
+name = "zhc_pipeline"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+zhc_ir.workspace = true
+zhc_sim.workspace = true
+zhc_utils.workspace = true
+zhc_langs.workspace = true
+zhc_builder.workspace = true
+serde.workspace = true
+bitfield-struct.workspace = true

@@ -1,0 +1,10 @@
+[package]
+name = "zhc_ir"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+zhc_utils.workspace = true
+zhc_utils_macro.workspace = true

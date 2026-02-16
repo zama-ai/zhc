@@ -1,0 +1,12 @@
+[package]
+name = "zhc_langs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+zhc_ir.workspace = true
+zhc_utils.workspace = true
+zhc_crypto.workspace = true
+serde.workspace = true

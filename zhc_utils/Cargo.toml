@@ -1,0 +1,12 @@
+[package]
+name = "zhc_utils"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+zhc_utils_macro.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+paste.workspace = true

@@ -1,13 +1,13 @@
 [workspace]
 members = [
-    "hc_ir",
-    "hc_langs",
-    "hc_pipeline",
-    "hc_sim",
-    "hc_utils",
-    "hc_utils_macro",
-    "hc_builder",
-    "hc_crypto",
+    "zhc_ir",
+    "zhc_langs",
+    "zhc_pipeline",
+    "zhc_sim",
+    "zhc_utils",
+    "zhc_utils_macro",
+    "zhc_builder",
+    "zhc_crypto",
 ]
 resolver = "3"
 
@@ -15,17 +15,17 @@ resolver = "3"
 version = "0.1.0"
 edition = "2024"
 license = "BSD-3-Clause-Clear"
-repository = "https://github.com/zama-ai/hpu_compiler"
+repository = "https://github.com/zama-ai/zhc"
 
 [workspace.dependencies]
-hc_ir = { path = "hc_ir", version = "0.1.0" }
-hc_langs = { path = "hc_langs", version = "0.1.0" }
-hc_pipeline = { path = "hc_pipeline", version = "0.1.0" }
-hc_sim = { path = "hc_sim", version = "0.1.0" }
-hc_utils = { path = "hc_utils", version = "0.1.0" }
-hc_utils_macro = { path = "hc_utils_macro", version = "0.1.0" }
-hc_builder = { path = "hc_builder", version = "0.1.0" }
-hc_crypto = { path = "hc_crypto", version = "0.1.0" }
+zhc_ir = { path = "zhc_ir", version = "0.1.0" }
+zhc_langs = { path = "zhc_langs", version = "0.1.0" }
+zhc_pipeline = { path = "zhc_pipeline", version = "0.1.0" }
+zhc_sim = { path = "zhc_sim", version = "0.1.0" }
+zhc_utils = { path = "zhc_utils", version = "0.1.0" }
+zhc_utils_macro = { path = "zhc_utils_macro", version = "0.1.0" }
+zhc_builder = { path = "zhc_builder", version = "0.1.0" }
+zhc_crypto = { path = "zhc_crypto", version = "0.1.0" }
 
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
