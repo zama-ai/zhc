@@ -5,7 +5,7 @@ use hc_ir::{
 };
 use hc_langs::ioplang::{
     IopInstructionSet, IopInterepreterContext, IopLang, IopTypeSystem, IopValue, Lut1Def, Lut2Def,
-    eliminate_aliases,
+    eliminate_aliases, skip_store_load,
 };
 use hc_utils::{
     FastMap,
@@ -529,6 +529,7 @@ impl Builder {
     pub fn into_ir(self) -> IR<IopLang> {
         let mut ir = self.inner.into_inner().ir;
         eliminate_aliases(&mut ir);
+        skip_store_load(&mut ir);
         eliminate_dead_code(&mut ir);
         eliminate_common_subexpressions(&mut ir);
         ir

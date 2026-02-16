@@ -1,7 +1,4 @@
-use std::{
-    fmt::Debug,
-    ops::Deref,
-};
+use std::{fmt::Debug, ops::Deref};
 
 use crate::{AnnIR, AnnOpRefFormatter, AnnValRef, Annotation, Dialect, OpRef};
 
