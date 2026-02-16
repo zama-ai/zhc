@@ -223,6 +223,16 @@ impl<T> OpMap<T> {
         })
     }
 
+    /// Consumes the map and returns an iterator over operation IDs and their stored values.
+    pub fn into_iter(self) -> impl DoubleEndedIterator<Item = (OpId, T)> {
+        self.store
+            .enumerate_into_iter()
+            .filter_map(|(i, a)| match a {
+                State::Active(Some(v)) => Some((i, v)),
+                _ => None,
+            })
+    }
+
     /// Acknowledge eventual changes
     pub fn ack_changes(&mut self) -> bool {
         std::mem::replace(&mut self.changed, false)

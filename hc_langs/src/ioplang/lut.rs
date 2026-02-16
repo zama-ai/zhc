@@ -1,4 +1,7 @@
-use hc_crypto::integer_semantics::EmulatedCiphertextBlock;
+use hc_crypto::integer_semantics::{
+    EmulatedCiphertextBlock,
+    lut::{protect_lookup, wrapping_lookup},
+};
 
 /// Enumeration of all available LUT1.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -67,7 +70,15 @@ pub enum Lut1Def {
 }
 
 impl Lut1Def {
-    pub(crate) fn get_fn(&self) -> fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
+    pub(crate) fn protect_lookup(&self, inp: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
+        protect_lookup(self.get_fn(), inp)
+    }
+
+    pub(crate) fn wrapping_lookup(&self, inp: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
+        wrapping_lookup(self.get_fn(), inp)
+    }
+
+    fn get_fn(&self) -> fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
         use hc_crypto::integer_semantics::lut::*;
         match self {
             Lut1Def::None => None_0,
@@ -156,7 +167,23 @@ pub enum Lut2Def {
 }
 
 impl Lut2Def {
-    pub(crate) fn get_fns(
+    pub(crate) fn protect_lookup(
+        &self,
+        inp: EmulatedCiphertextBlock,
+    ) -> (EmulatedCiphertextBlock, EmulatedCiphertextBlock) {
+        let (f0, f1) = self.get_fns();
+        (protect_lookup(f0, inp), protect_lookup(f1, inp))
+    }
+
+    pub(crate) fn wrapping_lookup(
+        &self,
+        inp: EmulatedCiphertextBlock,
+    ) -> (EmulatedCiphertextBlock, EmulatedCiphertextBlock) {
+        let (f0, f1) = self.get_fns();
+        (wrapping_lookup(f0, inp), wrapping_lookup(f1, inp))
+    }
+
+    fn get_fns(
         &self,
     ) -> (
         fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
@@ -196,7 +223,43 @@ impl Lut2Def {
 pub enum Lut4Def {}
 
 impl Lut4Def {
-    pub(crate) fn get_fns(
+    pub(crate) fn protect_lookup(
+        &self,
+        inp: EmulatedCiphertextBlock,
+    ) -> (
+        EmulatedCiphertextBlock,
+        EmulatedCiphertextBlock,
+        EmulatedCiphertextBlock,
+        EmulatedCiphertextBlock,
+    ) {
+        let (f0, f1, f2, f3) = self.get_fns();
+        (
+            protect_lookup(f0, inp),
+            protect_lookup(f1, inp),
+            protect_lookup(f2, inp),
+            protect_lookup(f3, inp),
+        )
+    }
+
+    pub(crate) fn wrapping_lookup(
+        &self,
+        inp: EmulatedCiphertextBlock,
+    ) -> (
+        EmulatedCiphertextBlock,
+        EmulatedCiphertextBlock,
+        EmulatedCiphertextBlock,
+        EmulatedCiphertextBlock,
+    ) {
+        let (f0, f1, f2, f3) = self.get_fns();
+        (
+            wrapping_lookup(f0, inp),
+            wrapping_lookup(f1, inp),
+            wrapping_lookup(f2, inp),
+            wrapping_lookup(f3, inp),
+        )
+    }
+
+    fn get_fns(
         &self,
     ) -> (
         fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
@@ -213,7 +276,59 @@ impl Lut4Def {
 pub enum Lut8Def {}
 
 impl Lut8Def {
-    pub(crate) fn get_fns(
+    pub(crate) fn protect_lookup(
+        &self,
+        inp: EmulatedCiphertextBlock,
+    ) -> (
+        EmulatedCiphertextBlock,
+        EmulatedCiphertextBlock,
+        EmulatedCiphertextBlock,
+        EmulatedCiphertextBlock,
+        EmulatedCiphertextBlock,
+        EmulatedCiphertextBlock,
+        EmulatedCiphertextBlock,
+        EmulatedCiphertextBlock,
+    ) {
+        let (f0, f1, f2, f3, f4, f5, f6, f7) = self.get_fns();
+        (
+            protect_lookup(f0, inp),
+            protect_lookup(f1, inp),
+            protect_lookup(f2, inp),
+            protect_lookup(f3, inp),
+            protect_lookup(f4, inp),
+            protect_lookup(f5, inp),
+            protect_lookup(f6, inp),
+            protect_lookup(f7, inp),
+        )
+    }
+
+    pub(crate) fn wrapping_lookup(
+        &self,
+        inp: EmulatedCiphertextBlock,
+    ) -> (
+        EmulatedCiphertextBlock,
+        EmulatedCiphertextBlock,
+        EmulatedCiphertextBlock,
+        EmulatedCiphertextBlock,
+        EmulatedCiphertextBlock,
+        EmulatedCiphertextBlock,
+        EmulatedCiphertextBlock,
+        EmulatedCiphertextBlock,
+    ) {
+        let (f0, f1, f2, f3, f4, f5, f6, f7) = self.get_fns();
+        (
+            wrapping_lookup(f0, inp),
+            wrapping_lookup(f1, inp),
+            wrapping_lookup(f2, inp),
+            wrapping_lookup(f3, inp),
+            wrapping_lookup(f4, inp),
+            wrapping_lookup(f5, inp),
+            wrapping_lookup(f6, inp),
+            wrapping_lookup(f7, inp),
+        )
+    }
+
+    fn get_fns(
         &self,
     ) -> (
         fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,

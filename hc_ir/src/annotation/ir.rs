@@ -239,6 +239,18 @@ impl<'ir, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> AnnIR<'ir, D, OpAnn
     pub fn format(&self) -> AnnIRFormatter<'_, 'ir, D, OpAnn, ValAnn> {
         AnnIRFormatter::new(self)
     }
+
+    pub fn into_opmap(self) -> OpMap<OpAnn> {
+        self.op_annotations
+    }
+
+    pub fn into_valmap(self) -> ValMap<ValAnn> {
+        self.val_annotations
+    }
+
+    pub fn into_maps(self) -> (OpMap<OpAnn>, ValMap<ValAnn>) {
+        (self.op_annotations, self.val_annotations)
+    }
 }
 
 impl<'ir, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> Deref

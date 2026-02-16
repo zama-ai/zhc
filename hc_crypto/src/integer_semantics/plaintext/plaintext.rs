@@ -4,6 +4,26 @@ use std::fmt::Debug;
 
 use super::super::{EmulatedPlaintextBlock, EmulatedPlaintextBlockStorage};
 
+/// An emulated plaintext integer for use in ciphertext-plaintext operations.
+///
+/// This structure models a multi-block plaintext where a large integer is decomposed into
+/// multiple [`EmulatedPlaintextBlock`] values using a fixed radix. Each block holds a portion
+/// of the integer's bits according to a shared [`PlaintextSpec`].
+///
+/// Plaintexts are created via [`PlaintextSpec::from_int`] or [`PlaintextSpec::random`].
+/// Individual blocks can be accessed with [`get_block`](Self::get_block). Block 0 is the least
+/// significant.
+///
+/// Plaintext integers are used as scalar operands in mixed operations with ciphertexts. A
+/// plaintext is compatible with a ciphertext when their specs have matching integer and block
+/// message sizes.
+///
+/// Two plaintexts can be compared for equality or ordering only if they share the same spec.
+///
+/// # Debug formatting
+///
+/// - Default format: `{block_n}_.._{block_0}_pint` (decimal block values, MSB first)
+/// - Alternate format (`{:#?}`): binary representation with proper bit widths
 #[derive(Clone, Copy)]
 pub struct EmulatedPlaintext {
     pub(crate) storage: EmulatedPlaintextStorage,
@@ -11,10 +31,18 @@ pub struct EmulatedPlaintext {
 }
 
 impl EmulatedPlaintext {
+    /// Returns the number of blocks in this plaintext.
     pub fn len(&self) -> u8 {
         self.spec.block_count()
     }
 
+    /// Returns the block at the given index.
+    ///
+    /// Block 0 is the least significant block.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `ith >= len()`.
     pub fn get_block(&self, ith: u8) -> EmulatedPlaintextBlock {
         assert!(ith < self.len(), "Tried to get nonexistent block.");
         let storage = (self.storage >> (ith * self.spec.block_spec().message_size()))
@@ -34,6 +62,7 @@ impl EmulatedPlaintext {
         self.raw_mask_int()
     }
 
+    /// Returns the specification describing this plaintext's layout.
     pub fn spec(&self) -> PlaintextSpec {
         self.spec
     }

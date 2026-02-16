@@ -38,12 +38,36 @@
 //! + The user may want to rely on the overflow/underflow of the whole block, to implement signed
 //!   integer semantics for instance.
 //!
-//! To accommodate for the different use cases, we propose three flavors of operations:
+//! To accommodate for the different use cases, we propose three flavors of linear operations:
 //! + `protect_*` prefixed operations ensure that operand padding bits are zero and that the padding
 //!   bit is not written during execution.
 //! + `temper_*` prefixed operations allows arbitrary operand padding bits and ensure that the
 //!   padding bit does not overflow/underflow during execution.
 //! + `wrapping_*` prefixed operations allows arbitrary operand padding bits and overflow/underflow.
+//!
+//! Lookup semantics
+//! ================
+//!
+//! Table lookups (programmable bootstrapping) also come in two flavors, reflecting how the padding
+//! bit affects the lookup behavior:
+//!
+//! + [`lut::protect_lookup`] requires the padding bit to be zero. The lookup index is guaranteed to
+//!   fall within the first half of the negacyclic table, so the LUT function is applied directly.
+//!   This is the standard mode when the padding bit serves as a guard.
+//!
+//! + [`lut::wrapping_lookup`] handles inputs with an arbitrary padding bit. When the padding bit is
+//!   zero, the LUT is applied directly. When it is set, the output is negated (two's complement) to
+//!   emulate the negacyclic structure: accessing the second half of the table returns the negation
+//!   of the corresponding first-half entry. Use this mode for operations that exploit negacyclic
+//!   semantics or when the padding bit may be set due to prior arithmetic.
+
+use rand::SeedableRng;
+use rand::rngs::SmallRng;
+use std::cell::RefCell;
+
+thread_local! {
+    static PRNG: RefCell<SmallRng> = RefCell::new(SmallRng::seed_from_u64(0));
+}
 
 pub mod lut;
 

@@ -1,7 +1,22 @@
 use super::{EmulatedPlaintextBlockStorage, PlaintextBlockSpec};
 use std::fmt::Debug;
 
-/// A plaintext block containing only message data.
+/// An emulated plaintext block for use in ciphertext-plaintext operations.
+///
+/// This structure models a single plaintext block containing only message bits — there are no
+/// carry or padding regions. Plaintext blocks are used as scalar operands in mixed operations
+/// with ciphertext blocks, such as
+/// [`protect_add_pt`](super::super::EmulatedCiphertextBlock::protect_add_pt).
+///
+/// Blocks are created via [`PlaintextBlockSpec::from_message`]. A plaintext block is compatible
+/// with a ciphertext block when their specs compare equal (i.e., when message sizes match).
+///
+/// Two blocks can be compared for equality or ordering only if they share the same spec.
+///
+/// # Debug formatting
+///
+/// - Default format: `{message}_pblk` (decimal value)
+/// - Alternate format (`{:#?}`): binary representation with proper bit width
 #[derive(Clone, Copy)]
 pub struct EmulatedPlaintextBlock {
     pub(crate) storage: EmulatedPlaintextBlockStorage,
@@ -9,7 +24,6 @@ pub struct EmulatedPlaintextBlock {
 }
 
 impl EmulatedPlaintextBlock {
-    /// Returns the raw message bits.
     pub(crate) fn raw_message_bits(&self) -> EmulatedPlaintextBlockStorage {
         self.raw_mask_message()
     }
@@ -18,6 +32,7 @@ impl EmulatedPlaintextBlock {
         self.storage & self.spec.message_mask()
     }
 
+    /// Returns the specification describing this block's layout.
     pub fn spec(&self) -> PlaintextBlockSpec {
         self.spec
     }

@@ -1,5 +1,7 @@
 use std::ops::{Add, Mul, Shl, Shr, Sub};
 
+use crate::integer_semantics::EmulatedCiphertext;
+
 use super::{EmulatedCiphertextBlock, EmulatedPlaintextBlock};
 
 impl EmulatedCiphertextBlock {
@@ -290,6 +292,7 @@ impl EmulatedCiphertextBlock {
         }
     }
 }
+
 impl EmulatedPlaintextBlock {
     /// Subtracts a ciphertext block from this plaintext block while protecting the padding bit.
     pub fn protect_sub_ct(self, rhs: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
@@ -319,6 +322,17 @@ impl EmulatedPlaintextBlock {
         EmulatedCiphertextBlock {
             storage,
             spec: rhs.spec,
+        }
+    }
+}
+
+impl EmulatedCiphertext {
+    pub fn add(self, other: Self) -> EmulatedCiphertext {
+        assert_eq!(self.spec, other.spec(), "Spec mismatch.");
+        let storage = (self.storage + other.storage) & self.spec.int_mask();
+        EmulatedCiphertext {
+            storage,
+            spec: self.spec,
         }
     }
 }

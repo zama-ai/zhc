@@ -69,6 +69,14 @@ impl<I: StoreIndex, V> Store<I, V> {
             .map(|(i, v)| (I::from_usize(i), v))
     }
 
+    /// Consumes the store and returns an iterator over typed indices and owned elements.
+    pub fn enumerate_into_iter(self) -> impl DoubleEndedIterator<Item = (I, V)> {
+        self.0
+            .into_iter()
+            .enumerate()
+            .map(|(i, v)| (I::from_usize(i), v))
+    }
+
     /// Returns an iterator over element references.
     pub fn iter(&self) -> std::slice::Iter<'_, V> {
         self.0.iter()

@@ -21,8 +21,8 @@ impl AllowCse for IopLang {
         let mut args = args.cosvec();
         let arity = op.get_signature().get_returns_arity();
         let (args, op) = match op {
-            AddCt => {
-                // In the case of the add ct op, both operands can be commutated.
+            AddCt | WrappingAddCt | TemperAddCt => {
+                // Addition is commutative regardless of flavor.
                 args.sort_unstable();
                 (args, op)
             }

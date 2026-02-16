@@ -1,12 +1,11 @@
 use crate::builder::{Ciphertext, CiphertextBlock, Plaintext, PlaintextBlock};
-use hc_crypto::integer_semantics::{
-    CiphertextBlockSpec, CiphertextSpec, EmulatedPlaintextBlockStorage, PlaintextSpec,
-};
+use hc_crypto::integer_semantics::{CiphertextBlockSpec, CiphertextSpec, PlaintextSpec};
 use hc_ir::{
     IR, PrintWalker, Signature, cse::eliminate_common_subexpressions, dce::eliminate_dead_code,
 };
 use hc_langs::ioplang::{
     IopInstructionSet, IopInterepreterContext, IopLang, IopTypeSystem, IopValue, Lut1Def, Lut2Def,
+    eliminate_aliases,
 };
 use hc_utils::{
     FastMap,
@@ -16,7 +15,8 @@ use hc_utils::{
 };
 use std::{
     cell::{Ref, RefCell, RefMut},
-    fmt::Display,
+    fmt::Debug,
+    iter::repeat_n,
 };
 
 /// A circuit I/O type, either encrypted or plaintext.
@@ -24,7 +24,7 @@ use std::{
 /// [`Type`] is used in [`Signature`] to describe the types of a circuit's inputs and
 /// outputs. Each variant carries the corresponding specification that fully describes the
 /// integer's bit-width and per-block layout.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum Type {
     /// An encrypted integer with the given [`CiphertextSpec`].
     Ciphertext(CiphertextSpec),
@@ -32,7 +32,20 @@ pub enum Type {
     Plaintext(PlaintextSpec),
 }
 
-impl Display for Type {
+impl Type {
+    /// Generates a random [`IopValue`] conforming to this type's specification.
+    ///
+    /// Useful for fuzz-testing circuits by generating randomized inputs that respect the
+    /// declared bit-widths and block layouts.
+    pub fn random_value(&self) -> IopValue {
+        match self {
+            Type::Ciphertext(spec) => IopValue::Ciphertext(spec.random()),
+            Type::Plaintext(spec) => IopValue::Plaintext(spec.random()),
+        }
+    }
+}
+
+impl Debug for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Type::Ciphertext(spec) => write!(
@@ -86,6 +99,275 @@ impl InnerBuilder {
     fn push_ret_type(&mut self, typ: Type) -> usize {
         self.sig.push_ret(typ);
         self.sig.get_returns_arity() - 1
+    }
+}
+
+/// A scoped comment guard returned by [`Builder::comment`].
+///
+/// This wrapper holds a reference to the parent [`Builder`] and delegates every builder
+/// method to it. When dropped, it automatically pops the comment that was pushed when
+/// [`Builder::comment`] was called. This RAII pattern ensures comments are properly
+/// nested even when chaining multiple operations.
+///
+/// All public methods mirror the corresponding [`Builder`] methods and consume `self`,
+/// meaning you can only call one builder method per [`CommentBuilder`]. To emit multiple
+/// operations under the same comment, use [`Builder::with_comment`] instead.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # use hc_builder::builder::*;
+/// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+/// let ct = builder.declare_ciphertext_input(4);
+/// let blocks = builder.split_ciphertext(&ct);
+/// // The comment is popped after block_add returns.
+/// let sum = builder.comment("add first two blocks").block_add(&blocks[0], &blocks[1]);
+/// ```
+pub struct CommentBuilder<'a> {
+    builder: &'a Builder,
+}
+
+impl<'a> CommentBuilder<'a> {
+    /// Declares an encrypted integer input. See [`Builder::declare_ciphertext_input`].
+    pub fn declare_ciphertext_input(self, int_size: u16) -> Ciphertext {
+        self.builder.declare_ciphertext_input(int_size)
+    }
+
+    /// Decomposes a ciphertext into blocks. See [`Builder::split_ciphertext`].
+    pub fn split_ciphertext(self, inp: impl AsRef<Ciphertext>) -> Vec<CiphertextBlock> {
+        self.builder.split_ciphertext(inp)
+    }
+
+    /// Declares a plaintext integer input. See [`Builder::declare_plaintext_input`].
+    pub fn declare_plaintext_input(self, int_size: u16) -> Plaintext {
+        self.builder.declare_plaintext_input(int_size)
+    }
+
+    /// Decomposes a plaintext into blocks. See [`Builder::split_plaintext`].
+    pub fn split_plaintext(self, inp: impl AsRef<Plaintext>) -> Vec<PlaintextBlock> {
+        self.builder.split_plaintext(inp)
+    }
+
+    /// Reassembles blocks into a ciphertext. See [`Builder::join_ciphertext`].
+    pub fn join_ciphertext(self, blocks: impl AsRef<[CiphertextBlock]>) -> Ciphertext {
+        self.builder.join_ciphertext(blocks)
+    }
+
+    /// Declares an encrypted integer output. See [`Builder::declare_ciphertext_output`].
+    pub fn declare_ciphertext_output(self, ct: impl AsRef<Ciphertext>) {
+        self.builder.declare_ciphertext_output(ct)
+    }
+
+    /// Creates a constant plaintext block. See [`Builder::block_const_plaintext`].
+    pub fn block_const_plaintext(self, constant: u8) -> PlaintextBlock {
+        self.builder.block_const_plaintext(constant)
+    }
+
+    /// Creates a constant ciphertext block. See [`Builder::block_const_ciphertext`].
+    pub fn block_const_ciphertext(self, constant: u8) -> CiphertextBlock {
+        self.builder.block_const_ciphertext(constant)
+    }
+
+    /// Adds two ciphertext blocks (protect). See [`Builder::block_add`].
+    pub fn block_add(
+        self,
+        src_a: impl AsRef<CiphertextBlock>,
+        src_b: impl AsRef<CiphertextBlock>,
+    ) -> CiphertextBlock {
+        self.builder.block_add(src_a, src_b)
+    }
+
+    /// Creates an alias for a ciphertext block. See [`Builder::block_alias`].
+    pub fn block_alias(self, src: impl AsRef<CiphertextBlock>) -> CiphertextBlock {
+        self.builder.block_alias(src)
+    }
+
+    /// Adds two ciphertext blocks (temper). See [`Builder::block_temper_add`].
+    pub fn block_temper_add(
+        self,
+        src_a: impl AsRef<CiphertextBlock>,
+        src_b: impl AsRef<CiphertextBlock>,
+    ) -> CiphertextBlock {
+        self.builder.block_temper_add(src_a, src_b)
+    }
+
+    /// Adds two ciphertext blocks (wrapping). See [`Builder::block_wrapping_add`].
+    pub fn block_wrapping_add(
+        self,
+        src_a: impl AsRef<CiphertextBlock>,
+        src_b: impl AsRef<CiphertextBlock>,
+    ) -> CiphertextBlock {
+        self.builder.block_wrapping_add(src_a, src_b)
+    }
+
+    /// Adds a plaintext to a ciphertext block (protect). See [`Builder::block_add_plaintext`].
+    pub fn block_add_plaintext(
+        self,
+        src_a: impl AsRef<CiphertextBlock>,
+        src_b: impl AsRef<PlaintextBlock>,
+    ) -> CiphertextBlock {
+        self.builder.block_add_plaintext(src_a, src_b)
+    }
+
+    /// Adds a plaintext to a ciphertext block (wrapping). See
+    /// [`Builder::block_wrapping_add_plaintext`].
+    pub fn block_wrapping_add_plaintext(
+        self,
+        src_a: impl AsRef<CiphertextBlock>,
+        src_b: impl AsRef<PlaintextBlock>,
+    ) -> CiphertextBlock {
+        self.builder.block_wrapping_add_plaintext(src_a, src_b)
+    }
+
+    /// Subtracts two ciphertext blocks (protect). See [`Builder::block_sub`].
+    pub fn block_sub(
+        self,
+        src_a: impl AsRef<CiphertextBlock>,
+        src_b: impl AsRef<CiphertextBlock>,
+    ) -> CiphertextBlock {
+        self.builder.block_sub(src_a, src_b)
+    }
+
+    /// Subtracts a plaintext from a ciphertext block (protect). See
+    /// [`Builder::block_sub_plaintext`].
+    pub fn block_sub_plaintext(
+        self,
+        src_a: impl AsRef<CiphertextBlock>,
+        src_b: impl AsRef<PlaintextBlock>,
+    ) -> CiphertextBlock {
+        self.builder.block_sub_plaintext(src_a, src_b)
+    }
+
+    /// Subtracts a ciphertext from a plaintext block (protect). See
+    /// [`Builder::block_plaintext_sub`].
+    pub fn block_plaintext_sub(
+        self,
+        src_a: impl AsRef<PlaintextBlock>,
+        src_b: impl AsRef<CiphertextBlock>,
+    ) -> CiphertextBlock {
+        self.builder.block_plaintext_sub(src_a, src_b)
+    }
+
+    /// Packs two ciphertext blocks into one. See [`Builder::block_pack`].
+    pub fn block_pack(
+        self,
+        src_a: impl AsRef<CiphertextBlock>,
+        src_b: impl AsRef<CiphertextBlock>,
+    ) -> CiphertextBlock {
+        self.builder.block_pack(src_a, src_b)
+    }
+
+    /// Packs two blocks and applies a PBS lookup. See [`Builder::block_pack_then_lookup`].
+    pub fn block_pack_then_lookup(
+        self,
+        src_a: impl AsRef<CiphertextBlock>,
+        src_b: impl AsRef<CiphertextBlock>,
+        lut: Lut1Def,
+    ) -> CiphertextBlock {
+        self.builder.block_pack_then_lookup(src_a, src_b, lut)
+    }
+
+    /// Applies a single-output PBS lookup. See [`Builder::block_lookup`].
+    pub fn block_lookup(self, src: impl AsRef<CiphertextBlock>, lut: Lut1Def) -> CiphertextBlock {
+        self.builder.block_lookup(src, lut)
+    }
+
+    /// Applies a single-output PBS lookup (wrapping). See [`Builder::block_wrapping_lookup`].
+    pub fn block_wrapping_lookup(
+        self,
+        src: impl AsRef<CiphertextBlock>,
+        lut: Lut1Def,
+    ) -> CiphertextBlock {
+        self.builder.block_wrapping_lookup(src, lut)
+    }
+
+    /// Applies a dual-output PBS lookup. See [`Builder::block_lookup2`].
+    pub fn block_lookup2(
+        self,
+        src: impl AsRef<CiphertextBlock>,
+        lut: Lut2Def,
+    ) -> (CiphertextBlock, CiphertextBlock) {
+        self.builder.block_lookup2(src, lut)
+    }
+
+    /// Packs consecutive pairs of blocks. See [`Builder::vector_pack`].
+    pub fn vector_pack(self, blocks: impl AsRef<[CiphertextBlock]>) -> Vec<CiphertextBlock> {
+        self.builder.vector_pack(blocks)
+    }
+
+    /// Packs consecutive pairs and applies an identity PBS. See
+    /// [`Builder::vector_pack_then_clean`].
+    pub fn vector_pack_then_clean(
+        self,
+        blocks: impl AsRef<[CiphertextBlock]>,
+    ) -> Vec<CiphertextBlock> {
+        self.builder.vector_pack_then_clean(blocks)
+    }
+
+    /// Packs consecutive pairs and applies a PBS lookup. See
+    /// [`Builder::vector_pack_then_lookup`].
+    pub fn vector_pack_then_lookup(
+        self,
+        blocks: impl AsRef<[CiphertextBlock]>,
+        lut: Lut1Def,
+    ) -> Vec<CiphertextBlock> {
+        self.builder.vector_pack_then_lookup(blocks, lut)
+    }
+
+    /// Zips two block slices, packs each pair, and applies a PBS lookup. See
+    /// [`Builder::vector_zip_then_lookup`].
+    pub fn vector_zip_then_lookup(
+        self,
+        lhs: impl AsRef<[CiphertextBlock]>,
+        rhs: impl AsRef<[CiphertextBlock]>,
+        lut: Lut1Def,
+        extension: ExtensionBehavior,
+    ) -> Vec<CiphertextBlock> {
+        self.builder
+            .vector_zip_then_lookup(lhs, rhs, lut, extension)
+    }
+
+    /// Applies a PBS lookup to every block. See [`Builder::vector_lookup`].
+    pub fn vector_lookup(
+        self,
+        blocks: impl AsRef<[CiphertextBlock]>,
+        lut: Lut1Def,
+    ) -> Vec<CiphertextBlock> {
+        self.builder.vector_lookup(blocks, lut)
+    }
+
+    /// Applies a dual-output PBS lookup to every block. See [`Builder::vector_lookup2`].
+    pub fn vector_lookup2(
+        self,
+        blocks: impl AsRef<[CiphertextBlock]>,
+        lut: Lut2Def,
+    ) -> Vec<(CiphertextBlock, CiphertextBlock)> {
+        self.builder.vector_lookup2(blocks, lut)
+    }
+
+    /// Adds two block slices element-wise. See [`Builder::vector_add`].
+    pub fn vector_add(
+        self,
+        lhs: impl AsRef<[CiphertextBlock]>,
+        rhs: impl AsRef<[CiphertextBlock]>,
+        extension: ExtensionBehavior,
+    ) -> Vec<CiphertextBlock> {
+        self.builder.vector_add(lhs, rhs, extension)
+    }
+
+    /// Zero-extends a block slice to a given length. See [`Builder::vector_unsigned_extension`].
+    pub fn vector_unsigned_extension(
+        self,
+        inp: impl AsRef<[CiphertextBlock]>,
+        size: usize,
+    ) -> Vec<CiphertextBlock> {
+        self.builder.vector_unsigned_extension(inp, size)
+    }
+}
+
+impl<'a> Drop for CommentBuilder<'a> {
+    fn drop(&mut self) {
+        self.builder.pop_comment();
     }
 }
 
@@ -144,6 +426,26 @@ impl Builder {
 
     fn inner_mut(&self) -> RefMut<'_, InnerBuilder> {
         self.inner.borrow_mut()
+    }
+
+    /// Pushes a comment and returns a guard that delegates builder methods.
+    ///
+    /// This is a fluent alternative to [`with_comment`](Self::with_comment) for single
+    /// operations. The returned [`CommentBuilder`] forwards one builder call under the
+    /// pushed comment, then automatically pops it when dropped.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use hc_builder::builder::*;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let ct = builder.declare_ciphertext_input(4);
+    /// let blocks = builder.split_ciphertext(&ct);
+    /// let sum = builder.comment("add blocks").block_add(&blocks[0], &blocks[1]);
+    /// ```
+    pub fn comment(&self, comment: impl Into<String>) -> CommentBuilder<'_> {
+        self.push_comment(comment);
+        CommentBuilder { builder: self }
     }
 
     /// Creates a new builder with the given block specification.
@@ -207,13 +509,26 @@ impl Builder {
         result
     }
 
-    /// Consumes the builder and returns the optimized IR.
+    /// Consumes the builder and returns the optimized IR graph.
     ///
-    /// Before returning, dead-code elimination (DCE) and common-subexpression elimination
-    /// (CSE) are applied to the accumulated graph. This is typically the last method
-    /// called on a builder.
+    /// Finalizes the circuit by running optimization passes — alias elimination, dead-code
+    /// elimination, and common subexpression elimination — then returns the resulting IR.
+    /// This is typically the last step after declaring all inputs, emitting operations, and
+    /// declaring outputs.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use hc_builder::builder::*;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let input = builder.declare_ciphertext_input(8);
+    /// // ... build circuit ...
+    /// builder.declare_ciphertext_output(&input);
+    /// let ir = builder.into_ir();
+    /// ```
     pub fn into_ir(self) -> IR<IopLang> {
         let mut ir = self.inner.into_inner().ir;
+        eliminate_aliases(&mut ir);
         eliminate_dead_code(&mut ir);
         eliminate_common_subexpressions(&mut ir);
         ir
@@ -250,7 +565,14 @@ impl Builder {
     ///
     /// Always panics after printing.
     pub fn dump_and_panic(&self) {
-        println!("{:#}", self.ir().format());
+        println!(
+            "{:#}",
+            self.ir()
+                .format()
+                .with_walker(PrintWalker::Linear)
+                .show_comments(true)
+                .show_types(false)
+        );
         panic!()
     }
 
@@ -352,6 +674,36 @@ impl Builder {
         let mut output: Vec<_> = context.outputs.into_iter().collect();
         output.sort_unstable_by_key(|a| a.0);
         output.into_iter().map(|a| a.1).collect()
+    }
+
+    #[cfg(test)]
+    pub fn test_random(&self, reps: usize, gen_expect: impl Fn(&[IopValue]) -> Vec<IopValue>) {
+        use hc_utils::iter::CollectInSmallVec;
+        for _ in 0..reps {
+            use std::panic::AssertUnwindSafe;
+
+            let inputs = self
+                .signature()
+                .get_args()
+                .iter()
+                .map(|a| a.random_value())
+                .cosvec();
+            let expectations = gen_expect(inputs.as_slice());
+            let outputs = match std::panic::catch_unwind(AssertUnwindSafe(|| self.eval(&inputs))) {
+                Ok(outputs) => outputs,
+                Err(_) => {
+                    self.dump_eval_and_panic(&inputs);
+                    unreachable!()
+                }
+            };
+            if expectations != outputs {
+                println!(
+                    "Random test failed for input {:?}:\nExpected:\n{:?}\nOutput:\n{:?}",
+                    inputs, expectations, outputs
+                );
+                self.dump_eval_and_panic(inputs);
+            }
+        }
     }
 
     /// Declares an encrypted integer input of the given bit-width.
@@ -479,7 +831,7 @@ impl Builder {
         let spec = self.spec.ciphertext_spec(int_size);
         let (_, acc) = self
             .inner_mut()
-            .add_op(IopInstructionSet::ZeroCiphertext, svec![]);
+            .add_op(IopInstructionSet::DeclareCiphertext, svec![]);
         let mut acc = acc[0];
         for (index, block) in blocks.iter().enumerate() {
             let index = index as u8;
@@ -524,13 +876,10 @@ impl Builder {
     /// let one = builder.block_const_plaintext(1);
     /// let incremented = builder.block_add_plaintext(&blocks[0], &one);
     /// ```
-    pub fn block_const_plaintext(&self, constant: u16) -> PlaintextBlock {
-        let (_node, ret) = self.inner_mut().add_op(
-            IopInstructionSet::LetPlaintextBlock {
-                value: constant as EmulatedPlaintextBlockStorage,
-            },
-            svec![],
-        );
+    pub fn block_const_plaintext(&self, value: u8) -> PlaintextBlock {
+        let (_node, ret) = self
+            .inner_mut()
+            .add_op(IopInstructionSet::LetPlaintextBlock { value }, svec![]);
         PlaintextBlock {
             valid: ret[0],
             spec: self.spec.matching_plaintext_block_spec(),
@@ -560,6 +909,64 @@ impl Builder {
         let (_node, ret) = self
             .inner_mut()
             .add_op(IopInstructionSet::AddCt, svec![src_a.valid, src_b.valid]);
+        CiphertextBlock {
+            valid: ret[0],
+            spec: self.spec,
+        }
+    }
+
+    /// Creates a new IR node that aliases an existing ciphertext block.
+    ///
+    /// The returned block references the same underlying value but has a distinct IR
+    /// node identity. This is useful for debugging purposes.
+    pub fn block_alias(&self, src: impl AsRef<CiphertextBlock>) -> CiphertextBlock {
+        let src = src.as_ref();
+        let (_node, ret) = self.inner_mut().add_op(
+            IopInstructionSet::Alias {
+                typ: IopTypeSystem::CiphertextBlock,
+            },
+            svec![src.valid],
+        );
+        CiphertextBlock {
+            valid: ret[0],
+            spec: self.spec,
+        }
+    }
+
+    /// Adds two ciphertext blocks (temper flavor).
+    ///
+    /// Computes `src_a + src_b` at the block level. Uses temper semantics — see
+    /// [Operation Flavors](super#operation-flavors).
+    pub fn block_temper_add(
+        &self,
+        src_a: impl AsRef<CiphertextBlock>,
+        src_b: impl AsRef<CiphertextBlock>,
+    ) -> CiphertextBlock {
+        let (src_a, src_b) = (src_a.as_ref(), src_b.as_ref());
+        let (_node, ret) = self.inner_mut().add_op(
+            IopInstructionSet::TemperAddCt,
+            svec![src_a.valid, src_b.valid],
+        );
+        CiphertextBlock {
+            valid: ret[0],
+            spec: self.spec,
+        }
+    }
+
+    /// Adds two ciphertext blocks (wrapping flavor).
+    ///
+    /// Computes `src_a + src_b` at the block level. Uses wrapping semantics — see
+    /// [Operation Flavors](super#operation-flavors).
+    pub fn block_wrapping_add(
+        &self,
+        src_a: impl AsRef<CiphertextBlock>,
+        src_b: impl AsRef<CiphertextBlock>,
+    ) -> CiphertextBlock {
+        let (src_a, src_b) = (src_a.as_ref(), src_b.as_ref());
+        let (_node, ret) = self.inner_mut().add_op(
+            IopInstructionSet::WrappingAddCt,
+            svec![src_a.valid, src_b.valid],
+        );
         CiphertextBlock {
             valid: ret[0],
             spec: self.spec,
@@ -596,7 +1003,7 @@ impl Builder {
     ) -> CiphertextBlock {
         let (src_a, src_b) = (src_a.as_ref(), src_b.as_ref());
         let (_node, ret) = self.inner_mut().add_op(
-            IopInstructionSet::AddPtWrapping,
+            IopInstructionSet::WrappingAddPt,
             svec![src_a.valid, src_b.valid],
         );
         CiphertextBlock {
@@ -696,7 +1103,7 @@ impl Builder {
         let (src_a, src_b) = (src_a.as_ref(), src_b.as_ref());
         let (_node, ret) = self.inner_mut().add_op(
             IopInstructionSet::PackCt {
-                mul: 2u8.pow(self.spec().message_size() as u32) as EmulatedPlaintextBlockStorage,
+                mul: 2u8.pow(self.spec().message_size() as u32),
             },
             svec![src_a.valid, src_b.valid],
         );
@@ -753,6 +1160,27 @@ impl Builder {
         }
     }
 
+    /// Applies a single-output PBS lookup using wrapping (negacyclic) semantics.
+    ///
+    /// Like [`block_lookup`](Self::block_lookup), but uses wrapping semantics for the
+    /// lookup — see [Operation Flavors](super#operation-flavors). This is appropriate
+    /// when the input block's padding bit may be set, enabling negacyclic lookup
+    /// behavior.
+    pub fn block_wrapping_lookup(
+        &self,
+        src: impl AsRef<CiphertextBlock>,
+        lut: Lut1Def,
+    ) -> CiphertextBlock {
+        let src = src.as_ref();
+        let (_node, ret) = self
+            .inner_mut()
+            .add_op(IopInstructionSet::WrappingPbs { lut }, svec![src.valid]);
+        CiphertextBlock {
+            valid: ret[0],
+            spec: self.spec,
+        }
+    }
+
     /// Applies a dual-output programmable bootstrapping (PBS) lookup to a block.
     ///
     /// Like [`block_lookup`](Self::block_lookup), but the bootstrapping produces two
@@ -779,6 +1207,21 @@ impl Builder {
             },
         )
     }
+
+    /// Creates a constant [`CiphertextBlock`] with the given value.
+    ///
+    /// The `value` is stored as a trivially-encrypted block (zero noise). This is useful
+    /// for initializing accumulators or providing constant operands in arithmetic. The
+    /// value's bit-width must fit within the block's data bits (carry + message).
+    pub fn block_const_ciphertext(&self, value: u8) -> CiphertextBlock {
+        let (_node, ret) = self
+            .inner_mut()
+            .add_op(IopInstructionSet::LetCiphertextBlock { value }, svec![]);
+        CiphertextBlock {
+            valid: ret[0],
+            spec: self.spec,
+        }
+    }
 }
 
 impl Builder {
@@ -804,39 +1247,6 @@ impl Builder {
                 Chunk::Rest(sv) => *sv[0],
             })
             .collect()
-    }
-
-    /// Packs element-wise pairs from two block slices.
-    ///
-    /// For each position, calls [`block_pack`](Self::block_pack) with `lhs[i]` in the
-    /// high bits and `rhs[i]` in the low bits. When the two slices have different lengths,
-    /// `extension` controls the behavior (see [`ExtensionBehavior`]).
-    ///
-    /// # Panics
-    ///
-    /// Panics if `carry_size != message_size` (see [`block_pack`](Self::block_pack)),
-    /// or if the slices differ in length and `extension` is
-    /// [`Panic`](ExtensionBehavior::Panic).
-    pub fn vector_zip(
-        &self,
-        lhs: impl AsRef<[CiphertextBlock]>,
-        rhs: impl AsRef<[CiphertextBlock]>,
-        extension: ExtensionBehavior,
-    ) -> Vec<CiphertextBlock> {
-        let mut output = Vec::new();
-        let mut lhs_i = lhs.as_ref().iter();
-        let mut rhs_i = rhs.as_ref().iter();
-        loop {
-            match (&extension, lhs_i.next(), rhs_i.next()) {
-                (_, Some(li), Some(ri)) => output.push(self.block_pack(li, ri)),
-                (_, None, None) => break,
-                (ExtensionBehavior::Panic, _, _) => panic!(),
-                (ExtensionBehavior::Limit, _, _) => break,
-                (ExtensionBehavior::Passthrough, None, Some(v)) => output.push(*v),
-                (ExtensionBehavior::Passthrough, Some(v), None) => output.push(*v),
-            }
-        }
-        output
     }
 
     /// Packs consecutive pairs and applies an identity PBS to clean noise.
@@ -885,6 +1295,45 @@ impl Builder {
                 Chunk::Rest(sv) => *sv[0],
             })
             .collect()
+    }
+
+    /// Zips two block slices, packs each pair, and applies a PBS lookup.
+    ///
+    /// For each position, packs `lhs[i]` into the high bits and `rhs[i]` into the low
+    /// bits via [`block_pack`](Self::block_pack), then passes the result through
+    /// [`block_lookup`](Self::block_lookup) with the given `lut`. When the two slices
+    /// have different lengths, `extension` controls the behavior (see
+    /// [`ExtensionBehavior`]).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `carry_size != message_size` (see [`block_pack`](Self::block_pack)), or
+    /// if the slices differ in length and `extension` is
+    /// [`Panic`](ExtensionBehavior::Panic).
+    pub fn vector_zip_then_lookup(
+        &self,
+        lhs: impl AsRef<[CiphertextBlock]>,
+        rhs: impl AsRef<[CiphertextBlock]>,
+        lut: Lut1Def,
+        extension: ExtensionBehavior,
+    ) -> Vec<CiphertextBlock> {
+        let mut output = Vec::new();
+        let mut lhs_i = lhs.as_ref().iter();
+        let mut rhs_i = rhs.as_ref().iter();
+        loop {
+            match (&extension, lhs_i.next(), rhs_i.next()) {
+                (_, Some(li), Some(ri)) => {
+                    let packed = self.block_pack(li, ri);
+                    output.push(self.block_lookup(packed, lut))
+                }
+                (_, None, None) => break,
+                (ExtensionBehavior::Panic, _, _) => panic!(),
+                (ExtensionBehavior::Limit, _, _) => break,
+                (ExtensionBehavior::Passthrough, None, Some(v)) => output.push(*v),
+                (ExtensionBehavior::Passthrough, Some(v), None) => output.push(*v),
+            }
+        }
+        output
     }
 
     /// Applies a single-output PBS lookup to every block in a slice.
@@ -951,11 +1400,38 @@ impl Builder {
         }
         return output;
     }
+
+    /// Zero-extends a block slice to a given length.
+    ///
+    /// Pads `inp` with zero-valued constant ciphertext blocks
+    /// ([`block_const_ciphertext(0)`](Self::block_const_ciphertext)) until the result
+    /// has `size` elements. This implements unsigned integer extension: the original
+    /// blocks represent the low-order radix digits, and the appended zeros represent
+    /// high-order digits.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `inp.len() > size`.
+    pub fn vector_unsigned_extension(
+        &self,
+        inp: impl AsRef<[CiphertextBlock]>,
+        size: usize,
+    ) -> Vec<CiphertextBlock> {
+        let inp = inp.as_ref();
+        assert!(
+            inp.len() <= size,
+            "Tried to extend a vector that is larger than the extended size."
+        );
+        inp.iter()
+            .cloned()
+            .chain(repeat_n(self.block_const_ciphertext(0), size - inp.len()))
+            .collect()
+    }
 }
 
 /// Strategy for handling mismatched slice lengths in binary vector operations.
 ///
-/// Binary vector operations like [`Builder::vector_add`] and [`Builder::vector_zip`]
+/// Binary vector operations like [`Builder::vector_add`] and [`Builder::vector_zip_then_lookup`]
 /// take two block slices that may differ in length. This enum controls what happens
 /// once the shorter slice is exhausted.
 pub enum ExtensionBehavior {

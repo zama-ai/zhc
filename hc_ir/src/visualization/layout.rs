@@ -15,7 +15,7 @@ use std::fmt::Debug;
 
 use hc_utils::{
     FastMap,
-    iter::{Median, MergerOf2, MultiZip},
+    iter::{Median, MultiZip, ReconcilerOf2},
     small::SmallVec,
     svec,
 };
@@ -75,7 +75,7 @@ impl<'ir, 'ann, D: Dialect> LayeredNode<'ir, 'ann, D> {
                         )
                     }
                 })
-                .merge_1_of_2(),
+                .reconcile_1_of_2(),
             LayeredNode::Value(val_ref, layer) => {
                 if *val_ref.get_origin().opref.get_annotation() == layer.above() {
                     std::iter::once((
@@ -91,7 +91,7 @@ impl<'ir, 'ann, D: Dialect> LayeredNode<'ir, 'ann, D> {
                         FracPos::CENTERED,
                     ))
                 }
-                .merge_2_of_2()
+                .reconcile_2_of_2()
             }
         }
     }
@@ -117,7 +117,7 @@ impl<'ir, 'ann, D: Dialect> LayeredNode<'ir, 'ann, D> {
                         )
                     }
                 })
-                .merge_1_of_2(),
+                .reconcile_1_of_2(),
             LayeredNode::Value(val_ref, layer) => val_ref
                 .get_uses_iter()
                 .filter(|uze| *uze.opref.get_annotation() > *layer)
@@ -137,7 +137,7 @@ impl<'ir, 'ann, D: Dialect> LayeredNode<'ir, 'ann, D> {
                         )
                     }
                 })
-                .merge_2_of_2(),
+                .reconcile_2_of_2(),
         }
     }
 }

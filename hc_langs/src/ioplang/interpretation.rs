@@ -1,6 +1,6 @@
 use hc_crypto::integer_semantics::{
-    CiphertextSpec, EmulatedCiphertext, EmulatedCiphertextBlock, EmulatedPlaintext,
-    EmulatedPlaintextBlock, EmulatedPlaintextBlockStorage,
+    CiphertextSpec, EmulatedCiphertext, EmulatedCiphertextBlock, EmulatedCiphertextBlockStorage,
+    EmulatedPlaintext, EmulatedPlaintextBlock, EmulatedPlaintextBlockStorage,
 };
 use hc_ir::interpretation::{Interpretable, Interpretation, InterpretsTo};
 use hc_utils::small::SmallVec;
@@ -101,7 +101,7 @@ impl Interpretable<IopValue> for super::IopInstructionSet {
                 context.outputs.insert(*pos, arguments[0].clone());
                 svec![]
             }
-            ZeroCiphertext => {
+            DeclareCiphertext => {
                 svec![IopValue::Ciphertext(context.spec.from_int(0))]
             }
             LetPlaintextBlock { value } => {
@@ -110,7 +110,15 @@ impl Interpretable<IopValue> for super::IopInstructionSet {
                         .spec
                         .matching_plaintext_spec()
                         .block_spec()
-                        .from_message(*value)
+                        .from_message(*value as EmulatedPlaintextBlockStorage)
+                )]
+            }
+            LetCiphertextBlock { value } => {
+                svec![IopValue::CiphertextBlock(
+                    context
+                        .spec
+                        .block_spec()
+                        .from_message(*value as EmulatedCiphertextBlockStorage)
                 )]
             }
             AddCt => {
@@ -118,18 +126,40 @@ impl Interpretable<IopValue> for super::IopInstructionSet {
                     (arguments[0].clone(), arguments[1].clone())
                 else {
                     panic!(
-                        "AddCt: expected (CiphertextBlock, CiphertextBlock), got:\n{:#?}",
+                        "Expected (CiphertextBlock, CiphertextBlock), got:\n{:#?}",
                         arguments
                     )
                 };
                 svec![IopValue::CiphertextBlock(left.protect_add(right))]
+            }
+            WrappingAddCt => {
+                let (IopValue::CiphertextBlock(left), IopValue::CiphertextBlock(right)) =
+                    (arguments[0].clone(), arguments[1].clone())
+                else {
+                    panic!(
+                        "Expected (CiphertextBlock, CiphertextBlock), got:\n{:#?}",
+                        arguments
+                    )
+                };
+                svec![IopValue::CiphertextBlock(left.wrapping_add(right))]
+            }
+            TemperAddCt => {
+                let (IopValue::CiphertextBlock(left), IopValue::CiphertextBlock(right)) =
+                    (arguments[0].clone(), arguments[1].clone())
+                else {
+                    panic!(
+                        "Expected (CiphertextBlock, CiphertextBlock), got:\n{:#?}",
+                        arguments
+                    )
+                };
+                svec![IopValue::CiphertextBlock(left.temper_add(right))]
             }
             SubCt => {
                 let (IopValue::CiphertextBlock(left), IopValue::CiphertextBlock(right)) =
                     (arguments[0].clone(), arguments[1].clone())
                 else {
                     panic!(
-                        "SubCt: expected (CiphertextBlock, CiphertextBlock), got:\n{:#?}",
+                        "Expected (CiphertextBlock, CiphertextBlock), got:\n{:#?}",
                         arguments
                     )
                 };
@@ -137,7 +167,7 @@ impl Interpretable<IopValue> for super::IopInstructionSet {
             }
             PackCt { mul } => {
                 assert_eq!(
-                    *mul,
+                    *mul as EmulatedPlaintextBlockStorage,
                     (2 as EmulatedPlaintextBlockStorage)
                         .pow(context.spec.block_spec().message_size() as u32)
                 );
@@ -145,7 +175,7 @@ impl Interpretable<IopValue> for super::IopInstructionSet {
                     (arguments[0].clone(), arguments[1].clone())
                 else {
                     panic!(
-                        "PackCt: expected (CiphertextBlock, CiphertextBlock), got:\n{:#?}",
+                        "Expected (CiphertextBlock, CiphertextBlock), got:\n{:#?}",
                         arguments
                     )
                 };
@@ -159,18 +189,18 @@ impl Interpretable<IopValue> for super::IopInstructionSet {
                     (arguments[0].clone(), arguments[1].clone())
                 else {
                     panic!(
-                        "AddPt: expected (CiphertextBlock, PlaintextBlock), got:\n{:#?}",
+                        "Expected (CiphertextBlock, PlaintextBlock), got:\n{:#?}",
                         arguments
                     )
                 };
                 svec![IopValue::CiphertextBlock(left.protect_add_pt(right))]
             }
-            AddPtWrapping => {
+            WrappingAddPt => {
                 let (IopValue::CiphertextBlock(left), IopValue::PlaintextBlock(right)) =
                     (arguments[0].clone(), arguments[1].clone())
                 else {
                     panic!(
-                        "AddPtWrapping: expected (CiphertextBlock, PlaintextBlock), got:\n{:#?}",
+                        "Expected (CiphertextBlock, PlaintextBlock), got:\n{:#?}",
                         arguments
                     )
                 };
@@ -182,7 +212,7 @@ impl Interpretable<IopValue> for super::IopInstructionSet {
                     (arguments[0].clone(), arguments[1].clone())
                 else {
                     panic!(
-                        "SubPt: expected (CiphertextBlock, PlaintextBlock), got:\n{:#?}",
+                        "Expected (CiphertextBlock, PlaintextBlock), got:\n{:#?}",
                         arguments
                     )
                 };
@@ -193,7 +223,7 @@ impl Interpretable<IopValue> for super::IopInstructionSet {
                     (arguments[0].clone(), arguments[1].clone())
                 else {
                     panic!(
-                        "PtSub: expected (PlaintextBlock, CiphertextBlock), got:\n{:#?}",
+                        "Expected (PlaintextBlock, CiphertextBlock), got:\n{:#?}",
                         arguments
                     )
                 };
@@ -204,7 +234,7 @@ impl Interpretable<IopValue> for super::IopInstructionSet {
                     (arguments[0].clone(), arguments[1].clone())
                 else {
                     panic!(
-                        "MulPt: expected (CiphertextBlock, PlaintextBlock), got:\n{:#?}",
+                        "Expected (CiphertextBlock, PlaintextBlock), got:\n{:#?}",
                         arguments
                     )
                 };
@@ -212,16 +242,13 @@ impl Interpretable<IopValue> for super::IopInstructionSet {
             }
             ExtractCtBlock { index } => {
                 let IopValue::Ciphertext(ct) = arguments[0] else {
-                    panic!(
-                        "ExtractCtBlock: expected Ciphertext, got:\n{:#?}",
-                        arguments
-                    )
+                    panic!("Expected Ciphertext, got:\n{:#?}", arguments)
                 };
                 svec![IopValue::CiphertextBlock(ct.get_block(*index))]
             }
             ExtractPtBlock { index } => {
                 let IopValue::Plaintext(pt) = arguments[0] else {
-                    panic!("ExtractPtBlock: expected Plaintext, got:\n{:#?}", arguments)
+                    panic!("Expected Plaintext, got:\n{:#?}", arguments)
                 };
                 svec![IopValue::PlaintextBlock(pt.get_block(*index))]
             }
@@ -230,7 +257,7 @@ impl Interpretable<IopValue> for super::IopInstructionSet {
                     (arguments[0].clone(), arguments[1].clone())
                 else {
                     panic!(
-                        "StoreCtBlock: expected (Ciphertext, CiphertextBlock), got:\n{:#?}",
+                        "Expected (Ciphertext, CiphertextBlock), got:\n{:#?}",
                         arguments
                     )
                 };
@@ -239,49 +266,95 @@ impl Interpretable<IopValue> for super::IopInstructionSet {
             }
             Pbs { lut } => {
                 let IopValue::CiphertextBlock(ct) = arguments[0] else {
-                    panic!("Pbs: expected CiphertextBlock, got:\n{:#?}", arguments)
+                    panic!("Expected CiphertextBlock, got:\n{:#?}", arguments)
                 };
-                let lut0 = lut.get_fn();
-                svec![IopValue::CiphertextBlock(lut0(ct))]
+                let ct0 = lut.protect_lookup(ct);
+                svec![IopValue::CiphertextBlock(ct0)]
             }
             Pbs2 { lut } => {
                 let IopValue::CiphertextBlock(ct) = arguments[0] else {
-                    panic!("Pbs2: expected CiphertextBlock, got:\n{:#?}", arguments)
+                    panic!("Expected CiphertextBlock, got:\n{:#?}", arguments)
                 };
-                let (lut0, lut1) = lut.get_fns();
+                let (ct0, ct1) = lut.protect_lookup(ct);
                 svec![
-                    IopValue::CiphertextBlock(lut0(ct)),
-                    IopValue::CiphertextBlock(lut1(ct))
+                    IopValue::CiphertextBlock(ct0),
+                    IopValue::CiphertextBlock(ct1)
                 ]
             }
             Pbs4 { lut } => {
                 let IopValue::CiphertextBlock(ct) = arguments[0] else {
-                    panic!("Pbs4: expected CiphertextBlock, got:\n{:#?}", arguments)
+                    panic!("Expected CiphertextBlock, got:\n{:#?}", arguments)
                 };
-                let (lut0, lut1, lut2, lut3) = lut.get_fns();
+                let (ct0, ct1, ct2, ct3) = lut.protect_lookup(ct);
                 svec![
-                    IopValue::CiphertextBlock(lut0(ct)),
-                    IopValue::CiphertextBlock(lut1(ct)),
-                    IopValue::CiphertextBlock(lut2(ct)),
-                    IopValue::CiphertextBlock(lut3(ct))
+                    IopValue::CiphertextBlock(ct0),
+                    IopValue::CiphertextBlock(ct1),
+                    IopValue::CiphertextBlock(ct2),
+                    IopValue::CiphertextBlock(ct3)
                 ]
             }
             Pbs8 { lut } => {
                 let IopValue::CiphertextBlock(ct) = arguments[0] else {
-                    panic!("Pbs8: expected CiphertextBlock, got:\n{:#?}", arguments)
+                    panic!("Expected CiphertextBlock, got:\n{:#?}", arguments)
                 };
-                let (lut0, lut1, lut2, lut3, lut4, lut5, lut6, lut7) = lut.get_fns();
+                let (ct0, ct1, ct2, ct3, ct4, ct5, ct6, ct7) = lut.protect_lookup(ct);
                 svec![
-                    IopValue::CiphertextBlock(lut0(ct)),
-                    IopValue::CiphertextBlock(lut1(ct)),
-                    IopValue::CiphertextBlock(lut2(ct)),
-                    IopValue::CiphertextBlock(lut3(ct)),
-                    IopValue::CiphertextBlock(lut4(ct)),
-                    IopValue::CiphertextBlock(lut5(ct)),
-                    IopValue::CiphertextBlock(lut6(ct)),
-                    IopValue::CiphertextBlock(lut7(ct))
+                    IopValue::CiphertextBlock(ct0),
+                    IopValue::CiphertextBlock(ct1),
+                    IopValue::CiphertextBlock(ct2),
+                    IopValue::CiphertextBlock(ct3),
+                    IopValue::CiphertextBlock(ct4),
+                    IopValue::CiphertextBlock(ct5),
+                    IopValue::CiphertextBlock(ct6),
+                    IopValue::CiphertextBlock(ct7)
                 ]
             }
+            WrappingPbs { lut } => {
+                let IopValue::CiphertextBlock(ct) = arguments[0] else {
+                    panic!("Expected CiphertextBlock, got:\n{:#?}", arguments)
+                };
+                let ct0 = lut.wrapping_lookup(ct);
+                svec![IopValue::CiphertextBlock(ct0)]
+            }
+            WrappingPbs2 { lut } => {
+                let IopValue::CiphertextBlock(ct) = arguments[0] else {
+                    panic!("Expected CiphertextBlock, got:\n{:#?}", arguments)
+                };
+                let (ct0, ct1) = lut.wrapping_lookup(ct);
+                svec![
+                    IopValue::CiphertextBlock(ct0),
+                    IopValue::CiphertextBlock(ct1)
+                ]
+            }
+            WrappingPbs4 { lut } => {
+                let IopValue::CiphertextBlock(ct) = arguments[0] else {
+                    panic!("Expected CiphertextBlock, got:\n{:#?}", arguments)
+                };
+                let (ct0, ct1, ct2, ct3) = lut.wrapping_lookup(ct);
+                svec![
+                    IopValue::CiphertextBlock(ct0),
+                    IopValue::CiphertextBlock(ct1),
+                    IopValue::CiphertextBlock(ct2),
+                    IopValue::CiphertextBlock(ct3)
+                ]
+            }
+            WrappingPbs8 { lut } => {
+                let IopValue::CiphertextBlock(ct) = arguments[0] else {
+                    panic!("Expected CiphertextBlock, got:\n{:#?}", arguments)
+                };
+                let (ct0, ct1, ct2, ct3, ct4, ct5, ct6, ct7) = lut.wrapping_lookup(ct);
+                svec![
+                    IopValue::CiphertextBlock(ct0),
+                    IopValue::CiphertextBlock(ct1),
+                    IopValue::CiphertextBlock(ct2),
+                    IopValue::CiphertextBlock(ct3),
+                    IopValue::CiphertextBlock(ct4),
+                    IopValue::CiphertextBlock(ct5),
+                    IopValue::CiphertextBlock(ct6),
+                    IopValue::CiphertextBlock(ct7)
+                ]
+            }
+            Alias { .. } => arguments,
         }
     }
 }

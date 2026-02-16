@@ -145,7 +145,7 @@ mod test {
                 @00                              | %0 : CtInt = input<0, CtInt>();
                 @09                              | %9 : CtInt = input<1, CtInt>();
                 @36   // Compare blocks / 0-th   | %36 : PtBlock = let_pt_block<1>();
-                @56                              | %56 : CtInt = zero_ct();
+                @56                              | %56 : CtInt = decl_ct();
                 @01                              | %1 : CtBlock = extract_ct_block<0>(%0 : CtInt);
                 @02                              | %2 : CtBlock = extract_ct_block<1>(%0 : CtInt);
                 @03                              | %3 : CtBlock = extract_ct_block<2>(%0 : CtInt);

@@ -1,7 +1,7 @@
 use std::any::TypeId;
 use std::fmt::Write as _;
 
-use hc_utils::iter::{MergerOf2, Separate};
+use hc_utils::iter::{ReconcilerOf2, Separate};
 
 use crate::{Annotation, val_ref::ValRef};
 
@@ -536,8 +536,8 @@ fn format_ir<D: Dialect>(
     indent: usize,
 ) -> std::fmt::Result {
     let ops_iter = match walker {
-        PrintWalker::Linear => ir.raw_walk_ops_linear().merge_1_of_2(),
-        PrintWalker::Topo => ir.raw_walk_ops_topo().merge_2_of_2(),
+        PrintWalker::Linear => ir.raw_walk_ops_linear().reconcile_1_of_2(),
+        PrintWalker::Topo => ir.raw_walk_ops_topo().reconcile_2_of_2(),
     };
     ops_iter
         .filter(|opref| opref.is_active() || show_erased_ops)
@@ -576,8 +576,8 @@ fn format_ann_ir<D: Dialect, OpAnn: Annotation, ValAnn: Annotation>(
     indent: usize,
 ) -> std::fmt::Result {
     let ops_iter = match walker {
-        PrintWalker::Linear => ann_ir.walk_ops_linear().merge_1_of_2(),
-        PrintWalker::Topo => ann_ir.walk_ops_topological().merge_2_of_2(),
+        PrintWalker::Linear => ann_ir.walk_ops_linear().reconcile_1_of_2(),
+        PrintWalker::Topo => ann_ir.walk_ops_topological().reconcile_2_of_2(),
     };
 
     ops_iter
@@ -634,7 +634,7 @@ fn format_opref<D: Dialect>(
     write!(f, "{:indent$}", "", indent = indent)?;
 
     if opref.is_inactive() {
-        write!(f, "// ")?;
+        write!(f, "\x1b[9m")?;
     }
 
     let has_comments = show_comments && max_comment_len > 0;
@@ -678,6 +678,10 @@ fn format_opref<D: Dialect>(
             Separated::Separator => write!(f, ", "),
         })?;
     write!(f, ");")?;
+
+    if opref.is_inactive() {
+        write!(f, "\x1b[29m")?;
+    }
 
     Ok(())
 }

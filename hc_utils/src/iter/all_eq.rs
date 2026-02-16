@@ -1,7 +1,41 @@
-/// Checks if all elements in an iterator are equal to each other.
+//! Equality check across all elements of an iterator.
+//!
+//! This module provides the [`AllEq`] extension trait, which adds a method to test whether every
+//! element in an iterator is equal to every other. It is automatically implemented for any
+//! iterator whose items implement `PartialEq`.
+//!
+//! # Example
+//!
+//! ```rust,no_run
+//! # use hc_utils::iter::AllEq;
+//! let uniform = vec![7, 7, 7, 7];
+//! assert_eq!(uniform.into_iter().all_eq(), Some(true));
+//!
+//! let mixed = vec![1, 2, 1];
+//! assert_eq!(mixed.into_iter().all_eq(), Some(false));
+//! ```
+
+/// An extension trait that checks whether all elements of an iterator are equal.
+///
+/// `AllEq` is automatically implemented for any iterator whose items implement `PartialEq`.
+/// Importing this trait brings the [`all_eq`](AllEq::all_eq) method into scope.
 pub trait AllEq {
-    /// Returns `Some(true)` if all elements are equal, `Some(false)` if not, or `None` for empty
-    /// iterators.
+    /// Consumes the iterator and checks whether all elements are equal to each other.
+    ///
+    /// This method compares every element to the first using `PartialEq`. It returns `Some(true)`
+    /// if all elements are equal, `Some(false)` if any element differs from the first, or `None`
+    /// if the iterator is empty. A single-element iterator always returns `Some(true)`.
+    ///
+    /// The check short-circuits: iteration stops as soon as a non-equal element is found.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use hc_utils::iter::AllEq;
+    /// assert_eq!([5, 5, 5].into_iter().all_eq(), Some(true));
+    /// assert_eq!([5, 5, 6].into_iter().all_eq(), Some(false));
+    /// assert_eq!(std::iter::empty::<i32>().all_eq(), None);
+    /// ```
     fn all_eq(self) -> Option<bool>;
 }
 

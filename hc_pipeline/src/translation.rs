@@ -142,8 +142,8 @@ impl Translator for IoplangToHpulang {
                 // For the output, we search the let reaching this output.
                 let let_pred = oup_op
                     .get_inc_reaching_iter()
-                    .find(|pr| matches!(pr.get_operation(), IopInstructionSet::ZeroCiphertext))
-                    .expect("Failed to find the `let` predecessor of an `output` op.");
+                    .find(|pr| matches!(pr.get_operation(), IopInstructionSet::DeclareCiphertext))
+                    .expect("Failed to find the declaration predecessor of an `output` op.");
                 let IopInstructionSet::Output { pos, .. } = oup_op.get_operation() else {
                     unreachable!()
                 };
@@ -153,15 +153,43 @@ impl Translator for IoplangToHpulang {
 
         for op in input.walk_ops_topological() {
             match op.get_operation() {
-                IopInstructionSet::Input { .. }
-                | IopInstructionSet::ZeroCiphertext
-                | IopInstructionSet::LetPlaintextBlock { .. } => {
+                IopInstructionSet::Input { .. } | IopInstructionSet::LetPlaintextBlock { .. } => {
                     // Handled in consumers.
                 }
                 IopInstructionSet::Output { .. } => {
-                    // Nop
+                    // No-op
                 }
-                IopInstructionSet::AddCt => {
+                IopInstructionSet::DeclareCiphertext => {
+                    // DeclareCiphertext has no semantics in hpulang.
+                    // We just verify that it is not used in an unexpected way.
+                    assert!(
+                        op.get_reached_iter().all(|reached| matches!(
+                            reached.get_operation(),
+                            IopInstructionSet::StoreCtBlock { .. }
+                                | IopInstructionSet::Output { .. }
+                        )),
+                        "Unexpectd use of DeclareCiphertext encountered."
+                    )
+                }
+                IopInstructionSet::Alias { .. } => {
+                    // Aliases have no semantics in hpulang. And they may prevent CSE so there
+                    // should be no aliases remaining here,
+                    panic!("Unexpected Alias op encountered.");
+                }
+                IopInstructionSet::LetCiphertextBlock { value } => {
+                    let (_, valids) = output
+                        .add_op(
+                            HpuInstructionSet::CstCt {
+                                cst: Immediate(value),
+                            },
+                            svec![],
+                        )
+                        .unwrap();
+                    map.insert(op.get_return_valids()[0], valids[0]);
+                }
+                IopInstructionSet::AddCt
+                | IopInstructionSet::WrappingAddCt
+                | IopInstructionSet::TemperAddCt => {
                     let (_, valids) = output
                         .add_op(
                             HpuInstructionSet::AddCt,
@@ -190,7 +218,7 @@ impl Translator for IoplangToHpulang {
                         .unwrap();
                     map.insert(op.get_return_valids()[0], valids[0]);
                 }
-                IopInstructionSet::AddPt | IopInstructionSet::AddPtWrapping => {
+                IopInstructionSet::AddPt | IopInstructionSet::WrappingAddPt => {
                     let (_, valids) = if map.contains_key(&op.get_arg_valids()[1]) {
                         // The plaintext input is not constant.
                         output
@@ -385,7 +413,9 @@ impl Translator for IoplangToHpulang {
                         .opref
                         .get_inc_reaching_iter()
                         .find_map(|op| match op.get_operation() {
-                            IopInstructionSet::ZeroCiphertext => let_map.get(&op.get_id()).cloned(),
+                            IopInstructionSet::DeclareCiphertext => {
+                                let_map.get(&op.get_id()).cloned()
+                            }
                             _ => None,
                         })
                         .unwrap();
@@ -401,7 +431,7 @@ impl Translator for IoplangToHpulang {
                         )
                         .unwrap();
                 }
-                IopInstructionSet::Pbs { lut } => {
+                IopInstructionSet::Pbs { lut } | IopInstructionSet::WrappingPbs { lut } => {
                     let lut = match GIDS1.get(&lut) {
                         Some(v) => *v,
                         None => panic!("Failed to lookup the gid for key: {lut:?}"),
@@ -414,7 +444,7 @@ impl Translator for IoplangToHpulang {
                         .unwrap();
                     map.insert(op.get_return_valids()[0], valids[0]);
                 }
-                IopInstructionSet::Pbs2 { lut } => {
+                IopInstructionSet::Pbs2 { lut } | IopInstructionSet::WrappingPbs2 { lut } => {
                     let lut = match GIDS2.get(&lut) {
                         Some(v) => *v,
                         None => panic!("Failed to lookup the gid for key: {lut:?}"),
@@ -428,7 +458,7 @@ impl Translator for IoplangToHpulang {
                     map.insert(op.get_return_valids()[0], valids[0]);
                     map.insert(op.get_return_valids()[1], valids[1]);
                 }
-                IopInstructionSet::Pbs4 { lut } => {
+                IopInstructionSet::Pbs4 { lut } | IopInstructionSet::WrappingPbs4 { lut } => {
                     let lut = match GIDS4.get(&lut) {
                         Some(v) => *v,
                         None => panic!("Failed to lookup the gid for key: {lut:?}"),
@@ -444,7 +474,7 @@ impl Translator for IoplangToHpulang {
                     map.insert(op.get_return_valids()[2], valids[2]);
                     map.insert(op.get_return_valids()[3], valids[3]);
                 }
-                IopInstructionSet::Pbs8 { lut } => {
+                IopInstructionSet::Pbs8 { lut } | IopInstructionSet::WrappingPbs8 { lut } => {
                     let lut = match GIDS8.get(&lut) {
                         Some(v) => *v,
                         None => panic!("Failed to lookup the gid for key: {lut:?}"),

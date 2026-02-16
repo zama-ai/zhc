@@ -133,7 +133,7 @@ pub fn batch(ir: &IR<HpuLang>) -> IR<HpuLang> {
                     .unwrap();
                 map.insert(op.get_return_valids()[0], valids[0]);
             }
-            ImmLd { .. } | SrcLd { .. } => {
+            ImmLd { .. } | SrcLd { .. } | CstCt { .. } => {
                 let (_, valids) = output.add_op(op.get_operation(), svec![]).unwrap();
                 map.insert(op.get_return_valids()[0], valids[0]);
             }

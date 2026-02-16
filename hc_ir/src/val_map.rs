@@ -232,6 +232,16 @@ impl<T> ValMap<T> {
             })
     }
 
+    /// Consumes the map and returns an iterator over value IDs and their stored data.
+    pub fn into_iter(self) -> impl DoubleEndedIterator<Item = (ValId, T)> {
+        self.store
+            .enumerate_into_iter()
+            .filter_map(|(i, a)| match a {
+                State::Active(Some(v)) => Some((i, v)),
+                _ => None,
+            })
+    }
+
     /// Acknowledge eventual changes
     pub fn ack_changes(&mut self) -> bool {
         std::mem::replace(&mut self.changed, false)

@@ -6,8 +6,8 @@ mod dedup;
 mod few_mapped;
 mod interleave;
 mod intermediate;
-mod merger;
 mod mzip;
+mod reconcile;
 mod separate;
 mod window;
 
@@ -19,7 +19,7 @@ pub use dedup::*;
 pub use few_mapped::*;
 pub use interleave::*;
 pub use intermediate::*;
-pub use merger::*;
 pub use mzip::*;
+pub use reconcile::*;
 pub use separate::*;
 pub use window::*;

@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 hc_utils = { path = "../hc_utils" }
 paste = {workspace = true}
+rand = {workspace = true}

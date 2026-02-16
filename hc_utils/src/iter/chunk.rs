@@ -1,16 +1,63 @@
+//! Fixed-size chunking for iterators.
+//!
+//! This module provides an extension trait that lets you split any iterator into chunks of a
+//! specified size. Unlike the standard library's `chunks` method on slices, this works on
+//! arbitrary iterators and distinguishes between complete chunks and partial remainders.
+//!
+//! # Example
+//!
+//! ```rust,no_run
+//! # use hc_utils::iter::{ChunkIt, Chunk};
+//! let values = vec![1, 2, 3, 4, 5];
+//! for chunk in values.into_iter().chunk(2) {
+//!     match chunk {
+//!         Chunk::Complete(items) => println!("Full chunk: {:?}", items.as_slice()),
+//!         Chunk::Rest(items) => println!("Remainder: {:?}", items.as_slice()),
+//!     }
+//! }
+//! // Output:
+//! // Full chunk: [1, 2]
+//! // Full chunk: [3, 4]
+//! // Remainder: [5]
+//! ```
+
 use crate::small::SmallVec;
 
-/// Splits an iterator into fixed-size chunks.
+/// An extension trait that adds fixed-size chunking to any iterator.
+///
+/// This trait is automatically implemented for all types that implement [`Iterator`]. Import it
+/// to gain access to the [`chunk`](ChunkIt::chunk) method on any iterator.
+///
+/// The chunking operation is lazy — elements are only consumed from the underlying iterator as
+/// you iterate over the chunks.
 pub trait ChunkIt
 where
     Self: Iterator + Sized,
 {
-    /// Creates an iterator that yields chunks of elements from this iterator.
+    /// Splits this iterator into fixed-size chunks.
     ///
-    /// Each chunk contains up to `chunks_size` elements. The last chunk may
-    /// contain fewer elements if the iterator length is not evenly divisible
-    /// by `chunks_size`.
-    fn chunk(self, chunks_size: usize) -> Chunked<Self>;
+    /// Returns a new iterator that yields [`Chunk`] values. Each chunk contains up to
+    /// `chunk_size` elements collected into a [`SmallVec`]. The iterator distinguishes between
+    /// [`Chunk::Complete`] (containing exactly `chunk_size` elements) and [`Chunk::Rest`]
+    /// (containing fewer elements when the source iterator is exhausted).
+    ///
+    /// An empty iterator yields no chunks at all.
+    ///
+    /// # Examples
+    ///
+    /// Processing data in fixed-size batches:
+    ///
+    /// ```rust,no_run
+    /// # use hc_utils::iter::{ChunkIt, Chunk};
+    /// let data = vec![1, 2, 3, 4, 5, 6, 7];
+    /// let mut chunks = data.into_iter().chunk(3);
+    ///
+    /// assert!(matches!(chunks.next(), Some(Chunk::Complete(_)))); // [1, 2, 3]
+    /// assert!(matches!(chunks.next(), Some(Chunk::Complete(_)))); // [4, 5, 6]
+    /// assert!(matches!(chunks.next(), Some(Chunk::Rest(_))));     // [7]
+    /// assert!(chunks.next().is_none());
+    /// ```
+    fn chunk(self, chunk_size: usize) -> Chunked<Self>;
 }
 
 impl<A: Iterator> ChunkIt for A {
@@ -22,19 +69,48 @@ impl<A: Iterator> ChunkIt for A {
     }
 }
 
-/// A chunk of elements from an iterator.
+/// A group of elements yielded by a chunked iterator.
 ///
-/// Chunks can be either complete (containing the requested number of elements)
-/// or partial (containing fewer elements when the iterator is exhausted).
+/// When iterating over chunks, this enum tells you whether the chunk contains the full requested
+/// number of elements or just the leftover elements at the end of the source iterator. This
+/// distinction is useful when your processing logic differs for complete batches versus partial
+/// remainders.
+///
+/// Both variants wrap a [`SmallVec`], which stores small chunks inline without heap allocation.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Chunk<A> {
     /// A complete chunk containing exactly the requested number of elements.
+    ///
+    /// You will receive this variant for every chunk except possibly the last one.
     Complete(SmallVec<A>),
-    /// A partial chunk containing the remaining elements when the iterator ends.
+
+    /// A partial chunk containing the remaining elements.
+    ///
+    /// This variant appears only as the final chunk when the source iterator's length is not
+    /// evenly divisible by the chunk size. It contains between 1 and `chunk_size - 1` elements.
     Rest(SmallVec<A>),
 }
 
 impl<A> Chunk<A> {
+    /// Extracts the inner vector, panicking if this is a partial chunk.
+    ///
+    /// Use this method when you expect all chunks to be complete and want to treat a partial
+    /// chunk as a programming error. For fallible extraction, match on the enum directly.
+    ///
+    /// # Panics
+    ///
+    /// Panics if called on a [`Chunk::Rest`] variant.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use hc_utils::iter::{ChunkIt, Chunk};
+    /// let data = vec![1, 2, 3, 4, 5, 6];
+    /// for chunk in data.into_iter().chunk(3) {
+    ///     let items = chunk.unwrap_complete(); // Safe: 6 is divisible by 3
+    ///     assert_eq!(items.len(), 3);
+    /// }
+    /// ```
     pub fn unwrap_complete(self) -> SmallVec<A> {
         match self {
             Chunk::Complete(small_vec) => small_vec,
@@ -43,7 +119,9 @@ impl<A> Chunk<A> {
     }
 }
 
-/// An iterator that yields chunks of elements from another iterator.
+/// An iterator that yields fixed-size chunks from an underlying iterator.
+///
+/// Created by calling [`chunk`](ChunkIt::chunk) on any iterator.
 pub struct Chunked<A: Iterator> {
     original: A,
     chunks_size: usize,

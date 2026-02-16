@@ -7,11 +7,13 @@
 
 use allocator::allocate_registers;
 use batcher::batch;
-use hc_builder::builder::CiphertextSpec;
 use hc_builder::iops::cmp::{cmp_eq, cmp_gt, cmp_gte, cmp_lt, cmp_lte, cmp_neq};
 use hc_builder::iops::if_then_else::if_then_else;
 use hc_builder::iops::if_then_zero::if_then_zero;
+use hc_ir::cse::eliminate_common_subexpressions;
+use hc_ir::dce::eliminate_dead_code;
 use hc_ir::translation::Translator;
+use hc_langs::ioplang::eliminate_aliases;
 use scheduler::schedule;
 use translation::IoplangToHpulang;
 use translation_table::{DOpRepr, generate_translation_table};
@@ -40,8 +42,10 @@ pub enum Iop {
     IfThenZero,
 }
 
+pub use hc_builder::builder::CiphertextSpec;
+
 fn pipeline(hpu_config: &HpuConfig, spec: CiphertextSpec, iop: Iop) -> Vec<DOpRepr> {
-    let ir = match iop {
+    let mut ir = match iop {
         Iop::CmpGt => cmp_gt(spec),
         Iop::CmpGte => cmp_gte(spec),
         Iop::CmpLt => cmp_lt(spec),
@@ -51,6 +55,9 @@ fn pipeline(hpu_config: &HpuConfig, spec: CiphertextSpec, iop: Iop) -> Vec<DOpRe
         Iop::IfThenElse => if_then_else(spec),
         Iop::IfThenZero => if_then_zero(spec),
     };
+    eliminate_aliases(&mut ir);
+    eliminate_dead_code(&mut ir);
+    eliminate_common_subexpressions(&mut ir);
     let unscheduled = IoplangToHpulang.translate(&ir);
     let scheduled = schedule(&unscheduled, hpu_config);
     let batched = batch(&scheduled);
