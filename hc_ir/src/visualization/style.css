@@ -1,5 +1,0 @@
-.interactive-path {
-    cursor: pointer;
-    transition: stroke 0.3s ease, stroke-width 0.3s ease;
-    pointer-events: stroke;
-}

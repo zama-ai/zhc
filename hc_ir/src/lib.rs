@@ -11,7 +11,6 @@ pub mod interpretation;
 pub mod scheduling;
 pub mod translation;
 pub mod traversal;
-pub mod visualization;
 
 mod annotation;
 mod dialect;

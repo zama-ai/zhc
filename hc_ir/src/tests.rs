@@ -77,6 +77,7 @@ use hc_utils::{assert_display_is, iter::CollectInVec, svec};
 
 use test_dialect::{Operations, TestDialect};
 
+#[allow(unused)]
 pub fn gen_complex_ir() -> Result<IR<TestDialect>, IRError<TestDialect>> {
     let mut ir: IR<TestDialect> = IR::empty();
 

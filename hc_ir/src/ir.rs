@@ -2,12 +2,10 @@ use crate::interpretation::{
     InterpState, Interpretable, Interpretation, InterpretsTo, interpret_ir,
 };
 use crate::val_ref::ValRef;
-use crate::visualization::draw_ir;
 use crate::{AnnIR, Annotation, IRFormatter, ValMap, ValOrigin, ValUse};
 use hc_utils::iter::MultiZip;
 use hc_utils::svec;
 use hc_utils::{Store, small::SmallVec};
-use std::path::Path;
 use std::{cmp::max, fmt::Debug};
 
 use super::{
@@ -629,11 +627,6 @@ impl<D: Dialect> IR<D> {
     pub fn dump(&self) {
         println!("{}", self.format());
         panic!();
-    }
-
-    /// Draws the IR as an SVG at the path.
-    pub fn draw(&self, path: impl AsRef<Path>) {
-        draw_ir(self, path);
     }
 
     /// Creates an empty operation map for this IR.

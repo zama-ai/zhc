@@ -1,6 +1,5 @@
 use std::{
     fmt::Debug,
-    hash::{Hash, Hasher},
     ops::Deref,
 };
 
@@ -139,13 +138,4 @@ impl<'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> PartialEq
 impl<'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> Eq
     for AnnOpRef<'ir, 'ann, D, OpAnn, ValAnn>
 {
-}
-
-impl<'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> Hash
-    for AnnOpRef<'ir, 'ann, D, OpAnn, ValAnn>
-{
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.opref.hash(state);
-        self.ann.hash(state);
-    }
 }
