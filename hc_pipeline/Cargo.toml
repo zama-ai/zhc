@@ -1,13 +1,15 @@
 [package]
 name = "hc_pipeline"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
-hc_ir = { path = "../hc_ir" }
-hc_sim = { path = "../hc_sim" }
-hc_utils = { path = "../hc_utils" }
-hc_langs = { path = "../hc_langs" }
-hc_builder = { path = "../hc_builder" }
-serde = { workspace = true }
-bitfield-struct = "0.10.0"
+hc_ir.workspace = true
+hc_sim.workspace = true
+hc_utils.workspace = true
+hc_langs.workspace = true
+hc_builder.workspace = true
+serde.workspace = true
+bitfield-struct.workspace = true

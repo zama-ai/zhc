@@ -1,9 +1,11 @@
 [package]
 name = "hc_crypto"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
-hc_utils = { path = "../hc_utils" }
-paste = {workspace = true}
-rand = {workspace = true}
+hc_utils.workspace = true
+paste.workspace = true
+rand.workspace = true

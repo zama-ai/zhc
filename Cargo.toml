@@ -11,12 +11,32 @@ members = [
 ]
 resolver = "3"
 
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "BSD-3-Clause-Clear"
+repository = "https://github.com/zama-ai/hpu_compiler"
+
 [workspace.dependencies]
+hc_ir = { path = "hc_ir", version = "0.1.0" }
+hc_langs = { path = "hc_langs", version = "0.1.0" }
+hc_pipeline = { path = "hc_pipeline", version = "0.1.0" }
+hc_sim = { path = "hc_sim", version = "0.1.0" }
+hc_utils = { path = "hc_utils", version = "0.1.0" }
+hc_utils_macro = { path = "hc_utils_macro", version = "0.1.0" }
+hc_builder = { path = "hc_builder", version = "0.1.0" }
+hc_crypto = { path = "hc_crypto", version = "0.1.0" }
+
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 toml = "0.9"
 paste = "1.0.15"
 rand = "0.10.0"
+bitfield-struct = "0.10.0"
+quote = "1.0"
+syn = { version = "2.0", features = ["full"] }
+proc-macro2 = "1.0"
+
 
 # Custom compilation profile
 # Compiles much faster for tests and allows reasonable performance for iterating

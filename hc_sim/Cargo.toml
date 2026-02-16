@@ -1,11 +1,13 @@
 [package]
 name = "hc_sim"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
-hc_utils = { path = "../hc_utils" }
-hc_langs = { path = "../hc_langs" }
-serde = { workspace = true }
-serde_json = { workspace = true }
-toml = { workspace = true }
+hc_utils.workspace = true
+hc_langs.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
