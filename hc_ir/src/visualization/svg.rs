@@ -265,6 +265,10 @@ impl std::fmt::Display for SvgElement {
                 id,
                 class,
             } => {
+                // Skip empty groups that have no semantic purpose
+                if elements.is_empty() && transform.is_none() && id.is_none() && class.is_none() {
+                    return Ok(());
+                }
                 write!(f, "  <g")?;
                 if let Some(id) = id {
                     write!(f, r#" id="{}""#, id)?;

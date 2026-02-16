@@ -15,7 +15,7 @@ use std::fmt::Debug;
 
 use hc_utils::{
     FastMap,
-    iter::{Median, MultiZip, ReconcilerOf2},
+    iter::{Median, MultiZip, ReconcilerOf3},
     small::SmallVec,
     svec,
 };
@@ -58,6 +58,10 @@ impl<'ir, 'ann, D: Dialect> std::fmt::Debug for LayeredNode<'ir, 'ann, D> {
 
 impl<'ir, 'ann, D: Dialect> LayeredNode<'ir, 'ann, D> {
 
+    fn is_slack(&self) -> bool {
+        !self.is_not_slack()
+    }
+
     fn is_not_slack(&self) -> bool {
         !matches!(self, LayeredNode::Slack(_))
     }
@@ -94,7 +98,7 @@ impl<'ir, 'ann, D: Dialect> LayeredNode<'ir, 'ann, D> {
                         )
                     }
                 })
-                .reconcile_1_of_2(),
+                .reconcile_1_of_3(),
             LayeredNode::Value(val_ref, layer) => {
                 if *val_ref.get_origin().opref.get_annotation() == layer.above() {
                     std::iter::once((
@@ -110,54 +114,55 @@ impl<'ir, 'ann, D: Dialect> LayeredNode<'ir, 'ann, D> {
                         FracPos::CENTERED,
                     ))
                 }
-                .reconcile_2_of_2()
+                .reconcile_2_of_3()
             }
-            LayeredNode::Slack(_) => std::iter::empty().merge_3_of_3(),
+            LayeredNode::Slack(_) => std::iter::empty().reconcile_3_of_3(),
         }
     }
 
     fn below(&self) -> impl Iterator<Item = (LayeredNode<'ir, 'ann, D>, FracPos)> {
         match self {
             LayeredNode::Operation(op_ref) => op_ref
-                .get_returns_iter()
-                .flat_map(|ret| (std::iter::repeat(ret.clone()), ret.get_uses_iter()).mzip())
-                .map(|(ret, uze)| {
-                    if *uze.opref.get_annotation() == op_ref.get_annotation().below() {
-                        (
-                            LayeredNode::Operation(uze.opref.clone()),
-                            FracPos::from_pos_arity(
-                                uze.position as usize,
-                                uze.opref.get_args_arity(),
-                            ),
-                        )
-                    } else {
-                        (
-                            LayeredNode::Value(ret, op_ref.get_annotation().below()),
-                            FracPos::CENTERED,
-                        )
-                    }
-                })
-                .reconcile_1_of_2(),
+                        .get_returns_iter()
+                        .flat_map(|ret| (std::iter::repeat(ret.clone()), ret.get_uses_iter()).mzip())
+                        .map(|(ret, uze)| {
+                            if *uze.opref.get_annotation() == op_ref.get_annotation().below() {
+                                (
+                                    LayeredNode::Operation(uze.opref.clone()),
+                                    FracPos::from_pos_arity(
+                                        uze.position as usize,
+                                        uze.opref.get_args_arity(),
+                                    ),
+                                )
+                            } else {
+                                (
+                                    LayeredNode::Value(ret, op_ref.get_annotation().below()),
+                                    FracPos::CENTERED,
+                                )
+                            }
+                        })
+                        .reconcile_1_of_3(),
             LayeredNode::Value(val_ref, layer) => val_ref
-                .get_uses_iter()
-                .filter(|uze| *uze.opref.get_annotation() > *layer)
-                .map(move |uze| {
-                    if *uze.opref.get_annotation() == layer.below() {
-                        (
-                            LayeredNode::Operation(uze.opref.clone()),
-                            FracPos::from_pos_arity(
-                                uze.position as usize,
-                                uze.opref.get_args_arity(),
-                            ),
-                        )
-                    } else {
-                        (
-                            LayeredNode::Value(val_ref.clone(), layer.below()),
-                            FracPos::CENTERED,
-                        )
-                    }
-                })
-                .reconcile_2_of_2(),
+                        .get_uses_iter()
+                        .filter(|uze| *uze.opref.get_annotation() > *layer)
+                        .map(move |uze| {
+                            if *uze.opref.get_annotation() == layer.below() {
+                                (
+                                    LayeredNode::Operation(uze.opref.clone()),
+                                    FracPos::from_pos_arity(
+                                        uze.position as usize,
+                                        uze.opref.get_args_arity(),
+                                    ),
+                                )
+                            } else {
+                                (
+                                    LayeredNode::Value(val_ref.clone(), layer.below()),
+                                    FracPos::CENTERED,
+                                )
+                            }
+                        })
+                        .reconcile_2_of_3(),
+            LayeredNode::Slack(_) => std::iter::empty().reconcile_3_of_3(),
         }
     }
 }
@@ -238,9 +243,9 @@ impl<'ir, 'ann, D: Dialect> LayoutBuilder<'ir, 'ann, D> {
         }
 
         // Pad all layers to equal width with slack nodes
-        let max_width = layout.iter().map(|l| l.len()).max().unwrap_or(0);
+        let width = layout.iter().map(|l| l.len()).max().unwrap_or(0) * 2;
         for layer in layout.iter_mut() {
-            layer.extend(std::iter::repeat_with(LayeredNode::slack).take(max_width - layer.len()));
+            layer.extend(std::iter::repeat_with(LayeredNode::slack).take(width - layer.len()));
         }
 
         // We create the builder object
@@ -250,8 +255,8 @@ impl<'ir, 'ann, D: Dialect> LayoutBuilder<'ir, 'ann, D> {
         };
 
         for _ in 0..10 {
-            builder.reorder_top_down();
             builder.reorder_bottom_up();
+            builder.reorder_top_down();
         }
 
         builder
@@ -267,7 +272,6 @@ impl<'ir, 'ann, D: Dialect> LayoutBuilder<'ir, 'ann, D> {
                         *self.position_buffer.get(&n).unwrap() as f64 + frac.0
                     })
                     .median()
-                    // .unwrap_or(0.);
                     .unwrap_or(*self.position_buffer.get(&node).unwrap() as f64);
                 buffer.push((node.clone(), median));
             }
@@ -280,7 +284,6 @@ impl<'ir, 'ann, D: Dialect> LayoutBuilder<'ir, 'ann, D> {
                 }
                 layer.push(node.clone());
             }
-            buffer.clear();
             for (i, node) in layer.iter().enumerate().filter(|(_, node)| node.is_not_slack()) {
                 self.position_buffer.insert(node.clone(), i);
             }
@@ -297,8 +300,7 @@ impl<'ir, 'ann, D: Dialect> LayoutBuilder<'ir, 'ann, D> {
                         *self.position_buffer.get(&n).unwrap() as f64 + frac.0
                     })
                     .median()
-                    .unwrap_or(0.);
-                    // .unwrap_or(*self.position_buffer.get(&node).unwrap() as f64);
+                    .unwrap_or(*self.position_buffer.get(&node).unwrap() as f64);
                 buffer.push((node.clone(), median));
             }
             buffer.as_mut_slice().sort_unstable_by(|a, b| a.1.total_cmp(&b.1));
@@ -310,11 +312,9 @@ impl<'ir, 'ann, D: Dialect> LayoutBuilder<'ir, 'ann, D> {
                 }
                 layer.push(node.clone());
             }
-            buffer.clear();
             for (i, node) in layer.iter().enumerate().filter(|(_, node)| node.is_not_slack()) {
                 self.position_buffer.insert(node.clone(), i);
             }
-
         }
     }
     fn into_vertices(self) -> VStack<HStack<Vertex>> {
