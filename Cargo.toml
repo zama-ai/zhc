@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "zhc",
     "zhc_ir",
     "zhc_langs",
     "zhc_pipeline",
