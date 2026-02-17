@@ -1,12 +1,12 @@
-//! Integer operations for homomorphic encryption circuits.
-//!
-//! This module provides specialized implementations of common integer operations
-//! like comparisons that work efficiently with encrypted data blocks.
+mod add;
+mod cmp;
+mod if_then_else;
+mod if_then_zero;
 
-pub mod add;
-pub mod cmp;
-pub mod if_then_else;
-pub mod if_then_zero;
+pub use add::*;
+pub use cmp::*;
+pub use if_then_else::*;
+pub use if_then_zero::*;
 
 // ADD
 // SUB

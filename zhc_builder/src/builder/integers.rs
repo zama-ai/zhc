@@ -11,7 +11,7 @@ use zhc_langs::ioplang::IopValue;
 /// A ciphertext block represents one digit in the radix-decomposition of
 /// an encrypted integer. Its bit layout contains `message_size` message bits (the digit
 /// value), `carry_size` carry bits (to absorb arithmetic overflow), and one padding bit.
-/// See the [module-level documentation](super) for the full layout diagram.
+/// See the [module-level documentation](super::super) for the full layout diagram.
 ///
 /// Blocks are produced by
 /// [`Builder::split_ciphertext`](`super::Builder::split_ciphertext`) or by block-level

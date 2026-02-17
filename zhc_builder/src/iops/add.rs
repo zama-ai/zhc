@@ -10,13 +10,8 @@ use zhc_utils::{
 
 use crate::builder::{Builder, Ciphertext, ExtensionBehavior};
 
+/// Creates an IR for addition of two encrypted integers.
 pub fn add(spec: CiphertextSpec) -> Builder {
-    // Add 2 integers, using the Hillis Steel method.
-    // Outputs a list containing the resulting blocks.
-    // clean_ct : option to clean the ct at the output.
-    // Note that if the ct is not cleaned, its noise
-    // has increased by 2 additions, compared to the input.
-
     let mut builder = Builder::new(spec.block_spec());
     let src_a = builder.declare_ciphertext_input(spec.int_size());
     let src_b = builder.declare_ciphertext_input(spec.int_size());
@@ -26,6 +21,7 @@ pub fn add(spec: CiphertextSpec) -> Builder {
 }
 
 impl Builder {
+    /// Adds two ciphertexts using parallel hillis-steele carry propagation.
     pub fn iop_add_hillis_steele(&mut self, lhs: &Ciphertext, rhs: &Ciphertext) -> Ciphertext {
         // Implements the addition with carry-propagation using the hillis-steele resolution and
         // group of size 4. The encoding of propagation status is the same as the one used

@@ -1,7 +1,4 @@
-use zhc_builder::{
-    builder::CiphertextSpec,
-    iops::{add::add, cmp::cmp_gt},
-};
+use zhc_builder::{CiphertextSpec, add, cmp_gt};
 use zhc_ir::{IR, cse::eliminate_common_subexpressions, dce::eliminate_dead_code};
 use zhc_langs::ioplang::IopLang;
 use zhc_utils::assert_display_is;
@@ -21,7 +18,8 @@ pub fn get_cmp_ir(integer_w: i64, msg_w: i64, carry_w: i64) -> IR<IopLang> {
         integer_w as u16,
         msg_w as u8,
         carry_w as u8,
-    ));
+    ))
+    .into_ir();
     eliminate_dead_code(&mut ir);
     eliminate_common_subexpressions(&mut ir);
     ir
@@ -116,29 +114,29 @@ fn test_cmp_ir() {
         ir.format(),
         r#"
             %0 : CtInt = input<0, CtInt>();
-            %9 : CtInt = input<1, CtInt>();
+            %1 : CtInt = input<1, CtInt>();
             %36 : PtBlock = let_pt_block<1>();
             %56 : CtInt = decl_ct();
-            %1 : CtBlock = extract_ct_block<0>(%0 : CtInt);
-            %2 : CtBlock = extract_ct_block<1>(%0 : CtInt);
-            %3 : CtBlock = extract_ct_block<2>(%0 : CtInt);
-            %4 : CtBlock = extract_ct_block<3>(%0 : CtInt);
-            %5 : CtBlock = extract_ct_block<4>(%0 : CtInt);
-            %6 : CtBlock = extract_ct_block<5>(%0 : CtInt);
-            %7 : CtBlock = extract_ct_block<6>(%0 : CtInt);
-            %8 : CtBlock = extract_ct_block<7>(%0 : CtInt);
-            %10 : CtBlock = extract_ct_block<0>(%9 : CtInt);
-            %11 : CtBlock = extract_ct_block<1>(%9 : CtInt);
-            %12 : CtBlock = extract_ct_block<2>(%9 : CtInt);
-            %13 : CtBlock = extract_ct_block<3>(%9 : CtInt);
-            %14 : CtBlock = extract_ct_block<4>(%9 : CtInt);
-            %15 : CtBlock = extract_ct_block<5>(%9 : CtInt);
-            %16 : CtBlock = extract_ct_block<6>(%9 : CtInt);
-            %17 : CtBlock = extract_ct_block<7>(%9 : CtInt);
-            %18 : CtBlock = pack_ct<4>(%2 : CtBlock, %1 : CtBlock);
-            %20 : CtBlock = pack_ct<4>(%4 : CtBlock, %3 : CtBlock);
-            %22 : CtBlock = pack_ct<4>(%6 : CtBlock, %5 : CtBlock);
-            %24 : CtBlock = pack_ct<4>(%8 : CtBlock, %7 : CtBlock);
+            %2 : CtBlock = extract_ct_block<0>(%0 : CtInt);
+            %3 : CtBlock = extract_ct_block<1>(%0 : CtInt);
+            %4 : CtBlock = extract_ct_block<2>(%0 : CtInt);
+            %5 : CtBlock = extract_ct_block<3>(%0 : CtInt);
+            %6 : CtBlock = extract_ct_block<4>(%0 : CtInt);
+            %7 : CtBlock = extract_ct_block<5>(%0 : CtInt);
+            %8 : CtBlock = extract_ct_block<6>(%0 : CtInt);
+            %9 : CtBlock = extract_ct_block<7>(%0 : CtInt);
+            %10 : CtBlock = extract_ct_block<0>(%1 : CtInt);
+            %11 : CtBlock = extract_ct_block<1>(%1 : CtInt);
+            %12 : CtBlock = extract_ct_block<2>(%1 : CtInt);
+            %13 : CtBlock = extract_ct_block<3>(%1 : CtInt);
+            %14 : CtBlock = extract_ct_block<4>(%1 : CtInt);
+            %15 : CtBlock = extract_ct_block<5>(%1 : CtInt);
+            %16 : CtBlock = extract_ct_block<6>(%1 : CtInt);
+            %17 : CtBlock = extract_ct_block<7>(%1 : CtInt);
+            %18 : CtBlock = pack_ct<4>(%3 : CtBlock, %2 : CtBlock);
+            %20 : CtBlock = pack_ct<4>(%5 : CtBlock, %4 : CtBlock);
+            %22 : CtBlock = pack_ct<4>(%7 : CtBlock, %6 : CtBlock);
+            %24 : CtBlock = pack_ct<4>(%9 : CtBlock, %8 : CtBlock);
             %26 : CtBlock = pack_ct<4>(%11 : CtBlock, %10 : CtBlock);
             %28 : CtBlock = pack_ct<4>(%13 : CtBlock, %12 : CtBlock);
             %30 : CtBlock = pack_ct<4>(%15 : CtBlock, %14 : CtBlock);

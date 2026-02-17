@@ -10,9 +10,9 @@ use batcher::batch;
 use scheduler::schedule;
 use translation::IoplangToHpulang;
 use translation_table::{DOpRepr, generate_translation_table};
-use zhc_builder::iops::cmp::{cmp_eq, cmp_gt, cmp_gte, cmp_lt, cmp_lte, cmp_neq};
-use zhc_builder::iops::if_then_else::if_then_else;
-use zhc_builder::iops::if_then_zero::if_then_zero;
+use zhc_builder::if_then_else;
+use zhc_builder::if_then_zero;
+use zhc_builder::{cmp_eq, cmp_gt, cmp_gte, cmp_lt, cmp_lte, cmp_neq};
 use zhc_ir::cse::eliminate_common_subexpressions;
 use zhc_ir::dce::eliminate_dead_code;
 use zhc_ir::translation::Translator;
@@ -42,18 +42,18 @@ pub enum Iop {
     IfThenZero,
 }
 
-pub use zhc_builder::builder::CiphertextSpec;
+pub use zhc_builder::CiphertextSpec;
 
 fn pipeline(hpu_config: &HpuConfig, spec: CiphertextSpec, iop: Iop) -> Vec<DOpRepr> {
     let mut ir = match iop {
-        Iop::CmpGt => cmp_gt(spec),
-        Iop::CmpGte => cmp_gte(spec),
-        Iop::CmpLt => cmp_lt(spec),
-        Iop::CmpLte => cmp_lte(spec),
-        Iop::CmpEq => cmp_eq(spec),
-        Iop::CmpNeq => cmp_neq(spec),
-        Iop::IfThenElse => if_then_else(spec),
-        Iop::IfThenZero => if_then_zero(spec),
+        Iop::CmpGt => cmp_gt(spec).into_ir(),
+        Iop::CmpGte => cmp_gte(spec).into_ir(),
+        Iop::CmpLt => cmp_lt(spec).into_ir(),
+        Iop::CmpLte => cmp_lte(spec).into_ir(),
+        Iop::CmpEq => cmp_eq(spec).into_ir(),
+        Iop::CmpNeq => cmp_neq(spec).into_ir(),
+        Iop::IfThenElse => if_then_else(spec).into_ir(),
+        Iop::IfThenZero => if_then_zero(spec).into_ir(),
     };
     eliminate_aliases(&mut ir);
     eliminate_dead_code(&mut ir);

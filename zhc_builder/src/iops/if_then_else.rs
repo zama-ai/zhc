@@ -1,34 +1,44 @@
 use zhc_crypto::integer_semantics::CiphertextSpec;
-use zhc_ir::IR;
-use zhc_langs::ioplang::{IopLang, Lut1Def};
+use zhc_langs::ioplang::Lut1Def;
 use zhc_utils::iter::{CollectInSmallVec, MultiZip};
 
-use crate::builder::Builder;
+use crate::{Ciphertext, builder::Builder};
 
-pub fn if_then_else(spec: CiphertextSpec) -> IR<IopLang> {
+/// Creates an IR for conditional selection between two encrypted integers.
+pub fn if_then_else(spec: CiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
-
     let src_a = builder.declare_ciphertext_input(spec.int_size());
-    let src_a_blocks = builder.split_ciphertext(&src_a);
     let src_b = builder.declare_ciphertext_input(spec.int_size());
-    let src_b_blocks = builder.split_ciphertext(&src_b);
     let cond = builder.declare_ciphertext_input(spec.block_spec().message_size() as u16);
-    let cond_blocks = builder.split_ciphertext(&cond);
+    let output = builder.iop_if_then_else(&src_a, &src_b, &cond);
+    builder.declare_ciphertext_output(output);
+    builder
+}
 
-    let output_blocks = (src_a_blocks.iter(), src_b_blocks.iter())
-        .mzip()
-        .map(|(a, b)| {
-            let cond_a = builder.block_pack(&cond_blocks[0], a);
-            let cond_a = builder.block_lookup(&cond_a, Lut1Def::IfFalseZeroed);
-            let cond_b = builder.block_pack(&cond_blocks[0], b);
-            let cond_b = builder.block_lookup(&cond_b, Lut1Def::IfTrueZeroed);
-            builder.block_add(&cond_a, &cond_b)
-        })
-        .cosvec();
+impl Builder {
+    pub fn iop_if_then_else(
+        &self,
+        src_a: &Ciphertext,
+        src_b: &Ciphertext,
+        cond: &Ciphertext,
+    ) -> Ciphertext {
+        let src_a_blocks = self.split_ciphertext(src_a);
+        let src_b_blocks = self.split_ciphertext(src_b);
+        let cond_blocks = self.split_ciphertext(cond);
 
-    builder.declare_ciphertext_output(builder.join_ciphertext(output_blocks));
+        let output_blocks = (src_a_blocks.iter(), src_b_blocks.iter())
+            .mzip()
+            .map(|(a, b)| {
+                let cond_a = self.block_pack(&cond_blocks[0], a);
+                let cond_a = self.block_lookup(&cond_a, Lut1Def::IfFalseZeroed);
+                let cond_b = self.block_pack(&cond_blocks[0], b);
+                let cond_b = self.block_lookup(&cond_b, Lut1Def::IfTrueZeroed);
+                self.block_add(&cond_a, &cond_b)
+            })
+            .cosvec();
 
-    builder.into_ir()
+        self.join_ciphertext(output_blocks)
+    }
 }
 
 #[cfg(test)]
@@ -39,47 +49,47 @@ mod test {
     #[test]
     fn test_if_then_else() {
         let spec = CiphertextSpec::new(16, 2, 2);
-        let ir = if_then_else(spec);
+        let ir = if_then_else(spec).into_ir();
         assert_display_is!(
             ir.format(),
             r#"
                 %0 : CtInt = input<0, CtInt>();
-                %9 : CtInt = input<1, CtInt>();
-                %18 : CtInt = input<2, CtInt>();
+                %1 : CtInt = input<1, CtInt>();
+                %2 : CtInt = input<2, CtInt>();
                 %60 : CtInt = decl_ct();
-                %1 : CtBlock = extract_ct_block<0>(%0 : CtInt);
-                %2 : CtBlock = extract_ct_block<1>(%0 : CtInt);
-                %3 : CtBlock = extract_ct_block<2>(%0 : CtInt);
-                %4 : CtBlock = extract_ct_block<3>(%0 : CtInt);
-                %5 : CtBlock = extract_ct_block<4>(%0 : CtInt);
-                %6 : CtBlock = extract_ct_block<5>(%0 : CtInt);
-                %7 : CtBlock = extract_ct_block<6>(%0 : CtInt);
-                %8 : CtBlock = extract_ct_block<7>(%0 : CtInt);
-                %10 : CtBlock = extract_ct_block<0>(%9 : CtInt);
-                %11 : CtBlock = extract_ct_block<1>(%9 : CtInt);
-                %12 : CtBlock = extract_ct_block<2>(%9 : CtInt);
-                %13 : CtBlock = extract_ct_block<3>(%9 : CtInt);
-                %14 : CtBlock = extract_ct_block<4>(%9 : CtInt);
-                %15 : CtBlock = extract_ct_block<5>(%9 : CtInt);
-                %16 : CtBlock = extract_ct_block<6>(%9 : CtInt);
-                %17 : CtBlock = extract_ct_block<7>(%9 : CtInt);
-                %19 : CtBlock = extract_ct_block<0>(%18 : CtInt);
-                %20 : CtBlock = pack_ct<4>(%19 : CtBlock, %1 : CtBlock);
-                %22 : CtBlock = pack_ct<4>(%19 : CtBlock, %10 : CtBlock);
-                %25 : CtBlock = pack_ct<4>(%19 : CtBlock, %2 : CtBlock);
-                %27 : CtBlock = pack_ct<4>(%19 : CtBlock, %11 : CtBlock);
-                %30 : CtBlock = pack_ct<4>(%19 : CtBlock, %3 : CtBlock);
-                %32 : CtBlock = pack_ct<4>(%19 : CtBlock, %12 : CtBlock);
-                %35 : CtBlock = pack_ct<4>(%19 : CtBlock, %4 : CtBlock);
-                %37 : CtBlock = pack_ct<4>(%19 : CtBlock, %13 : CtBlock);
-                %40 : CtBlock = pack_ct<4>(%19 : CtBlock, %5 : CtBlock);
-                %42 : CtBlock = pack_ct<4>(%19 : CtBlock, %14 : CtBlock);
-                %45 : CtBlock = pack_ct<4>(%19 : CtBlock, %6 : CtBlock);
-                %47 : CtBlock = pack_ct<4>(%19 : CtBlock, %15 : CtBlock);
-                %50 : CtBlock = pack_ct<4>(%19 : CtBlock, %7 : CtBlock);
-                %52 : CtBlock = pack_ct<4>(%19 : CtBlock, %16 : CtBlock);
-                %55 : CtBlock = pack_ct<4>(%19 : CtBlock, %8 : CtBlock);
-                %57 : CtBlock = pack_ct<4>(%19 : CtBlock, %17 : CtBlock);
+                %3 : CtBlock = extract_ct_block<0>(%0 : CtInt);
+                %4 : CtBlock = extract_ct_block<1>(%0 : CtInt);
+                %5 : CtBlock = extract_ct_block<2>(%0 : CtInt);
+                %6 : CtBlock = extract_ct_block<3>(%0 : CtInt);
+                %7 : CtBlock = extract_ct_block<4>(%0 : CtInt);
+                %8 : CtBlock = extract_ct_block<5>(%0 : CtInt);
+                %9 : CtBlock = extract_ct_block<6>(%0 : CtInt);
+                %10 : CtBlock = extract_ct_block<7>(%0 : CtInt);
+                %11 : CtBlock = extract_ct_block<0>(%1 : CtInt);
+                %12 : CtBlock = extract_ct_block<1>(%1 : CtInt);
+                %13 : CtBlock = extract_ct_block<2>(%1 : CtInt);
+                %14 : CtBlock = extract_ct_block<3>(%1 : CtInt);
+                %15 : CtBlock = extract_ct_block<4>(%1 : CtInt);
+                %16 : CtBlock = extract_ct_block<5>(%1 : CtInt);
+                %17 : CtBlock = extract_ct_block<6>(%1 : CtInt);
+                %18 : CtBlock = extract_ct_block<7>(%1 : CtInt);
+                %19 : CtBlock = extract_ct_block<0>(%2 : CtInt);
+                %20 : CtBlock = pack_ct<4>(%19 : CtBlock, %3 : CtBlock);
+                %22 : CtBlock = pack_ct<4>(%19 : CtBlock, %11 : CtBlock);
+                %25 : CtBlock = pack_ct<4>(%19 : CtBlock, %4 : CtBlock);
+                %27 : CtBlock = pack_ct<4>(%19 : CtBlock, %12 : CtBlock);
+                %30 : CtBlock = pack_ct<4>(%19 : CtBlock, %5 : CtBlock);
+                %32 : CtBlock = pack_ct<4>(%19 : CtBlock, %13 : CtBlock);
+                %35 : CtBlock = pack_ct<4>(%19 : CtBlock, %6 : CtBlock);
+                %37 : CtBlock = pack_ct<4>(%19 : CtBlock, %14 : CtBlock);
+                %40 : CtBlock = pack_ct<4>(%19 : CtBlock, %7 : CtBlock);
+                %42 : CtBlock = pack_ct<4>(%19 : CtBlock, %15 : CtBlock);
+                %45 : CtBlock = pack_ct<4>(%19 : CtBlock, %8 : CtBlock);
+                %47 : CtBlock = pack_ct<4>(%19 : CtBlock, %16 : CtBlock);
+                %50 : CtBlock = pack_ct<4>(%19 : CtBlock, %9 : CtBlock);
+                %52 : CtBlock = pack_ct<4>(%19 : CtBlock, %17 : CtBlock);
+                %55 : CtBlock = pack_ct<4>(%19 : CtBlock, %10 : CtBlock);
+                %57 : CtBlock = pack_ct<4>(%19 : CtBlock, %18 : CtBlock);
                 %21 : CtBlock = pbs<IfFalseZeroed>(%20 : CtBlock);
                 %23 : CtBlock = pbs<IfTrueZeroed>(%22 : CtBlock);
                 %26 : CtBlock = pbs<IfFalseZeroed>(%25 : CtBlock);

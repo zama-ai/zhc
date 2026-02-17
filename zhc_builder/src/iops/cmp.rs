@@ -1,131 +1,153 @@
-use crate::builder::Builder;
+use crate::{Ciphertext, builder::Builder};
 use zhc_crypto::integer_semantics::CiphertextSpec;
-use zhc_ir::IR;
-use zhc_langs::ioplang::{IopLang, Lut1Def};
+use zhc_langs::ioplang::Lut1Def;
 use zhc_utils::iter::{CollectInSmallVec, MultiZip};
 
 /// Creates an IR for greater-than comparison between two encrypted integers.
-pub fn cmp_gt(spec: CiphertextSpec) -> IR<IopLang> {
-    cmp(spec, Kind::Gt)
+pub fn cmp_gt(spec: CiphertextSpec) -> Builder {
+    let builder = Builder::new(spec.block_spec());
+    let src_a = builder.declare_ciphertext_input(spec.int_size());
+    let src_b = builder.declare_ciphertext_input(spec.int_size());
+    let output = builder.iop_cmp(&src_a, &src_b, CmpKind::Greater);
+    builder.declare_ciphertext_output(output);
+    builder
 }
 
 /// Creates an IR for greater-than-or-equal comparison between two encrypted integers.
-pub fn cmp_gte(spec: CiphertextSpec) -> IR<IopLang> {
-    cmp(spec, Kind::Gte)
+pub fn cmp_gte(spec: CiphertextSpec) -> Builder {
+    let builder = Builder::new(spec.block_spec());
+    let src_a = builder.declare_ciphertext_input(spec.int_size());
+    let src_b = builder.declare_ciphertext_input(spec.int_size());
+    let output = builder.iop_cmp(&src_a, &src_b, CmpKind::GreaterOrEqual);
+    builder.declare_ciphertext_output(output);
+    builder
 }
 
 /// Creates an IR for less-than comparison between two encrypted integers.
-pub fn cmp_lt(spec: CiphertextSpec) -> IR<IopLang> {
-    cmp(spec, Kind::Lt)
+pub fn cmp_lt(spec: CiphertextSpec) -> Builder {
+    let builder = Builder::new(spec.block_spec());
+    let src_a = builder.declare_ciphertext_input(spec.int_size());
+    let src_b = builder.declare_ciphertext_input(spec.int_size());
+    let output = builder.iop_cmp(&src_a, &src_b, CmpKind::Lower);
+    builder.declare_ciphertext_output(output);
+    builder
 }
 
 /// Creates an IR for less-than-or-equal comparison between two encrypted integers.
-pub fn cmp_lte(spec: CiphertextSpec) -> IR<IopLang> {
-    cmp(spec, Kind::Lte)
+pub fn cmp_lte(spec: CiphertextSpec) -> Builder {
+    let builder = Builder::new(spec.block_spec());
+    let src_a = builder.declare_ciphertext_input(spec.int_size());
+    let src_b = builder.declare_ciphertext_input(spec.int_size());
+    let output = builder.iop_cmp(&src_a, &src_b, CmpKind::LowerOrEqual);
+    builder.declare_ciphertext_output(output);
+    builder
 }
 
 /// Creates an IR for equality comparison between two encrypted integers.
-pub fn cmp_eq(spec: CiphertextSpec) -> IR<IopLang> {
-    cmp(spec, Kind::Eq)
+pub fn cmp_eq(spec: CiphertextSpec) -> Builder {
+    let builder = Builder::new(spec.block_spec());
+    let src_a = builder.declare_ciphertext_input(spec.int_size());
+    let src_b = builder.declare_ciphertext_input(spec.int_size());
+    let output = builder.iop_cmp(&src_a, &src_b, CmpKind::Equal);
+    builder.declare_ciphertext_output(output);
+    builder
 }
 
 /// Creates an IR for inequality comparison between two encrypted integers.
-pub fn cmp_neq(spec: CiphertextSpec) -> IR<IopLang> {
-    cmp(spec, Kind::Neq)
+pub fn cmp_neq(spec: CiphertextSpec) -> Builder {
+    let builder = Builder::new(spec.block_spec());
+    let src_a = builder.declare_ciphertext_input(spec.int_size());
+    let src_b = builder.declare_ciphertext_input(spec.int_size());
+    let output = builder.iop_cmp(&src_a, &src_b, CmpKind::NotEqual);
+    builder.declare_ciphertext_output(output);
+    builder
 }
 
-enum Kind {
-    Gt,
-    Gte,
-    Lt,
-    Lte,
-    Eq,
-    Neq,
+/// The different kinds of comparison.
+pub enum CmpKind {
+    Greater,
+    GreaterOrEqual,
+    Lower,
+    LowerOrEqual,
+    Equal,
+    NotEqual,
 }
 
-impl Kind {
+impl CmpKind {
     fn merge(&self) -> Lut1Def {
         match self {
-            Kind::Gt => Lut1Def::CmpGtMrg,
-            Kind::Gte => Lut1Def::CmpGteMrg,
-            Kind::Lt => Lut1Def::CmpLtMrg,
-            Kind::Lte => Lut1Def::CmpLteMrg,
-            Kind::Eq => Lut1Def::CmpEqMrg,
-            Kind::Neq => Lut1Def::CmpNeqMrg,
+            CmpKind::Greater => Lut1Def::CmpGtMrg,
+            CmpKind::GreaterOrEqual => Lut1Def::CmpGteMrg,
+            CmpKind::Lower => Lut1Def::CmpLtMrg,
+            CmpKind::LowerOrEqual => Lut1Def::CmpLteMrg,
+            CmpKind::Equal => Lut1Def::CmpEqMrg,
+            CmpKind::NotEqual => Lut1Def::CmpNeqMrg,
         }
     }
 
     fn compare(&self) -> Lut1Def {
         match self {
-            Kind::Gt => Lut1Def::CmpGt,
-            Kind::Gte => Lut1Def::CmpGte,
-            Kind::Lt => Lut1Def::CmpLt,
-            Kind::Lte => Lut1Def::CmpLte,
-            Kind::Eq => Lut1Def::CmpEq,
-            Kind::Neq => Lut1Def::CmpNeq,
+            CmpKind::Greater => Lut1Def::CmpGt,
+            CmpKind::GreaterOrEqual => Lut1Def::CmpGte,
+            CmpKind::Lower => Lut1Def::CmpLt,
+            CmpKind::LowerOrEqual => Lut1Def::CmpLte,
+            CmpKind::Equal => Lut1Def::CmpEq,
+            CmpKind::NotEqual => Lut1Def::CmpNeq,
         }
     }
 }
 
-fn cmp(spec: CiphertextSpec, kind: Kind) -> IR<IopLang> {
-    let builder = Builder::new(spec.block_spec());
+impl Builder {
+    pub fn iop_cmp(&self, src_a: &Ciphertext, src_b: &Ciphertext, kind: CmpKind) -> Ciphertext {
+        // get input as array of blk
+        let src_a_blocks = self.split_ciphertext(&src_a);
+        let src_b_blocks = self.split_ciphertext(&src_b);
 
-    // get input as array of blk
-    let src_a = builder.declare_ciphertext_input(spec.int_size());
-    let src_a_blocks = builder.split_ciphertext(&src_a);
-    let src_b = builder.declare_ciphertext_input(spec.int_size());
-    let src_b_blocks = builder.split_ciphertext(&src_b);
+        // pack cts
+        let packed_a = self.comment("Pack A").vector_pack_then_clean(src_a_blocks);
+        let packed_b = self.comment("Pack B").vector_pack_then_clean(src_b_blocks);
 
-    // pack a by pairs
-    let packed_a = builder.with_comment("Pack A", || builder.vector_pack_then_clean(src_a_blocks));
-    // pack b by pairs
-    let packed_b = builder.with_comment("Pack B", || builder.vector_pack_then_clean(src_b_blocks));
-
-    // merge a /b and get sign
-    let mut merged = builder.with_comment("Compare blocks", || {
-        (packed_a.iter(), packed_b.iter())
+        // merge a /b and get sign
+        self.push_comment("Compare blocks");
+        let mut merged = (packed_a.iter(), packed_b.iter())
             .mzip()
             .enumerate()
             .map(|(i, (l, r))| {
-                builder.with_comment(format!("{i}-th"), || {
-                    let sub_lr = builder.block_sub(l, r);
-                    let pbsed = builder.block_lookup(&sub_lr, Lut1Def::CmpSign);
-                    let cst = builder.block_const_plaintext(1);
-                    builder.block_add_plaintext(&pbsed, &cst)
+                self.with_comment(format!("{i}-th"), || {
+                    let sub_lr = self.block_sub(l, r);
+                    let pbsed = self.block_lookup(&sub_lr, Lut1Def::CmpSign);
+                    let cst = self.block_const_plaintext(1);
+                    self.block_add_plaintext(&pbsed, &cst)
                 })
             })
-            .cosvec()
-    });
+            .cosvec();
+        self.pop_comment();
 
-    // reduce (tree-based reduce)
-    builder.with_comment("Reduce comparison", || {
+        // reduce (tree-based reduce)
+        self.push_comment("Reduce comparison");
         while merged.len() > 2 {
-            let packed = builder.vector_pack(merged.as_slice());
+            let packed = self.vector_pack(merged.as_slice());
             let reduced = packed
                 .iter()
-                .map(|x| builder.block_lookup(x, Lut1Def::CmpReduce))
+                .map(|x| self.block_lookup(x, Lut1Def::CmpReduce))
                 .cosvec();
             // prepare next iter
             merged = reduced;
         }
-    });
+        self.pop_comment();
 
-    // last reduce and cast based on user required cmp
-    let cmp_res = match merged.len() {
-        2 => {
-            let p = builder.vector_pack(merged.as_slice());
-            builder.block_lookup(&p[0], kind.merge())
-        }
-        1 => builder.block_lookup(&merged[0], kind.compare()),
-        _ => unreachable!(),
-    };
+        // last reduce and cast based on user required cmp
+        let cmp_res = match merged.len() {
+            2 => {
+                let p = self.vector_pack(merged.as_slice());
+                self.block_lookup(&p[0], kind.merge())
+            }
+            1 => self.block_lookup(&merged[0], kind.compare()),
+            _ => unreachable!(),
+        };
 
-    // store result in slot 0 of output 0
-    let output = builder.join_ciphertext([cmp_res]);
-
-    builder.declare_ciphertext_output(output);
-
-    builder.into_ir()
+        self.join_ciphertext([cmp_res])
+    }
 }
 
 #[cfg(test)]
@@ -140,32 +162,32 @@ mod test {
         let spec = CiphertextSpec::new(16, 2, 2);
         let ir = cmp_eq(spec);
         assert_display_is!(
-            ir.format().show_comments(true).show_opid(true),
+            ir.into_ir().format().show_comments(true).show_opid(true),
             r#"
                 @00                              | %0 : CtInt = input<0, CtInt>();
-                @09                              | %9 : CtInt = input<1, CtInt>();
+                @01                              | %1 : CtInt = input<1, CtInt>();
                 @36   // Compare blocks / 0-th   | %36 : PtBlock = let_pt_block<1>();
                 @56                              | %56 : CtInt = decl_ct();
-                @01                              | %1 : CtBlock = extract_ct_block<0>(%0 : CtInt);
-                @02                              | %2 : CtBlock = extract_ct_block<1>(%0 : CtInt);
-                @03                              | %3 : CtBlock = extract_ct_block<2>(%0 : CtInt);
-                @04                              | %4 : CtBlock = extract_ct_block<3>(%0 : CtInt);
-                @05                              | %5 : CtBlock = extract_ct_block<4>(%0 : CtInt);
-                @06                              | %6 : CtBlock = extract_ct_block<5>(%0 : CtInt);
-                @07                              | %7 : CtBlock = extract_ct_block<6>(%0 : CtInt);
-                @08                              | %8 : CtBlock = extract_ct_block<7>(%0 : CtInt);
-                @10                              | %10 : CtBlock = extract_ct_block<0>(%9 : CtInt);
-                @11                              | %11 : CtBlock = extract_ct_block<1>(%9 : CtInt);
-                @12                              | %12 : CtBlock = extract_ct_block<2>(%9 : CtInt);
-                @13                              | %13 : CtBlock = extract_ct_block<3>(%9 : CtInt);
-                @14                              | %14 : CtBlock = extract_ct_block<4>(%9 : CtInt);
-                @15                              | %15 : CtBlock = extract_ct_block<5>(%9 : CtInt);
-                @16                              | %16 : CtBlock = extract_ct_block<6>(%9 : CtInt);
-                @17                              | %17 : CtBlock = extract_ct_block<7>(%9 : CtInt);
-                @18   // Pack A                  | %18 : CtBlock = pack_ct<4>(%2 : CtBlock, %1 : CtBlock);
-                @20   // Pack A                  | %20 : CtBlock = pack_ct<4>(%4 : CtBlock, %3 : CtBlock);
-                @22   // Pack A                  | %22 : CtBlock = pack_ct<4>(%6 : CtBlock, %5 : CtBlock);
-                @24   // Pack A                  | %24 : CtBlock = pack_ct<4>(%8 : CtBlock, %7 : CtBlock);
+                @02                              | %2 : CtBlock = extract_ct_block<0>(%0 : CtInt);
+                @03                              | %3 : CtBlock = extract_ct_block<1>(%0 : CtInt);
+                @04                              | %4 : CtBlock = extract_ct_block<2>(%0 : CtInt);
+                @05                              | %5 : CtBlock = extract_ct_block<3>(%0 : CtInt);
+                @06                              | %6 : CtBlock = extract_ct_block<4>(%0 : CtInt);
+                @07                              | %7 : CtBlock = extract_ct_block<5>(%0 : CtInt);
+                @08                              | %8 : CtBlock = extract_ct_block<6>(%0 : CtInt);
+                @09                              | %9 : CtBlock = extract_ct_block<7>(%0 : CtInt);
+                @10                              | %10 : CtBlock = extract_ct_block<0>(%1 : CtInt);
+                @11                              | %11 : CtBlock = extract_ct_block<1>(%1 : CtInt);
+                @12                              | %12 : CtBlock = extract_ct_block<2>(%1 : CtInt);
+                @13                              | %13 : CtBlock = extract_ct_block<3>(%1 : CtInt);
+                @14                              | %14 : CtBlock = extract_ct_block<4>(%1 : CtInt);
+                @15                              | %15 : CtBlock = extract_ct_block<5>(%1 : CtInt);
+                @16                              | %16 : CtBlock = extract_ct_block<6>(%1 : CtInt);
+                @17                              | %17 : CtBlock = extract_ct_block<7>(%1 : CtInt);
+                @18   // Pack A                  | %18 : CtBlock = pack_ct<4>(%3 : CtBlock, %2 : CtBlock);
+                @20   // Pack A                  | %20 : CtBlock = pack_ct<4>(%5 : CtBlock, %4 : CtBlock);
+                @22   // Pack A                  | %22 : CtBlock = pack_ct<4>(%7 : CtBlock, %6 : CtBlock);
+                @24   // Pack A                  | %24 : CtBlock = pack_ct<4>(%9 : CtBlock, %8 : CtBlock);
                 @26   // Pack B                  | %26 : CtBlock = pack_ct<4>(%11 : CtBlock, %10 : CtBlock);
                 @28   // Pack B                  | %28 : CtBlock = pack_ct<4>(%13 : CtBlock, %12 : CtBlock);
                 @30   // Pack B                  | %30 : CtBlock = pack_ct<4>(%15 : CtBlock, %14 : CtBlock);

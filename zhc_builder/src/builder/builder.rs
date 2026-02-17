@@ -3,6 +3,7 @@ use std::{
     cell::{Ref, RefCell, RefMut},
     fmt::Debug,
     iter::repeat_n,
+    rc::Rc,
 };
 use zhc_crypto::integer_semantics::{CiphertextBlockSpec, CiphertextSpec, PlaintextSpec};
 use zhc_ir::{
@@ -65,27 +66,20 @@ impl Debug for Type {
     }
 }
 
+#[derive(Debug)]
 struct InnerBuilder {
     ir: IR<IopLang>,
     sig: Signature<Type>,
-    comment_stack: Vec<String>,
 }
 
 impl InnerBuilder {
-    fn current_comment(&self) -> Option<String> {
-        if self.comment_stack.is_empty() {
-            None
-        } else {
-            Some(self.comment_stack.join(" / "))
-        }
-    }
-
     fn add_op(
         &mut self,
         op: IopInstructionSet,
         args: SmallVec<zhc_ir::ValId>,
+        comment: Option<String>,
     ) -> (zhc_ir::OpId, SmallVec<zhc_ir::ValId>) {
-        match self.current_comment() {
+        match comment {
             Some(comment) => self.ir.add_op_with_comment(op, args, comment).unwrap(),
             None => self.ir.add_op(op, args).unwrap(),
         }
@@ -99,275 +93,6 @@ impl InnerBuilder {
     fn push_ret_type(&mut self, typ: Type) -> usize {
         self.sig.push_ret(typ);
         self.sig.get_returns_arity() - 1
-    }
-}
-
-/// A scoped comment guard returned by [`Builder::comment`].
-///
-/// This wrapper holds a reference to the parent [`Builder`] and delegates every builder
-/// method to it. When dropped, it automatically pops the comment that was pushed when
-/// [`Builder::comment`] was called. This RAII pattern ensures comments are properly
-/// nested even when chaining multiple operations.
-///
-/// All public methods mirror the corresponding [`Builder`] methods and consume `self`,
-/// meaning you can only call one builder method per [`CommentBuilder`]. To emit multiple
-/// operations under the same comment, use [`Builder::with_comment`] instead.
-///
-/// # Examples
-///
-/// ```rust,no_run
-/// # use zhc_builder::builder::*;
-/// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-/// let ct = builder.declare_ciphertext_input(4);
-/// let blocks = builder.split_ciphertext(&ct);
-/// // The comment is popped after block_add returns.
-/// let sum = builder.comment("add first two blocks").block_add(&blocks[0], &blocks[1]);
-/// ```
-pub struct CommentBuilder<'a> {
-    builder: &'a Builder,
-}
-
-impl<'a> CommentBuilder<'a> {
-    /// Declares an encrypted integer input. See [`Builder::declare_ciphertext_input`].
-    pub fn declare_ciphertext_input(self, int_size: u16) -> Ciphertext {
-        self.builder.declare_ciphertext_input(int_size)
-    }
-
-    /// Decomposes a ciphertext into blocks. See [`Builder::split_ciphertext`].
-    pub fn split_ciphertext(self, inp: impl AsRef<Ciphertext>) -> Vec<CiphertextBlock> {
-        self.builder.split_ciphertext(inp)
-    }
-
-    /// Declares a plaintext integer input. See [`Builder::declare_plaintext_input`].
-    pub fn declare_plaintext_input(self, int_size: u16) -> Plaintext {
-        self.builder.declare_plaintext_input(int_size)
-    }
-
-    /// Decomposes a plaintext into blocks. See [`Builder::split_plaintext`].
-    pub fn split_plaintext(self, inp: impl AsRef<Plaintext>) -> Vec<PlaintextBlock> {
-        self.builder.split_plaintext(inp)
-    }
-
-    /// Reassembles blocks into a ciphertext. See [`Builder::join_ciphertext`].
-    pub fn join_ciphertext(self, blocks: impl AsRef<[CiphertextBlock]>) -> Ciphertext {
-        self.builder.join_ciphertext(blocks)
-    }
-
-    /// Declares an encrypted integer output. See [`Builder::declare_ciphertext_output`].
-    pub fn declare_ciphertext_output(self, ct: impl AsRef<Ciphertext>) {
-        self.builder.declare_ciphertext_output(ct)
-    }
-
-    /// Creates a constant plaintext block. See [`Builder::block_const_plaintext`].
-    pub fn block_const_plaintext(self, constant: u8) -> PlaintextBlock {
-        self.builder.block_const_plaintext(constant)
-    }
-
-    /// Creates a constant ciphertext block. See [`Builder::block_const_ciphertext`].
-    pub fn block_const_ciphertext(self, constant: u8) -> CiphertextBlock {
-        self.builder.block_const_ciphertext(constant)
-    }
-
-    /// Adds two ciphertext blocks (protect). See [`Builder::block_add`].
-    pub fn block_add(
-        self,
-        src_a: impl AsRef<CiphertextBlock>,
-        src_b: impl AsRef<CiphertextBlock>,
-    ) -> CiphertextBlock {
-        self.builder.block_add(src_a, src_b)
-    }
-
-    /// Creates an alias for a ciphertext block. See [`Builder::block_alias`].
-    pub fn block_alias(self, src: impl AsRef<CiphertextBlock>) -> CiphertextBlock {
-        self.builder.block_alias(src)
-    }
-
-    /// Adds two ciphertext blocks (temper). See [`Builder::block_temper_add`].
-    pub fn block_temper_add(
-        self,
-        src_a: impl AsRef<CiphertextBlock>,
-        src_b: impl AsRef<CiphertextBlock>,
-    ) -> CiphertextBlock {
-        self.builder.block_temper_add(src_a, src_b)
-    }
-
-    /// Adds two ciphertext blocks (wrapping). See [`Builder::block_wrapping_add`].
-    pub fn block_wrapping_add(
-        self,
-        src_a: impl AsRef<CiphertextBlock>,
-        src_b: impl AsRef<CiphertextBlock>,
-    ) -> CiphertextBlock {
-        self.builder.block_wrapping_add(src_a, src_b)
-    }
-
-    /// Adds a plaintext to a ciphertext block (protect). See [`Builder::block_add_plaintext`].
-    pub fn block_add_plaintext(
-        self,
-        src_a: impl AsRef<CiphertextBlock>,
-        src_b: impl AsRef<PlaintextBlock>,
-    ) -> CiphertextBlock {
-        self.builder.block_add_plaintext(src_a, src_b)
-    }
-
-    /// Adds a plaintext to a ciphertext block (wrapping). See
-    /// [`Builder::block_wrapping_add_plaintext`].
-    pub fn block_wrapping_add_plaintext(
-        self,
-        src_a: impl AsRef<CiphertextBlock>,
-        src_b: impl AsRef<PlaintextBlock>,
-    ) -> CiphertextBlock {
-        self.builder.block_wrapping_add_plaintext(src_a, src_b)
-    }
-
-    /// Subtracts two ciphertext blocks (protect). See [`Builder::block_sub`].
-    pub fn block_sub(
-        self,
-        src_a: impl AsRef<CiphertextBlock>,
-        src_b: impl AsRef<CiphertextBlock>,
-    ) -> CiphertextBlock {
-        self.builder.block_sub(src_a, src_b)
-    }
-
-    /// Subtracts a plaintext from a ciphertext block (protect). See
-    /// [`Builder::block_sub_plaintext`].
-    pub fn block_sub_plaintext(
-        self,
-        src_a: impl AsRef<CiphertextBlock>,
-        src_b: impl AsRef<PlaintextBlock>,
-    ) -> CiphertextBlock {
-        self.builder.block_sub_plaintext(src_a, src_b)
-    }
-
-    /// Subtracts a ciphertext from a plaintext block (protect). See
-    /// [`Builder::block_plaintext_sub`].
-    pub fn block_plaintext_sub(
-        self,
-        src_a: impl AsRef<PlaintextBlock>,
-        src_b: impl AsRef<CiphertextBlock>,
-    ) -> CiphertextBlock {
-        self.builder.block_plaintext_sub(src_a, src_b)
-    }
-
-    /// Packs two ciphertext blocks into one. See [`Builder::block_pack`].
-    pub fn block_pack(
-        self,
-        src_a: impl AsRef<CiphertextBlock>,
-        src_b: impl AsRef<CiphertextBlock>,
-    ) -> CiphertextBlock {
-        self.builder.block_pack(src_a, src_b)
-    }
-
-    /// Packs two blocks and applies a PBS lookup. See [`Builder::block_pack_then_lookup`].
-    pub fn block_pack_then_lookup(
-        self,
-        src_a: impl AsRef<CiphertextBlock>,
-        src_b: impl AsRef<CiphertextBlock>,
-        lut: Lut1Def,
-    ) -> CiphertextBlock {
-        self.builder.block_pack_then_lookup(src_a, src_b, lut)
-    }
-
-    /// Applies a single-output PBS lookup. See [`Builder::block_lookup`].
-    pub fn block_lookup(self, src: impl AsRef<CiphertextBlock>, lut: Lut1Def) -> CiphertextBlock {
-        self.builder.block_lookup(src, lut)
-    }
-
-    /// Applies a single-output PBS lookup (wrapping). See [`Builder::block_wrapping_lookup`].
-    pub fn block_wrapping_lookup(
-        self,
-        src: impl AsRef<CiphertextBlock>,
-        lut: Lut1Def,
-    ) -> CiphertextBlock {
-        self.builder.block_wrapping_lookup(src, lut)
-    }
-
-    /// Applies a dual-output PBS lookup. See [`Builder::block_lookup2`].
-    pub fn block_lookup2(
-        self,
-        src: impl AsRef<CiphertextBlock>,
-        lut: Lut2Def,
-    ) -> (CiphertextBlock, CiphertextBlock) {
-        self.builder.block_lookup2(src, lut)
-    }
-
-    /// Packs consecutive pairs of blocks. See [`Builder::vector_pack`].
-    pub fn vector_pack(self, blocks: impl AsRef<[CiphertextBlock]>) -> Vec<CiphertextBlock> {
-        self.builder.vector_pack(blocks)
-    }
-
-    /// Packs consecutive pairs and applies an identity PBS. See
-    /// [`Builder::vector_pack_then_clean`].
-    pub fn vector_pack_then_clean(
-        self,
-        blocks: impl AsRef<[CiphertextBlock]>,
-    ) -> Vec<CiphertextBlock> {
-        self.builder.vector_pack_then_clean(blocks)
-    }
-
-    /// Packs consecutive pairs and applies a PBS lookup. See
-    /// [`Builder::vector_pack_then_lookup`].
-    pub fn vector_pack_then_lookup(
-        self,
-        blocks: impl AsRef<[CiphertextBlock]>,
-        lut: Lut1Def,
-    ) -> Vec<CiphertextBlock> {
-        self.builder.vector_pack_then_lookup(blocks, lut)
-    }
-
-    /// Zips two block slices, packs each pair, and applies a PBS lookup. See
-    /// [`Builder::vector_zip_then_lookup`].
-    pub fn vector_zip_then_lookup(
-        self,
-        lhs: impl AsRef<[CiphertextBlock]>,
-        rhs: impl AsRef<[CiphertextBlock]>,
-        lut: Lut1Def,
-        extension: ExtensionBehavior,
-    ) -> Vec<CiphertextBlock> {
-        self.builder
-            .vector_zip_then_lookup(lhs, rhs, lut, extension)
-    }
-
-    /// Applies a PBS lookup to every block. See [`Builder::vector_lookup`].
-    pub fn vector_lookup(
-        self,
-        blocks: impl AsRef<[CiphertextBlock]>,
-        lut: Lut1Def,
-    ) -> Vec<CiphertextBlock> {
-        self.builder.vector_lookup(blocks, lut)
-    }
-
-    /// Applies a dual-output PBS lookup to every block. See [`Builder::vector_lookup2`].
-    pub fn vector_lookup2(
-        self,
-        blocks: impl AsRef<[CiphertextBlock]>,
-        lut: Lut2Def,
-    ) -> Vec<(CiphertextBlock, CiphertextBlock)> {
-        self.builder.vector_lookup2(blocks, lut)
-    }
-
-    /// Adds two block slices element-wise. See [`Builder::vector_add`].
-    pub fn vector_add(
-        self,
-        lhs: impl AsRef<[CiphertextBlock]>,
-        rhs: impl AsRef<[CiphertextBlock]>,
-        extension: ExtensionBehavior,
-    ) -> Vec<CiphertextBlock> {
-        self.builder.vector_add(lhs, rhs, extension)
-    }
-
-    /// Zero-extends a block slice to a given length. See [`Builder::vector_unsigned_extension`].
-    pub fn vector_unsigned_extension(
-        self,
-        inp: impl AsRef<[CiphertextBlock]>,
-        size: usize,
-    ) -> Vec<CiphertextBlock> {
-        self.builder.vector_unsigned_extension(inp, size)
-    }
-}
-
-impl<'a> Drop for CommentBuilder<'a> {
-    fn drop(&mut self) {
-        self.builder.pop_comment();
     }
 }
 
@@ -405,7 +130,7 @@ impl<'a> Drop for CommentBuilder<'a> {
 /// # Examples
 ///
 /// ```rust,no_run
-/// # use zhc_builder::builder::*;
+/// # use zhc_builder::*;
 /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
 /// let input = builder.declare_ciphertext_input(8);
 /// let blocks = builder.split_ciphertext(&input);
@@ -416,7 +141,8 @@ impl<'a> Drop for CommentBuilder<'a> {
 /// ```
 pub struct Builder {
     spec: CiphertextBlockSpec,
-    inner: RefCell<InnerBuilder>,
+    inner: Rc<RefCell<InnerBuilder>>,
+    comment_stack: RefCell<Vec<String>>,
 }
 
 impl Builder {
@@ -428,24 +154,13 @@ impl Builder {
         self.inner.borrow_mut()
     }
 
-    /// Pushes a comment and returns a guard that delegates builder methods.
-    ///
-    /// This is a fluent alternative to [`with_comment`](Self::with_comment) for single
-    /// operations. The returned [`CommentBuilder`] forwards one builder call under the
-    /// pushed comment, then automatically pops it when dropped.
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// # use zhc_builder::builder::*;
-    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.declare_ciphertext_input(4);
-    /// let blocks = builder.split_ciphertext(&ct);
-    /// let sum = builder.comment("add blocks").block_add(&blocks[0], &blocks[1]);
-    /// ```
-    pub fn comment(&self, comment: impl Into<String>) -> CommentBuilder<'_> {
-        self.push_comment(comment);
-        CommentBuilder { builder: self }
+    fn current_comment(&self) -> Option<String> {
+        let stack = self.comment_stack.borrow();
+        if stack.is_empty() {
+            return None;
+        } else {
+            Some(stack.join(" / "))
+        }
     }
 
     /// Creates a new builder with the given block specification.
@@ -457,56 +172,18 @@ impl Builder {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use zhc_builder::builder::*;
+    /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
     /// ```
     pub fn new(spec: CiphertextBlockSpec) -> Self {
         Self {
             spec: spec,
-            inner: RefCell::new(InnerBuilder {
+            inner: Rc::new(RefCell::new(InnerBuilder {
                 ir: IR::empty(),
                 sig: Signature::empty(),
-                comment_stack: Vec::new(),
-            }),
+            })),
+            comment_stack: RefCell::new(Vec::new()),
         }
-    }
-
-    /// Pushes a comment onto the annotation stack.
-    ///
-    /// All IR instructions emitted while this comment is on the stack will be annotated
-    /// with the full stack joined by ` / `. Use [`pop_comment`](Self::pop_comment) to
-    /// remove it, or prefer the RAII-style [`with_comment`](Self::with_comment).
-    pub fn push_comment(&self, comment: impl Into<String>) {
-        self.inner_mut().comment_stack.push(comment.into());
-    }
-
-    /// Pops the most recent comment from the annotation stack.
-    pub fn pop_comment(&self) {
-        self.inner_mut().comment_stack.pop();
-    }
-
-    /// Executes a closure with a temporary comment pushed onto the annotation stack.
-    ///
-    /// The comment is pushed before calling `f` and popped after it returns, ensuring
-    /// proper nesting even if `f` itself pushes additional comments. Returns whatever
-    /// `f` returns.
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// # use zhc_builder::builder::*;
-    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.declare_ciphertext_input(4);
-    /// let blocks = builder.split_ciphertext(&ct);
-    /// let result = builder.with_comment("carry propagation", || {
-    ///     builder.block_add(&blocks[0], &blocks[1])
-    /// });
-    /// ```
-    pub fn with_comment<R>(&self, comment: impl Into<String>, f: impl FnOnce() -> R) -> R {
-        self.push_comment(comment);
-        let result = f();
-        self.pop_comment();
-        result
     }
 
     /// Consumes the builder and returns the optimized IR graph.
@@ -519,7 +196,7 @@ impl Builder {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use zhc_builder::builder::*;
+    /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
     /// let input = builder.declare_ciphertext_input(8);
     /// // ... build circuit ...
@@ -527,7 +204,7 @@ impl Builder {
     /// let ir = builder.into_ir();
     /// ```
     pub fn into_ir(self) -> IR<IopLang> {
-        let mut ir = self.inner.into_inner().ir;
+        let mut ir = Rc::try_unwrap(self.inner).unwrap().into_inner().ir;
         eliminate_aliases(&mut ir);
         skip_store_load(&mut ir);
         eliminate_dead_code(&mut ir);
@@ -649,7 +326,7 @@ impl Builder {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use zhc_builder::builder::*;
+    /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
     /// let a = builder.declare_ciphertext_input(8);
     /// let b = builder.declare_ciphertext_input(8);
@@ -707,6 +384,72 @@ impl Builder {
         }
     }
 
+    /// Returns a new builder handle with the given comment appended to the annotation stack.
+    ///
+    /// Unlike [`push_comment`](Self::push_comment) which mutates the current builder, this
+    /// method returns a *new* [`Builder`] sharing the same underlying IR but with an
+    /// independent comment stack containing the new comment. All instructions emitted
+    /// through the returned builder are annotated with the full stack including the new
+    /// comment; instructions emitted through the original builder remain unaffected. This
+    /// is useful for forking annotation contexts without manual push/pop management.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let commented = builder.comment("add phase");
+    /// let ct = commented.declare_ciphertext_input(4);
+    /// // Instructions through `commented` carry the "add phase" annotation.
+    /// ```
+    pub fn comment(&self, comment: impl Into<String>) -> Builder {
+        let comment_stack = self.comment_stack.clone();
+        comment_stack.borrow_mut().push(comment.into());
+        Builder {
+            spec: self.spec,
+            inner: self.inner.clone(),
+            comment_stack,
+        }
+    }
+
+    /// Pushes a comment onto the annotation stack.
+    ///
+    /// All IR instructions emitted while this comment is on the stack will be annotated
+    /// with the full stack joined by ` / `. Use [`pop_comment`](Self::pop_comment) to
+    /// remove it, or prefer the RAII-style [`with_comment`](Self::with_comment).
+    pub fn push_comment(&self, comment: impl Into<String>) {
+        self.comment_stack.borrow_mut().push(comment.into());
+    }
+
+    /// Pops the most recent comment from the annotation stack.
+    pub fn pop_comment(&self) {
+        self.comment_stack.borrow_mut().pop();
+    }
+
+    /// Executes a closure with a temporary comment pushed onto the annotation stack.
+    ///
+    /// The comment is pushed before calling `f` and popped after it returns, ensuring
+    /// proper nesting even if `f` itself pushes additional comments. Returns whatever
+    /// `f` returns.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let ct = builder.declare_ciphertext_input(4);
+    /// let blocks = builder.split_ciphertext(&ct);
+    /// let result = builder.with_comment("carry propagation", || {
+    ///     builder.block_add(&blocks[0], &blocks[1])
+    /// });
+    /// ```
+    pub fn with_comment<R>(&self, comment: impl Into<String>, f: impl FnOnce() -> R) -> R {
+        self.push_comment(comment);
+        let result = f();
+        self.pop_comment();
+        result
+    }
+
     /// Declares an encrypted integer input of the given bit-width.
     ///
     /// Registers a new ciphertext input in the circuit signature and emits the
@@ -719,7 +462,7 @@ impl Builder {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use zhc_builder::builder::*;
+    /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
     /// let input = builder.declare_ciphertext_input(8);
     /// let blocks = builder.split_ciphertext(&input);
@@ -733,6 +476,7 @@ impl Builder {
                 typ: IopTypeSystem::Ciphertext,
             },
             svec![],
+            self.current_comment(),
         );
         Ciphertext {
             valid: inp[0],
@@ -752,6 +496,7 @@ impl Builder {
                 let (_, ret) = self.inner_mut().add_op(
                     IopInstructionSet::ExtractCtBlock { index },
                     svec![inp.valid],
+                    self.current_comment(),
                 );
                 CiphertextBlock {
                     valid: ret[0],
@@ -781,6 +526,7 @@ impl Builder {
                 typ: IopTypeSystem::Plaintext,
             },
             svec![],
+            self.current_comment(),
         );
         Plaintext {
             valid: inp[0],
@@ -790,7 +536,7 @@ impl Builder {
 
     /// Decomposes a [`Plaintext`] into its individual radix blocks.
     ///
-    /// Returns one [`PlaintextBlock`] per digit in the radix-decompoosed
+    /// Returns one [`PlaintextBlock`] per digit in the radix-decomposed
     /// representation, ordered from least-significant to most-significant digit. The
     /// length of the returned vector is `int_size / message_size`.
     pub fn split_plaintext(&self, inp: impl AsRef<Plaintext>) -> Vec<PlaintextBlock> {
@@ -800,6 +546,7 @@ impl Builder {
                 let (_, ret) = self.inner_mut().add_op(
                     IopInstructionSet::ExtractPtBlock { index },
                     svec![inp.valid],
+                    self.current_comment(),
                 );
                 PlaintextBlock {
                     valid: ret[0],
@@ -818,7 +565,7 @@ impl Builder {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use zhc_builder::builder::*;
+    /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
     /// let input = builder.declare_ciphertext_input(8);
     /// let blocks = builder.split_ciphertext(&input);
@@ -830,15 +577,18 @@ impl Builder {
         let blocks = blocks.as_ref();
         let int_size = blocks.len() as u16 * self.spec.message_size() as u16;
         let spec = self.spec.ciphertext_spec(int_size);
-        let (_, acc) = self
-            .inner_mut()
-            .add_op(IopInstructionSet::DeclareCiphertext, svec![]);
+        let (_, acc) = self.inner_mut().add_op(
+            IopInstructionSet::DeclareCiphertext,
+            svec![],
+            self.current_comment(),
+        );
         let mut acc = acc[0];
         for (index, block) in blocks.iter().enumerate() {
             let index = index as u8;
             let (_, ret) = self.inner_mut().add_op(
                 IopInstructionSet::StoreCtBlock { index },
                 svec![block.valid, acc],
+                self.current_comment(),
             );
             acc = ret[0];
         }
@@ -859,18 +609,19 @@ impl Builder {
                 typ: IopTypeSystem::Ciphertext,
             },
             svec![ct.valid],
+            self.current_comment(),
         );
     }
 
     /// Creates a constant [`PlaintextBlock`] with the given message value.
     ///
-    /// The `constant` is stored as a message-only plaintext block. Its bit-width must fit
+    /// The `value` is stored as a message-only plaintext block. Its bit-width must fit
     /// within the builder's message size.
     ///
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use zhc_builder::builder::*;
+    /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
     /// let ct = builder.declare_ciphertext_input(4);
     /// let blocks = builder.split_ciphertext(&ct);
@@ -878,9 +629,11 @@ impl Builder {
     /// let incremented = builder.block_add_plaintext(&blocks[0], &one);
     /// ```
     pub fn block_const_plaintext(&self, value: u8) -> PlaintextBlock {
-        let (_node, ret) = self
-            .inner_mut()
-            .add_op(IopInstructionSet::LetPlaintextBlock { value }, svec![]);
+        let (_node, ret) = self.inner_mut().add_op(
+            IopInstructionSet::LetPlaintextBlock { value },
+            svec![],
+            self.current_comment(),
+        );
         PlaintextBlock {
             valid: ret[0],
             spec: self.spec.matching_plaintext_block_spec(),
@@ -890,12 +643,12 @@ impl Builder {
     /// Adds two ciphertext blocks (protect flavor).
     ///
     /// Computes `src_a + src_b` at the block level. Uses protect semantics — see
-    /// [Operation Flavors](super#operation-flavors).
+    /// [Operation Flavors](super::super#operation-flavors).
     ///
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use zhc_builder::builder::*;
+    /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
     /// let ct = builder.declare_ciphertext_input(4);
     /// let blocks = builder.split_ciphertext(&ct);
@@ -907,9 +660,11 @@ impl Builder {
         src_b: impl AsRef<CiphertextBlock>,
     ) -> CiphertextBlock {
         let (src_a, src_b) = (src_a.as_ref(), src_b.as_ref());
-        let (_node, ret) = self
-            .inner_mut()
-            .add_op(IopInstructionSet::AddCt, svec![src_a.valid, src_b.valid]);
+        let (_node, ret) = self.inner_mut().add_op(
+            IopInstructionSet::AddCt,
+            svec![src_a.valid, src_b.valid],
+            self.current_comment(),
+        );
         CiphertextBlock {
             valid: ret[0],
             spec: self.spec,
@@ -927,6 +682,7 @@ impl Builder {
                 typ: IopTypeSystem::CiphertextBlock,
             },
             svec![src.valid],
+            self.current_comment(),
         );
         CiphertextBlock {
             valid: ret[0],
@@ -937,7 +693,7 @@ impl Builder {
     /// Adds two ciphertext blocks (temper flavor).
     ///
     /// Computes `src_a + src_b` at the block level. Uses temper semantics — see
-    /// [Operation Flavors](super#operation-flavors).
+    /// [Operation Flavors](super::super#operation-flavors).
     pub fn block_temper_add(
         &self,
         src_a: impl AsRef<CiphertextBlock>,
@@ -947,6 +703,7 @@ impl Builder {
         let (_node, ret) = self.inner_mut().add_op(
             IopInstructionSet::TemperAddCt,
             svec![src_a.valid, src_b.valid],
+            self.current_comment(),
         );
         CiphertextBlock {
             valid: ret[0],
@@ -957,7 +714,7 @@ impl Builder {
     /// Adds two ciphertext blocks (wrapping flavor).
     ///
     /// Computes `src_a + src_b` at the block level. Uses wrapping semantics — see
-    /// [Operation Flavors](super#operation-flavors).
+    /// [Operation Flavors](super::super#operation-flavors).
     pub fn block_wrapping_add(
         &self,
         src_a: impl AsRef<CiphertextBlock>,
@@ -967,6 +724,7 @@ impl Builder {
         let (_node, ret) = self.inner_mut().add_op(
             IopInstructionSet::WrappingAddCt,
             svec![src_a.valid, src_b.valid],
+            self.current_comment(),
         );
         CiphertextBlock {
             valid: ret[0],
@@ -977,16 +735,18 @@ impl Builder {
     /// Adds a plaintext block to a ciphertext block (protect flavor).
     ///
     /// Computes `src_a + src_b` where `src_a` is encrypted and `src_b` is plaintext.
-    /// Uses protect semantics — see [Operation Flavors](super#operation-flavors).
+    /// Uses protect semantics — see [Operation Flavors](super::super#operation-flavors).
     pub fn block_add_plaintext(
         &self,
         src_a: impl AsRef<CiphertextBlock>,
         src_b: impl AsRef<PlaintextBlock>,
     ) -> CiphertextBlock {
         let (src_a, src_b) = (src_a.as_ref(), src_b.as_ref());
-        let (_node, ret) = self
-            .inner_mut()
-            .add_op(IopInstructionSet::AddPt, svec![src_a.valid, src_b.valid]);
+        let (_node, ret) = self.inner_mut().add_op(
+            IopInstructionSet::AddPt,
+            svec![src_a.valid, src_b.valid],
+            self.current_comment(),
+        );
         CiphertextBlock {
             valid: ret[0],
             spec: self.spec,
@@ -996,7 +756,7 @@ impl Builder {
     /// Adds a plaintext block to a ciphertext block (wrapping flavor).
     ///
     /// Computes `src_a + src_b` where `src_a` is encrypted and `src_b` is plaintext.
-    /// Uses wrapping semantics — see [Operation Flavors](super#operation-flavors).
+    /// Uses wrapping semantics — see [Operation Flavors](super::super#operation-flavors).
     pub fn block_wrapping_add_plaintext(
         &self,
         src_a: impl AsRef<CiphertextBlock>,
@@ -1006,6 +766,7 @@ impl Builder {
         let (_node, ret) = self.inner_mut().add_op(
             IopInstructionSet::WrappingAddPt,
             svec![src_a.valid, src_b.valid],
+            self.current_comment(),
         );
         CiphertextBlock {
             valid: ret[0],
@@ -1016,16 +777,18 @@ impl Builder {
     /// Subtracts two ciphertext blocks (protect flavor).
     ///
     /// Computes `src_a - src_b` at the block level. Uses protect semantics — see
-    /// [Operation Flavors](super#operation-flavors).
+    /// [Operation Flavors](super::super#operation-flavors).
     pub fn block_sub(
         &self,
         src_a: impl AsRef<CiphertextBlock>,
         src_b: impl AsRef<CiphertextBlock>,
     ) -> CiphertextBlock {
         let (src_a, src_b) = (src_a.as_ref(), src_b.as_ref());
-        let (_node, ret) = self
-            .inner_mut()
-            .add_op(IopInstructionSet::SubCt, svec![src_a.valid, src_b.valid]);
+        let (_node, ret) = self.inner_mut().add_op(
+            IopInstructionSet::SubCt,
+            svec![src_a.valid, src_b.valid],
+            self.current_comment(),
+        );
         CiphertextBlock {
             valid: ret[0],
             spec: self.spec,
@@ -1035,16 +798,18 @@ impl Builder {
     /// Subtracts a plaintext block from a ciphertext block (protect flavor).
     ///
     /// Computes `src_a - src_b` where `src_a` is encrypted and `src_b` is plaintext.
-    /// Uses protect semantics — see [Operation Flavors](super#operation-flavors).
+    /// Uses protect semantics — see [Operation Flavors](super::super#operation-flavors).
     pub fn block_sub_plaintext(
         &self,
         src_a: impl AsRef<CiphertextBlock>,
         src_b: impl AsRef<PlaintextBlock>,
     ) -> CiphertextBlock {
         let (src_a, src_b) = (src_a.as_ref(), src_b.as_ref());
-        let (_node, ret) = self
-            .inner_mut()
-            .add_op(IopInstructionSet::SubPt, svec![src_a.valid, src_b.valid]);
+        let (_node, ret) = self.inner_mut().add_op(
+            IopInstructionSet::SubPt,
+            svec![src_a.valid, src_b.valid],
+            self.current_comment(),
+        );
         CiphertextBlock {
             valid: ret[0],
             spec: self.spec,
@@ -1055,7 +820,7 @@ impl Builder {
     ///
     /// Computes `src_a - src_b` where `src_a` is plaintext and `src_b` is encrypted.
     /// The result is a ciphertext block. Uses protect semantics — see
-    /// [Operation Flavors](super#operation-flavors). Note the reversed operand order
+    /// [Operation Flavors](super::super#operation-flavors). Note the reversed operand order
     /// compared to [`block_sub_plaintext`](Self::block_sub_plaintext).
     pub fn block_plaintext_sub(
         &self,
@@ -1063,9 +828,11 @@ impl Builder {
         src_b: impl AsRef<CiphertextBlock>,
     ) -> CiphertextBlock {
         let (src_a, src_b) = (src_a.as_ref(), src_b.as_ref());
-        let (_node, ret) = self
-            .inner_mut()
-            .add_op(IopInstructionSet::PtSub, svec![src_a.valid, src_b.valid]);
+        let (_node, ret) = self.inner_mut().add_op(
+            IopInstructionSet::PtSub,
+            svec![src_a.valid, src_b.valid],
+            self.current_comment(),
+        );
         CiphertextBlock {
             valid: ret[0],
             spec: self.spec,
@@ -1087,7 +854,7 @@ impl Builder {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use zhc_builder::builder::*;
+    /// # use zhc_builder::*;
     /// # use zhc_langs::ioplang::Lut1Def;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
     /// let ct = builder.declare_ciphertext_input(4);
@@ -1107,6 +874,7 @@ impl Builder {
                 mul: 2u8.pow(self.spec().message_size() as u32),
             },
             svec![src_a.valid, src_b.valid],
+            self.current_comment(),
         );
         CiphertextBlock {
             valid: ret[0],
@@ -1142,7 +910,7 @@ impl Builder {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use zhc_builder::builder::*;
+    /// # use zhc_builder::*;
     /// # use zhc_langs::ioplang::Lut1Def;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
     /// let ct = builder.declare_ciphertext_input(4);
@@ -1152,9 +920,11 @@ impl Builder {
     /// ```
     pub fn block_lookup(&self, src: impl AsRef<CiphertextBlock>, lut: Lut1Def) -> CiphertextBlock {
         let src = src.as_ref();
-        let (_node, ret) = self
-            .inner_mut()
-            .add_op(IopInstructionSet::Pbs { lut }, svec![src.valid]);
+        let (_node, ret) = self.inner_mut().add_op(
+            IopInstructionSet::Pbs { lut },
+            svec![src.valid],
+            self.current_comment(),
+        );
         CiphertextBlock {
             valid: ret[0],
             spec: self.spec,
@@ -1164,7 +934,7 @@ impl Builder {
     /// Applies a single-output PBS lookup using wrapping (negacyclic) semantics.
     ///
     /// Like [`block_lookup`](Self::block_lookup), but uses wrapping semantics for the
-    /// lookup — see [Operation Flavors](super#operation-flavors). This is appropriate
+    /// lookup — see [Operation Flavors](super::super#operation-flavors). This is appropriate
     /// when the input block's padding bit may be set, enabling negacyclic lookup
     /// behavior.
     pub fn block_wrapping_lookup(
@@ -1173,9 +943,11 @@ impl Builder {
         lut: Lut1Def,
     ) -> CiphertextBlock {
         let src = src.as_ref();
-        let (_node, ret) = self
-            .inner_mut()
-            .add_op(IopInstructionSet::WrappingPbs { lut }, svec![src.valid]);
+        let (_node, ret) = self.inner_mut().add_op(
+            IopInstructionSet::WrappingPbs { lut },
+            svec![src.valid],
+            self.current_comment(),
+        );
         CiphertextBlock {
             valid: ret[0],
             spec: self.spec,
@@ -1194,9 +966,11 @@ impl Builder {
         lut: Lut2Def,
     ) -> (CiphertextBlock, CiphertextBlock) {
         let src = src.as_ref();
-        let (_node, ret) = self
-            .inner_mut()
-            .add_op(IopInstructionSet::Pbs2 { lut }, svec![src.valid]);
+        let (_node, ret) = self.inner_mut().add_op(
+            IopInstructionSet::Pbs2 { lut },
+            svec![src.valid],
+            self.current_comment(),
+        );
         (
             CiphertextBlock {
                 valid: ret[0],
@@ -1215,9 +989,11 @@ impl Builder {
     /// for initializing accumulators or providing constant operands in arithmetic. The
     /// value's bit-width must fit within the block's data bits (carry + message).
     pub fn block_const_ciphertext(&self, value: u8) -> CiphertextBlock {
-        let (_node, ret) = self
-            .inner_mut()
-            .add_op(IopInstructionSet::LetCiphertextBlock { value }, svec![]);
+        let (_node, ret) = self.inner_mut().add_op(
+            IopInstructionSet::LetCiphertextBlock { value },
+            svec![],
+            self.current_comment(),
+        );
         CiphertextBlock {
             valid: ret[0],
             spec: self.spec,
