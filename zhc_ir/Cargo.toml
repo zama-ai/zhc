@@ -1,9 +1,11 @@
 [package]
 name = "zhc_ir"
+description = "Graph-based intermediate representation framework with dialect support"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+readme.workspace = true
 
 [dependencies]
 zhc_utils.workspace = true

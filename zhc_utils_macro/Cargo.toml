@@ -1,9 +1,11 @@
 [package]
 name = "zhc_utils_macro"
+description = "Procedural macros for the ZHC compiler"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+readme.workspace = true
 
 [lib]
 proc-macro = true

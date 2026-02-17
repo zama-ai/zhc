@@ -1,9 +1,11 @@
 [package]
 name = "zhc_builder"
+description = "High-level builders for homomorphic integer operations"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+readme.workspace = true
 
 [dependencies]
 zhc_ir.workspace = true
