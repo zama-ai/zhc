@@ -88,8 +88,8 @@ impl<'ir, D: Dialect> OpRef<'ir, D> {
         self.id
     }
 
-    /// Returns a copy of the operation's dialect-specific data.
-    pub fn get_operation(&self) -> D::InstructionSet {
+    /// Returns a copy of the instruction's dialect-specific data.
+    pub fn get_instruction(&self) -> D::InstructionSet {
         self.operation.clone()
     }
 

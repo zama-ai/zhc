@@ -135,7 +135,7 @@ pub fn generate_translation_table(ir: &IR<DopLang>) -> Vec<DOpRepr> {
     for op in ir.walk_ops_topological() {
         use zhc_langs::doplang::Argument::*;
         use zhc_langs::doplang::DopInstructionSet::*;
-        match op.get_operation() {
+        match op.get_instruction() {
             ADD {
                 dst: CtReg { addr: dst, .. },
                 src1: CtReg { addr: src1, .. },

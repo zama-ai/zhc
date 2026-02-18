@@ -5,7 +5,7 @@ use super::{Depth, Dialect, OpId, Signature, State, ValId};
 #[allow(dead_code)]
 pub struct OpMut<'s, D: Dialect> {
     pub id: OpId,
-    pub operation: &'s mut D::InstructionSet,
+    pub instruction: &'s mut D::InstructionSet,
     pub signature: &'s mut Signature<D::TypeSystem>,
     pub args: &'s mut SmallVec<ValId>,
     pub returns: &'s mut SmallVec<ValId>,

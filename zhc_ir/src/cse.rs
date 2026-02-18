@@ -100,7 +100,7 @@ impl CommonSubexpressionAnalysis {
 
             // We compute an expr for each return value of the op and iterate.
             for (expr, val) in
-                D::op_to_exprs(op.get_operation(), arg_vns.into_iter()).zip(op.get_returns_iter())
+                D::op_to_exprs(op.get_instruction(), arg_vns.into_iter()).zip(op.get_returns_iter())
             {
                 // We get the vn for the current val.
                 let vn = if expr_to_vn.contains_key(&expr) {

@@ -347,25 +347,25 @@ impl BatchMap {
         let args = op.get_arg_valids();
         let rets = op.get_return_valids();
         let mut map = SmallMap::<ValId, ValId>::new();
-        let HpuInstructionSet::Batch { block } = op.get_operation() else {
+        let HpuInstructionSet::Batch { block } = op.get_instruction() else {
             unreachable!()
         };
         let mut ordered_batch_arg_valids = block
             .walk_ops_linear()
-            .filter(|op| matches!(op.get_operation(), HpuInstructionSet::BatchArg { .. }))
+            .filter(|op| matches!(op.get_instruction(), HpuInstructionSet::BatchArg { .. }))
             .covec();
         ordered_batch_arg_valids.sort_unstable_by_key(|op| {
-            let HpuInstructionSet::BatchArg { pos, .. } = op.get_operation() else {
+            let HpuInstructionSet::BatchArg { pos, .. } = op.get_instruction() else {
                 unreachable!()
             };
             pos
         });
         let mut ordered_batch_ret_valids = block
             .walk_ops_linear()
-            .filter(|op| matches!(op.get_operation(), HpuInstructionSet::BatchRet { .. }))
+            .filter(|op| matches!(op.get_instruction(), HpuInstructionSet::BatchRet { .. }))
             .covec();
         ordered_batch_ret_valids.sort_unstable_by_key(|op| {
-            let HpuInstructionSet::BatchRet { pos, .. } = op.get_operation() else {
+            let HpuInstructionSet::BatchRet { pos, .. } = op.get_instruction() else {
                 unreachable!()
             };
             pos
@@ -514,7 +514,7 @@ impl<'ir> Allocator<'ir> {
             let args = op.get_arg_valids();
             let rets = op.get_return_valids();
 
-            match op.get_operation() {
+            match op.get_instruction() {
                 HpuInstructionSet::SrcLd { from } => {
                     let [r_dst] = self.get_dst_registers([rets[0]]);
                     self.add_dop(DopInstructionSet::LD {
@@ -578,7 +578,7 @@ impl<'ir> Allocator<'ir> {
                         .get_val(args[1])
                         .get_origin()
                         .opref
-                        .get_operation();
+                        .get_instruction();
                     let HpuInstructionSet::ImmLd { from } = imm_ld_op else {
                         unreachable!()
                     };
@@ -599,7 +599,7 @@ impl<'ir> Allocator<'ir> {
                         .get_val(args[1])
                         .get_origin()
                         .opref
-                        .get_operation();
+                        .get_instruction();
                     let HpuInstructionSet::ImmLd { from } = imm_ld_op else {
                         unreachable!()
                     };
@@ -620,7 +620,7 @@ impl<'ir> Allocator<'ir> {
                         .get_val(args[0])
                         .get_origin()
                         .opref
-                        .get_operation();
+                        .get_instruction();
                     let HpuInstructionSet::ImmLd { from } = imm_ld_op else {
                         unreachable!()
                     };
@@ -641,7 +641,7 @@ impl<'ir> Allocator<'ir> {
                         .get_val(args[1])
                         .get_origin()
                         .opref
-                        .get_operation();
+                        .get_instruction();
                     let HpuInstructionSet::ImmLd { from } = imm_ld_op else {
                         unreachable!()
                     };
@@ -695,7 +695,7 @@ impl<'ir> Allocator<'ir> {
                     for op in block.walk_ops_linear() {
                         let rets = op.get_return_valids();
                         let args = op.get_arg_valids();
-                        match op.get_operation() {
+                        match op.get_instruction() {
                             HpuInstructionSet::Pbs { lut } => {
                                 let [r_dst] = self.get_dst_registers([map[rets[0]]]);
                                 let r_src = self.get_src_register(map[args[0]]);
@@ -802,14 +802,14 @@ impl<'ir> Allocator<'ir> {
                             | HpuInstructionSet::BatchRet { .. } => {}
                             _ => unreachable!(
                                 "Encountered unexpected operation while allocating: {}",
-                                op.get_operation()
+                                op.get_instruction()
                             ),
                         }
                     }
                 }
                 _ => unreachable!(
                     "Encountered unexpected operation while allocating: {}",
-                    op.get_operation()
+                    op.get_instruction()
                 ),
             }
 

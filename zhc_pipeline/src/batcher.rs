@@ -65,7 +65,7 @@ impl<'a> Batcher<'a> {
         for op in self.0.iter() {
             let (_, batch_op_rets) = batch
                 .add_op(
-                    op.get_operation(),
+                    op.get_instruction(),
                     op.get_arg_valids()
                         .iter()
                         .map(|k| batch_map.get(k).unwrap())
@@ -117,11 +117,11 @@ pub fn batch(ir: &IR<HpuLang>) -> IR<HpuLang> {
     let mut batcher = Batcher::new();
     for op in ir.walk_ops_linear() {
         use zhc_langs::hpulang::HpuInstructionSet::*;
-        match op.get_operation() {
+        match op.get_instruction() {
             AddCt | SubCt | Mac { .. } | AddPt | SubPt | PtSub | MulPt => {
                 let (_, valids) = output
                     .add_op(
-                        op.get_operation(),
+                        op.get_instruction(),
                         svec![map[op.get_arg_valids()[0]], map[op.get_arg_valids()[1]]],
                     )
                     .unwrap();
@@ -129,17 +129,17 @@ pub fn batch(ir: &IR<HpuLang>) -> IR<HpuLang> {
             }
             AddCst { .. } | SubCst { .. } | CstSub { .. } | MulCst { .. } => {
                 let (_, valids) = output
-                    .add_op(op.get_operation(), svec![map[op.get_arg_valids()[0]]])
+                    .add_op(op.get_instruction(), svec![map[op.get_arg_valids()[0]]])
                     .unwrap();
                 map.insert(op.get_return_valids()[0], valids[0]);
             }
             ImmLd { .. } | SrcLd { .. } | CstCt { .. } => {
-                let (_, valids) = output.add_op(op.get_operation(), svec![]).unwrap();
+                let (_, valids) = output.add_op(op.get_instruction(), svec![]).unwrap();
                 map.insert(op.get_return_valids()[0], valids[0]);
             }
             DstSt { .. } => {
                 output
-                    .add_op(op.get_operation(), svec![map[op.get_arg_valids()[0]]])
+                    .add_op(op.get_instruction(), svec![map[op.get_arg_valids()[0]]])
                     .unwrap();
             }
             Pbs { .. } | Pbs2 { .. } | Pbs4 { .. } | Pbs8 { .. } => {
@@ -180,7 +180,7 @@ mod test {
         use zhc_langs::hpulang::HpuInstructionSet::*;
         batch
             .walk_ops_linear()
-            .for_each(|op| match op.get_operation() {
+            .for_each(|op| match op.get_instruction() {
                 Pbs { .. }
                 | Pbs2 { .. }
                 | Pbs4 { .. }

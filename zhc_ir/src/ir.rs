@@ -102,7 +102,7 @@ impl<D: Dialect> IR<D> {
     pub(crate) fn raw_get_op_mut(&mut self, opid: OpId) -> OpMut<'_, D> {
         assert!(self.raw_has_opid(opid), "Unknown opid");
         OpMut {
-            operation: &mut self.op_operations[opid],
+            instruction: &mut self.op_operations[opid],
             signature: &mut self.op_signatures[opid],
             args: &mut self.op_arguments[opid],
             returns: &mut self.op_returns[opid],
@@ -196,7 +196,7 @@ impl<D: Dialect> IR<D> {
     pub(crate) fn raw_insert_op(&mut self, op: Op<D>) -> OpId {
         let opid = OpId(self.raw_n_ops());
         let Op {
-            operation,
+            instruction: operation,
             signature,
             args,
             returns,
@@ -390,7 +390,7 @@ impl<D: Dialect> IR<D> {
         walker.for_each(|opid| {
             let opmut = self.raw_get_op_mut(opid);
             if opmut.state.is_active() {
-                f(opmut.operation);
+                f(opmut.instruction);
             };
         });
     }
@@ -469,7 +469,7 @@ impl<D: Dialect> IR<D> {
         // We begin by adding the op. Note that for now the return values do not exist, and will be
         // added once created.
         let op = Op {
-            operation: op,
+            instruction: op,
             signature: sig.clone(),
             args: args.clone(),
             returns: svec![],

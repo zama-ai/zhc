@@ -163,7 +163,7 @@ impl DialectInstructionSet for HpuInstructionSet {
             HpuInstructionSet::Batch { block } => {
                 let mut inputs = block
                     .walk_ops_linear()
-                    .filter_map(|op| match op.get_operation() {
+                    .filter_map(|op| match op.get_instruction() {
                         HpuInstructionSet::BatchArg { pos, ty } => Some((pos, ty)),
                         _ => None,
                     })
@@ -172,7 +172,7 @@ impl DialectInstructionSet for HpuInstructionSet {
                 let inputs = inputs.into_iter().map(|a| a.1).cosvec();
                 let mut outputs = block
                     .walk_ops_linear()
-                    .filter_map(|op| match op.get_operation() {
+                    .filter_map(|op| match op.get_instruction() {
                         HpuInstructionSet::BatchRet { pos, ty } => Some((pos, ty)),
                         _ => None,
                     })

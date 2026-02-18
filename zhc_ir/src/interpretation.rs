@@ -139,7 +139,7 @@ where
     let mut had_failure = false;
 
     let annotated = ir.forward_dataflow_analysis(|_, valmap: &ValMap<InterpState<V>>, opref| {
-        let sig = opref.get_operation().get_signature();
+        let sig = opref.get_instruction().get_signature();
         let n_returns = sig.get_returns().len();
 
         // Retrieve arguments and check for upstream failures
@@ -180,7 +180,7 @@ where
 
         // Interpret with panic catching
         let interpret_result = catch_unwind(AssertUnwindSafe(|| {
-            opref.get_operation().interpret(context, interpreted_args)
+            opref.get_instruction().interpret(context, interpreted_args)
         }));
 
         match interpret_result {

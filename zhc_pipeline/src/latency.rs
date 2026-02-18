@@ -22,7 +22,7 @@ pub fn compute_latency(ir: &IR<DopLang>, config: HpuConfig) -> Cycle {
     let dops = ir
         .walk_ops_linear()
         .map(|a| DOp {
-            raw: a.get_operation(),
+            raw: a.get_instruction(),
             id: DOpId(a.get_id().into()),
         })
         .collect();

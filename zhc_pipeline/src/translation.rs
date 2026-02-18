@@ -131,7 +131,7 @@ impl Translator for IoplangToHpulang {
             .filter(|op| {
                 // Keep the ciphertext output ops.
                 matches!(
-                    op.get_operation(),
+                    op.get_instruction(),
                     IopInstructionSet::Output {
                         typ: IopTypeSystem::Ciphertext,
                         ..
@@ -142,9 +142,9 @@ impl Translator for IoplangToHpulang {
                 // For the output, we search the let reaching this output.
                 let let_pred = oup_op
                     .get_inc_reaching_iter()
-                    .find(|pr| matches!(pr.get_operation(), IopInstructionSet::DeclareCiphertext))
+                    .find(|pr| matches!(pr.get_instruction(), IopInstructionSet::DeclareCiphertext))
                     .expect("Failed to find the declaration predecessor of an `output` op.");
-                let IopInstructionSet::Output { pos, .. } = oup_op.get_operation() else {
+                let IopInstructionSet::Output { pos, .. } = oup_op.get_instruction() else {
                     unreachable!()
                 };
                 (let_pred.get_id(), pos)
@@ -152,7 +152,7 @@ impl Translator for IoplangToHpulang {
             .collect();
 
         for op in input.walk_ops_topological() {
-            match op.get_operation() {
+            match op.get_instruction() {
                 IopInstructionSet::Input { .. } | IopInstructionSet::LetPlaintextBlock { .. } => {
                     // Handled in consumers.
                 }
@@ -164,7 +164,7 @@ impl Translator for IoplangToHpulang {
                     // We just verify that it is not used in an unexpected way.
                     assert!(
                         op.get_reached_iter().all(|reached| matches!(
-                            reached.get_operation(),
+                            reached.get_instruction(),
                             IopInstructionSet::StoreCtBlock { .. }
                                 | IopInstructionSet::Output { .. }
                         )),
@@ -235,7 +235,7 @@ impl Translator for IoplangToHpulang {
                             .unwrap()
                             .get_origin()
                             .opref
-                            .get_operation()
+                            .get_instruction()
                         else {
                             unreachable!()
                         };
@@ -267,7 +267,7 @@ impl Translator for IoplangToHpulang {
                             .unwrap()
                             .get_origin()
                             .opref
-                            .get_operation()
+                            .get_instruction()
                         else {
                             unreachable!()
                         };
@@ -299,7 +299,7 @@ impl Translator for IoplangToHpulang {
                             .unwrap()
                             .get_origin()
                             .opref
-                            .get_operation()
+                            .get_instruction()
                         else {
                             unreachable!()
                         };
@@ -331,7 +331,7 @@ impl Translator for IoplangToHpulang {
                             .unwrap()
                             .get_origin()
                             .opref
-                            .get_operation()
+                            .get_instruction()
                         else {
                             unreachable!()
                         };
@@ -354,7 +354,7 @@ impl Translator for IoplangToHpulang {
                         .get_origin()
                         .opref
                         .get_inc_reaching_iter()
-                        .find_map(|op| match op.get_operation() {
+                        .find_map(|op| match op.get_instruction() {
                             IopInstructionSet::Input {
                                 typ: IopTypeSystem::Ciphertext,
                                 pos,
@@ -383,7 +383,7 @@ impl Translator for IoplangToHpulang {
                         .get_origin()
                         .opref
                         .get_inc_reaching_iter()
-                        .find_map(|op| match op.get_operation() {
+                        .find_map(|op| match op.get_instruction() {
                             IopInstructionSet::Input {
                                 typ: IopTypeSystem::Plaintext,
                                 pos,
@@ -412,7 +412,7 @@ impl Translator for IoplangToHpulang {
                         .get_origin()
                         .opref
                         .get_inc_reaching_iter()
-                        .find_map(|op| match op.get_operation() {
+                        .find_map(|op| match op.get_instruction() {
                             IopInstructionSet::DeclareCiphertext => {
                                 let_map.get(&op.get_id()).cloned()
                             }

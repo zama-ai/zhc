@@ -22,7 +22,7 @@ pub fn eliminate_aliases(ir: &mut IR<IopLang>) {
 
     let ann_ir = ir.forward_dataflow_analysis(|_, valmap, op| {
         use super::IopInstructionSet::*;
-        match op.get_operation() {
+        match op.get_instruction() {
             Alias { .. } => {
                 let valid = match valmap[op.get_arg_valids()[0]] {
                     ValAction::Keep(valid) => valid,

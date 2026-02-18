@@ -8,8 +8,8 @@ use super::{Depth, Dialect, Signature, State, ValId};
 /// arguments, return values, execution state, and depth information. Operations
 /// are the fundamental computational units in the IR graph.
 pub struct Op<D: Dialect> {
-    /// The dialect-specific operation being performed.
-    pub operation: D::InstructionSet,
+    /// The dialect-specific instruction being performed.
+    pub instruction: D::InstructionSet,
     /// Type signature specifying argument and return types.
     pub signature: Signature<D::TypeSystem>,
     /// Input values consumed by this operation.

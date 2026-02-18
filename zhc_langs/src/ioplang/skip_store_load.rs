@@ -19,7 +19,7 @@ pub fn skip_store_load(ir: &mut IR<IopLang>) {
 
     let ann_ir = ir.forward_dataflow_analysis(|_, valmap, op| {
         use super::IopInstructionSet::*;
-        match op.get_operation() {
+        match op.get_instruction() {
             DeclareCiphertext => ((), svec![ValAnn::StoresBlocks(FastMap::new())]),
             Input { typ, .. } if typ == IopTypeSystem::Ciphertext => {
                 ((), svec![ValAnn::StoresBlocks(FastMap::new())])

@@ -39,7 +39,7 @@ pub fn schedule<'a, 'b>(ir: &'a IR<HpuLang>, config: &'b HpuConfig) -> IR<HpuLan
     let flusher = |opref: &OpRef<HpuLang>| {
         use zhc_langs::hpulang::HpuInstructionSet::*;
         if should_flush.contains(&opref.get_id()) {
-            match opref.get_operation() {
+            match opref.get_instruction() {
                 Pbs { lut } | PbsF { lut } => PbsF { lut },
                 Pbs2 { lut } | Pbs2F { lut } => Pbs2F { lut },
                 Pbs4 { lut } | Pbs4F { lut } => Pbs4F { lut },
@@ -47,7 +47,7 @@ pub fn schedule<'a, 'b>(ir: &'a IR<HpuLang>, config: &'b HpuConfig) -> IR<HpuLan
                 _ => unreachable!(),
             }
         } else {
-            opref.get_operation()
+            opref.get_instruction()
         }
     };
     let mut output = IR::empty();
@@ -125,7 +125,7 @@ impl<'ir> Scheduler<'ir> {
         let config = config.to_owned();
         let simulator =
             Simulator::from_simulatable(config.freq, (Hpu::new(&config), Timeouter::new()));
-        let affinities = ir.totally_mapped_opmap(|op| match op.get_operation() {
+        let affinities = ir.totally_mapped_opmap(|op| match op.get_instruction() {
             AddCt => Affinity::Alu,
             SubCt => Affinity::Alu,
             Mac { .. } => Affinity::Alu,
@@ -265,7 +265,7 @@ impl<'ir> ForwardSimulator for Scheduler<'ir> {
 
 fn opref_to_dop<'a>(opref: OpRef<'a, HpuLang>, force_flush: bool) -> Option<DOp> {
     use zhc_langs::hpulang::HpuInstructionSet::*;
-    let raw = match opref.get_operation() {
+    let raw = match opref.get_instruction() {
         AddCt => Some(RawDOp::ADD {
             dst: Argument::ct_reg(opref.get_return_valids()[0]),
             src1: Argument::ct_reg(opref.get_arg_valids()[0]),
