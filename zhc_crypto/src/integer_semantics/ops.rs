@@ -335,4 +335,31 @@ impl EmulatedCiphertext {
             spec: self.spec,
         }
     }
+
+    pub fn bitwise_and(self, other: Self) -> EmulatedCiphertext {
+        assert_eq!(self.spec, other.spec(), "Spec mismatch.");
+        let storage = (self.storage & other.storage) & self.spec.int_mask();
+        EmulatedCiphertext {
+            storage,
+            spec: self.spec,
+        }
+    }
+
+    pub fn bitwise_or(self, other: Self) -> EmulatedCiphertext {
+        assert_eq!(self.spec, other.spec(), "Spec mismatch.");
+        let storage = (self.storage | other.storage) & self.spec.int_mask();
+        EmulatedCiphertext {
+            storage,
+            spec: self.spec,
+        }
+    }
+
+    pub fn bitwise_xor(self, other: Self) -> EmulatedCiphertext {
+        assert_eq!(self.spec, other.spec(), "Spec mismatch.");
+        let storage = (self.storage ^ other.storage) & self.spec.int_mask();
+        EmulatedCiphertext {
+            storage,
+            spec: self.spec,
+        }
+    }
 }
