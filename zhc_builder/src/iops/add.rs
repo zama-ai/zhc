@@ -10,7 +10,24 @@ use zhc_utils::{
 
 use crate::builder::{Builder, Ciphertext, ExtensionBehavior};
 
-/// Creates an IR for addition of two encrypted integers.
+/// Creates an IR for the addition of two encrypted integers.
+///
+/// The returned [`Builder`] declares two ciphertext inputs and one ciphertext
+/// output representing the wrapping sum of the operands. Internally the
+/// addition uses [`Builder::iop_add_hillis_steele`] for carry propagation.
+///
+/// The `spec` parameter describes the integer encoding (bit-width, message
+/// bits, carry bits) and determines the number of blocks in the
+/// decomposition.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # use zhc_builder::{CiphertextSpec, add};
+/// # let spec = CiphertextSpec::new(16, 2, 2);
+/// let builder = add(spec);
+/// let ir = builder.into_ir();
+/// ```
 pub fn add(spec: CiphertextSpec) -> Builder {
     let mut builder = Builder::new(spec.block_spec());
     let src_a = builder.declare_ciphertext_input(spec.int_size());
@@ -21,7 +38,29 @@ pub fn add(spec: CiphertextSpec) -> Builder {
 }
 
 impl Builder {
-    /// Adds two ciphertexts using parallel hillis-steele carry propagation.
+    /// Adds two encrypted integers with Hillis-Steele carry propagation.
+    ///
+    /// The operation computes `lhs + rhs` (wrapping) using a parallel-prefix
+    /// carry-propagation scheme with 4-block grouping. Both operands must
+    /// share the same block decomposition as determined by the
+    /// [`CiphertextSpec`] used to create the builder. The result is a fresh
+    /// [`Ciphertext`] whose message bits have been cleaned of any residual
+    /// carry via a final programmable bootstrapping pass.
+    ///
+    /// Non-power-of-two and non-multiple-of-four block counts are handled
+    /// transparently: the computation is extended to a favourable size and
+    /// dead-code elimination trims the unused portion downstream.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::{CiphertextSpec, Builder};
+    /// # let spec = CiphertextSpec::new(16, 2, 2);
+    /// # let mut builder = Builder::new(spec.block_spec());
+    /// # let a = builder.declare_ciphertext_input(spec.int_size());
+    /// # let b = builder.declare_ciphertext_input(spec.int_size());
+    /// let sum = builder.iop_add_hillis_steele(&a, &b);
+    /// ```
     pub fn iop_add_hillis_steele(&mut self, lhs: &Ciphertext, rhs: &Ciphertext) -> Ciphertext {
         // Implements the addition with carry-propagation using the hillis-steele resolution and
         // group of size 4. The encoding of propagation status is the same as the one used

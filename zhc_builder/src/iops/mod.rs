@@ -1,3 +1,34 @@
+//! Integer operations on encrypted data.
+//!
+//! This module collects the built-in *integer operation primitives* (iops) that
+//! the [`Builder`](crate::Builder) can emit into an IR. Every operation comes in
+//! two flavours:
+//!
+//! - A **factory function** (e.g. [`add`], [`cmp_gt`], [`bitwise_xor`]) that returns a fully wired
+//!   [`Builder`](crate::Builder) with declared inputs and outputs, ready to be compiled into an IR
+//!   via [`into_ir`](crate::Builder::into_ir).
+//!
+//! - A **builder method** (e.g. [`Builder::iop_add_hillis_steele`], [`Builder::iop_cmp`]) that can
+//!   be called on an existing [`Builder`](crate::Builder) to compose the operation with other
+//!   logic.
+//!
+//! # Examples
+//!
+//! ```rust,no_run
+//! # use zhc_builder::*;
+//! # let spec = CiphertextSpec::new(16, 2, 2);
+//! // Standalone: build a complete addition IR.
+//! let ir = add(spec).into_ir();
+//!
+//! // Composed: add then compare inside a single builder.
+//! let mut builder = Builder::new(spec.block_spec());
+//! let a = builder.declare_ciphertext_input(spec.int_size());
+//! let b = builder.declare_ciphertext_input(spec.int_size());
+//! let sum = builder.iop_add_hillis_steele(&a, &b);
+//! let is_gt = builder.iop_cmp(&sum, &b, CmpKind::Greater);
+//! builder.declare_ciphertext_output(is_gt);
+//! ```
+
 mod add;
 mod bitwise;
 mod cmp;

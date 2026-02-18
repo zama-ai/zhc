@@ -4,7 +4,27 @@ use zhc_utils::iter::CollectInSmallVec;
 
 use crate::{Ciphertext, builder::Builder};
 
-/// Creates an IR for conditional zeroing of an encrypted integer.
+/// Creates an IR for a conditional zeroing of an encrypted integer.
+///
+/// The returned [`Builder`] declares two ciphertext inputs — one integer
+/// operand and one single-block boolean condition — and one ciphertext
+/// output. When the condition is zero (false) the output equals the
+/// operand; when it is non-zero (true) the output is zero. Internally
+/// delegates to [`Builder::iop_if_then_zero`].
+///
+/// The `spec` parameter describes the integer encoding (bit-width, message
+/// bits, carry bits) and determines the number of blocks in the
+/// decomposition. The condition input is automatically sized to a single
+/// message block.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # use zhc_builder::{CiphertextSpec, if_then_zero};
+/// # let spec = CiphertextSpec::new(16, 2, 2);
+/// let builder = if_then_zero(spec);
+/// let ir = builder.into_ir();
+/// ```
 pub fn if_then_zero(spec: CiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
     let src = builder.declare_ciphertext_input(spec.int_size());
@@ -15,6 +35,27 @@ pub fn if_then_zero(spec: CiphertextSpec) -> Builder {
 }
 
 impl Builder {
+    /// Zeroes an encrypted integer when a condition is true.
+    ///
+    /// When `cond` is zero (false) the result equals `src`; when `cond` is
+    /// non-zero (true) the result is zero. The operation applies a single
+    /// programmable bootstrapping per block, making it cheaper than a full
+    /// [`iop_if_then_else`](Self::iop_if_then_else).
+    ///
+    /// The `cond` operand must be a single-block ciphertext (typically the
+    /// output of a comparison operation such as
+    /// [`iop_cmp`](Self::iop_cmp)).
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::{CiphertextSpec, Builder};
+    /// # let spec = CiphertextSpec::new(16, 2, 2);
+    /// # let builder = Builder::new(spec.block_spec());
+    /// # let src = builder.declare_ciphertext_input(spec.int_size());
+    /// # let cond = builder.declare_ciphertext_input(spec.block_spec().message_size() as u16);
+    /// let zeroed = builder.iop_if_then_zero(&src, &cond);
+    /// ```
     pub fn iop_if_then_zero(&self, src: &Ciphertext, cond: &Ciphertext) -> Ciphertext {
         let src_blocks = self.split_ciphertext(src);
         let cond_blocks = self.split_ciphertext(cond);

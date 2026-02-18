@@ -89,8 +89,11 @@ pub fn bitwise_xor(spec: CiphertextSpec) -> Builder {
 
 /// The kind of bitwise operation to apply block-wise.
 pub enum BwKind {
+    /// Bitwise AND — each output block is `a & b`.
     And,
+    /// Bitwise OR — each output block is `a | b`.
     Or,
+    /// Bitwise XOR — each output block is `a ^ b`.
     Xor,
 }
 

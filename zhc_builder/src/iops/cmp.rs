@@ -3,7 +3,25 @@ use zhc_crypto::integer_semantics::CiphertextSpec;
 use zhc_langs::ioplang::Lut1Def;
 use zhc_utils::iter::{CollectInSmallVec, MultiZip};
 
-/// Creates an IR for greater-than comparison between two encrypted integers.
+/// Creates an IR for a *greater-than* comparison of two encrypted integers.
+///
+/// The returned [`Builder`] declares two ciphertext inputs and one
+/// single-block ciphertext output encoding the boolean result (1 when the
+/// first operand is strictly greater than the second, 0 otherwise).
+/// Internally delegates to [`Builder::iop_cmp`] with [`CmpKind::Greater`].
+///
+/// The `spec` parameter describes the integer encoding (bit-width, message
+/// bits, carry bits) and determines the number of blocks in the
+/// decomposition.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # use zhc_builder::{CiphertextSpec, cmp_gt};
+/// # let spec = CiphertextSpec::new(16, 2, 2);
+/// let builder = cmp_gt(spec);
+/// let ir = builder.into_ir();
+/// ```
 pub fn cmp_gt(spec: CiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
     let src_a = builder.declare_ciphertext_input(spec.int_size());
@@ -13,7 +31,26 @@ pub fn cmp_gt(spec: CiphertextSpec) -> Builder {
     builder
 }
 
-/// Creates an IR for greater-than-or-equal comparison between two encrypted integers.
+/// Creates an IR for a *greater-or-equal* comparison of two encrypted integers.
+///
+/// The returned [`Builder`] declares two ciphertext inputs and one
+/// single-block ciphertext output encoding the boolean result (1 when the
+/// first operand is greater than or equal to the second, 0 otherwise).
+/// Internally delegates to [`Builder::iop_cmp`] with
+/// [`CmpKind::GreaterOrEqual`].
+///
+/// The `spec` parameter describes the integer encoding (bit-width, message
+/// bits, carry bits) and determines the number of blocks in the
+/// decomposition.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # use zhc_builder::{CiphertextSpec, cmp_gte};
+/// # let spec = CiphertextSpec::new(16, 2, 2);
+/// let builder = cmp_gte(spec);
+/// let ir = builder.into_ir();
+/// ```
 pub fn cmp_gte(spec: CiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
     let src_a = builder.declare_ciphertext_input(spec.int_size());
@@ -23,7 +60,25 @@ pub fn cmp_gte(spec: CiphertextSpec) -> Builder {
     builder
 }
 
-/// Creates an IR for less-than comparison between two encrypted integers.
+/// Creates an IR for a *less-than* comparison of two encrypted integers.
+///
+/// The returned [`Builder`] declares two ciphertext inputs and one
+/// single-block ciphertext output encoding the boolean result (1 when the
+/// first operand is strictly less than the second, 0 otherwise).
+/// Internally delegates to [`Builder::iop_cmp`] with [`CmpKind::Lower`].
+///
+/// The `spec` parameter describes the integer encoding (bit-width, message
+/// bits, carry bits) and determines the number of blocks in the
+/// decomposition.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # use zhc_builder::{CiphertextSpec, cmp_lt};
+/// # let spec = CiphertextSpec::new(16, 2, 2);
+/// let builder = cmp_lt(spec);
+/// let ir = builder.into_ir();
+/// ```
 pub fn cmp_lt(spec: CiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
     let src_a = builder.declare_ciphertext_input(spec.int_size());
@@ -33,7 +88,26 @@ pub fn cmp_lt(spec: CiphertextSpec) -> Builder {
     builder
 }
 
-/// Creates an IR for less-than-or-equal comparison between two encrypted integers.
+/// Creates an IR for a *less-or-equal* comparison of two encrypted integers.
+///
+/// The returned [`Builder`] declares two ciphertext inputs and one
+/// single-block ciphertext output encoding the boolean result (1 when the
+/// first operand is less than or equal to the second, 0 otherwise).
+/// Internally delegates to [`Builder::iop_cmp`] with
+/// [`CmpKind::LowerOrEqual`].
+///
+/// The `spec` parameter describes the integer encoding (bit-width, message
+/// bits, carry bits) and determines the number of blocks in the
+/// decomposition.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # use zhc_builder::{CiphertextSpec, cmp_lte};
+/// # let spec = CiphertextSpec::new(16, 2, 2);
+/// let builder = cmp_lte(spec);
+/// let ir = builder.into_ir();
+/// ```
 pub fn cmp_lte(spec: CiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
     let src_a = builder.declare_ciphertext_input(spec.int_size());
@@ -43,7 +117,25 @@ pub fn cmp_lte(spec: CiphertextSpec) -> Builder {
     builder
 }
 
-/// Creates an IR for equality comparison between two encrypted integers.
+/// Creates an IR for an *equality* comparison of two encrypted integers.
+///
+/// The returned [`Builder`] declares two ciphertext inputs and one
+/// single-block ciphertext output encoding the boolean result (1 when the
+/// two operands are equal, 0 otherwise). Internally delegates to
+/// [`Builder::iop_cmp`] with [`CmpKind::Equal`].
+///
+/// The `spec` parameter describes the integer encoding (bit-width, message
+/// bits, carry bits) and determines the number of blocks in the
+/// decomposition.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # use zhc_builder::{CiphertextSpec, cmp_eq};
+/// # let spec = CiphertextSpec::new(16, 2, 2);
+/// let builder = cmp_eq(spec);
+/// let ir = builder.into_ir();
+/// ```
 pub fn cmp_eq(spec: CiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
     let src_a = builder.declare_ciphertext_input(spec.int_size());
@@ -53,7 +145,25 @@ pub fn cmp_eq(spec: CiphertextSpec) -> Builder {
     builder
 }
 
-/// Creates an IR for inequality comparison between two encrypted integers.
+/// Creates an IR for an *inequality* comparison of two encrypted integers.
+///
+/// The returned [`Builder`] declares two ciphertext inputs and one
+/// single-block ciphertext output encoding the boolean result (1 when the
+/// two operands differ, 0 otherwise). Internally delegates to
+/// [`Builder::iop_cmp`] with [`CmpKind::NotEqual`].
+///
+/// The `spec` parameter describes the integer encoding (bit-width, message
+/// bits, carry bits) and determines the number of blocks in the
+/// decomposition.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # use zhc_builder::{CiphertextSpec, cmp_neq};
+/// # let spec = CiphertextSpec::new(16, 2, 2);
+/// let builder = cmp_neq(spec);
+/// let ir = builder.into_ir();
+/// ```
 pub fn cmp_neq(spec: CiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
     let src_a = builder.declare_ciphertext_input(spec.int_size());
@@ -63,13 +173,22 @@ pub fn cmp_neq(spec: CiphertextSpec) -> Builder {
     builder
 }
 
-/// The different kinds of comparison.
+/// The comparison relation to evaluate between two encrypted integers.
+///
+/// Each variant selects the appropriate look-up tables used during the
+/// tree-based reduction in [`Builder::iop_cmp`].
 pub enum CmpKind {
+    /// Strictly greater than (`>`).
     Greater,
+    /// Greater than or equal to (`>=`).
     GreaterOrEqual,
+    /// Strictly less than (`<`).
     Lower,
+    /// Less than or equal to (`<=`).
     LowerOrEqual,
+    /// Equal (`==`).
     Equal,
+    /// Not equal (`!=`).
     NotEqual,
 }
 
@@ -98,6 +217,27 @@ impl CmpKind {
 }
 
 impl Builder {
+    /// Compares two encrypted integers under the given relation.
+    ///
+    /// The comparison proceeds in three phases: block-wise subtraction with
+    /// sign extraction, tree-based reduction of the per-block results, and a
+    /// final merge PBS that produces the boolean output. The `kind` parameter
+    /// selects which relation is evaluated (see [`CmpKind`]).
+    ///
+    /// Both `src_a` and `src_b` must have the same block decomposition. The
+    /// returned [`Ciphertext`] is a single-block integer encoding the boolean
+    /// result: 1 when the relation holds, 0 otherwise.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::{CiphertextSpec, Builder, CmpKind};
+    /// # let spec = CiphertextSpec::new(16, 2, 2);
+    /// # let builder = Builder::new(spec.block_spec());
+    /// # let a = builder.declare_ciphertext_input(spec.int_size());
+    /// # let b = builder.declare_ciphertext_input(spec.int_size());
+    /// let is_eq = builder.iop_cmp(&a, &b, CmpKind::Equal);
+    /// ```
     pub fn iop_cmp(&self, src_a: &Ciphertext, src_b: &Ciphertext, kind: CmpKind) -> Ciphertext {
         // get input as array of blk
         let src_a_blocks = self.split_ciphertext(&src_a);

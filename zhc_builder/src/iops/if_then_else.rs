@@ -4,7 +4,27 @@ use zhc_utils::iter::{CollectInSmallVec, MultiZip};
 
 use crate::{Ciphertext, builder::Builder};
 
-/// Creates an IR for conditional selection between two encrypted integers.
+/// Creates an IR for a conditional select between two encrypted integers.
+///
+/// The returned [`Builder`] declares three ciphertext inputs — two integer
+/// operands and one single-block boolean condition — and one ciphertext
+/// output. When the condition is zero (false) the output equals the first
+/// operand; when it is non-zero (true) the output equals the second.
+/// Internally delegates to [`Builder::iop_if_then_else`].
+///
+/// The `spec` parameter describes the integer encoding (bit-width, message
+/// bits, carry bits) and determines the number of blocks in the
+/// decomposition. The condition input is automatically sized to a single
+/// message block.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # use zhc_builder::{CiphertextSpec, if_then_else};
+/// # let spec = CiphertextSpec::new(16, 2, 2);
+/// let builder = if_then_else(spec);
+/// let ir = builder.into_ir();
+/// ```
 pub fn if_then_else(spec: CiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
     let src_a = builder.declare_ciphertext_input(spec.int_size());
@@ -16,6 +36,29 @@ pub fn if_then_else(spec: CiphertextSpec) -> Builder {
 }
 
 impl Builder {
+    /// Selects between two encrypted integers based on an encrypted condition.
+    ///
+    /// When `cond` is zero (false) the result equals `src_a`; when `cond` is
+    /// non-zero (true) the result equals `src_b`. The selection is performed
+    /// block-wise: each block of `src_a` is zeroed when the condition is true
+    /// and each block of `src_b` is zeroed when it is false, then the two
+    /// are added together.
+    ///
+    /// Both `src_a` and `src_b` must have the same block decomposition, and
+    /// `cond` must be a single-block ciphertext (typically the output of a
+    /// comparison operation such as [`iop_cmp`](Self::iop_cmp)).
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::{CiphertextSpec, Builder};
+    /// # let spec = CiphertextSpec::new(16, 2, 2);
+    /// # let builder = Builder::new(spec.block_spec());
+    /// # let a = builder.declare_ciphertext_input(spec.int_size());
+    /// # let b = builder.declare_ciphertext_input(spec.int_size());
+    /// # let cond = builder.declare_ciphertext_input(spec.block_spec().message_size() as u16);
+    /// let selected = builder.iop_if_then_else(&a, &b, &cond);
+    /// ```
     pub fn iop_if_then_else(
         &self,
         src_a: &Ciphertext,
