@@ -116,7 +116,7 @@ impl Debug for EmulatedCiphertext {
             })
             .separate_with(|| format!("_"))
             .for_each(|string| write!(f, "{}", string).unwrap());
-        write!(f, "_cint")
+        write!(f, "_ct")
     }
 }
 

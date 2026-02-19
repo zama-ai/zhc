@@ -153,8 +153,8 @@ fn display_formatting() {
     let spec = PlaintextSpec::new(8, 4);
     let plaintext = spec.from_int(0b1111_0101);
 
-    assert_eq!(format!("{:?}", plaintext), "15_5_pint");
-    assert_eq!(format!("{:#?}", plaintext), "1111_0101_pint");
+    assert_eq!(format!("{:?}", plaintext), "15_5_pt");
+    assert_eq!(format!("{:#?}", plaintext), "1111_0101_pt");
 }
 
 #[test]

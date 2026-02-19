@@ -87,12 +87,12 @@ mod tests {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : CtBlock = let_ct_block<42>();
-            %1 : CtInt = decl_ct();
-            %2 : CtInt = store_ct_block<0>(%0 : CtBlock, %1 : CtInt);
-            %3 : CtBlock = extract_ct_block<0>(%2 : CtInt);
-            output<0, CtBlock>(%3 : CtBlock);
-        "#
+                %0 : CtBlock = let_ct_block<42>();
+                %1 : Ct = decl_ct();
+                %2 : Ct = store_ct_block<0>(%0 : CtBlock, %1 : Ct);
+                %3 : CtBlock = extract_ct_block<0>(%2 : Ct);
+                output<0, CtBlock>(%3 : CtBlock);
+            "#
         );
 
         skip_store_load(&mut ir);
@@ -177,15 +177,15 @@ mod tests {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : CtBlock = let_ct_block<10>();
-            %1 : CtBlock = let_ct_block<20>();
-            %2 : CtInt = decl_ct();
-            %3 : CtInt = store_ct_block<0>(%0 : CtBlock, %2 : CtInt);
-            %4 : CtInt = store_ct_block<1>(%1 : CtBlock, %3 : CtInt);
-            %5 : CtBlock = extract_ct_block<0>(%4 : CtInt);
-            %6 : CtBlock = extract_ct_block<1>(%4 : CtInt);
-            %7 : CtBlock = add_ct(%5 : CtBlock, %6 : CtBlock);
-            output<0, CtBlock>(%7 : CtBlock);
+                %0 : CtBlock = let_ct_block<10>();
+                %1 : CtBlock = let_ct_block<20>();
+                %2 : Ct = decl_ct();
+                %3 : Ct = store_ct_block<0>(%0 : CtBlock, %2 : Ct);
+                %4 : Ct = store_ct_block<1>(%1 : CtBlock, %3 : Ct);
+                %5 : CtBlock = extract_ct_block<0>(%4 : Ct);
+                %6 : CtBlock = extract_ct_block<1>(%4 : Ct);
+                %7 : CtBlock = add_ct(%5 : CtBlock, %6 : CtBlock);
+                output<0, CtBlock>(%7 : CtBlock);
             "#
         );
 
@@ -236,13 +236,13 @@ mod tests {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : CtBlock = let_ct_block<10>();
-            %1 : CtBlock = let_ct_block<20>();
-            %2 : CtInt = decl_ct();
-            %3 : CtInt = store_ct_block<0>(%0 : CtBlock, %2 : CtInt);
-            %4 : CtInt = store_ct_block<0>(%1 : CtBlock, %3 : CtInt);
-            %5 : CtBlock = extract_ct_block<0>(%4 : CtInt);
-            output<0, CtBlock>(%5 : CtBlock);
+                %0 : CtBlock = let_ct_block<10>();
+                %1 : CtBlock = let_ct_block<20>();
+                %2 : Ct = decl_ct();
+                %3 : Ct = store_ct_block<0>(%0 : CtBlock, %2 : Ct);
+                %4 : Ct = store_ct_block<0>(%1 : CtBlock, %3 : Ct);
+                %5 : CtBlock = extract_ct_block<0>(%4 : Ct);
+                output<0, CtBlock>(%5 : CtBlock);
             "#
         );
 
@@ -323,11 +323,11 @@ mod tests {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : CtInt = input<0, CtInt>();
-            %1 : CtBlock = let_ct_block<99>();
-            %2 : CtInt = store_ct_block<0>(%1 : CtBlock, %0 : CtInt);
-            %3 : CtBlock = extract_ct_block<0>(%2 : CtInt);
-            output<0, CtBlock>(%3 : CtBlock);
+                %0 : Ct = input<0, Ct>();
+                %1 : CtBlock = let_ct_block<99>();
+                %2 : Ct = store_ct_block<0>(%1 : CtBlock, %0 : Ct);
+                %3 : CtBlock = extract_ct_block<0>(%2 : Ct);
+                output<0, CtBlock>(%3 : CtBlock);
             "#
         );
 
@@ -418,15 +418,15 @@ mod tests {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : CtBlock = let_ct_block<10>();
-            %1 : CtBlock = let_ct_block<20>();
-            %2 : CtInt = decl_ct();
-            %3 : CtInt = store_ct_block<0>(%0 : CtBlock, %2 : CtInt);
-            %4 : CtInt = store_ct_block<0>(%1 : CtBlock, %3 : CtInt);
-            %5 : CtBlock = extract_ct_block<0>(%3 : CtInt);
-            %6 : CtBlock = extract_ct_block<0>(%4 : CtInt);
-            %7 : CtBlock = add_ct(%5 : CtBlock, %6 : CtBlock);
-            output<0, CtBlock>(%7 : CtBlock);
+                %0 : CtBlock = let_ct_block<10>();
+                %1 : CtBlock = let_ct_block<20>();
+                %2 : Ct = decl_ct();
+                %3 : Ct = store_ct_block<0>(%0 : CtBlock, %2 : Ct);
+                %4 : Ct = store_ct_block<0>(%1 : CtBlock, %3 : Ct);
+                %5 : CtBlock = extract_ct_block<0>(%3 : Ct);
+                %6 : CtBlock = extract_ct_block<0>(%4 : Ct);
+                %7 : CtBlock = add_ct(%5 : CtBlock, %6 : CtBlock);
+                output<0, CtBlock>(%7 : CtBlock);
             "#
         );
 

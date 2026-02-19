@@ -43,12 +43,12 @@ impl Debug for EmulatedPlaintextBlock {
         if f.alternate() {
             write!(
                 f,
-                "{:0message_size$b}_pblk",
+                "{:0message_size$b}_ptblock",
                 self.raw_message_bits(),
                 message_size = self.spec.message_size() as usize
             )
         } else {
-            write!(f, "{}_pblk", self.raw_message_bits())
+            write!(f, "{}_ptblock", self.raw_message_bits())
         }
     }
 }

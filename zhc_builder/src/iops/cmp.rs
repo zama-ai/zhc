@@ -304,26 +304,26 @@ mod test {
         assert_display_is!(
             ir.into_ir().format().show_comments(true).show_opid(true),
             r#"
-                @00                              | %0 : CtInt = input<0, CtInt>();
-                @01                              | %1 : CtInt = input<1, CtInt>();
+                @00                              | %0 : Ct = input<0, Ct>();
+                @01                              | %1 : Ct = input<1, Ct>();
                 @36   // Compare blocks / 0-th   | %36 : PtBlock = let_pt_block<1>();
-                @56                              | %56 : CtInt = decl_ct();
-                @02                              | %2 : CtBlock = extract_ct_block<0>(%0 : CtInt);
-                @03                              | %3 : CtBlock = extract_ct_block<1>(%0 : CtInt);
-                @04                              | %4 : CtBlock = extract_ct_block<2>(%0 : CtInt);
-                @05                              | %5 : CtBlock = extract_ct_block<3>(%0 : CtInt);
-                @06                              | %6 : CtBlock = extract_ct_block<4>(%0 : CtInt);
-                @07                              | %7 : CtBlock = extract_ct_block<5>(%0 : CtInt);
-                @08                              | %8 : CtBlock = extract_ct_block<6>(%0 : CtInt);
-                @09                              | %9 : CtBlock = extract_ct_block<7>(%0 : CtInt);
-                @10                              | %10 : CtBlock = extract_ct_block<0>(%1 : CtInt);
-                @11                              | %11 : CtBlock = extract_ct_block<1>(%1 : CtInt);
-                @12                              | %12 : CtBlock = extract_ct_block<2>(%1 : CtInt);
-                @13                              | %13 : CtBlock = extract_ct_block<3>(%1 : CtInt);
-                @14                              | %14 : CtBlock = extract_ct_block<4>(%1 : CtInt);
-                @15                              | %15 : CtBlock = extract_ct_block<5>(%1 : CtInt);
-                @16                              | %16 : CtBlock = extract_ct_block<6>(%1 : CtInt);
-                @17                              | %17 : CtBlock = extract_ct_block<7>(%1 : CtInt);
+                @56                              | %56 : Ct = decl_ct();
+                @02                              | %2 : CtBlock = extract_ct_block<0>(%0 : Ct);
+                @03                              | %3 : CtBlock = extract_ct_block<1>(%0 : Ct);
+                @04                              | %4 : CtBlock = extract_ct_block<2>(%0 : Ct);
+                @05                              | %5 : CtBlock = extract_ct_block<3>(%0 : Ct);
+                @06                              | %6 : CtBlock = extract_ct_block<4>(%0 : Ct);
+                @07                              | %7 : CtBlock = extract_ct_block<5>(%0 : Ct);
+                @08                              | %8 : CtBlock = extract_ct_block<6>(%0 : Ct);
+                @09                              | %9 : CtBlock = extract_ct_block<7>(%0 : Ct);
+                @10                              | %10 : CtBlock = extract_ct_block<0>(%1 : Ct);
+                @11                              | %11 : CtBlock = extract_ct_block<1>(%1 : Ct);
+                @12                              | %12 : CtBlock = extract_ct_block<2>(%1 : Ct);
+                @13                              | %13 : CtBlock = extract_ct_block<3>(%1 : Ct);
+                @14                              | %14 : CtBlock = extract_ct_block<4>(%1 : Ct);
+                @15                              | %15 : CtBlock = extract_ct_block<5>(%1 : Ct);
+                @16                              | %16 : CtBlock = extract_ct_block<6>(%1 : Ct);
+                @17                              | %17 : CtBlock = extract_ct_block<7>(%1 : Ct);
                 @18   // Pack A                  | %18 : CtBlock = pack_ct<4>(%3 : CtBlock, %2 : CtBlock);
                 @20   // Pack A                  | %20 : CtBlock = pack_ct<4>(%5 : CtBlock, %4 : CtBlock);
                 @22   // Pack A                  | %22 : CtBlock = pack_ct<4>(%7 : CtBlock, %6 : CtBlock);
@@ -358,8 +358,8 @@ mod test {
                 @53   // Reduce comparison       | %53 : CtBlock = pbs<CmpReduce>(%51 : CtBlock);
                 @54                              | %54 : CtBlock = pack_ct<4>(%53 : CtBlock, %52 : CtBlock);
                 @55                              | %55 : CtBlock = pbs<CmpEqMrg>(%54 : CtBlock);
-                @57                              | %57 : CtInt = store_ct_block<0>(%55 : CtBlock, %56 : CtInt);
-                @58                              | output<0, CtInt>(%57 : CtInt);
+                @57                              | %57 : Ct = store_ct_block<0>(%55 : CtBlock, %56 : Ct);
+                @58                              | output<0, Ct>(%57 : Ct);
             "#
         );
     }

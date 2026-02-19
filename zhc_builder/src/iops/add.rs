@@ -289,8 +289,8 @@ mod test {
                 .show_comments(true)
                 .show_types(false),
             r#"
-                                                   | %0 = input<0, CtInt>();
-                                                   | %1 = input<1, CtInt>();
+                                                   | %0 = input<0, Ct>();
+                                                   | %1 = input<1, Ct>();
                                                    | %2 = extract_ct_block<0>(%0);
                                                    | %3 = extract_ct_block<1>(%0);
                                                    | %4 = extract_ct_block<2>(%0);
@@ -373,7 +373,7 @@ mod test {
                 // Join                            | %171 = store_ct_block<6>(%154, %170);
                 // Join                            | %172 = store_ct_block<7>(%155, %171);
                 // Join                            | %173 = store_ct_block<8>(%156, %172);
-                                                   | output<0, CtInt>(%173);
+                                                   | output<0, Ct>(%173);
             "#
         );
     }

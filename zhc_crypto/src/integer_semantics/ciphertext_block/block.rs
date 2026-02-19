@@ -122,7 +122,7 @@ impl Debug for EmulatedCiphertextBlock {
         if f.alternate() {
             write!(
                 f,
-                "{:0padding_size$b}_{:0carry_size$b}_{:0message_size$b}_cblk",
+                "{:0padding_size$b}_{:0carry_size$b}_{:0message_size$b}_ctblock",
                 self.raw_padding_bits(),
                 self.raw_carry_bits(),
                 self.raw_message_bits(),
@@ -133,7 +133,7 @@ impl Debug for EmulatedCiphertextBlock {
         } else {
             write!(
                 f,
-                "{}_{}_{}_cblk",
+                "{}_{}_{}_ctblock",
                 self.raw_padding_bits(),
                 self.raw_carry_bits(),
                 self.raw_message_bits()

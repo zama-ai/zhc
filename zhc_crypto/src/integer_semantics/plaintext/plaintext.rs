@@ -87,7 +87,7 @@ impl Debug for EmulatedPlaintext {
             })
             .separate_with(|| format!("_"))
             .for_each(|string| write!(f, "{}", string).unwrap());
-        write!(f, "_pint")
+        write!(f, "_pt")
     }
 }
 

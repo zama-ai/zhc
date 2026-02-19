@@ -29,7 +29,7 @@ pub struct CiphertextBlock {
 
 impl Debug for CiphertextBlock {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}_ct_block", self.valid)
+        write!(f, "{}_ctblock", self.valid)
     }
 }
 
@@ -124,7 +124,7 @@ pub struct PlaintextBlock {
 
 impl Debug for PlaintextBlock {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}_pt_block", self.valid)
+        write!(f, "{}_ptblock", self.valid)
     }
 }
 

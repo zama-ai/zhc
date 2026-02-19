@@ -84,18 +84,18 @@ mod test {
         assert_display_is!(
             ir.format(),
             r#"
-                %0 : CtInt = input<0, CtInt>();
-                %1 : CtInt = input<1, CtInt>();
-                %27 : CtInt = decl_ct();
-                %2 : CtBlock = extract_ct_block<0>(%0 : CtInt);
-                %3 : CtBlock = extract_ct_block<1>(%0 : CtInt);
-                %4 : CtBlock = extract_ct_block<2>(%0 : CtInt);
-                %5 : CtBlock = extract_ct_block<3>(%0 : CtInt);
-                %6 : CtBlock = extract_ct_block<4>(%0 : CtInt);
-                %7 : CtBlock = extract_ct_block<5>(%0 : CtInt);
-                %8 : CtBlock = extract_ct_block<6>(%0 : CtInt);
-                %9 : CtBlock = extract_ct_block<7>(%0 : CtInt);
-                %10 : CtBlock = extract_ct_block<0>(%1 : CtInt);
+                %0 : Ct = input<0, Ct>();
+                %1 : Ct = input<1, Ct>();
+                %27 : Ct = decl_ct();
+                %2 : CtBlock = extract_ct_block<0>(%0 : Ct);
+                %3 : CtBlock = extract_ct_block<1>(%0 : Ct);
+                %4 : CtBlock = extract_ct_block<2>(%0 : Ct);
+                %5 : CtBlock = extract_ct_block<3>(%0 : Ct);
+                %6 : CtBlock = extract_ct_block<4>(%0 : Ct);
+                %7 : CtBlock = extract_ct_block<5>(%0 : Ct);
+                %8 : CtBlock = extract_ct_block<6>(%0 : Ct);
+                %9 : CtBlock = extract_ct_block<7>(%0 : Ct);
+                %10 : CtBlock = extract_ct_block<0>(%1 : Ct);
                 %11 : CtBlock = pack_ct<4>(%10 : CtBlock, %2 : CtBlock);
                 %13 : CtBlock = pack_ct<4>(%10 : CtBlock, %3 : CtBlock);
                 %15 : CtBlock = pack_ct<4>(%10 : CtBlock, %4 : CtBlock);
@@ -112,15 +112,15 @@ mod test {
                 %22 : CtBlock = pbs<IfFalseZeroed>(%21 : CtBlock);
                 %24 : CtBlock = pbs<IfFalseZeroed>(%23 : CtBlock);
                 %26 : CtBlock = pbs<IfFalseZeroed>(%25 : CtBlock);
-                %28 : CtInt = store_ct_block<0>(%12 : CtBlock, %27 : CtInt);
-                %29 : CtInt = store_ct_block<1>(%14 : CtBlock, %28 : CtInt);
-                %30 : CtInt = store_ct_block<2>(%16 : CtBlock, %29 : CtInt);
-                %31 : CtInt = store_ct_block<3>(%18 : CtBlock, %30 : CtInt);
-                %32 : CtInt = store_ct_block<4>(%20 : CtBlock, %31 : CtInt);
-                %33 : CtInt = store_ct_block<5>(%22 : CtBlock, %32 : CtInt);
-                %34 : CtInt = store_ct_block<6>(%24 : CtBlock, %33 : CtInt);
-                %35 : CtInt = store_ct_block<7>(%26 : CtBlock, %34 : CtInt);
-                output<0, CtInt>(%35 : CtInt);
+                %28 : Ct = store_ct_block<0>(%12 : CtBlock, %27 : Ct);
+                %29 : Ct = store_ct_block<1>(%14 : CtBlock, %28 : Ct);
+                %30 : Ct = store_ct_block<2>(%16 : CtBlock, %29 : Ct);
+                %31 : Ct = store_ct_block<3>(%18 : CtBlock, %30 : Ct);
+                %32 : Ct = store_ct_block<4>(%20 : CtBlock, %31 : Ct);
+                %33 : Ct = store_ct_block<5>(%22 : CtBlock, %32 : Ct);
+                %34 : Ct = store_ct_block<6>(%24 : CtBlock, %33 : Ct);
+                %35 : Ct = store_ct_block<7>(%26 : CtBlock, %34 : Ct);
+                output<0, Ct>(%35 : Ct);
             "#
         );
     }

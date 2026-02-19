@@ -31,25 +31,25 @@ fn test_add_ir() {
     assert_display_is!(
         ir.format(),
         r#"
-            %0 : CtInt = input<0, CtInt>();
-            %1 : CtInt = input<1, CtInt>();
-            %89 : CtInt = decl_ct();
-            %2 : CtBlock = extract_ct_block<0>(%0 : CtInt);
-            %3 : CtBlock = extract_ct_block<1>(%0 : CtInt);
-            %4 : CtBlock = extract_ct_block<2>(%0 : CtInt);
-            %5 : CtBlock = extract_ct_block<3>(%0 : CtInt);
-            %6 : CtBlock = extract_ct_block<4>(%0 : CtInt);
-            %7 : CtBlock = extract_ct_block<5>(%0 : CtInt);
-            %8 : CtBlock = extract_ct_block<6>(%0 : CtInt);
-            %9 : CtBlock = extract_ct_block<7>(%0 : CtInt);
-            %10 : CtBlock = extract_ct_block<0>(%1 : CtInt);
-            %11 : CtBlock = extract_ct_block<1>(%1 : CtInt);
-            %12 : CtBlock = extract_ct_block<2>(%1 : CtInt);
-            %13 : CtBlock = extract_ct_block<3>(%1 : CtInt);
-            %14 : CtBlock = extract_ct_block<4>(%1 : CtInt);
-            %15 : CtBlock = extract_ct_block<5>(%1 : CtInt);
-            %16 : CtBlock = extract_ct_block<6>(%1 : CtInt);
-            %17 : CtBlock = extract_ct_block<7>(%1 : CtInt);
+            %0 : Ct = input<0, Ct>();
+            %1 : Ct = input<1, Ct>();
+            %89 : Ct = decl_ct();
+            %2 : CtBlock = extract_ct_block<0>(%0 : Ct);
+            %3 : CtBlock = extract_ct_block<1>(%0 : Ct);
+            %4 : CtBlock = extract_ct_block<2>(%0 : Ct);
+            %5 : CtBlock = extract_ct_block<3>(%0 : Ct);
+            %6 : CtBlock = extract_ct_block<4>(%0 : Ct);
+            %7 : CtBlock = extract_ct_block<5>(%0 : Ct);
+            %8 : CtBlock = extract_ct_block<6>(%0 : Ct);
+            %9 : CtBlock = extract_ct_block<7>(%0 : Ct);
+            %10 : CtBlock = extract_ct_block<0>(%1 : Ct);
+            %11 : CtBlock = extract_ct_block<1>(%1 : Ct);
+            %12 : CtBlock = extract_ct_block<2>(%1 : Ct);
+            %13 : CtBlock = extract_ct_block<3>(%1 : Ct);
+            %14 : CtBlock = extract_ct_block<4>(%1 : Ct);
+            %15 : CtBlock = extract_ct_block<5>(%1 : Ct);
+            %16 : CtBlock = extract_ct_block<6>(%1 : Ct);
+            %17 : CtBlock = extract_ct_block<7>(%1 : Ct);
             %18 : CtBlock = add_ct(%2 : CtBlock, %10 : CtBlock);
             %19 : CtBlock = add_ct(%3 : CtBlock, %11 : CtBlock);
             %20 : CtBlock = add_ct(%4 : CtBlock, %12 : CtBlock);
@@ -73,11 +73,11 @@ fn test_add_ir() {
             %45 : CtBlock = add_ct(%44 : CtBlock, %34 : CtBlock);
             %56 : CtBlock = pbs<SolvePropGroupFinal0>(%36 : CtBlock);
             %82 : CtBlock = pbs<MsgOnly>(%74 : CtBlock);
-            %90 : CtInt = store_ct_block<0>(%81 : CtBlock, %89 : CtInt);
+            %90 : Ct = store_ct_block<0>(%81 : CtBlock, %89 : Ct);
             %38 : CtBlock = temper_add_ct(%37 : CtBlock, %31 : CtBlock);
             %57 : CtBlock = pbs<SolvePropGroupFinal1>(%37 : CtBlock);
             %75 : CtBlock = add_ct(%20 : CtBlock, %56 : CtBlock);
-            %91 : CtInt = store_ct_block<1>(%82 : CtBlock, %90 : CtInt);
+            %91 : Ct = store_ct_block<1>(%82 : CtBlock, %90 : Ct);
             %39 : CtBlock = pbs<SolvePropGroupFinal2>(%38 : CtBlock);
             %76 : CtBlock = add_ct(%21 : CtBlock, %57 : CtBlock);
             %83 : CtBlock = pbs<MsgOnly>(%75 : CtBlock);
@@ -86,23 +86,23 @@ fn test_add_ir() {
             %66 : CtBlock = add_ct(%45 : CtBlock, %39 : CtBlock);
             %77 : CtBlock = add_ct(%22 : CtBlock, %39 : CtBlock);
             %84 : CtBlock = pbs<MsgOnly>(%76 : CtBlock);
-            %92 : CtInt = store_ct_block<2>(%83 : CtBlock, %91 : CtInt);
+            %92 : Ct = store_ct_block<2>(%83 : CtBlock, %91 : Ct);
             %63 : CtBlock = pbs<SolvePropGroupFinal0>(%62 : CtBlock);
             %65 : CtBlock = pbs<SolvePropGroupFinal1>(%64 : CtBlock);
             %67 : CtBlock = pbs<SolvePropGroupFinal2>(%66 : CtBlock);
             %85 : CtBlock = pbs<MsgOnly>(%77 : CtBlock);
-            %93 : CtInt = store_ct_block<3>(%84 : CtBlock, %92 : CtInt);
+            %93 : Ct = store_ct_block<3>(%84 : CtBlock, %92 : Ct);
             %78 : CtBlock = add_ct(%23 : CtBlock, %63 : CtBlock);
             %79 : CtBlock = add_ct(%24 : CtBlock, %65 : CtBlock);
             %80 : CtBlock = add_ct(%25 : CtBlock, %67 : CtBlock);
-            %94 : CtInt = store_ct_block<4>(%85 : CtBlock, %93 : CtInt);
+            %94 : Ct = store_ct_block<4>(%85 : CtBlock, %93 : Ct);
             %86 : CtBlock = pbs<MsgOnly>(%78 : CtBlock);
             %87 : CtBlock = pbs<MsgOnly>(%79 : CtBlock);
             %88 : CtBlock = pbs<MsgOnly>(%80 : CtBlock);
-            %95 : CtInt = store_ct_block<5>(%86 : CtBlock, %94 : CtInt);
-            %96 : CtInt = store_ct_block<6>(%87 : CtBlock, %95 : CtInt);
-            %97 : CtInt = store_ct_block<7>(%88 : CtBlock, %96 : CtInt);
-            output<0, CtInt>(%97 : CtInt);
+            %95 : Ct = store_ct_block<5>(%86 : CtBlock, %94 : Ct);
+            %96 : Ct = store_ct_block<6>(%87 : CtBlock, %95 : Ct);
+            %97 : Ct = store_ct_block<7>(%88 : CtBlock, %96 : Ct);
+            output<0, Ct>(%97 : Ct);
         "#
     );
 }
@@ -113,26 +113,26 @@ fn test_cmp_ir() {
     assert_display_is!(
         ir.format(),
         r#"
-            %0 : CtInt = input<0, CtInt>();
-            %1 : CtInt = input<1, CtInt>();
+            %0 : Ct = input<0, Ct>();
+            %1 : Ct = input<1, Ct>();
             %36 : PtBlock = let_pt_block<1>();
-            %56 : CtInt = decl_ct();
-            %2 : CtBlock = extract_ct_block<0>(%0 : CtInt);
-            %3 : CtBlock = extract_ct_block<1>(%0 : CtInt);
-            %4 : CtBlock = extract_ct_block<2>(%0 : CtInt);
-            %5 : CtBlock = extract_ct_block<3>(%0 : CtInt);
-            %6 : CtBlock = extract_ct_block<4>(%0 : CtInt);
-            %7 : CtBlock = extract_ct_block<5>(%0 : CtInt);
-            %8 : CtBlock = extract_ct_block<6>(%0 : CtInt);
-            %9 : CtBlock = extract_ct_block<7>(%0 : CtInt);
-            %10 : CtBlock = extract_ct_block<0>(%1 : CtInt);
-            %11 : CtBlock = extract_ct_block<1>(%1 : CtInt);
-            %12 : CtBlock = extract_ct_block<2>(%1 : CtInt);
-            %13 : CtBlock = extract_ct_block<3>(%1 : CtInt);
-            %14 : CtBlock = extract_ct_block<4>(%1 : CtInt);
-            %15 : CtBlock = extract_ct_block<5>(%1 : CtInt);
-            %16 : CtBlock = extract_ct_block<6>(%1 : CtInt);
-            %17 : CtBlock = extract_ct_block<7>(%1 : CtInt);
+            %56 : Ct = decl_ct();
+            %2 : CtBlock = extract_ct_block<0>(%0 : Ct);
+            %3 : CtBlock = extract_ct_block<1>(%0 : Ct);
+            %4 : CtBlock = extract_ct_block<2>(%0 : Ct);
+            %5 : CtBlock = extract_ct_block<3>(%0 : Ct);
+            %6 : CtBlock = extract_ct_block<4>(%0 : Ct);
+            %7 : CtBlock = extract_ct_block<5>(%0 : Ct);
+            %8 : CtBlock = extract_ct_block<6>(%0 : Ct);
+            %9 : CtBlock = extract_ct_block<7>(%0 : Ct);
+            %10 : CtBlock = extract_ct_block<0>(%1 : Ct);
+            %11 : CtBlock = extract_ct_block<1>(%1 : Ct);
+            %12 : CtBlock = extract_ct_block<2>(%1 : Ct);
+            %13 : CtBlock = extract_ct_block<3>(%1 : Ct);
+            %14 : CtBlock = extract_ct_block<4>(%1 : Ct);
+            %15 : CtBlock = extract_ct_block<5>(%1 : Ct);
+            %16 : CtBlock = extract_ct_block<6>(%1 : Ct);
+            %17 : CtBlock = extract_ct_block<7>(%1 : Ct);
             %18 : CtBlock = pack_ct<4>(%3 : CtBlock, %2 : CtBlock);
             %20 : CtBlock = pack_ct<4>(%5 : CtBlock, %4 : CtBlock);
             %22 : CtBlock = pack_ct<4>(%7 : CtBlock, %6 : CtBlock);
@@ -167,8 +167,8 @@ fn test_cmp_ir() {
             %53 : CtBlock = pbs<CmpReduce>(%51 : CtBlock);
             %54 : CtBlock = pack_ct<4>(%53 : CtBlock, %52 : CtBlock);
             %55 : CtBlock = pbs<CmpGtMrg>(%54 : CtBlock);
-            %57 : CtInt = store_ct_block<0>(%55 : CtBlock, %56 : CtInt);
-            output<0, CtInt>(%57 : CtInt);
+            %57 : Ct = store_ct_block<0>(%55 : CtBlock, %56 : Ct);
+            output<0, Ct>(%57 : Ct);
         "#
     );
 }
