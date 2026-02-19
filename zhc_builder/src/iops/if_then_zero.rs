@@ -27,10 +27,10 @@ use crate::{Ciphertext, builder::Builder};
 /// ```
 pub fn if_then_zero(spec: CiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src = builder.declare_ciphertext_input(spec.int_size());
-    let cond = builder.declare_ciphertext_input(spec.block_spec().message_size() as u16);
+    let src = builder.input_ciphertext(spec.int_size());
+    let cond = builder.input_ciphertext(spec.block_spec().message_size() as u16);
     let output = builder.iop_if_then_zero(&src, &cond);
-    builder.declare_ciphertext_output(output);
+    builder.output_ciphertext(output);
     builder
 }
 
@@ -52,8 +52,8 @@ impl Builder {
     /// # use zhc_builder::{CiphertextSpec, Builder};
     /// # let spec = CiphertextSpec::new(16, 2, 2);
     /// # let builder = Builder::new(spec.block_spec());
-    /// # let src = builder.declare_ciphertext_input(spec.int_size());
-    /// # let cond = builder.declare_ciphertext_input(spec.block_spec().message_size() as u16);
+    /// # let src = builder.input_ciphertext(spec.int_size());
+    /// # let cond = builder.input_ciphertext(spec.block_spec().message_size() as u16);
     /// let zeroed = builder.iop_if_then_zero(&src, &cond);
     /// ```
     pub fn iop_if_then_zero(&self, src: &Ciphertext, cond: &Ciphertext) -> Ciphertext {

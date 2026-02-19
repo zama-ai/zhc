@@ -24,10 +24,10 @@ use crate::builder::{Builder, Ciphertext};
 /// ```
 pub fn bitwise_and(spec: CiphertextSpec) -> Builder {
     let mut builder = Builder::new(spec.block_spec());
-    let src_a = builder.declare_ciphertext_input(spec.int_size());
-    let src_b = builder.declare_ciphertext_input(spec.int_size());
+    let src_a = builder.input_ciphertext(spec.int_size());
+    let src_b = builder.input_ciphertext(spec.int_size());
     let res = builder.iop_bitwise(&src_a, &src_b, BwKind::And);
-    builder.declare_ciphertext_output(res);
+    builder.output_ciphertext(res);
     builder
 }
 
@@ -52,10 +52,10 @@ pub fn bitwise_and(spec: CiphertextSpec) -> Builder {
 /// ```
 pub fn bitwise_or(spec: CiphertextSpec) -> Builder {
     let mut builder = Builder::new(spec.block_spec());
-    let src_a = builder.declare_ciphertext_input(spec.int_size());
-    let src_b = builder.declare_ciphertext_input(spec.int_size());
+    let src_a = builder.input_ciphertext(spec.int_size());
+    let src_b = builder.input_ciphertext(spec.int_size());
     let res = builder.iop_bitwise(&src_a, &src_b, BwKind::Or);
-    builder.declare_ciphertext_output(res);
+    builder.output_ciphertext(res);
     builder
 }
 
@@ -80,10 +80,10 @@ pub fn bitwise_or(spec: CiphertextSpec) -> Builder {
 /// ```
 pub fn bitwise_xor(spec: CiphertextSpec) -> Builder {
     let mut builder = Builder::new(spec.block_spec());
-    let src_a = builder.declare_ciphertext_input(spec.int_size());
-    let src_b = builder.declare_ciphertext_input(spec.int_size());
+    let src_a = builder.input_ciphertext(spec.int_size());
+    let src_b = builder.input_ciphertext(spec.int_size());
     let res = builder.iop_bitwise(&src_a, &src_b, BwKind::Xor);
-    builder.declare_ciphertext_output(res);
+    builder.output_ciphertext(res);
     builder
 }
 
@@ -123,8 +123,8 @@ impl Builder {
     /// # use zhc_builder::{CiphertextSpec, Builder, BwKind};
     /// # let spec = CiphertextSpec::new(16, 2, 2);
     /// # let mut builder = Builder::new(spec.block_spec());
-    /// # let a = builder.declare_ciphertext_input(spec.int_size());
-    /// # let b = builder.declare_ciphertext_input(spec.int_size());
+    /// # let a = builder.input_ciphertext(spec.int_size());
+    /// # let b = builder.input_ciphertext(spec.int_size());
     /// let result = builder.iop_bitwise(&a, &b, BwKind::Xor);
     /// ```
     pub fn iop_bitwise(&mut self, lhs: &Ciphertext, rhs: &Ciphertext, kind: BwKind) -> Ciphertext {

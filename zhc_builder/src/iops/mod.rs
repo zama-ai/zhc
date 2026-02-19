@@ -22,11 +22,11 @@
 //!
 //! // Composed: add then compare inside a single builder.
 //! let mut builder = Builder::new(spec.block_spec());
-//! let a = builder.declare_ciphertext_input(spec.int_size());
-//! let b = builder.declare_ciphertext_input(spec.int_size());
+//! let a = builder.input_ciphertext(spec.int_size());
+//! let b = builder.input_ciphertext(spec.int_size());
 //! let sum = builder.iop_add_hillis_steele(&a, &b);
 //! let is_gt = builder.iop_cmp(&sum, &b, CmpKind::Greater);
-//! builder.declare_ciphertext_output(is_gt);
+//! builder.output_ciphertext(is_gt);
 //! ```
 
 mod add;

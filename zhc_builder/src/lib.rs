@@ -71,8 +71,8 @@
 //! let builder = Builder::new(CiphertextBlockSpec(2, 2));
 //!
 //! // 2. Declare circuit inputs.
-//! let a = builder.declare_ciphertext_input(8);
-//! let b = builder.declare_ciphertext_input(8);
+//! let a = builder.input_ciphertext(8);
+//! let b = builder.input_ciphertext(8);
 //!
 //! // 3. Decompose into blocks and operate.
 //! let a_blocks = builder.split_ciphertext(&a);
@@ -83,7 +83,7 @@
 //!
 //! // 4. Reassemble and declare the output.
 //! let result = builder.join_ciphertext(&sum_blocks);
-//! builder.declare_ciphertext_output(&result);
+//! builder.output_ciphertext(&result);
 //!
 //! // 5. Finalize — this runs dead-code elimination and CSE.
 //! let ir = builder.into_ir();

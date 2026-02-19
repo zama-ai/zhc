@@ -27,11 +27,11 @@ use crate::{Ciphertext, builder::Builder};
 /// ```
 pub fn if_then_else(spec: CiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src_a = builder.declare_ciphertext_input(spec.int_size());
-    let src_b = builder.declare_ciphertext_input(spec.int_size());
-    let cond = builder.declare_ciphertext_input(spec.block_spec().message_size() as u16);
+    let src_a = builder.input_ciphertext(spec.int_size());
+    let src_b = builder.input_ciphertext(spec.int_size());
+    let cond = builder.input_ciphertext(spec.block_spec().message_size() as u16);
     let output = builder.iop_if_then_else(&src_a, &src_b, &cond);
-    builder.declare_ciphertext_output(output);
+    builder.output_ciphertext(output);
     builder
 }
 
@@ -54,9 +54,9 @@ impl Builder {
     /// # use zhc_builder::{CiphertextSpec, Builder};
     /// # let spec = CiphertextSpec::new(16, 2, 2);
     /// # let builder = Builder::new(spec.block_spec());
-    /// # let a = builder.declare_ciphertext_input(spec.int_size());
-    /// # let b = builder.declare_ciphertext_input(spec.int_size());
-    /// # let cond = builder.declare_ciphertext_input(spec.block_spec().message_size() as u16);
+    /// # let a = builder.input_ciphertext(spec.int_size());
+    /// # let b = builder.input_ciphertext(spec.int_size());
+    /// # let cond = builder.input_ciphertext(spec.block_spec().message_size() as u16);
     /// let selected = builder.iop_if_then_else(&a, &b, &cond);
     /// ```
     pub fn iop_if_then_else(

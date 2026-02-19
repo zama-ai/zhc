@@ -24,10 +24,10 @@ use zhc_utils::iter::{CollectInSmallVec, MultiZip};
 /// ```
 pub fn cmp_gt(spec: CiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src_a = builder.declare_ciphertext_input(spec.int_size());
-    let src_b = builder.declare_ciphertext_input(spec.int_size());
+    let src_a = builder.input_ciphertext(spec.int_size());
+    let src_b = builder.input_ciphertext(spec.int_size());
     let output = builder.iop_cmp(&src_a, &src_b, CmpKind::Greater);
-    builder.declare_ciphertext_output(output);
+    builder.output_ciphertext(output);
     builder
 }
 
@@ -53,10 +53,10 @@ pub fn cmp_gt(spec: CiphertextSpec) -> Builder {
 /// ```
 pub fn cmp_gte(spec: CiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src_a = builder.declare_ciphertext_input(spec.int_size());
-    let src_b = builder.declare_ciphertext_input(spec.int_size());
+    let src_a = builder.input_ciphertext(spec.int_size());
+    let src_b = builder.input_ciphertext(spec.int_size());
     let output = builder.iop_cmp(&src_a, &src_b, CmpKind::GreaterOrEqual);
-    builder.declare_ciphertext_output(output);
+    builder.output_ciphertext(output);
     builder
 }
 
@@ -81,10 +81,10 @@ pub fn cmp_gte(spec: CiphertextSpec) -> Builder {
 /// ```
 pub fn cmp_lt(spec: CiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src_a = builder.declare_ciphertext_input(spec.int_size());
-    let src_b = builder.declare_ciphertext_input(spec.int_size());
+    let src_a = builder.input_ciphertext(spec.int_size());
+    let src_b = builder.input_ciphertext(spec.int_size());
     let output = builder.iop_cmp(&src_a, &src_b, CmpKind::Lower);
-    builder.declare_ciphertext_output(output);
+    builder.output_ciphertext(output);
     builder
 }
 
@@ -110,10 +110,10 @@ pub fn cmp_lt(spec: CiphertextSpec) -> Builder {
 /// ```
 pub fn cmp_lte(spec: CiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src_a = builder.declare_ciphertext_input(spec.int_size());
-    let src_b = builder.declare_ciphertext_input(spec.int_size());
+    let src_a = builder.input_ciphertext(spec.int_size());
+    let src_b = builder.input_ciphertext(spec.int_size());
     let output = builder.iop_cmp(&src_a, &src_b, CmpKind::LowerOrEqual);
-    builder.declare_ciphertext_output(output);
+    builder.output_ciphertext(output);
     builder
 }
 
@@ -138,10 +138,10 @@ pub fn cmp_lte(spec: CiphertextSpec) -> Builder {
 /// ```
 pub fn cmp_eq(spec: CiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src_a = builder.declare_ciphertext_input(spec.int_size());
-    let src_b = builder.declare_ciphertext_input(spec.int_size());
+    let src_a = builder.input_ciphertext(spec.int_size());
+    let src_b = builder.input_ciphertext(spec.int_size());
     let output = builder.iop_cmp(&src_a, &src_b, CmpKind::Equal);
-    builder.declare_ciphertext_output(output);
+    builder.output_ciphertext(output);
     builder
 }
 
@@ -166,10 +166,10 @@ pub fn cmp_eq(spec: CiphertextSpec) -> Builder {
 /// ```
 pub fn cmp_neq(spec: CiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src_a = builder.declare_ciphertext_input(spec.int_size());
-    let src_b = builder.declare_ciphertext_input(spec.int_size());
+    let src_a = builder.input_ciphertext(spec.int_size());
+    let src_b = builder.input_ciphertext(spec.int_size());
     let output = builder.iop_cmp(&src_a, &src_b, CmpKind::NotEqual);
-    builder.declare_ciphertext_output(output);
+    builder.output_ciphertext(output);
     builder
 }
 
@@ -234,8 +234,8 @@ impl Builder {
     /// # use zhc_builder::{CiphertextSpec, Builder, CmpKind};
     /// # let spec = CiphertextSpec::new(16, 2, 2);
     /// # let builder = Builder::new(spec.block_spec());
-    /// # let a = builder.declare_ciphertext_input(spec.int_size());
-    /// # let b = builder.declare_ciphertext_input(spec.int_size());
+    /// # let a = builder.input_ciphertext(spec.int_size());
+    /// # let b = builder.input_ciphertext(spec.int_size());
     /// let is_eq = builder.iop_cmp(&a, &b, CmpKind::Equal);
     /// ```
     pub fn iop_cmp(&self, src_a: &Ciphertext, src_b: &Ciphertext, kind: CmpKind) -> Ciphertext {
@@ -256,7 +256,7 @@ impl Builder {
                 self.with_comment(format!("{i}-th"), || {
                     let sub_lr = self.block_sub(l, r);
                     let pbsed = self.block_lookup(&sub_lr, Lut1Def::CmpSign);
-                    let cst = self.block_const_plaintext(1);
+                    let cst = self.block_let_plaintext(1);
                     self.block_add_plaintext(&pbsed, &cst)
                 })
             })

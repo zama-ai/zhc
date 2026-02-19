@@ -110,10 +110,10 @@ impl InnerBuilder {
 /// # Input / Output Ordering
 ///
 /// Inputs and outputs are **positional**: they are recorded in the order they are
-/// declared. The first call to [`declare_ciphertext_input`](Self::declare_ciphertext_input)
-/// or [`declare_plaintext_input`](Self::declare_plaintext_input) becomes input 0, the
+/// declared. The first call to [`input_ciphertext`](Self::input_ciphertext)
+/// or [`input_plaintext`](Self::input_plaintext) becomes input 0, the
 /// second becomes input 1, and so on — both kinds share the same index space. Likewise,
-/// the first [`declare_ciphertext_output`](Self::declare_ciphertext_output) becomes
+/// the first [`output_ciphertext`](Self::output_ciphertext) becomes
 /// output 0. This ordering defines the circuit's [`signature`](Self::signature) and must
 /// match the order of values passed to [`eval`](Self::eval).
 ///
@@ -132,11 +132,11 @@ impl InnerBuilder {
 /// ```rust,no_run
 /// # use zhc_builder::*;
 /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-/// let input = builder.declare_ciphertext_input(8);
+/// let input = builder.input_ciphertext(8);
 /// let blocks = builder.split_ciphertext(&input);
 /// // ... operate on blocks ...
 /// let output = builder.join_ciphertext(&blocks);
-/// builder.declare_ciphertext_output(&output);
+/// builder.output_ciphertext(&output);
 /// let ir = builder.into_ir();
 /// ```
 pub struct Builder {
@@ -198,9 +198,9 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let input = builder.declare_ciphertext_input(8);
+    /// let input = builder.input_ciphertext(8);
     /// // ... build circuit ...
-    /// builder.declare_ciphertext_output(&input);
+    /// builder.output_ciphertext(&input);
     /// let ir = builder.into_ir();
     /// ```
     pub fn into_ir(self) -> IR<IopLang> {
@@ -328,8 +328,8 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let a = builder.declare_ciphertext_input(8);
-    /// let b = builder.declare_ciphertext_input(8);
+    /// let a = builder.input_ciphertext(8);
+    /// let b = builder.input_ciphertext(8);
     /// // ... build circuit ...
     /// let outputs = builder.eval(&[a.make_value(42), b.make_value(7)]);
     /// ```
@@ -399,7 +399,7 @@ impl Builder {
     /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
     /// let commented = builder.comment("add phase");
-    /// let ct = commented.declare_ciphertext_input(4);
+    /// let ct = commented.input_ciphertext(4);
     /// // Instructions through `commented` carry the "add phase" annotation.
     /// ```
     pub fn comment(&self, comment: impl Into<String>) -> Builder {
@@ -437,7 +437,7 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.declare_ciphertext_input(4);
+    /// let ct = builder.input_ciphertext(4);
     /// let blocks = builder.split_ciphertext(&ct);
     /// let result = builder.with_comment("carry propagation", || {
     ///     builder.block_add(&blocks[0], &blocks[1])
@@ -464,10 +464,10 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let input = builder.declare_ciphertext_input(8);
+    /// let input = builder.input_ciphertext(8);
     /// let blocks = builder.split_ciphertext(&input);
     /// ```
-    pub fn declare_ciphertext_input(&self, int_size: u16) -> Ciphertext {
+    pub fn input_ciphertext(&self, int_size: u16) -> Ciphertext {
         let spec = self.spec.ciphertext_spec(int_size);
         let pos = self.inner_mut().push_arg_type(Type::Ciphertext(spec));
         let (_, inp) = self.inner_mut().add_op(
@@ -514,7 +514,7 @@ impl Builder {
     /// (see [Input / Output Ordering](Self#input--output-ordering)). The plaintext block
     /// spec is derived from the builder's ciphertext block spec (matching message size, no
     /// carry bits).
-    pub fn declare_plaintext_input(&self, int_size: u16) -> Plaintext {
+    pub fn input_plaintext(&self, int_size: u16) -> Plaintext {
         let spec = self
             .spec
             .matching_plaintext_block_spec()
@@ -567,11 +567,11 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let input = builder.declare_ciphertext_input(8);
+    /// let input = builder.input_ciphertext(8);
     /// let blocks = builder.split_ciphertext(&input);
     /// // ... operate on blocks ...
     /// let ct = builder.join_ciphertext(&blocks);
-    /// builder.declare_ciphertext_output(&ct);
+    /// builder.output_ciphertext(&ct);
     /// ```
     pub fn join_ciphertext(&self, blocks: impl AsRef<[CiphertextBlock]>) -> Ciphertext {
         let blocks = blocks.as_ref();
@@ -600,7 +600,7 @@ impl Builder {
     /// Registers the ciphertext as a circuit output in the signature and emits the
     /// corresponding IR output instruction. The output is assigned the next positional
     /// index (see [Input / Output Ordering](Self#input--output-ordering)).
-    pub fn declare_ciphertext_output(&self, ct: impl AsRef<Ciphertext>) {
+    pub fn output_ciphertext(&self, ct: impl AsRef<Ciphertext>) {
         let ct = ct.as_ref();
         let pos = self.inner_mut().push_ret_type(Type::Ciphertext(ct.spec()));
         self.inner_mut().add_op(
@@ -623,12 +623,12 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.declare_ciphertext_input(4);
+    /// let ct = builder.input_ciphertext(4);
     /// let blocks = builder.split_ciphertext(&ct);
-    /// let one = builder.block_const_plaintext(1);
+    /// let one = builder.block_let_plaintext(1);
     /// let incremented = builder.block_add_plaintext(&blocks[0], &one);
     /// ```
-    pub fn block_const_plaintext(&self, value: u8) -> PlaintextBlock {
+    pub fn block_let_plaintext(&self, value: u8) -> PlaintextBlock {
         let (_node, ret) = self.inner_mut().add_op(
             IopInstructionSet::LetPlaintextBlock { value },
             svec![],
@@ -650,7 +650,7 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.declare_ciphertext_input(4);
+    /// let ct = builder.input_ciphertext(4);
     /// let blocks = builder.split_ciphertext(&ct);
     /// let sum = builder.block_add(&blocks[0], &blocks[1]);
     /// ```
@@ -857,7 +857,7 @@ impl Builder {
     /// # use zhc_builder::*;
     /// # use zhc_langs::ioplang::Lut1Def;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.declare_ciphertext_input(4);
+    /// let ct = builder.input_ciphertext(4);
     /// let blocks = builder.split_ciphertext(&ct);
     /// let packed = builder.block_pack(&blocks[1], &blocks[0]);
     /// let result = builder.block_lookup(&packed, Lut1Def::MsgOnly);
@@ -913,7 +913,7 @@ impl Builder {
     /// # use zhc_builder::*;
     /// # use zhc_langs::ioplang::Lut1Def;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.declare_ciphertext_input(4);
+    /// let ct = builder.input_ciphertext(4);
     /// let blocks = builder.split_ciphertext(&ct);
     /// // Extract only the message bits, clearing the carry.
     /// let clean = builder.block_lookup(&blocks[0], Lut1Def::MsgOnly);
@@ -988,7 +988,7 @@ impl Builder {
     /// The `value` is stored as a trivially-encrypted block (zero noise). This is useful
     /// for initializing accumulators or providing constant operands in arithmetic. The
     /// value's bit-width must fit within the block's data bits (carry + message).
-    pub fn block_const_ciphertext(&self, value: u8) -> CiphertextBlock {
+    pub fn block_let_ciphertext(&self, value: u8) -> CiphertextBlock {
         let (_node, ret) = self.inner_mut().add_op(
             IopInstructionSet::LetCiphertextBlock { value },
             svec![],
@@ -1181,7 +1181,7 @@ impl Builder {
     /// Zero-extends a block slice to a given length.
     ///
     /// Pads `inp` with zero-valued constant ciphertext blocks
-    /// ([`block_const_ciphertext(0)`](Self::block_const_ciphertext)) until the result
+    /// ([`block_let_ciphertext(0)`](Self::block_let_ciphertext)) until the result
     /// has `size` elements. This implements unsigned integer extension: the original
     /// blocks represent the low-order radix digits, and the appended zeros represent
     /// high-order digits.
@@ -1201,7 +1201,7 @@ impl Builder {
         );
         inp.iter()
             .cloned()
-            .chain(repeat_n(self.block_const_ciphertext(0), size - inp.len()))
+            .chain(repeat_n(self.block_let_ciphertext(0), size - inp.len()))
             .collect()
     }
 }

@@ -30,10 +30,10 @@ use crate::builder::{Builder, Ciphertext, ExtensionBehavior};
 /// ```
 pub fn add(spec: CiphertextSpec) -> Builder {
     let mut builder = Builder::new(spec.block_spec());
-    let src_a = builder.declare_ciphertext_input(spec.int_size());
-    let src_b = builder.declare_ciphertext_input(spec.int_size());
+    let src_a = builder.input_ciphertext(spec.int_size());
+    let src_b = builder.input_ciphertext(spec.int_size());
     let res = builder.iop_add_hillis_steele(&src_a, &src_b);
-    builder.declare_ciphertext_output(res);
+    builder.output_ciphertext(res);
     builder
 }
 
@@ -57,8 +57,8 @@ impl Builder {
     /// # use zhc_builder::{CiphertextSpec, Builder};
     /// # let spec = CiphertextSpec::new(16, 2, 2);
     /// # let mut builder = Builder::new(spec.block_spec());
-    /// # let a = builder.declare_ciphertext_input(spec.int_size());
-    /// # let b = builder.declare_ciphertext_input(spec.int_size());
+    /// # let a = builder.input_ciphertext(spec.int_size());
+    /// # let b = builder.input_ciphertext(spec.int_size());
     /// let sum = builder.iop_add_hillis_steele(&a, &b);
     /// ```
     pub fn iop_add_hillis_steele(&mut self, lhs: &Ciphertext, rhs: &Ciphertext) -> Ciphertext {
@@ -150,7 +150,7 @@ impl Builder {
                 let b2 = self.block_add(&b1, &states[2]);
                 let b3 = self.block_temper_add(&b2, &states[3]);
                 let b3 = self.block_wrapping_lookup(&b3, Lut1Def::ReduceCarryPad);
-                let b3 = self.block_wrapping_add_plaintext(&b3, &self.block_const_plaintext(1));
+                let b3 = self.block_wrapping_add_plaintext(&b3, &self.block_let_plaintext(1));
                 [
                     self.comment("GN-B0").block_alias(b0),
                     self.comment("GN-B1").block_alias(b1),
