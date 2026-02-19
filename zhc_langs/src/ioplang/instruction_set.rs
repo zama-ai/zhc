@@ -2,6 +2,7 @@ use std::{
     fmt::{Debug, Display},
     hash::Hash,
 };
+use zhc_crypto::integer_semantics::lut::LookupCheck;
 use zhc_ir::{DialectInstructionSet, Signature, sig};
 
 use crate::ioplang::{
@@ -30,14 +31,10 @@ pub enum IopInstructionSet {
     ExtractCtBlock { index: u8 },
     ExtractPtBlock { index: u8 },
     StoreCtBlock { index: u8 },
-    Pbs { lut: Lut1Def },
+    Pbs { check: LookupCheck, lut: Lut1Def },
     Pbs2 { lut: Lut2Def },
     Pbs4 { lut: Lut4Def },
     Pbs8 { lut: Lut8Def },
-    WrappingPbs { lut: Lut1Def },
-    WrappingPbs2 { lut: Lut2Def },
-    WrappingPbs4 { lut: Lut4Def },
-    WrappingPbs8 { lut: Lut8Def },
 }
 
 impl Display for IopInstructionSet {
@@ -62,14 +59,10 @@ impl Display for IopInstructionSet {
             IopInstructionSet::ExtractCtBlock { index } => write!(f, "extract_ct_block<{index}>"),
             IopInstructionSet::ExtractPtBlock { index } => write!(f, "extract_pt_block<{index}>"),
             IopInstructionSet::StoreCtBlock { index } => write!(f, "store_ct_block<{index}>"),
-            IopInstructionSet::Pbs { lut } => write!(f, "pbs<{lut:?}>"),
+            IopInstructionSet::Pbs { check, lut } => write!(f, "pbs<{check:?}, {lut:?}>"),
             IopInstructionSet::Pbs2 { lut } => write!(f, "pbs2<{lut:?}>"),
             IopInstructionSet::Pbs4 { lut } => write!(f, "pbs4<{lut:?}>"),
             IopInstructionSet::Pbs8 { lut } => write!(f, "pbs8<{lut:?}>"),
-            IopInstructionSet::WrappingPbs { lut } => write!(f, "wrapping_pbs<{lut:?}>"),
-            IopInstructionSet::WrappingPbs2 { lut } => write!(f, "wrapping_pbs2<{lut:?}>"),
-            IopInstructionSet::WrappingPbs4 { lut } => write!(f, "wrapping_pbs4<{lut:?}>"),
-            IopInstructionSet::WrappingPbs8 { lut } => write!(f, "wrapping_pbs8<{lut:?}>"),
         }
     }
 }
@@ -128,16 +121,6 @@ impl DialectInstructionSet for IopInstructionSet {
                 sig![(CiphertextBlock) -> (CiphertextBlock, CiphertextBlock, CiphertextBlock, CiphertextBlock)]
             }
             IopInstructionSet::Pbs8 { .. } => {
-                sig![(CiphertextBlock) -> (CiphertextBlock, CiphertextBlock, CiphertextBlock, CiphertextBlock, CiphertextBlock, CiphertextBlock, CiphertextBlock, CiphertextBlock)]
-            }
-            IopInstructionSet::WrappingPbs { .. } => sig![(CiphertextBlock) -> (CiphertextBlock)],
-            IopInstructionSet::WrappingPbs2 { .. } => {
-                sig![(CiphertextBlock) -> (CiphertextBlock, CiphertextBlock)]
-            }
-            IopInstructionSet::WrappingPbs4 { .. } => {
-                sig![(CiphertextBlock) -> (CiphertextBlock, CiphertextBlock, CiphertextBlock, CiphertextBlock)]
-            }
-            IopInstructionSet::WrappingPbs8 { .. } => {
                 sig![(CiphertextBlock) -> (CiphertextBlock, CiphertextBlock, CiphertextBlock, CiphertextBlock, CiphertextBlock, CiphertextBlock, CiphertextBlock, CiphertextBlock)]
             }
             IopInstructionSet::Alias { typ } => sig![(typ.clone()) -> (typ.clone())],

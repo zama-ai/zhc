@@ -5,7 +5,9 @@ use std::{
     iter::repeat_n,
     rc::Rc,
 };
-use zhc_crypto::integer_semantics::{CiphertextBlockSpec, CiphertextSpec, PlaintextSpec};
+use zhc_crypto::integer_semantics::{
+    CiphertextBlockSpec, CiphertextSpec, PlaintextSpec, lut::LookupCheck,
+};
 use zhc_ir::{
     IR, PrintWalker, Signature, cse::eliminate_common_subexpressions, dce::eliminate_dead_code,
 };
@@ -73,7 +75,7 @@ struct InnerBuilder {
 }
 
 impl InnerBuilder {
-    fn add_op(
+    fn insert_op(
         &mut self,
         op: IopInstructionSet,
         args: SmallVec<zhc_ir::ValId>,
@@ -470,7 +472,7 @@ impl Builder {
     pub fn input_ciphertext(&self, int_size: u16) -> Ciphertext {
         let spec = self.spec.ciphertext_spec(int_size);
         let pos = self.inner_mut().push_arg_type(Type::Ciphertext(spec));
-        let (_, inp) = self.inner_mut().add_op(
+        let (_, inp) = self.inner_mut().insert_op(
             IopInstructionSet::Input {
                 pos,
                 typ: IopTypeSystem::Ciphertext,
@@ -493,7 +495,7 @@ impl Builder {
         let inp = inp.as_ref();
         (0..inp.spec().block_count())
             .map(|index| {
-                let (_, ret) = self.inner_mut().add_op(
+                let (_, ret) = self.inner_mut().insert_op(
                     IopInstructionSet::ExtractCtBlock { index },
                     svec![inp.valid],
                     self.current_comment(),
@@ -520,7 +522,7 @@ impl Builder {
             .matching_plaintext_block_spec()
             .plaintext_spec(int_size);
         let pos = self.inner_mut().push_arg_type(Type::Plaintext(spec));
-        let (_, inp) = self.inner_mut().add_op(
+        let (_, inp) = self.inner_mut().insert_op(
             IopInstructionSet::Input {
                 pos,
                 typ: IopTypeSystem::Plaintext,
@@ -543,7 +545,7 @@ impl Builder {
         let inp = inp.as_ref();
         (0..inp.spec().block_count())
             .map(|index| {
-                let (_, ret) = self.inner_mut().add_op(
+                let (_, ret) = self.inner_mut().insert_op(
                     IopInstructionSet::ExtractPtBlock { index },
                     svec![inp.valid],
                     self.current_comment(),
@@ -577,7 +579,7 @@ impl Builder {
         let blocks = blocks.as_ref();
         let int_size = blocks.len() as u16 * self.spec.message_size() as u16;
         let spec = self.spec.ciphertext_spec(int_size);
-        let (_, acc) = self.inner_mut().add_op(
+        let (_, acc) = self.inner_mut().insert_op(
             IopInstructionSet::DeclareCiphertext,
             svec![],
             self.current_comment(),
@@ -585,7 +587,7 @@ impl Builder {
         let mut acc = acc[0];
         for (index, block) in blocks.iter().enumerate() {
             let index = index as u8;
-            let (_, ret) = self.inner_mut().add_op(
+            let (_, ret) = self.inner_mut().insert_op(
                 IopInstructionSet::StoreCtBlock { index },
                 svec![block.valid, acc],
                 self.current_comment(),
@@ -603,7 +605,7 @@ impl Builder {
     pub fn output_ciphertext(&self, ct: impl AsRef<Ciphertext>) {
         let ct = ct.as_ref();
         let pos = self.inner_mut().push_ret_type(Type::Ciphertext(ct.spec()));
-        self.inner_mut().add_op(
+        self.inner_mut().insert_op(
             IopInstructionSet::Output {
                 pos,
                 typ: IopTypeSystem::Ciphertext,
@@ -629,7 +631,7 @@ impl Builder {
     /// let incremented = builder.block_add_plaintext(&blocks[0], &one);
     /// ```
     pub fn block_let_plaintext(&self, value: u8) -> PlaintextBlock {
-        let (_node, ret) = self.inner_mut().add_op(
+        let (_node, ret) = self.inner_mut().insert_op(
             IopInstructionSet::LetPlaintextBlock { value },
             svec![],
             self.current_comment(),
@@ -660,7 +662,7 @@ impl Builder {
         src_b: impl AsRef<CiphertextBlock>,
     ) -> CiphertextBlock {
         let (src_a, src_b) = (src_a.as_ref(), src_b.as_ref());
-        let (_node, ret) = self.inner_mut().add_op(
+        let (_node, ret) = self.inner_mut().insert_op(
             IopInstructionSet::AddCt,
             svec![src_a.valid, src_b.valid],
             self.current_comment(),
@@ -677,7 +679,7 @@ impl Builder {
     /// node identity. This is useful for debugging purposes.
     pub fn block_alias(&self, src: impl AsRef<CiphertextBlock>) -> CiphertextBlock {
         let src = src.as_ref();
-        let (_node, ret) = self.inner_mut().add_op(
+        let (_node, ret) = self.inner_mut().insert_op(
             IopInstructionSet::Alias {
                 typ: IopTypeSystem::CiphertextBlock,
             },
@@ -700,7 +702,7 @@ impl Builder {
         src_b: impl AsRef<CiphertextBlock>,
     ) -> CiphertextBlock {
         let (src_a, src_b) = (src_a.as_ref(), src_b.as_ref());
-        let (_node, ret) = self.inner_mut().add_op(
+        let (_node, ret) = self.inner_mut().insert_op(
             IopInstructionSet::TemperAddCt,
             svec![src_a.valid, src_b.valid],
             self.current_comment(),
@@ -721,7 +723,7 @@ impl Builder {
         src_b: impl AsRef<CiphertextBlock>,
     ) -> CiphertextBlock {
         let (src_a, src_b) = (src_a.as_ref(), src_b.as_ref());
-        let (_node, ret) = self.inner_mut().add_op(
+        let (_node, ret) = self.inner_mut().insert_op(
             IopInstructionSet::WrappingAddCt,
             svec![src_a.valid, src_b.valid],
             self.current_comment(),
@@ -742,7 +744,7 @@ impl Builder {
         src_b: impl AsRef<PlaintextBlock>,
     ) -> CiphertextBlock {
         let (src_a, src_b) = (src_a.as_ref(), src_b.as_ref());
-        let (_node, ret) = self.inner_mut().add_op(
+        let (_node, ret) = self.inner_mut().insert_op(
             IopInstructionSet::AddPt,
             svec![src_a.valid, src_b.valid],
             self.current_comment(),
@@ -763,7 +765,7 @@ impl Builder {
         src_b: impl AsRef<PlaintextBlock>,
     ) -> CiphertextBlock {
         let (src_a, src_b) = (src_a.as_ref(), src_b.as_ref());
-        let (_node, ret) = self.inner_mut().add_op(
+        let (_node, ret) = self.inner_mut().insert_op(
             IopInstructionSet::WrappingAddPt,
             svec![src_a.valid, src_b.valid],
             self.current_comment(),
@@ -784,7 +786,7 @@ impl Builder {
         src_b: impl AsRef<CiphertextBlock>,
     ) -> CiphertextBlock {
         let (src_a, src_b) = (src_a.as_ref(), src_b.as_ref());
-        let (_node, ret) = self.inner_mut().add_op(
+        let (_node, ret) = self.inner_mut().insert_op(
             IopInstructionSet::SubCt,
             svec![src_a.valid, src_b.valid],
             self.current_comment(),
@@ -805,7 +807,7 @@ impl Builder {
         src_b: impl AsRef<PlaintextBlock>,
     ) -> CiphertextBlock {
         let (src_a, src_b) = (src_a.as_ref(), src_b.as_ref());
-        let (_node, ret) = self.inner_mut().add_op(
+        let (_node, ret) = self.inner_mut().insert_op(
             IopInstructionSet::SubPt,
             svec![src_a.valid, src_b.valid],
             self.current_comment(),
@@ -828,7 +830,7 @@ impl Builder {
         src_b: impl AsRef<CiphertextBlock>,
     ) -> CiphertextBlock {
         let (src_a, src_b) = (src_a.as_ref(), src_b.as_ref());
-        let (_node, ret) = self.inner_mut().add_op(
+        let (_node, ret) = self.inner_mut().insert_op(
             IopInstructionSet::PtSub,
             svec![src_a.valid, src_b.valid],
             self.current_comment(),
@@ -869,7 +871,7 @@ impl Builder {
     ) -> CiphertextBlock {
         assert_eq!(self.spec().carry_size(), self.spec().message_size());
         let (src_a, src_b) = (src_a.as_ref(), src_b.as_ref());
-        let (_node, ret) = self.inner_mut().add_op(
+        let (_node, ret) = self.inner_mut().insert_op(
             IopInstructionSet::PackCt {
                 mul: 2u8.pow(self.spec().message_size() as u32),
             },
@@ -920,8 +922,31 @@ impl Builder {
     /// ```
     pub fn block_lookup(&self, src: impl AsRef<CiphertextBlock>, lut: Lut1Def) -> CiphertextBlock {
         let src = src.as_ref();
-        let (_node, ret) = self.inner_mut().add_op(
-            IopInstructionSet::Pbs { lut },
+        let (_node, ret) = self.inner_mut().insert_op(
+            IopInstructionSet::Pbs {
+                check: LookupCheck::Protect,
+                lut,
+            },
+            svec![src.valid],
+            self.current_comment(),
+        );
+        CiphertextBlock {
+            valid: ret[0],
+            spec: self.spec,
+        }
+    }
+
+    pub fn block_padding_lookup(
+        &self,
+        src: impl AsRef<CiphertextBlock>,
+        lut: Lut1Def,
+    ) -> CiphertextBlock {
+        let src = src.as_ref();
+        let (_node, ret) = self.inner_mut().insert_op(
+            IopInstructionSet::Pbs {
+                check: LookupCheck::AllowOutputPadding,
+                lut,
+            },
             svec![src.valid],
             self.current_comment(),
         );
@@ -943,8 +968,11 @@ impl Builder {
         lut: Lut1Def,
     ) -> CiphertextBlock {
         let src = src.as_ref();
-        let (_node, ret) = self.inner_mut().add_op(
-            IopInstructionSet::WrappingPbs { lut },
+        let (_node, ret) = self.inner_mut().insert_op(
+            IopInstructionSet::Pbs {
+                check: LookupCheck::AllowBothPadding,
+                lut,
+            },
             svec![src.valid],
             self.current_comment(),
         );
@@ -966,7 +994,7 @@ impl Builder {
         lut: Lut2Def,
     ) -> (CiphertextBlock, CiphertextBlock) {
         let src = src.as_ref();
-        let (_node, ret) = self.inner_mut().add_op(
+        let (_node, ret) = self.inner_mut().insert_op(
             IopInstructionSet::Pbs2 { lut },
             svec![src.valid],
             self.current_comment(),
@@ -989,7 +1017,7 @@ impl Builder {
     /// for initializing accumulators or providing constant operands in arithmetic. The
     /// value's bit-width must fit within the block's data bits (carry + message).
     pub fn block_let_ciphertext(&self, value: u8) -> CiphertextBlock {
-        let (_node, ret) = self.inner_mut().add_op(
+        let (_node, ret) = self.inner_mut().insert_op(
             IopInstructionSet::LetCiphertextBlock { value },
             svec![],
             self.current_comment(),

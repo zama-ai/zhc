@@ -264,18 +264,18 @@ impl Interpretable<IopValue> for super::IopInstructionSet {
                 ct.set_block(*index, ctblock);
                 svec![IopValue::Ciphertext(ct)]
             }
-            Pbs { lut } => {
+            Pbs { check, lut } => {
                 let IopValue::CiphertextBlock(ct) = arguments[0] else {
                     panic!("Expected CiphertextBlock, got:\n{:#?}", arguments)
                 };
-                let ct0 = lut.protect_lookup(ct);
+                let ct0 = lut.lookup(ct, *check);
                 svec![IopValue::CiphertextBlock(ct0)]
             }
             Pbs2 { lut } => {
                 let IopValue::CiphertextBlock(ct) = arguments[0] else {
                     panic!("Expected CiphertextBlock, got:\n{:#?}", arguments)
                 };
-                let (ct0, ct1) = lut.protect_lookup(ct);
+                let (ct0, ct1) = lut.lookup(ct);
                 svec![
                     IopValue::CiphertextBlock(ct0),
                     IopValue::CiphertextBlock(ct1)
@@ -285,7 +285,7 @@ impl Interpretable<IopValue> for super::IopInstructionSet {
                 let IopValue::CiphertextBlock(ct) = arguments[0] else {
                     panic!("Expected CiphertextBlock, got:\n{:#?}", arguments)
                 };
-                let (ct0, ct1, ct2, ct3) = lut.protect_lookup(ct);
+                let (ct0, ct1, ct2, ct3) = lut.lookup(ct);
                 svec![
                     IopValue::CiphertextBlock(ct0),
                     IopValue::CiphertextBlock(ct1),
@@ -297,52 +297,7 @@ impl Interpretable<IopValue> for super::IopInstructionSet {
                 let IopValue::CiphertextBlock(ct) = arguments[0] else {
                     panic!("Expected CiphertextBlock, got:\n{:#?}", arguments)
                 };
-                let (ct0, ct1, ct2, ct3, ct4, ct5, ct6, ct7) = lut.protect_lookup(ct);
-                svec![
-                    IopValue::CiphertextBlock(ct0),
-                    IopValue::CiphertextBlock(ct1),
-                    IopValue::CiphertextBlock(ct2),
-                    IopValue::CiphertextBlock(ct3),
-                    IopValue::CiphertextBlock(ct4),
-                    IopValue::CiphertextBlock(ct5),
-                    IopValue::CiphertextBlock(ct6),
-                    IopValue::CiphertextBlock(ct7)
-                ]
-            }
-            WrappingPbs { lut } => {
-                let IopValue::CiphertextBlock(ct) = arguments[0] else {
-                    panic!("Expected CiphertextBlock, got:\n{:#?}", arguments)
-                };
-                let ct0 = lut.wrapping_lookup(ct);
-                svec![IopValue::CiphertextBlock(ct0)]
-            }
-            WrappingPbs2 { lut } => {
-                let IopValue::CiphertextBlock(ct) = arguments[0] else {
-                    panic!("Expected CiphertextBlock, got:\n{:#?}", arguments)
-                };
-                let (ct0, ct1) = lut.wrapping_lookup(ct);
-                svec![
-                    IopValue::CiphertextBlock(ct0),
-                    IopValue::CiphertextBlock(ct1)
-                ]
-            }
-            WrappingPbs4 { lut } => {
-                let IopValue::CiphertextBlock(ct) = arguments[0] else {
-                    panic!("Expected CiphertextBlock, got:\n{:#?}", arguments)
-                };
-                let (ct0, ct1, ct2, ct3) = lut.wrapping_lookup(ct);
-                svec![
-                    IopValue::CiphertextBlock(ct0),
-                    IopValue::CiphertextBlock(ct1),
-                    IopValue::CiphertextBlock(ct2),
-                    IopValue::CiphertextBlock(ct3)
-                ]
-            }
-            WrappingPbs8 { lut } => {
-                let IopValue::CiphertextBlock(ct) = arguments[0] else {
-                    panic!("Expected CiphertextBlock, got:\n{:#?}", arguments)
-                };
-                let (ct0, ct1, ct2, ct3, ct4, ct5, ct6, ct7) = lut.wrapping_lookup(ct);
+                let (ct0, ct1, ct2, ct3, ct4, ct5, ct6, ct7) = lut.lookup(ct);
                 svec![
                     IopValue::CiphertextBlock(ct0),
                     IopValue::CiphertextBlock(ct1),

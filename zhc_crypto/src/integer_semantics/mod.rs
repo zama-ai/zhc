@@ -48,18 +48,14 @@
 //! Lookup semantics
 //! ================
 //!
-//! Table lookups (programmable bootstrapping) also come in two flavors, reflecting how the padding
-//! bit affects the lookup behavior:
+//! Table lookups (programmable bootstrapping) are handled by a single [`lut::lookup`] function,
+//! parameterized by a [`lut::LookupCheck`] policy that controls padding-bit assertions on input
+//! and output. When the input padding bit is set, the raw LUT output is two's-complement negated
+//! to reproduce the negacyclic table folding of a real TFHE bootstrap.
 //!
-//! + [`lut::protect_lookup`] requires the padding bit to be zero. The lookup index is guaranteed to
-//!   fall within the first half of the negacyclic table, so the LUT function is applied directly.
-//!   This is the standard mode when the padding bit serves as a guard.
-//!
-//! + [`lut::wrapping_lookup`] handles inputs with an arbitrary padding bit. When the padding bit is
-//!   zero, the LUT is applied directly. When it is set, the output is negated (two's complement) to
-//!   emulate the negacyclic structure: accessing the second half of the table returns the negation
-//!   of the corresponding first-half entry. Use this mode for operations that exploit negacyclic
-//!   semantics or when the padding bit may be set due to prior arithmetic.
+//! Multi-LUT variants ([`lut::lookup2`], [`lut::lookup4`], [`lut::lookup8`]) evaluate several LUT
+//! functions on the same block in a single PBS, packing sub-tables into the polynomial. These
+//! always require a clean padding bit.
 
 use rand::SeedableRng;
 use rand::rngs::SmallRng;

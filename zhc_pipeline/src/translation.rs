@@ -431,7 +431,7 @@ impl Translator for IoplangToHpulang {
                         )
                         .unwrap();
                 }
-                IopInstructionSet::Pbs { lut } | IopInstructionSet::WrappingPbs { lut } => {
+                IopInstructionSet::Pbs { lut, .. } => {
                     let lut = match GIDS1.get(&lut) {
                         Some(v) => *v,
                         None => panic!("Failed to lookup the gid for key: {lut:?}"),
@@ -444,7 +444,7 @@ impl Translator for IoplangToHpulang {
                         .unwrap();
                     map.insert(op.get_return_valids()[0], valids[0]);
                 }
-                IopInstructionSet::Pbs2 { lut } | IopInstructionSet::WrappingPbs2 { lut } => {
+                IopInstructionSet::Pbs2 { lut } => {
                     let lut = match GIDS2.get(&lut) {
                         Some(v) => *v,
                         None => panic!("Failed to lookup the gid for key: {lut:?}"),
@@ -458,7 +458,7 @@ impl Translator for IoplangToHpulang {
                     map.insert(op.get_return_valids()[0], valids[0]);
                     map.insert(op.get_return_valids()[1], valids[1]);
                 }
-                IopInstructionSet::Pbs4 { lut } | IopInstructionSet::WrappingPbs4 { lut } => {
+                IopInstructionSet::Pbs4 { lut } => {
                     let lut = match GIDS4.get(&lut) {
                         Some(v) => *v,
                         None => panic!("Failed to lookup the gid for key: {lut:?}"),
@@ -474,7 +474,7 @@ impl Translator for IoplangToHpulang {
                     map.insert(op.get_return_valids()[2], valids[2]);
                     map.insert(op.get_return_valids()[3], valids[3]);
                 }
-                IopInstructionSet::Pbs8 { lut } | IopInstructionSet::WrappingPbs8 { lut } => {
+                IopInstructionSet::Pbs8 { lut } => {
                     let lut = match GIDS8.get(&lut) {
                         Some(v) => *v,
                         None => panic!("Failed to lookup the gid for key: {lut:?}"),
