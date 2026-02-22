@@ -87,7 +87,7 @@ mod test {
 
     #[test]
     fn test_empty_ir() {
-        let mut ir = IR::<TestDialect>::empty();
+        let mut ir = IR::<TestLang>::empty();
         let analysis = DeadCodeAnalysis::from_ir(&ir);
         assert_eq!(analysis.get_statuses_iter().count(), 0);
         eliminate_dead_code(&mut ir);
@@ -96,10 +96,10 @@ mod test {
     }
 
     #[test]
-    fn test_single_effect_operation() -> Result<(), IRError<TestDialect>> {
-        let mut ir = IR::<TestDialect>::empty();
-        let (input_op, input_vals) = ir.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-        let (return_op, _) = ir.add_op(Operations::Return, input_vals)?;
+    fn test_single_effect_operation() -> Result<(), IRError<TestLang>> {
+        let mut ir = IR::<TestLang>::empty();
+        let (input_op, input_vals) = ir.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+        let (return_op, _) = ir.add_op(TestInstructionSet::Return, input_vals)?;
         assert_display_is!(
             ir.format(),
             r#"
@@ -127,12 +127,12 @@ mod test {
     }
 
     #[test]
-    fn test_dead_operation_no_users() -> Result<(), IRError<TestDialect>> {
-        let mut ir = IR::<TestDialect>::empty();
-        let (input_op, input_vals) = ir.add_op(Operations::IntInput { pos: 0 }, svec![])?;
+    fn test_dead_operation_no_users() -> Result<(), IRError<TestLang>> {
+        let mut ir = IR::<TestLang>::empty();
+        let (input_op, input_vals) = ir.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
         let (add_op, _add_vals) =
-            ir.add_op(Operations::Add, svec![input_vals[0], input_vals[0]])?;
-        let (return_op, _) = ir.add_op(Operations::Return, svec![input_vals[0]])?;
+            ir.add_op(TestInstructionSet::Add, svec![input_vals[0], input_vals[0]])?;
+        let (return_op, _) = ir.add_op(TestInstructionSet::Return, svec![input_vals[0]])?;
 
         assert_display_is!(
             ir.format(),
@@ -165,13 +165,13 @@ mod test {
     }
 
     #[test]
-    fn test_dependency_chain_all_live() -> Result<(), IRError<TestDialect>> {
-        let mut ir = IR::<TestDialect>::empty();
-        let (input1, vals1) = ir.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-        let (input2, vals2) = ir.add_op(Operations::IntInput { pos: 1 }, svec![])?;
-        let (add_op, add_vals) = ir.add_op(Operations::Add, svec![vals1[0], vals2[0]])?;
-        let (inc_op, inc_vals) = ir.add_op(Operations::Inc, add_vals)?;
-        let (return_op, _) = ir.add_op(Operations::Return, inc_vals)?;
+    fn test_dependency_chain_all_live() -> Result<(), IRError<TestLang>> {
+        let mut ir = IR::<TestLang>::empty();
+        let (input1, vals1) = ir.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+        let (input2, vals2) = ir.add_op(TestInstructionSet::IntInput { pos: 1 }, svec![])?;
+        let (add_op, add_vals) = ir.add_op(TestInstructionSet::Add, svec![vals1[0], vals2[0]])?;
+        let (inc_op, inc_vals) = ir.add_op(TestInstructionSet::Inc, add_vals)?;
+        let (return_op, _) = ir.add_op(TestInstructionSet::Return, inc_vals)?;
 
         assert_display_is!(
             ir.format(),
@@ -208,13 +208,13 @@ mod test {
     }
 
     #[test]
-    fn test_diamond_pattern_partial_dead() -> Result<(), IRError<TestDialect>> {
-        let mut ir = IR::<TestDialect>::empty();
-        let (input_op, input_vals) = ir.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-        let (inc1_op, inc1_vals) = ir.add_op(Operations::Inc, input_vals.clone())?;
-        let (inc2_op, inc2_vals) = ir.add_op(Operations::Inc, input_vals)?;
-        let (add_op, _) = ir.add_op(Operations::Add, svec![inc1_vals[0], inc2_vals[0]])?;
-        let (return_op, _) = ir.add_op(Operations::Return, svec![inc1_vals[0]])?;
+    fn test_diamond_pattern_partial_dead() -> Result<(), IRError<TestLang>> {
+        let mut ir = IR::<TestLang>::empty();
+        let (input_op, input_vals) = ir.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+        let (inc1_op, inc1_vals) = ir.add_op(TestInstructionSet::Inc, input_vals.clone())?;
+        let (inc2_op, inc2_vals) = ir.add_op(TestInstructionSet::Inc, input_vals)?;
+        let (add_op, _) = ir.add_op(TestInstructionSet::Add, svec![inc1_vals[0], inc2_vals[0]])?;
+        let (return_op, _) = ir.add_op(TestInstructionSet::Return, svec![inc1_vals[0]])?;
 
         assert_display_is!(
             ir.format(),
@@ -254,13 +254,13 @@ mod test {
     }
 
     #[test]
-    fn test_multiple_effects() -> Result<(), IRError<TestDialect>> {
-        let mut ir = IR::<TestDialect>::empty();
-        let (input1, vals1) = ir.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-        let (input2, vals2) = ir.add_op(Operations::IntInput { pos: 1 }, svec![])?;
-        let (add_op, _) = ir.add_op(Operations::Add, svec![vals1[0], vals2[0]])?;
-        let (return1, _) = ir.add_op(Operations::Return, svec![vals1[0]])?;
-        let (return2, _) = ir.add_op(Operations::Return, svec![vals2[0]])?;
+    fn test_multiple_effects() -> Result<(), IRError<TestLang>> {
+        let mut ir = IR::<TestLang>::empty();
+        let (input1, vals1) = ir.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+        let (input2, vals2) = ir.add_op(TestInstructionSet::IntInput { pos: 1 }, svec![])?;
+        let (add_op, _) = ir.add_op(TestInstructionSet::Add, svec![vals1[0], vals2[0]])?;
+        let (return1, _) = ir.add_op(TestInstructionSet::Return, svec![vals1[0]])?;
+        let (return2, _) = ir.add_op(TestInstructionSet::Return, svec![vals2[0]])?;
 
         assert_display_is!(
             ir.format(),
@@ -296,11 +296,11 @@ mod test {
     }
 
     #[test]
-    fn test_all_operations_dead() -> Result<(), IRError<TestDialect>> {
-        let mut ir = IR::<TestDialect>::empty();
-        let (input_op, input_vals) = ir.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-        let (add_op, add_vals) = ir.add_op(Operations::Add, svec![input_vals[0], input_vals[0]])?;
-        let (inc_op, _) = ir.add_op(Operations::Inc, add_vals)?;
+    fn test_all_operations_dead() -> Result<(), IRError<TestLang>> {
+        let mut ir = IR::<TestLang>::empty();
+        let (input_op, input_vals) = ir.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+        let (add_op, add_vals) = ir.add_op(TestInstructionSet::Add, svec![input_vals[0], input_vals[0]])?;
+        let (inc_op, _) = ir.add_op(TestInstructionSet::Inc, add_vals)?;
 
         assert_display_is!(
             ir.format(),
@@ -328,11 +328,11 @@ mod test {
     }
 
     #[test]
-    fn test_with_already_deleted_operations() -> Result<(), IRError<TestDialect>> {
-        let mut ir = IR::<TestDialect>::empty();
-        let (input_op, input_vals) = ir.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-        let (add_op, _) = ir.add_op(Operations::Add, svec![input_vals[0], input_vals[0]])?;
-        let (return_op, _) = ir.add_op(Operations::Return, input_vals)?;
+    fn test_with_already_deleted_operations() -> Result<(), IRError<TestLang>> {
+        let mut ir = IR::<TestLang>::empty();
+        let (input_op, input_vals) = ir.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+        let (add_op, _) = ir.add_op(TestInstructionSet::Add, svec![input_vals[0], input_vals[0]])?;
+        let (return_op, _) = ir.add_op(TestInstructionSet::Return, input_vals)?;
 
         ir.delete_op(add_op);
 
@@ -364,14 +364,14 @@ mod test {
     }
 
     #[test]
-    fn test_complex_mixed_scenario() -> Result<(), IRError<TestDialect>> {
-        let mut ir = IR::<TestDialect>::empty();
-        let (input1, vals1) = ir.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-        let (input2, vals2) = ir.add_op(Operations::IntInput { pos: 1 }, svec![])?;
-        let (dead_add1, dead_vals1) = ir.add_op(Operations::Add, svec![vals1[0], vals2[0]])?;
-        let (dead_add2, _) = ir.add_op(Operations::Add, svec![dead_vals1[0], dead_vals1[0]])?;
-        let (live_inc, live_vals) = ir.add_op(Operations::Inc, svec![vals1[0]])?;
-        let (return_op, _) = ir.add_op(Operations::Return, live_vals)?;
+    fn test_complex_mixed_scenario() -> Result<(), IRError<TestLang>> {
+        let mut ir = IR::<TestLang>::empty();
+        let (input1, vals1) = ir.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+        let (input2, vals2) = ir.add_op(TestInstructionSet::IntInput { pos: 1 }, svec![])?;
+        let (dead_add1, dead_vals1) = ir.add_op(TestInstructionSet::Add, svec![vals1[0], vals2[0]])?;
+        let (dead_add2, _) = ir.add_op(TestInstructionSet::Add, svec![dead_vals1[0], dead_vals1[0]])?;
+        let (live_inc, live_vals) = ir.add_op(TestInstructionSet::Inc, svec![vals1[0]])?;
+        let (return_op, _) = ir.add_op(TestInstructionSet::Return, live_vals)?;
 
         assert_display_is!(
             ir.format(),

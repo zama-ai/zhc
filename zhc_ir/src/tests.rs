@@ -7,22 +7,22 @@ pub mod test_dialect {
     use zhc_utils::svec;
 
     #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-    pub enum Types {
+    pub enum TestTypeSystem {
         Int,
         Bool,
     }
-    impl Display for Types {
+    impl Display for TestTypeSystem {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             match self {
-                Types::Int => write!(f, "Int"),
-                Types::Bool => write!(f, "Bool"),
+                TestTypeSystem::Int => write!(f, "Int"),
+                TestTypeSystem::Bool => write!(f, "Bool"),
             }
         }
     }
-    impl DialectTypeSystem for Types {}
+    impl DialectTypeSystem for TestTypeSystem {}
 
     #[derive(Debug, Clone, Hash, PartialEq, Eq)]
-    pub enum Operations {
+    pub enum TestInstructionSet {
         IntInput { pos: usize },
         BoolConstant { val: bool },
         Add,
@@ -32,137 +32,137 @@ pub mod test_dialect {
         Return,
     }
 
-    impl Display for Operations {
+    impl Display for TestInstructionSet {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             match self {
-                Operations::IntInput { pos } => write!(f, "int_input<pos: {}>", pos),
-                Operations::BoolConstant { val } => write!(f, "bool_constant<val: {}>", val),
-                Operations::Add => write!(f, "add"),
-                Operations::IfElse => write!(f, "if_else"),
-                Operations::DivRem => write!(f, "div_rem"),
-                Operations::Inc => write!(f, "inc"),
-                Operations::Return => write!(f, "return"),
+                TestInstructionSet::IntInput { pos } => write!(f, "int_input<pos: {}>", pos),
+                TestInstructionSet::BoolConstant { val } => write!(f, "bool_constant<val: {}>", val),
+                TestInstructionSet::Add => write!(f, "add"),
+                TestInstructionSet::IfElse => write!(f, "if_else"),
+                TestInstructionSet::DivRem => write!(f, "div_rem"),
+                TestInstructionSet::Inc => write!(f, "inc"),
+                TestInstructionSet::Return => write!(f, "return"),
             }
         }
     }
 
-    impl DialectInstructionSet for Operations {
-        type TypeSystem = Types;
+    impl DialectInstructionSet for TestInstructionSet {
+        type TypeSystem = TestTypeSystem;
 
         fn get_signature(&self) -> crate::signature::Signature<Self::TypeSystem> {
-            use Types::*;
+            use TestTypeSystem::*;
             match self {
-                Operations::IntInput { .. } => Signature(svec![], svec![Int]),
-                Operations::BoolConstant { .. } => Signature(svec![], svec![Bool]),
-                Operations::Add => Signature(svec![Int, Int], svec![Int]),
-                Operations::IfElse => Signature(svec![Int, Bool, Int], svec![Int]),
-                Operations::DivRem => Signature(svec![Int, Int], svec![Int, Int]),
-                Operations::Inc => Signature(svec![Int], svec![Int]),
-                Operations::Return => Signature(svec![Int], svec![]),
+                TestInstructionSet::IntInput { .. } => Signature(svec![], svec![Int]),
+                TestInstructionSet::BoolConstant { .. } => Signature(svec![], svec![Bool]),
+                TestInstructionSet::Add => Signature(svec![Int, Int], svec![Int]),
+                TestInstructionSet::IfElse => Signature(svec![Int, Bool, Int], svec![Int]),
+                TestInstructionSet::DivRem => Signature(svec![Int, Int], svec![Int, Int]),
+                TestInstructionSet::Inc => Signature(svec![Int], svec![Int]),
+                TestInstructionSet::Return => Signature(svec![Int], svec![]),
             }
         }
     }
 
     #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-    pub struct TestDialect;
+    pub struct TestLang;
 
-    impl Dialect for TestDialect {
-        type TypeSystem = Types;
-        type InstructionSet = Operations;
+    impl Dialect for TestLang {
+        type TypeSystem = TestTypeSystem;
+        type InstructionSet = TestInstructionSet;
     }
 }
 
 use crate::{DialectInstructionSet, IR, IRError};
 use zhc_utils::{assert_display_is, iter::CollectInVec, svec};
 
-use test_dialect::{Operations, TestDialect};
+use test_dialect::{TestInstructionSet, TestLang};
 
 #[allow(unused)]
-pub fn gen_complex_ir() -> Result<IR<TestDialect>, IRError<TestDialect>> {
-    let mut ir: IR<TestDialect> = IR::empty();
+pub fn gen_complex_ir() -> Result<IR<TestLang>, IRError<TestLang>> {
+    let mut ir: IR<TestLang> = IR::empty();
 
     // Create multiple input sources (wide foundation)
-    let (_, inp0) = ir.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (_, inp1) = ir.add_op(Operations::IntInput { pos: 1 }, svec![])?;
-    let (_, inp2) = ir.add_op(Operations::IntInput { pos: 2 }, svec![])?;
-    let (_, inp3) = ir.add_op(Operations::IntInput { pos: 3 }, svec![])?;
-    let (_, bool_inp) = ir.add_op(Operations::BoolConstant { val: true }, svec![])?;
+    let (_, inp0) = ir.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (_, inp1) = ir.add_op(TestInstructionSet::IntInput { pos: 1 }, svec![])?;
+    let (_, inp2) = ir.add_op(TestInstructionSet::IntInput { pos: 2 }, svec![])?;
+    let (_, inp3) = ir.add_op(TestInstructionSet::IntInput { pos: 3 }, svec![])?;
+    let (_, bool_inp) = ir.add_op(TestInstructionSet::BoolConstant { val: true }, svec![])?;
 
     // First layer - basic operations on inputs
-    let (_, add0) = ir.add_op(Operations::Add, svec![inp0[0], inp1[0]])?;
-    let (_, add1) = ir.add_op(Operations::Add, svec![inp2[0], inp3[0]])?;
-    let (_, inc0) = ir.add_op(Operations::Inc, svec![inp0[0]])?;
-    let (_, inc1) = ir.add_op(Operations::Inc, svec![inp1[0]])?;
+    let (_, add0) = ir.add_op(TestInstructionSet::Add, svec![inp0[0], inp1[0]])?;
+    let (_, add1) = ir.add_op(TestInstructionSet::Add, svec![inp2[0], inp3[0]])?;
+    let (_, inc0) = ir.add_op(TestInstructionSet::Inc, svec![inp0[0]])?;
+    let (_, inc1) = ir.add_op(TestInstructionSet::Inc, svec![inp1[0]])?;
 
     // Create a diamond pattern: add0 -> inc2, inc3 -> add2
-    let (_, inc2) = ir.add_op(Operations::Inc, svec![add0[0]])?;
-    let (_, inc3) = ir.add_op(Operations::Inc, svec![add0[0]])?;
-    let (_, add2) = ir.add_op(Operations::Add, svec![inc2[0], inc3[0]])?;
+    let (_, inc2) = ir.add_op(TestInstructionSet::Inc, svec![add0[0]])?;
+    let (_, inc3) = ir.add_op(TestInstructionSet::Inc, svec![add0[0]])?;
+    let (_, add2) = ir.add_op(TestInstructionSet::Add, svec![inc2[0], inc3[0]])?;
 
     // Create a deeper chain from inp2
-    let (_, chain0) = ir.add_op(Operations::Inc, svec![inp2[0]])?;
-    let (_, chain1) = ir.add_op(Operations::Inc, svec![chain0[0]])?;
-    let (_, chain2) = ir.add_op(Operations::Inc, svec![chain1[0]])?;
-    let (_, chain3) = ir.add_op(Operations::Inc, svec![chain2[0]])?;
-    let (_, chain4) = ir.add_op(Operations::Inc, svec![chain3[0]])?;
+    let (_, chain0) = ir.add_op(TestInstructionSet::Inc, svec![inp2[0]])?;
+    let (_, chain1) = ir.add_op(TestInstructionSet::Inc, svec![chain0[0]])?;
+    let (_, chain2) = ir.add_op(TestInstructionSet::Inc, svec![chain1[0]])?;
+    let (_, chain3) = ir.add_op(TestInstructionSet::Inc, svec![chain2[0]])?;
+    let (_, chain4) = ir.add_op(TestInstructionSet::Inc, svec![chain3[0]])?;
 
     // Multi-output operation creating branching
-    let (_, divrem0) = ir.add_op(Operations::DivRem, svec![add1[0], inc0[0]])?;
-    let (_, divrem1) = ir.add_op(Operations::DivRem, svec![chain4[0], inp3[0]])?;
+    let (_, divrem0) = ir.add_op(TestInstructionSet::DivRem, svec![add1[0], inc0[0]])?;
+    let (_, divrem1) = ir.add_op(TestInstructionSet::DivRem, svec![chain4[0], inp3[0]])?;
 
     // Fan-out: use both outputs of divrem operations
-    let (_, inc4) = ir.add_op(Operations::Inc, svec![divrem0[0]])?; // quotient
-    let (_, inc5) = ir.add_op(Operations::Inc, svec![divrem0[1]])?; // remainder
-    let (_, inc6) = ir.add_op(Operations::Inc, svec![divrem1[0]])?; // quotient
-    let (_, inc7) = ir.add_op(Operations::Inc, svec![divrem1[1]])?; // remainder
+    let (_, inc4) = ir.add_op(TestInstructionSet::Inc, svec![divrem0[0]])?; // quotient
+    let (_, inc5) = ir.add_op(TestInstructionSet::Inc, svec![divrem0[1]])?; // remainder
+    let (_, inc6) = ir.add_op(TestInstructionSet::Inc, svec![divrem1[0]])?; // quotient
+    let (_, inc7) = ir.add_op(TestInstructionSet::Inc, svec![divrem1[1]])?; // remainder
 
     // Create convergence points
-    let (_, conv0) = ir.add_op(Operations::Add, svec![inc4[0], inc5[0]])?;
-    let (_, conv1) = ir.add_op(Operations::Add, svec![inc6[0], inc7[0]])?;
-    let (_, conv2) = ir.add_op(Operations::Add, svec![add2[0], chain2[0]])?;
+    let (_, conv0) = ir.add_op(TestInstructionSet::Add, svec![inc4[0], inc5[0]])?;
+    let (_, conv1) = ir.add_op(TestInstructionSet::Add, svec![inc6[0], inc7[0]])?;
+    let (_, conv2) = ir.add_op(TestInstructionSet::Add, svec![add2[0], chain2[0]])?;
 
     // IfElse operations using the boolean input
-    let (_, ifelse0) = ir.add_op(Operations::IfElse, svec![conv0[0], bool_inp[0], conv1[0]])?;
-    let (_, ifelse1) = ir.add_op(Operations::IfElse, svec![conv2[0], bool_inp[0], inc1[0]])?;
+    let (_, ifelse0) = ir.add_op(TestInstructionSet::IfElse, svec![conv0[0], bool_inp[0], conv1[0]])?;
+    let (_, ifelse1) = ir.add_op(TestInstructionSet::IfElse, svec![conv2[0], bool_inp[0], inc1[0]])?;
 
     // Create more complex interactions
-    let (_, add3) = ir.add_op(Operations::Add, svec![ifelse0[0], ifelse1[0]])?;
-    let (_, add4) = ir.add_op(Operations::Add, svec![conv0[0], conv1[0]])?;
-    let (_, add5) = ir.add_op(Operations::Add, svec![chain4[0], add2[0]])?;
+    let (_, add3) = ir.add_op(TestInstructionSet::Add, svec![ifelse0[0], ifelse1[0]])?;
+    let (_, add4) = ir.add_op(TestInstructionSet::Add, svec![conv0[0], conv1[0]])?;
+    let (_, add5) = ir.add_op(TestInstructionSet::Add, svec![chain4[0], add2[0]])?;
 
     // Another level of DivRem for more multi-output complexity
-    let (_, divrem2) = ir.add_op(Operations::DivRem, svec![add3[0], add4[0]])?;
-    let (_, divrem3) = ir.add_op(Operations::DivRem, svec![add5[0], ifelse1[0]])?;
+    let (_, divrem2) = ir.add_op(TestInstructionSet::DivRem, svec![add3[0], add4[0]])?;
+    let (_, divrem3) = ir.add_op(TestInstructionSet::DivRem, svec![add5[0], ifelse1[0]])?;
 
     // Final convergence layer
-    let (_, final0) = ir.add_op(Operations::Add, svec![divrem2[0], divrem3[0]])?;
-    let (_, final1) = ir.add_op(Operations::Add, svec![divrem2[1], divrem3[1]])?;
-    let (_, final2) = ir.add_op(Operations::Add, svec![final0[0], final1[0]])?;
+    let (_, final0) = ir.add_op(TestInstructionSet::Add, svec![divrem2[0], divrem3[0]])?;
+    let (_, final1) = ir.add_op(TestInstructionSet::Add, svec![divrem2[1], divrem3[1]])?;
+    let (_, final2) = ir.add_op(TestInstructionSet::Add, svec![final0[0], final1[0]])?;
 
     // Independent subgraph that eventually merges
-    let (_, indep0) = ir.add_op(Operations::Inc, svec![inp0[0]])?;
-    let (_, indep1) = ir.add_op(Operations::Inc, svec![indep0[0]])?;
-    let (_, indep2) = ir.add_op(Operations::Inc, svec![indep1[0]])?;
+    let (_, indep0) = ir.add_op(TestInstructionSet::Inc, svec![inp0[0]])?;
+    let (_, indep1) = ir.add_op(TestInstructionSet::Inc, svec![indep0[0]])?;
+    let (_, indep2) = ir.add_op(TestInstructionSet::Inc, svec![indep1[0]])?;
 
     // Merge independent subgraph with main computation
-    let (_, ultimate) = ir.add_op(Operations::Add, svec![final2[0], indep2[0]])?;
+    let (_, ultimate) = ir.add_op(TestInstructionSet::Add, svec![final2[0], indep2[0]])?;
 
     // Some effect operations
-    let (_, _) = ir.add_op(Operations::Return, svec![ultimate[0]])?;
-    let (_, _) = ir.add_op(Operations::Return, svec![final0[0]])?;
-    let (_, _) = ir.add_op(Operations::Return, svec![conv2[0]])?;
+    let (_, _) = ir.add_op(TestInstructionSet::Return, svec![ultimate[0]])?;
+    let (_, _) = ir.add_op(TestInstructionSet::Return, svec![final0[0]])?;
+    let (_, _) = ir.add_op(TestInstructionSet::Return, svec![conv2[0]])?;
 
     // Additional independent operations to reach ~50 nodes
-    let (_, extra0) = ir.add_op(Operations::Inc, svec![inp3[0]])?;
-    let (_, extra1) = ir.add_op(Operations::Inc, svec![extra0[0]])?;
-    let (_, extra2) = ir.add_op(Operations::Add, svec![extra1[0], chain1[0]])?;
-    let (_, _) = ir.add_op(Operations::Return, svec![extra2[0]])?;
+    let (_, extra0) = ir.add_op(TestInstructionSet::Inc, svec![inp3[0]])?;
+    let (_, extra1) = ir.add_op(TestInstructionSet::Inc, svec![extra0[0]])?;
+    let (_, extra2) = ir.add_op(TestInstructionSet::Add, svec![extra1[0], chain1[0]])?;
+    let (_, _) = ir.add_op(TestInstructionSet::Return, svec![extra2[0]])?;
 
     // More branching from existing values
-    let (_, branch0) = ir.add_op(Operations::Inc, svec![add1[0]])?;
-    let (_, branch1) = ir.add_op(Operations::Inc, svec![branch0[0]])?;
-    let (_, branch2) = ir.add_op(Operations::Add, svec![branch1[0], inc7[0]])?;
-    let (_, _) = ir.add_op(Operations::Return, svec![branch2[0]])?;
+    let (_, branch0) = ir.add_op(TestInstructionSet::Inc, svec![add1[0]])?;
+    let (_, branch1) = ir.add_op(TestInstructionSet::Inc, svec![branch0[0]])?;
+    let (_, branch2) = ir.add_op(TestInstructionSet::Add, svec![branch1[0], inc7[0]])?;
+    let (_, _) = ir.add_op(TestInstructionSet::Return, svec![branch2[0]])?;
 
     assert_display_is!(
         ir.format(),
@@ -227,17 +227,17 @@ pub fn gen_complex_ir() -> Result<IR<TestDialect>, IRError<TestDialect>> {
 /// Tests basic IR construction with complex operation graph and validates
 /// all operation properties, value relationships, and depth calculations
 #[test]
-fn test_construction() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
+fn test_construction() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
 
-    let (lhs_id, v0) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (rhs_id, v1) = store.add_op(Operations::IntInput { pos: 1 }, svec![])?;
-    let (join_id, v2) = store.add_op(Operations::Add, svec![v0[0], v1[0]])?;
-    let (split_id, v3) = store.add_op(Operations::DivRem, svec![v2[0], v0[0]])?;
-    let (ulhs_id, v4) = store.add_op(Operations::Inc, svec![v3[0]])?;
-    let (urhs_id, v5) = store.add_op(Operations::Inc, svec![v3[1]])?;
-    let (final_add_id, v6) = store.add_op(Operations::Add, svec![v4[0], v5[0]])?;
-    let (effect_id, _) = store.add_op(Operations::Return, svec![v3[0]])?;
+    let (lhs_id, v0) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (rhs_id, v1) = store.add_op(TestInstructionSet::IntInput { pos: 1 }, svec![])?;
+    let (join_id, v2) = store.add_op(TestInstructionSet::Add, svec![v0[0], v1[0]])?;
+    let (split_id, v3) = store.add_op(TestInstructionSet::DivRem, svec![v2[0], v0[0]])?;
+    let (ulhs_id, v4) = store.add_op(TestInstructionSet::Inc, svec![v3[0]])?;
+    let (urhs_id, v5) = store.add_op(TestInstructionSet::Inc, svec![v3[1]])?;
+    let (final_add_id, v6) = store.add_op(TestInstructionSet::Add, svec![v4[0], v5[0]])?;
+    let (effect_id, _) = store.add_op(TestInstructionSet::Return, svec![v3[0]])?;
 
     let lhs = store.get_op(lhs_id);
     let p0 = store.get_val(v0[0]);
@@ -348,9 +348,9 @@ fn test_construction() -> Result<(), IRError<TestDialect>> {
 
 /// Tests that an operation reaches itself (reflexive property)
 #[test]
-fn test_reaches_self() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
-    let (lhs_id, _) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
+fn test_reaches_self() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
+    let (lhs_id, _) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
     let lhs = store.get_op(lhs_id);
     assert_display_is!(
         store.format(),
@@ -364,10 +364,10 @@ fn test_reaches_self() -> Result<(), IRError<TestDialect>> {
 
 /// Tests basic reachability between two operations in a dependency chain
 #[test]
-fn test_reaches_base() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
-    let (lhs_id, v0) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (ulhs_id, _) = store.add_op(Operations::Inc, svec![v0[0]])?;
+fn test_reaches_base() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
+    let (lhs_id, v0) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (ulhs_id, _) = store.add_op(TestInstructionSet::Inc, svec![v0[0]])?;
     let lhs = store.get_op(lhs_id);
     let ulhs = store.get_op(ulhs_id);
     assert_display_is!(
@@ -383,14 +383,14 @@ fn test_reaches_base() -> Result<(), IRError<TestDialect>> {
 
 /// Tests reachability through a longer chain of operations
 #[test]
-fn test_reaches_chain() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
-    let (lhs_id, v0) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (_, v1) = store.add_op(Operations::Inc, svec![v0[0]])?;
-    let (_, v2) = store.add_op(Operations::Inc, svec![v1[0]])?;
-    let (_, v3) = store.add_op(Operations::Inc, svec![v2[0]])?;
-    let (_, v4) = store.add_op(Operations::Inc, svec![v3[0]])?;
-    let (ulhs_id, _) = store.add_op(Operations::Inc, svec![v4[0]])?;
+fn test_reaches_chain() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
+    let (lhs_id, v0) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (_, v1) = store.add_op(TestInstructionSet::Inc, svec![v0[0]])?;
+    let (_, v2) = store.add_op(TestInstructionSet::Inc, svec![v1[0]])?;
+    let (_, v3) = store.add_op(TestInstructionSet::Inc, svec![v2[0]])?;
+    let (_, v4) = store.add_op(TestInstructionSet::Inc, svec![v3[0]])?;
+    let (ulhs_id, _) = store.add_op(TestInstructionSet::Inc, svec![v4[0]])?;
     let lhs = store.get_op(lhs_id);
     let ulhs = store.get_op(ulhs_id);
     assert_display_is!(
@@ -410,11 +410,11 @@ fn test_reaches_chain() -> Result<(), IRError<TestDialect>> {
 
 /// Tests that independent operations don't reach each other
 #[test]
-fn test_reaches_happy_path() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
-    let (lhs_id, v0) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (rhs_id, _) = store.add_op(Operations::IntInput { pos: 1 }, svec![])?;
-    let _ = store.add_op(Operations::Inc, svec![v0[0]])?;
+fn test_reaches_happy_path() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
+    let (lhs_id, v0) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (rhs_id, _) = store.add_op(TestInstructionSet::IntInput { pos: 1 }, svec![])?;
+    let _ = store.add_op(TestInstructionSet::Inc, svec![v0[0]])?;
     let lhs = store.get_op(lhs_id);
     let rhs = store.get_op(rhs_id);
     assert_display_is!(
@@ -431,12 +431,12 @@ fn test_reaches_happy_path() -> Result<(), IRError<TestDialect>> {
 
 /// Tests get_reaching_iter returns all operations that can reach the current operation
 #[test]
-fn test_get_reaching_iter_simple() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
-    let (inp1_id, v0) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (inp2_id, v1) = store.add_op(Operations::IntInput { pos: 1 }, svec![])?;
-    let (add_id, v2) = store.add_op(Operations::Add, svec![v0[0], v1[0]])?;
-    let (inc_id, _) = store.add_op(Operations::Inc, svec![v2[0]])?;
+fn test_get_reaching_iter_simple() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
+    let (inp1_id, v0) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (inp2_id, v1) = store.add_op(TestInstructionSet::IntInput { pos: 1 }, svec![])?;
+    let (add_id, v2) = store.add_op(TestInstructionSet::Add, svec![v0[0], v1[0]])?;
+    let (inc_id, _) = store.add_op(TestInstructionSet::Inc, svec![v2[0]])?;
 
     let inc_op = store.get_op(inc_id);
     let reaching_ops: Vec<_> = inc_op.get_reaching_iter().map(|op| op.get_id()).collect();
@@ -451,13 +451,13 @@ fn test_get_reaching_iter_simple() -> Result<(), IRError<TestDialect>> {
 
 /// Tests get_reaching_iter with complex dependency graph
 #[test]
-fn test_get_reaching_iter_complex() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
-    let (inp_id, v0) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (inc1_id, v1) = store.add_op(Operations::Inc, svec![v0[0]])?;
-    let (inc2_id, v2) = store.add_op(Operations::Inc, svec![v1[0]])?;
-    let (inc3_id, v3) = store.add_op(Operations::Inc, svec![v0[0]])?; // Alternative branch
-    let (add_id, _) = store.add_op(Operations::Add, svec![v2[0], v3[0]])?;
+fn test_get_reaching_iter_complex() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
+    let (inp_id, v0) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (inc1_id, v1) = store.add_op(TestInstructionSet::Inc, svec![v0[0]])?;
+    let (inc2_id, v2) = store.add_op(TestInstructionSet::Inc, svec![v1[0]])?;
+    let (inc3_id, v3) = store.add_op(TestInstructionSet::Inc, svec![v0[0]])?; // Alternative branch
+    let (add_id, _) = store.add_op(TestInstructionSet::Add, svec![v2[0], v3[0]])?;
 
     let add_op = store.get_op(add_id);
     let reaching_ops: Vec<_> = add_op.get_reaching_iter().map(|op| op.get_id()).collect();
@@ -473,12 +473,12 @@ fn test_get_reaching_iter_complex() -> Result<(), IRError<TestDialect>> {
 
 /// Tests get_reaching_iter with diamond pattern
 #[test]
-fn test_get_reaching_iter_diamond() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
-    let (a_id, a_vals) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?; // A
-    let (b_id, b_vals) = store.add_op(Operations::Inc, svec![a_vals[0]])?; // B depends on A
-    let (c_id, c_vals) = store.add_op(Operations::Inc, svec![a_vals[0]])?; // C depends on A
-    let (d_id, _) = store.add_op(Operations::Add, svec![b_vals[0], c_vals[0]])?; // D depends on B,C
+fn test_get_reaching_iter_diamond() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
+    let (a_id, a_vals) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?; // A
+    let (b_id, b_vals) = store.add_op(TestInstructionSet::Inc, svec![a_vals[0]])?; // B depends on A
+    let (c_id, c_vals) = store.add_op(TestInstructionSet::Inc, svec![a_vals[0]])?; // C depends on A
+    let (d_id, _) = store.add_op(TestInstructionSet::Add, svec![b_vals[0], c_vals[0]])?; // D depends on B,C
 
     let d_op = store.get_op(d_id);
     let reaching_ops: Vec<_> = d_op.get_reaching_iter().map(|op| op.get_id()).collect();
@@ -494,9 +494,9 @@ fn test_get_reaching_iter_diamond() -> Result<(), IRError<TestDialect>> {
 
 /// Tests get_reaching_iter on input operation (no predecessors)
 #[test]
-fn test_get_reaching_iter_input() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
-    let (inp_id, _) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
+fn test_get_reaching_iter_input() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
+    let (inp_id, _) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
 
     let inp_op = store.get_op(inp_id);
     let reaching_ops: Vec<_> = inp_op.get_reaching_iter().map(|op| op.get_id()).collect();
@@ -508,18 +508,18 @@ fn test_get_reaching_iter_input() -> Result<(), IRError<TestDialect>> {
 
 /// Tests get_reaching_iter with two completely disconnected subgraphs
 #[test]
-fn test_get_reaching_iter_disconnected_subgraphs() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
+fn test_get_reaching_iter_disconnected_subgraphs() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
 
     // Subgraph 1: inp1 → inc1 → inc2
-    let (inp1_id, v0) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (inc1_id, v1) = store.add_op(Operations::Inc, svec![v0[0]])?;
-    let (inc2_id, _v2) = store.add_op(Operations::Inc, svec![v1[0]])?;
+    let (inp1_id, v0) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (inc1_id, v1) = store.add_op(TestInstructionSet::Inc, svec![v0[0]])?;
+    let (inc2_id, _v2) = store.add_op(TestInstructionSet::Inc, svec![v1[0]])?;
 
     // Subgraph 2: inp2 → inc3 → inc4
-    let (inp2_id, v3) = store.add_op(Operations::IntInput { pos: 1 }, svec![])?;
-    let (inc3_id, v4) = store.add_op(Operations::Inc, svec![v3[0]])?;
-    let (inc4_id, _v5) = store.add_op(Operations::Inc, svec![v4[0]])?;
+    let (inp2_id, v3) = store.add_op(TestInstructionSet::IntInput { pos: 1 }, svec![])?;
+    let (inc3_id, v4) = store.add_op(TestInstructionSet::Inc, svec![v3[0]])?;
+    let (inc4_id, _v5) = store.add_op(TestInstructionSet::Inc, svec![v4[0]])?;
 
     // Test that subgraph 1 operations only reach within their own subgraph
     let inc2_op = store.get_op(inc2_id);
@@ -554,12 +554,12 @@ fn test_get_reaching_iter_disconnected_subgraphs() -> Result<(), IRError<TestDia
 
 /// Tests get_reached_iter returns all operations that can be reached from the current operation
 #[test]
-fn test_get_reached_iter_simple() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
-    let (inp1_id, v0) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (inp2_id, v1) = store.add_op(Operations::IntInput { pos: 1 }, svec![])?;
-    let (add_id, v2) = store.add_op(Operations::Add, svec![v0[0], v1[0]])?;
-    let (inc_id, _) = store.add_op(Operations::Inc, svec![v2[0]])?;
+fn test_get_reached_iter_simple() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
+    let (inp1_id, v0) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (inp2_id, v1) = store.add_op(TestInstructionSet::IntInput { pos: 1 }, svec![])?;
+    let (add_id, v2) = store.add_op(TestInstructionSet::Add, svec![v0[0], v1[0]])?;
+    let (inc_id, _) = store.add_op(TestInstructionSet::Inc, svec![v2[0]])?;
 
     let add_op = store.get_op(add_id);
     let reached_ops: Vec<_> = add_op.get_reached_iter().map(|op| op.get_id()).collect();
@@ -575,13 +575,13 @@ fn test_get_reached_iter_simple() -> Result<(), IRError<TestDialect>> {
 
 /// Tests get_reached_iter with complex dependency graph
 #[test]
-fn test_get_reached_iter_complex() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
-    let (inp_id, v0) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (inc1_id, v1) = store.add_op(Operations::Inc, svec![v0[0]])?;
-    let (inc2_id, v2) = store.add_op(Operations::Inc, svec![v1[0]])?;
-    let (inc3_id, v3) = store.add_op(Operations::Inc, svec![v0[0]])?; // Alternative branch
-    let (add_id, _) = store.add_op(Operations::Add, svec![v2[0], v3[0]])?;
+fn test_get_reached_iter_complex() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
+    let (inp_id, v0) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (inc1_id, v1) = store.add_op(TestInstructionSet::Inc, svec![v0[0]])?;
+    let (inc2_id, v2) = store.add_op(TestInstructionSet::Inc, svec![v1[0]])?;
+    let (inc3_id, v3) = store.add_op(TestInstructionSet::Inc, svec![v0[0]])?; // Alternative branch
+    let (add_id, _) = store.add_op(TestInstructionSet::Add, svec![v2[0], v3[0]])?;
 
     let inp_op = store.get_op(inp_id);
     let reached_ops: Vec<_> = inp_op.get_reached_iter().map(|op| op.get_id()).collect();
@@ -597,12 +597,12 @@ fn test_get_reached_iter_complex() -> Result<(), IRError<TestDialect>> {
 
 /// Tests get_reached_iter with diamond pattern
 #[test]
-fn test_get_reached_iter_diamond() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
-    let (a_id, a_vals) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?; // A
-    let (b_id, b_vals) = store.add_op(Operations::Inc, svec![a_vals[0]])?; // B depends on A
-    let (c_id, c_vals) = store.add_op(Operations::Inc, svec![a_vals[0]])?; // C depends on A
-    let (d_id, _) = store.add_op(Operations::Add, svec![b_vals[0], c_vals[0]])?; // D depends on B,C
+fn test_get_reached_iter_diamond() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
+    let (a_id, a_vals) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?; // A
+    let (b_id, b_vals) = store.add_op(TestInstructionSet::Inc, svec![a_vals[0]])?; // B depends on A
+    let (c_id, c_vals) = store.add_op(TestInstructionSet::Inc, svec![a_vals[0]])?; // C depends on A
+    let (d_id, _) = store.add_op(TestInstructionSet::Add, svec![b_vals[0], c_vals[0]])?; // D depends on B,C
 
     let a_op = store.get_op(a_id);
     let reached_ops: Vec<_> = a_op.get_reached_iter().map(|op| op.get_id()).collect();
@@ -618,10 +618,10 @@ fn test_get_reached_iter_diamond() -> Result<(), IRError<TestDialect>> {
 
 /// Tests get_reached_iter on operation with no successors (effect)
 #[test]
-fn test_get_reached_iter_effect() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
-    let (_, vals) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (ret_id, _) = store.add_op(Operations::Return, vals)?;
+fn test_get_reached_iter_effect() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
+    let (_, vals) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (ret_id, _) = store.add_op(TestInstructionSet::Return, vals)?;
 
     let ret_op = store.get_op(ret_id);
     let reached_ops: Vec<_> = ret_op.get_reached_iter().map(|op| op.get_id()).collect();
@@ -633,18 +633,18 @@ fn test_get_reached_iter_effect() -> Result<(), IRError<TestDialect>> {
 
 /// Tests get_reached_iter with two completely disconnected subgraphs
 #[test]
-fn test_get_reached_iter_disconnected_subgraphs() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
+fn test_get_reached_iter_disconnected_subgraphs() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
 
     // Subgraph 1: inp1 → inc1 → inc2
-    let (inp1_id, v0) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (inc1_id, v1) = store.add_op(Operations::Inc, svec![v0[0]])?;
-    let (inc2_id, _v2) = store.add_op(Operations::Inc, svec![v1[0]])?;
+    let (inp1_id, v0) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (inc1_id, v1) = store.add_op(TestInstructionSet::Inc, svec![v0[0]])?;
+    let (inc2_id, _v2) = store.add_op(TestInstructionSet::Inc, svec![v1[0]])?;
 
     // Subgraph 2: inp2 → inc3 → inc4
-    let (inp2_id, v3) = store.add_op(Operations::IntInput { pos: 1 }, svec![])?;
-    let (inc3_id, v4) = store.add_op(Operations::Inc, svec![v3[0]])?;
-    let (inc4_id, _v5) = store.add_op(Operations::Inc, svec![v4[0]])?;
+    let (inp2_id, v3) = store.add_op(TestInstructionSet::IntInput { pos: 1 }, svec![])?;
+    let (inc3_id, v4) = store.add_op(TestInstructionSet::Inc, svec![v3[0]])?;
+    let (inc4_id, _v5) = store.add_op(TestInstructionSet::Inc, svec![v4[0]])?;
 
     // Test that subgraph 1 operations only reach within their own subgraph
     let inp1_op = store.get_op(inp1_id);
@@ -679,12 +679,12 @@ fn test_get_reached_iter_disconnected_subgraphs() -> Result<(), IRError<TestDial
 
 /// Tests get_reached_iter with branching pattern (one-to-many)
 #[test]
-fn test_get_reached_iter_branching() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
-    let (inp_id, vals) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (ret1_id, _) = store.add_op(Operations::Return, vals.clone())?;
-    let (inc_id, inc_vals) = store.add_op(Operations::Inc, vals)?;
-    let (ret2_id, _) = store.add_op(Operations::Return, inc_vals)?;
+fn test_get_reached_iter_branching() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
+    let (inp_id, vals) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (ret1_id, _) = store.add_op(TestInstructionSet::Return, vals.clone())?;
+    let (inc_id, inc_vals) = store.add_op(TestInstructionSet::Inc, vals)?;
+    let (ret2_id, _) = store.add_op(TestInstructionSet::Return, inc_vals)?;
 
     let inp_op = store.get_op(inp_id);
     let reached_ops: Vec<_> = inp_op.get_reached_iter().map(|op| op.get_id()).collect();
@@ -699,11 +699,11 @@ fn test_get_reached_iter_branching() -> Result<(), IRError<TestDialect>> {
 
 /// Tests get_reached_iter with convergent pattern (many-to-one)
 #[test]
-fn test_get_reached_iter_convergent() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
-    let (inp1_id, v0) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (inp2_id, v1) = store.add_op(Operations::IntInput { pos: 1 }, svec![])?;
-    let (add_id, _) = store.add_op(Operations::Add, svec![v0[0], v1[0]])?;
+fn test_get_reached_iter_convergent() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
+    let (inp1_id, v0) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (inp2_id, v1) = store.add_op(TestInstructionSet::IntInput { pos: 1 }, svec![])?;
+    let (add_id, _) = store.add_op(TestInstructionSet::Add, svec![v0[0], v1[0]])?;
 
     // Both inputs should reach the same add operation
     let inp1_op = store.get_op(inp1_id);
@@ -724,26 +724,26 @@ fn test_get_reached_iter_convergent() -> Result<(), IRError<TestDialect>> {
 #[test]
 #[should_panic]
 fn test_delete_op_in_use() {
-    let mut store: IR<TestDialect> = IR::empty();
+    let mut store: IR<TestLang> = IR::empty();
     let (lhs_id, v0) = store
-        .add_op(Operations::IntInput { pos: 0 }, svec![])
+        .add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])
         .expect("Bad add_op");
     let (_, v1) = store
-        .add_op(Operations::IntInput { pos: 1 }, svec![])
+        .add_op(TestInstructionSet::IntInput { pos: 1 }, svec![])
         .expect("Bad add_op");
     let _ = store
-        .add_op(Operations::Add, svec![v0[0], v1[0]])
+        .add_op(TestInstructionSet::Add, svec![v0[0], v1[0]])
         .expect("Bad add_op");
     store.delete_op(lhs_id);
 }
 
 /// Tests successful deletion of operations and verification of inactive state
 #[test]
-fn test_delete_op() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
-    let (_, v0) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (rhs_id, v1) = store.add_op(Operations::IntInput { pos: 1 }, svec![])?;
-    let (join_id, v2) = store.add_op(Operations::Add, svec![v0[0], v1[0]])?;
+fn test_delete_op() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
+    let (_, v0) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (rhs_id, v1) = store.add_op(TestInstructionSet::IntInput { pos: 1 }, svec![])?;
+    let (join_id, v2) = store.add_op(TestInstructionSet::Add, svec![v0[0], v1[0]])?;
     store.delete_op(join_id);
     store.delete_op(rhs_id);
     assert_display_is!(
@@ -763,12 +763,12 @@ fn test_delete_op() -> Result<(), IRError<TestDialect>> {
 #[test]
 #[should_panic(expected = "Tried to replace a value with one it reaches.")]
 fn test_replace_val_use_wrong() {
-    let mut store: IR<TestDialect> = IR::empty();
+    let mut store: IR<TestLang> = IR::empty();
     let (_, v0) = store
-        .add_op(Operations::IntInput { pos: 0 }, svec![])
+        .add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])
         .expect("Bad add_op");
     let (_, v1) = store
-        .add_op(Operations::Inc, svec![v0[0]])
+        .add_op(TestInstructionSet::Inc, svec![v0[0]])
         .expect("Bad add_op");
     assert_display_is!(
         store.format(),
@@ -784,12 +784,12 @@ fn test_replace_val_use_wrong() {
 #[test]
 #[should_panic(expected = "Tried to replace a value with one it reaches.")]
 fn test_replace_val_use_wrong_longer() {
-    let mut store: IR<TestDialect> = IR::empty();
+    let mut store: IR<TestLang> = IR::empty();
     let (_, v0) = store
-        .add_op(Operations::IntInput { pos: 0 }, svec![])
+        .add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])
         .expect("Bad add_op");
     let (_, v1) = store
-        .add_op(Operations::Inc, svec![v0[0]])
+        .add_op(TestInstructionSet::Inc, svec![v0[0]])
         .expect("Bad add_op");
     assert_display_is!(
         store.format(),
@@ -803,11 +803,11 @@ fn test_replace_val_use_wrong_longer() {
 
 /// Tests successful value use replacement and user list updates
 #[test]
-fn test_replace_val_use() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
-    let (_inp1_id, v0) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (_inp2_id, v1) = store.add_op(Operations::IntInput { pos: 1 }, svec![])?;
-    let (inc_id, _v2) = store.add_op(Operations::Inc, svec![v0[0]])?;
+fn test_replace_val_use() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
+    let (_inp1_id, v0) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (_inp2_id, v1) = store.add_op(TestInstructionSet::IntInput { pos: 1 }, svec![])?;
+    let (inc_id, _v2) = store.add_op(TestInstructionSet::Inc, svec![v0[0]])?;
     assert_display_is!(
         store.format(),
         r#"
@@ -835,14 +835,14 @@ fn test_replace_val_use() -> Result<(), IRError<TestDialect>> {
 
 /// Tests that value replacement makes operation depth shallower when appropriate
 #[test]
-fn test_replace_val_use_make_shallower() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
-    let (_inp1_id, v0) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (_inp2_id, v1) = store.add_op(Operations::IntInput { pos: 1 }, svec![])?;
-    let (_, v2) = store.add_op(Operations::Inc, svec![v1[0]])?;
-    let (_, v3) = store.add_op(Operations::Inc, svec![v2[0]])?;
-    let (_, v4) = store.add_op(Operations::Inc, svec![v3[0]])?;
-    let (last_id, _v5) = store.add_op(Operations::Inc, svec![v4[0]])?;
+fn test_replace_val_use_make_shallower() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
+    let (_inp1_id, v0) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (_inp2_id, v1) = store.add_op(TestInstructionSet::IntInput { pos: 1 }, svec![])?;
+    let (_, v2) = store.add_op(TestInstructionSet::Inc, svec![v1[0]])?;
+    let (_, v3) = store.add_op(TestInstructionSet::Inc, svec![v2[0]])?;
+    let (_, v4) = store.add_op(TestInstructionSet::Inc, svec![v3[0]])?;
+    let (last_id, _v5) = store.add_op(TestInstructionSet::Inc, svec![v4[0]])?;
     assert_display_is!(
         store.format(),
         r#"
@@ -875,14 +875,14 @@ fn test_replace_val_use_make_shallower() -> Result<(), IRError<TestDialect>> {
 
 /// Tests that value replacement makes operation depth deeper when appropriate
 #[test]
-fn test_replace_val_use_make_deeper() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
-    let (_inp1_id, v0) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (_inp2_id, v1) = store.add_op(Operations::IntInput { pos: 1 }, svec![])?;
-    let (_, v2) = store.add_op(Operations::Inc, svec![v1[0]])?;
-    let (_, v3) = store.add_op(Operations::Inc, svec![v2[0]])?;
-    let (_, v4) = store.add_op(Operations::Inc, svec![v0[0]])?;
-    let (last_id, _v5) = store.add_op(Operations::Inc, svec![v4[0]])?;
+fn test_replace_val_use_make_deeper() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
+    let (_inp1_id, v0) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (_inp2_id, v1) = store.add_op(TestInstructionSet::IntInput { pos: 1 }, svec![])?;
+    let (_, v2) = store.add_op(TestInstructionSet::Inc, svec![v1[0]])?;
+    let (_, v3) = store.add_op(TestInstructionSet::Inc, svec![v2[0]])?;
+    let (_, v4) = store.add_op(TestInstructionSet::Inc, svec![v0[0]])?;
+    let (last_id, _v5) = store.add_op(TestInstructionSet::Inc, svec![v4[0]])?;
     assert_display_is!(
         store.format(),
         r#"
@@ -915,17 +915,17 @@ fn test_replace_val_use_make_deeper() -> Result<(), IRError<TestDialect>> {
 
 /// Tests that add_op panics when argument types don't match operation signature
 #[test]
-fn test_add_op_type_mismatch() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
-    let (_, bool_val) = store.add_op(Operations::BoolConstant { val: true }, svec![])?;
+fn test_add_op_type_mismatch() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
+    let (_, bool_val) = store.add_op(TestInstructionSet::BoolConstant { val: true }, svec![])?;
 
     // Try to use bool value where int is expected
-    let ret = store.add_op(Operations::Inc, svec![bool_val[0]]);
+    let ret = store.add_op(TestInstructionSet::Inc, svec![bool_val[0]]);
 
     assert_eq!(
         std::mem::discriminant(&ret.err().expect("must return an error")),
-        std::mem::discriminant(&IRError::<TestDialect>::OpSig {
-            op: Operations::Add,
+        std::mem::discriminant(&IRError::<TestLang>::OpSig {
+            op: TestInstructionSet::Add,
             recv: vec![],
             exp: vec![]
         })
@@ -935,15 +935,15 @@ fn test_add_op_type_mismatch() -> Result<(), IRError<TestDialect>> {
 
 /// Tests that add_op return error when wrong number of arguments provided
 #[test]
-fn test_add_op_wrong_arg_count() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
-    let (_, int_vals) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
+fn test_add_op_wrong_arg_count() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
+    let (_, int_vals) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
     // Add operation expects 2 args, providing only 1
-    let ret = store.add_op(Operations::Add, svec![int_vals[0]]);
+    let ret = store.add_op(TestInstructionSet::Add, svec![int_vals[0]]);
     assert_eq!(
         std::mem::discriminant(&ret.err().expect("must return an error")),
-        std::mem::discriminant(&IRError::<TestDialect>::OpSig {
-            op: Operations::Add,
+        std::mem::discriminant(&IRError::<TestLang>::OpSig {
+            op: TestInstructionSet::Add,
             recv: vec![],
             exp: vec![]
         })
@@ -955,14 +955,14 @@ fn test_add_op_wrong_arg_count() -> Result<(), IRError<TestDialect>> {
 #[test]
 #[should_panic(expected = "Unknown valid")]
 fn test_add_op_with_deleted_value() {
-    let mut store: IR<TestDialect> = IR::empty();
+    let mut store: IR<TestLang> = IR::empty();
     let (op_id, vals) = store
-        .add_op(Operations::IntInput { pos: 0 }, svec![])
+        .add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])
         .expect("Bad add_op");
     store.delete_op(op_id);
     // Try to use deleted value
     store
-        .add_op(Operations::Inc, svec![vals[0]])
+        .add_op(TestInstructionSet::Inc, svec![vals[0]])
         .expect("Bad add_op");
 }
 
@@ -970,9 +970,9 @@ fn test_add_op_with_deleted_value() {
 #[test]
 #[should_panic(expected = "Tried to get a dead op")]
 fn test_get_deleted_op() {
-    let mut store: IR<TestDialect> = IR::empty();
+    let mut store: IR<TestLang> = IR::empty();
     let (op_id, _) = store
-        .add_op(Operations::IntInput { pos: 0 }, svec![])
+        .add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])
         .expect("Bad add_op");
     store.delete_op(op_id);
     store.get_op(op_id);
@@ -982,9 +982,9 @@ fn test_get_deleted_op() {
 #[test]
 #[should_panic(expected = "Tried to get a dead val")]
 fn test_get_deleted_val() {
-    let mut store: IR<TestDialect> = IR::empty();
+    let mut store: IR<TestLang> = IR::empty();
     let (op_id, vals) = store
-        .add_op(Operations::IntInput { pos: 0 }, svec![])
+        .add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])
         .expect("Bad add_op");
     store.delete_op(op_id);
     store.get_val(vals[0]);
@@ -994,9 +994,9 @@ fn test_get_deleted_val() {
 #[test]
 #[should_panic(expected = "Tried to delete an already inactive operation")]
 fn test_double_deletion() {
-    let mut store: IR<TestDialect> = IR::empty();
+    let mut store: IR<TestLang> = IR::empty();
     let (op_id, _) = store
-        .add_op(Operations::IntInput { pos: 0 }, svec![])
+        .add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])
         .expect("Bad add_op");
     store.delete_op(op_id);
     store.delete_op(op_id); // Should panic on second deletion
@@ -1004,10 +1004,10 @@ fn test_double_deletion() {
 
 /// Tests self-value replacement (should be no-op)
 #[test]
-fn test_replace_val_use_self() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
-    let (_, vals) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (inc_id, _) = store.add_op(Operations::Inc, svec![vals[0]])?;
+fn test_replace_val_use_self() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
+    let (_, vals) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (inc_id, _) = store.add_op(TestInstructionSet::Inc, svec![vals[0]])?;
 
     let inc_before = format!("{:?}", store.get_op(inc_id));
     store.replace_val_use(vals[0], vals[0]); // Should be no-op
@@ -1026,10 +1026,10 @@ fn test_replace_val_use_self() -> Result<(), IRError<TestDialect>> {
 
 /// Tests using same value multiple times in single operation
 #[test]
-fn test_same_value_multiple_args() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
-    let (_, vals) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (add_id, _) = store.add_op(Operations::Add, svec![vals[0], vals[0]])?;
+fn test_same_value_multiple_args() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
+    let (_, vals) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (add_id, _) = store.add_op(TestInstructionSet::Add, svec![vals[0], vals[0]])?;
 
     let val = store.get_val(vals[0]);
     let add_op = store.get_op(add_id);
@@ -1048,12 +1048,12 @@ fn test_same_value_multiple_args() -> Result<(), IRError<TestDialect>> {
 
 /// Tests diamond dependency pattern (A→B, A→C, B→D, C→D)
 #[test]
-fn test_diamond_dependencies() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
-    let (_, a_vals) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?; // A
-    let (_b_id, b_vals) = store.add_op(Operations::Inc, svec![a_vals[0]])?; // B depends on A
-    let (_c_id, c_vals) = store.add_op(Operations::Inc, svec![a_vals[0]])?; // C depends on A
-    let (d_id, _) = store.add_op(Operations::Add, svec![b_vals[0], c_vals[0]])?; // D depends on B,C
+fn test_diamond_dependencies() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
+    let (_, a_vals) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?; // A
+    let (_b_id, b_vals) = store.add_op(TestInstructionSet::Inc, svec![a_vals[0]])?; // B depends on A
+    let (_c_id, c_vals) = store.add_op(TestInstructionSet::Inc, svec![a_vals[0]])?; // C depends on A
+    let (d_id, _) = store.add_op(TestInstructionSet::Add, svec![b_vals[0], c_vals[0]])?; // D depends on B,C
 
     let a_val = store.get_val(a_vals[0]);
     let d_op = store.get_op(d_id);
@@ -1067,16 +1067,16 @@ fn test_diamond_dependencies() -> Result<(), IRError<TestDialect>> {
 
 /// Tests multiple independent subgraphs in same IR
 #[test]
-fn test_independent_subgraphs() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
+fn test_independent_subgraphs() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
 
     // Subgraph 1: input1 → inc1
-    let (_, vals1) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (inc1_id, _) = store.add_op(Operations::Inc, svec![vals1[0]])?;
+    let (_, vals1) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (inc1_id, _) = store.add_op(TestInstructionSet::Inc, svec![vals1[0]])?;
 
     // Subgraph 2: input2 → inc2
-    let (_, vals2) = store.add_op(Operations::IntInput { pos: 1 }, svec![])?;
-    let (inc2_id, _) = store.add_op(Operations::Inc, svec![vals2[0]])?;
+    let (_, vals2) = store.add_op(TestInstructionSet::IntInput { pos: 1 }, svec![])?;
+    let (inc2_id, _) = store.add_op(TestInstructionSet::Inc, svec![vals2[0]])?;
 
     let inc1 = store.get_op(inc1_id);
     let inc2 = store.get_op(inc2_id);
@@ -1089,15 +1089,15 @@ fn test_independent_subgraphs() -> Result<(), IRError<TestDialect>> {
 
 /// Tests operations with multi-return where returns have different user patterns
 #[test]
-fn test_multi_return_different_users() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
-    let (_, inp1) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (_, inp2) = store.add_op(Operations::IntInput { pos: 1 }, svec![])?;
-    let (_, div_vals) = store.add_op(Operations::DivRem, svec![inp1[0], inp2[0]])?;
+fn test_multi_return_different_users() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
+    let (_, inp1) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (_, inp2) = store.add_op(TestInstructionSet::IntInput { pos: 1 }, svec![])?;
+    let (_, div_vals) = store.add_op(TestInstructionSet::DivRem, svec![inp1[0], inp2[0]])?;
 
     // Use first return in one op, second return in another
-    let (_, _) = store.add_op(Operations::Inc, svec![div_vals[0]])?; // Use quotient
-    let (_, _) = store.add_op(Operations::Inc, svec![div_vals[1]])?; // Use remainder
+    let (_, _) = store.add_op(TestInstructionSet::Inc, svec![div_vals[0]])?; // Use quotient
+    let (_, _) = store.add_op(TestInstructionSet::Inc, svec![div_vals[1]])?; // Use remainder
 
     let quot = store.get_val(div_vals[0]);
     let rem = store.get_val(div_vals[1]);
@@ -1113,11 +1113,11 @@ fn test_multi_return_different_users() -> Result<(), IRError<TestDialect>> {
 
 /// Tests iteration behavior over IR with deleted elements
 #[test]
-fn test_iteration_with_deleted_elements() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
-    let (op1_id, _) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (op2_id, _) = store.add_op(Operations::IntInput { pos: 1 }, svec![])?;
-    let (op3_id, _) = store.add_op(Operations::IntInput { pos: 2 }, svec![])?;
+fn test_iteration_with_deleted_elements() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
+    let (op1_id, _) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (op2_id, _) = store.add_op(TestInstructionSet::IntInput { pos: 1 }, svec![])?;
+    let (op3_id, _) = store.add_op(TestInstructionSet::IntInput { pos: 2 }, svec![])?;
 
     store.delete_op(op2_id); // Delete middle operation
 
@@ -1137,11 +1137,11 @@ fn test_iteration_with_deleted_elements() -> Result<(), IRError<TestDialect>> {
 
 /// Tests that user lists remain consistent after deletions
 #[test]
-fn test_user_consistency_after_deletion() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
-    let (_inp_id, vals) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (inc1_id, _) = store.add_op(Operations::Inc, svec![vals[0]])?;
-    let (_inc2_id, _) = store.add_op(Operations::Inc, svec![vals[0]])?;
+fn test_user_consistency_after_deletion() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
+    let (_inp_id, vals) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (inc1_id, _) = store.add_op(TestInstructionSet::Inc, svec![vals[0]])?;
+    let (_inc2_id, _) = store.add_op(TestInstructionSet::Inc, svec![vals[0]])?;
 
     // Value should have 2 users
     assert_eq!(store.get_val(vals[0]).get_users_iter().count(), 2);
@@ -1168,16 +1168,16 @@ fn test_user_consistency_after_deletion() -> Result<(), IRError<TestDialect>> {
 
 /// Tests replacement cascade affecting multiple dependency levels
 #[test]
-fn test_replacement_cascade_multiple_levels() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
+fn test_replacement_cascade_multiple_levels() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
 
     // Create: inp1 → inc1 → inc2 → inc3
     //         inp2 (unused initially)
-    let (_, inp1) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (_, inp2) = store.add_op(Operations::IntInput { pos: 1 }, svec![])?;
-    let (inc1_id, inc1_vals) = store.add_op(Operations::Inc, svec![inp1[0]])?;
-    let (inc2_id, inc2_vals) = store.add_op(Operations::Inc, svec![inc1_vals[0]])?;
-    let (inc3_id, _) = store.add_op(Operations::Inc, svec![inc2_vals[0]])?;
+    let (_, inp1) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (_, inp2) = store.add_op(TestInstructionSet::IntInput { pos: 1 }, svec![])?;
+    let (inc1_id, inc1_vals) = store.add_op(TestInstructionSet::Inc, svec![inp1[0]])?;
+    let (inc2_id, inc2_vals) = store.add_op(TestInstructionSet::Inc, svec![inc1_vals[0]])?;
+    let (inc3_id, _) = store.add_op(TestInstructionSet::Inc, svec![inc2_vals[0]])?;
 
     let depths_before = [
         store.get_op(inc1_id).get_depth(),
@@ -1201,14 +1201,14 @@ fn test_replacement_cascade_multiple_levels() -> Result<(), IRError<TestDialect>
 
 /// Tests replacement creating deeper dependency chain
 #[test]
-fn test_replacement_deeper_chain() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
+fn test_replacement_deeper_chain() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
 
     // Create: inp1, inp2 → inc1, inp2 → inc2
-    let (_, inp1) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (_, inp2) = store.add_op(Operations::IntInput { pos: 1 }, svec![])?;
-    let (_, inc1_vals) = store.add_op(Operations::Inc, svec![inp2[0]])?;
-    let (inc2_id, _) = store.add_op(Operations::Inc, svec![inp1[0]])?; // Initially uses inp1
+    let (_, inp1) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (_, inp2) = store.add_op(TestInstructionSet::IntInput { pos: 1 }, svec![])?;
+    let (_, inc1_vals) = store.add_op(TestInstructionSet::Inc, svec![inp2[0]])?;
+    let (inc2_id, _) = store.add_op(TestInstructionSet::Inc, svec![inp1[0]])?; // Initially uses inp1
 
     assert_eq!(store.get_op(inc2_id).get_depth(), 1);
 
@@ -1221,9 +1221,9 @@ fn test_replacement_deeper_chain() -> Result<(), IRError<TestDialect>> {
 
 /// Tests has_opid/has_valid behavior with deleted elements
 #[test]
-fn test_has_id_with_deleted_elements() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
-    let (op_id, vals) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
+fn test_has_id_with_deleted_elements() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
+    let (op_id, vals) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
 
     assert!(store.has_opid(op_id));
     assert!(store.has_valid(vals[0]));
@@ -1242,8 +1242,8 @@ fn test_has_id_with_deleted_elements() -> Result<(), IRError<TestDialect>> {
 
 /// Tests operations on empty IR
 #[test]
-fn test_empty_ir_operations() -> Result<(), IRError<TestDialect>> {
-    let store: IR<TestDialect> = IR::empty();
+fn test_empty_ir_operations() -> Result<(), IRError<TestLang>> {
+    let store: IR<TestLang> = IR::empty();
 
     assert_eq!(store.n_ops(), 0);
     assert_eq!(store.n_vals(), 0);
@@ -1257,12 +1257,12 @@ fn test_empty_ir_operations() -> Result<(), IRError<TestDialect>> {
 
 /// Tests topological ordering with deleted operations
 #[test]
-fn test_topological_order_with_deletions() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
-    let (op1_id, vals1) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (op2_id, vals2) = store.add_op(Operations::Inc, svec![vals1[0]])?;
-    let (op3_id, _vals3) = store.add_op(Operations::Inc, svec![vals2[0]])?;
-    let (op4_id, _) = store.add_op(Operations::Inc, svec![vals1[0]])?; // Independent branch
+fn test_topological_order_with_deletions() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
+    let (op1_id, vals1) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (op2_id, vals2) = store.add_op(TestInstructionSet::Inc, svec![vals1[0]])?;
+    let (op3_id, _vals3) = store.add_op(TestInstructionSet::Inc, svec![vals2[0]])?;
+    let (op4_id, _) = store.add_op(TestInstructionSet::Inc, svec![vals1[0]])?; // Independent branch
 
     // Delete operations in reverse dependency order (leaf first)
     store.delete_op(op3_id); // Delete op3 first since it depends on op2
@@ -1292,12 +1292,12 @@ fn test_topological_order_with_deletions() -> Result<(), IRError<TestDialect>> {
 #[test]
 #[should_panic(expected = "Tried to replace a value with one of different type")]
 fn test_replace_val_different_types() {
-    let mut store: IR<TestDialect> = IR::empty();
+    let mut store: IR<TestLang> = IR::empty();
     let (_, int_vals) = store
-        .add_op(Operations::IntInput { pos: 0 }, svec![])
+        .add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])
         .expect("Bad add_op");
     let (_, bool_vals) = store
-        .add_op(Operations::BoolConstant { val: true }, svec![])
+        .add_op(TestInstructionSet::BoolConstant { val: true }, svec![])
         .expect("Bad add_op");
 
     // Try to replace int value with bool value
@@ -1306,12 +1306,12 @@ fn test_replace_val_different_types() {
 
 /// Tests operations that become unreachable after replacement but aren't deleted
 #[test]
-fn test_unreachable_after_replacement() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
-    let (_, inp1) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (_, inp2) = store.add_op(Operations::IntInput { pos: 1 }, svec![])?;
-    let (inc1_id, inc1_vals) = store.add_op(Operations::Inc, svec![inp1[0]])?;
-    let (_ret_id, _) = store.add_op(Operations::Return, svec![inc1_vals[0]])?;
+fn test_unreachable_after_replacement() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
+    let (_, inp1) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (_, inp2) = store.add_op(TestInstructionSet::IntInput { pos: 1 }, svec![])?;
+    let (inc1_id, inc1_vals) = store.add_op(TestInstructionSet::Inc, svec![inp1[0]])?;
+    let (_ret_id, _) = store.add_op(TestInstructionSet::Return, svec![inc1_vals[0]])?;
 
     // Replace return's input with inp2, making inc1 unreachable
     store.replace_val_use(inc1_vals[0], inp2[0]);
@@ -1327,12 +1327,12 @@ fn test_unreachable_after_replacement() -> Result<(), IRError<TestDialect>> {
 }
 
 #[test]
-fn test_is_effect() -> Result<(), IRError<TestDialect>> {
-    let mut ir = IR::<TestDialect>::empty();
-    let (_, inp1) = ir.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (_, inp2) = ir.add_op(Operations::IntInput { pos: 1 }, svec![])?;
-    let (add_op, add) = ir.add_op(Operations::Add, svec![inp1[0], inp2[0]])?;
-    let (ret_op, _) = ir.add_op(Operations::Return, svec![add[0]])?;
+fn test_is_effect() -> Result<(), IRError<TestLang>> {
+    let mut ir = IR::<TestLang>::empty();
+    let (_, inp1) = ir.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (_, inp2) = ir.add_op(TestInstructionSet::IntInput { pos: 1 }, svec![])?;
+    let (add_op, add) = ir.add_op(TestInstructionSet::Add, svec![inp1[0], inp2[0]])?;
+    let (ret_op, _) = ir.add_op(TestInstructionSet::Return, svec![add[0]])?;
 
     assert!(ir.get_op(ret_op).is_effect());
     assert!(!ir.get_op(add_op).is_effect());
@@ -1340,11 +1340,11 @@ fn test_is_effect() -> Result<(), IRError<TestDialect>> {
 }
 
 #[test]
-fn test_signature_consistency() -> Result<(), IRError<TestDialect>> {
-    let mut ir = IR::<TestDialect>::empty();
-    let (_, inp1) = ir.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (_, inp2) = ir.add_op(Operations::IntInput { pos: 1 }, svec![])?;
-    let (add_op, _) = ir.add_op(Operations::Add, svec![inp1[0], inp2[0]])?;
+fn test_signature_consistency() -> Result<(), IRError<TestLang>> {
+    let mut ir = IR::<TestLang>::empty();
+    let (_, inp1) = ir.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (_, inp2) = ir.add_op(TestInstructionSet::IntInput { pos: 1 }, svec![])?;
+    let (add_op, _) = ir.add_op(TestInstructionSet::Add, svec![inp1[0], inp2[0]])?;
     let op_ref = ir.get_op(add_op);
 
     // Verify cached signature matches operation signature
@@ -1353,9 +1353,9 @@ fn test_signature_consistency() -> Result<(), IRError<TestDialect>> {
 }
 
 #[test]
-fn test_batch_delete_empty() -> Result<(), IRError<TestDialect>> {
-    let mut ir = IR::<TestDialect>::empty();
-    let (op1, _) = ir.add_op(Operations::IntInput { pos: 0 }, svec![])?;
+fn test_batch_delete_empty() -> Result<(), IRError<TestLang>> {
+    let mut ir = IR::<TestLang>::empty();
+    let (op1, _) = ir.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
 
     // Empty batch should be no-op
     ir.batch_delete_op(std::iter::empty());
@@ -1366,10 +1366,10 @@ fn test_batch_delete_empty() -> Result<(), IRError<TestDialect>> {
 }
 
 #[test]
-fn test_batch_delete_single() -> Result<(), IRError<TestDialect>> {
-    let mut ir = IR::<TestDialect>::empty();
-    let (op1, vals1) = ir.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (op2, _) = ir.add_op(Operations::Return, vals1)?;
+fn test_batch_delete_single() -> Result<(), IRError<TestLang>> {
+    let mut ir = IR::<TestLang>::empty();
+    let (op1, vals1) = ir.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (op2, _) = ir.add_op(TestInstructionSet::Return, vals1)?;
 
     ir.batch_delete_op(std::iter::once(op2));
 
@@ -1380,12 +1380,12 @@ fn test_batch_delete_single() -> Result<(), IRError<TestDialect>> {
 }
 
 #[test]
-fn test_batch_delete_dependency_chain() -> Result<(), IRError<TestDialect>> {
-    let mut ir = IR::<TestDialect>::empty();
-    let (op1, vals1) = ir.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (op2, vals2) = ir.add_op(Operations::Inc, vals1)?;
-    let (op3, vals3) = ir.add_op(Operations::Inc, vals2)?;
-    let (op4, _) = ir.add_op(Operations::Return, vals3)?;
+fn test_batch_delete_dependency_chain() -> Result<(), IRError<TestLang>> {
+    let mut ir = IR::<TestLang>::empty();
+    let (op1, vals1) = ir.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (op2, vals2) = ir.add_op(TestInstructionSet::Inc, vals1)?;
+    let (op3, vals3) = ir.add_op(TestInstructionSet::Inc, vals2)?;
+    let (op4, _) = ir.add_op(TestInstructionSet::Return, vals3)?;
 
     // Delete the entire chain
     ir.batch_delete_op([op2, op3, op4].into_iter());
@@ -1399,11 +1399,11 @@ fn test_batch_delete_dependency_chain() -> Result<(), IRError<TestDialect>> {
 }
 
 #[test]
-fn test_batch_delete_order_independence() -> Result<(), IRError<TestDialect>> {
-    let mut ir = IR::<TestDialect>::empty();
-    let (op1, vals1) = ir.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (op2, vals2) = ir.add_op(Operations::Inc, vals1)?;
-    let (op3, _) = ir.add_op(Operations::Return, vals2)?;
+fn test_batch_delete_order_independence() -> Result<(), IRError<TestLang>> {
+    let mut ir = IR::<TestLang>::empty();
+    let (op1, vals1) = ir.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (op2, vals2) = ir.add_op(TestInstructionSet::Inc, vals1)?;
+    let (op3, _) = ir.add_op(TestInstructionSet::Return, vals2)?;
 
     // Delete in reverse dependency order - should still work
     ir.batch_delete_op([op2, op3].into_iter());
@@ -1416,12 +1416,12 @@ fn test_batch_delete_order_independence() -> Result<(), IRError<TestDialect>> {
 }
 
 #[test]
-fn test_batch_delete_diamond_pattern() -> Result<(), IRError<TestDialect>> {
-    let mut ir = IR::<TestDialect>::empty();
-    let (op1, vals1) = ir.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (op2, vals2) = ir.add_op(Operations::Inc, vals1.clone())?;
-    let (op3, vals3) = ir.add_op(Operations::Inc, vals1)?;
-    let (op4, _) = ir.add_op(Operations::Add, svec![vals2[0], vals3[0]])?;
+fn test_batch_delete_diamond_pattern() -> Result<(), IRError<TestLang>> {
+    let mut ir = IR::<TestLang>::empty();
+    let (op1, vals1) = ir.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (op2, vals2) = ir.add_op(TestInstructionSet::Inc, vals1.clone())?;
+    let (op3, vals3) = ir.add_op(TestInstructionSet::Inc, vals1)?;
+    let (op4, _) = ir.add_op(TestInstructionSet::Add, svec![vals2[0], vals3[0]])?;
 
     // Delete the diamond (op2, op3, op4) but leave op1
     ir.batch_delete_op([op2, op3, op4].into_iter());
@@ -1435,12 +1435,12 @@ fn test_batch_delete_diamond_pattern() -> Result<(), IRError<TestDialect>> {
 }
 
 #[test]
-fn test_batch_delete_independent_operations() -> Result<(), IRError<TestDialect>> {
-    let mut ir = IR::<TestDialect>::empty();
-    let (op1, vals1) = ir.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (op2, vals2) = ir.add_op(Operations::IntInput { pos: 1 }, svec![])?;
-    let (op3, _) = ir.add_op(Operations::Return, vals1)?;
-    let (op4, _) = ir.add_op(Operations::Return, vals2)?;
+fn test_batch_delete_independent_operations() -> Result<(), IRError<TestLang>> {
+    let mut ir = IR::<TestLang>::empty();
+    let (op1, vals1) = ir.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (op2, vals2) = ir.add_op(TestInstructionSet::IntInput { pos: 1 }, svec![])?;
+    let (op3, _) = ir.add_op(TestInstructionSet::Return, vals1)?;
+    let (op4, _) = ir.add_op(TestInstructionSet::Return, vals2)?;
 
     // Delete two independent subgraphs
     ir.batch_delete_op([op3, op4].into_iter());
@@ -1456,16 +1456,16 @@ fn test_batch_delete_independent_operations() -> Result<(), IRError<TestDialect>
 #[test]
 #[should_panic(expected = "Tried to delete an operation whose return values are still in use")]
 fn test_batch_delete_with_external_users() {
-    let mut ir = IR::<TestDialect>::empty();
+    let mut ir = IR::<TestLang>::empty();
     let (_op1, vals1) = ir
-        .add_op(Operations::IntInput { pos: 0 }, svec![])
+        .add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])
         .expect("Bad add_op");
-    let (op2, vals2) = ir.add_op(Operations::Inc, vals1).expect("Bad add_op");
+    let (op2, vals2) = ir.add_op(TestInstructionSet::Inc, vals1).expect("Bad add_op");
     let (op3, _) = ir
-        .add_op(Operations::Return, vals2.clone())
+        .add_op(TestInstructionSet::Return, vals2.clone())
         .expect("Bad add_op");
     let (_op4, _) = ir
-        .add_op(Operations::Return, vals2) // op4 also uses vals?2
+        .add_op(TestInstructionSet::Return, vals2) // op4 also uses vals?2
         .expect("Bad add_op");
 
     // Try to delete op2 and op3, but op4 still uses vals2 from op2
@@ -1473,13 +1473,13 @@ fn test_batch_delete_with_external_users() {
 }
 
 #[test]
-fn test_batch_delete_partial_dependency_closure() -> Result<(), IRError<TestDialect>> {
-    let mut ir = IR::<TestDialect>::empty();
-    let (op1, vals1) = ir.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (op2, vals2) = ir.add_op(Operations::Inc, vals1)?;
-    let (op3, vals3) = ir.add_op(Operations::Inc, vals2.clone())?;
-    let (op4, _) = ir.add_op(Operations::Return, vals3)?;
-    let (op5, _) = ir.add_op(Operations::Return, vals2)?; // Also uses vals2
+fn test_batch_delete_partial_dependency_closure() -> Result<(), IRError<TestLang>> {
+    let mut ir = IR::<TestLang>::empty();
+    let (op1, vals1) = ir.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (op2, vals2) = ir.add_op(TestInstructionSet::Inc, vals1)?;
+    let (op3, vals3) = ir.add_op(TestInstructionSet::Inc, vals2.clone())?;
+    let (op4, _) = ir.add_op(TestInstructionSet::Return, vals3)?;
+    let (op5, _) = ir.add_op(TestInstructionSet::Return, vals2)?; // Also uses vals2
 
     // Can delete op3 and op4 (leaves op2 and op5 intact)
     ir.batch_delete_op([op3, op4].into_iter());
@@ -1496,11 +1496,11 @@ fn test_batch_delete_partial_dependency_closure() -> Result<(), IRError<TestDial
 #[test]
 #[should_panic(expected = "Tried to get a dead op")]
 fn test_batch_delete_already_deleted() {
-    let mut ir = IR::<TestDialect>::empty();
+    let mut ir = IR::<TestLang>::empty();
     let (_, vals1) = ir
-        .add_op(Operations::IntInput { pos: 0 }, svec![])
+        .add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])
         .expect("Bad add_op");
-    let (op2, _) = ir.add_op(Operations::Return, vals1).expect("Bad add_op");
+    let (op2, _) = ir.add_op(TestInstructionSet::Return, vals1).expect("Bad add_op");
 
     ir.delete_op(op2); // Delete normally first
 
@@ -1513,12 +1513,12 @@ fn test_batch_delete_already_deleted() {
 /// This verifies that when an operation returns multiple values, each value knows not just
 /// which operation produced it, but also which return position it came from.
 #[test]
-fn test_val_origin_position_tracking() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
+fn test_val_origin_position_tracking() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
 
     // Create an operation with multiple return values
-    let (_input_id, v_input) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (divrem_id, v_divrem) = store.add_op(Operations::DivRem, svec![v_input[0], v_input[0]])?;
+    let (_input_id, v_input) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (divrem_id, v_divrem) = store.add_op(TestInstructionSet::DivRem, svec![v_input[0], v_input[0]])?;
 
     // Test that each return value has the correct position in its origin
     let quotient = store.get_val(v_divrem[0]);
@@ -1540,15 +1540,15 @@ fn test_val_origin_position_tracking() -> Result<(), IRError<TestDialect>> {
 /// This verifies that when a value is used as an argument to an operation, the value
 /// knows not just which operation uses it, but also at which argument position.
 #[test]
-fn test_val_use_position_tracking() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
+fn test_val_use_position_tracking() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
 
     // Create values to be used as arguments
-    let (_input1_id, v1) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (_input2_id, v2) = store.add_op(Operations::IntInput { pos: 1 }, svec![])?;
+    let (_input1_id, v1) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (_input2_id, v2) = store.add_op(TestInstructionSet::IntInput { pos: 1 }, svec![])?;
 
     // Create an operation that uses both values as arguments
-    let (add_id, _v_add) = store.add_op(Operations::Add, svec![v1[0], v2[0]])?;
+    let (add_id, _v_add) = store.add_op(TestInstructionSet::Add, svec![v1[0], v2[0]])?;
 
     // Test that values track their usage positions correctly
     let val1 = store.get_val(v1[0]);
@@ -1574,15 +1574,15 @@ fn test_val_use_position_tracking() -> Result<(), IRError<TestDialect>> {
 /// This verifies that when a value is used as arguments in multiple operations and positions,
 /// each usage is tracked with the correct operation ID and argument position.
 #[test]
-fn test_position_tracking_with_multiple_uses() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
+fn test_position_tracking_with_multiple_uses() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
 
     // Create a value that will be used multiple times
-    let (_input_id, v_input) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
+    let (_input_id, v_input) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
 
     // Use the same value in different positions of different operations
-    let (add1_id, _v_add1) = store.add_op(Operations::Add, svec![v_input[0], v_input[0]])?;
-    let (divrem_id, _v_divrem) = store.add_op(Operations::DivRem, svec![v_input[0], v_input[0]])?;
+    let (add1_id, _v_add1) = store.add_op(TestInstructionSet::Add, svec![v_input[0], v_input[0]])?;
+    let (divrem_id, _v_divrem) = store.add_op(TestInstructionSet::DivRem, svec![v_input[0], v_input[0]])?;
 
     let input_val = store.get_val(v_input[0]);
 
@@ -1615,18 +1615,18 @@ fn test_position_tracking_with_multiple_uses() -> Result<(), IRError<TestDialect
 /// both origin positions (which return value) and use positions (which argument) are
 /// correctly tracked throughout the dataflow graph.
 #[test]
-fn test_position_tracking_with_multi_return_multi_use() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
+fn test_position_tracking_with_multi_return_multi_use() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
 
     // Create initial values
-    let (_input1_id, v1) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (_input2_id, v2) = store.add_op(Operations::IntInput { pos: 1 }, svec![])?;
+    let (_input1_id, v1) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (_input2_id, v2) = store.add_op(TestInstructionSet::IntInput { pos: 1 }, svec![])?;
 
     // Create an operation with multiple returns
-    let (divrem_id, v_divrem) = store.add_op(Operations::DivRem, svec![v1[0], v2[0]])?;
+    let (divrem_id, v_divrem) = store.add_op(TestInstructionSet::DivRem, svec![v1[0], v2[0]])?;
 
     // Use both return values in different positions of a new operation
-    let (add_id, _v_add) = store.add_op(Operations::Add, svec![v_divrem[0], v_divrem[1]])?;
+    let (add_id, _v_add) = store.add_op(TestInstructionSet::Add, svec![v_divrem[0], v_divrem[1]])?;
 
     // Test origin position tracking for the multi-return operation
     let quotient = store.get_val(v_divrem[0]);
@@ -1655,16 +1655,16 @@ fn test_position_tracking_with_multi_return_multi_use() -> Result<(), IRError<Te
 /// correctly - the new value should be tracked at the same argument position where the
 /// old value was used.
 #[test]
-fn test_position_consistency_after_replacement() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
+fn test_position_consistency_after_replacement() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
 
     // Create values
-    let (_input1_id, v1) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (_input2_id, v2) = store.add_op(Operations::IntInput { pos: 1 }, svec![])?;
-    let (_input3_id, v3) = store.add_op(Operations::IntInput { pos: 2 }, svec![])?;
+    let (_input1_id, v1) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (_input2_id, v2) = store.add_op(TestInstructionSet::IntInput { pos: 1 }, svec![])?;
+    let (_input3_id, v3) = store.add_op(TestInstructionSet::IntInput { pos: 2 }, svec![])?;
 
     // Create an operation using the first value
-    let (add_id, _v_add) = store.add_op(Operations::Add, svec![v1[0], v2[0]])?;
+    let (add_id, _v_add) = store.add_op(TestInstructionSet::Add, svec![v1[0], v2[0]])?;
 
     // Replace the first argument with a different value
     store.replace_val_use(v1[0], v3[0]);
@@ -1691,12 +1691,12 @@ fn test_position_consistency_after_replacement() -> Result<(), IRError<TestDiale
 /// This verifies that position tracking works correctly for operations that take
 /// only one argument, ensuring the position is tracked as 0.
 #[test]
-fn test_position_tracking_single_argument_operation() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
+fn test_position_tracking_single_argument_operation() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
 
     // Create a value and use it in a single-argument operation
-    let (_input_id, v_input) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (inc_id, _v_inc) = store.add_op(Operations::Inc, svec![v_input[0]])?;
+    let (_input_id, v_input) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (inc_id, _v_inc) = store.add_op(TestInstructionSet::Inc, svec![v_input[0]])?;
 
     // Verify position tracking for single-argument operation
     let input_val = store.get_val(v_input[0]);
@@ -1713,12 +1713,12 @@ fn test_position_tracking_single_argument_operation() -> Result<(), IRError<Test
 /// This verifies that position tracking works correctly for operations that return
 /// only one value, ensuring the return position is tracked as 0.
 #[test]
-fn test_position_tracking_single_return_operation() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
+fn test_position_tracking_single_return_operation() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
 
     // Create operations with single return values
-    let (_input_id, v_input) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (add_id, v_add) = store.add_op(Operations::Add, svec![v_input[0], v_input[0]])?;
+    let (_input_id, v_input) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (add_id, v_add) = store.add_op(TestInstructionSet::Add, svec![v_input[0], v_input[0]])?;
 
     // Verify position tracking for single-return operation
     let result_val = store.get_val(v_add[0]);
@@ -1734,11 +1734,11 @@ fn test_position_tracking_single_return_operation() -> Result<(), IRError<TestDi
 /// This verifies that operations with no arguments (like input operations) still
 /// have their return values properly tracked with position 0.
 #[test]
-fn test_position_tracking_zero_argument_operation() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
+fn test_position_tracking_zero_argument_operation() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
 
     // Create an operation with no arguments (like IntInput)
-    let (input_id, v_input) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
+    let (input_id, v_input) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
 
     // Verify the value's origin tracking
     let input_val = store.get_val(v_input[0]);
@@ -1756,14 +1756,14 @@ fn test_position_tracking_zero_argument_operation() -> Result<(), IRError<TestDi
 /// behaves correctly - raw users lists retain deleted operations, but filtered
 /// iteration excludes inactive operations.
 #[test]
-fn test_position_tracking_after_deletion() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
+fn test_position_tracking_after_deletion() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
 
     // Create a chain of operations
-    let (_input1_id, v1) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (_input2_id, v2) = store.add_op(Operations::IntInput { pos: 1 }, svec![])?;
-    let (_add1_id, v_add1) = store.add_op(Operations::Add, svec![v1[0], v2[0]])?;
-    let (add2_id, _v_add2) = store.add_op(Operations::Add, svec![v_add1[0], v1[0]])?;
+    let (_input1_id, v1) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (_input2_id, v2) = store.add_op(TestInstructionSet::IntInput { pos: 1 }, svec![])?;
+    let (_add1_id, v_add1) = store.add_op(TestInstructionSet::Add, svec![v1[0], v2[0]])?;
+    let (add2_id, _v_add2) = store.add_op(TestInstructionSet::Add, svec![v_add1[0], v1[0]])?;
 
     // Verify initial position tracking
     let intermediate_val = store.get_val(v_add1[0]);
@@ -1790,14 +1790,14 @@ fn test_position_tracking_after_deletion() -> Result<(), IRError<TestDialect>> {
 /// This verifies that the ValOrigin and ValUse structs have proper equality
 /// semantics and can be constructed and compared correctly.
 #[test]
-fn test_val_origin_and_val_use_equality() -> Result<(), IRError<TestDialect>> {
+fn test_val_origin_and_val_use_equality() -> Result<(), IRError<TestLang>> {
     use crate::{ValOrigin, ValUse};
 
-    let mut store: IR<TestDialect> = IR::empty();
+    let mut store: IR<TestLang> = IR::empty();
 
     // Create some operations to get valid OpIds
-    let (op1_id, _v1) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (op2_id, _v2) = store.add_op(Operations::IntInput { pos: 1 }, svec![])?;
+    let (op1_id, _v1) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (op2_id, _v2) = store.add_op(TestInstructionSet::IntInput { pos: 1 }, svec![])?;
 
     // Test ValOrigin equality
     let origin1 = ValOrigin {
@@ -1858,11 +1858,11 @@ fn test_val_origin_and_val_use_equality() -> Result<(), IRError<TestDialect>> {
 /// This ensures that these types can be printed for debugging purposes
 /// and that their debug output contains the expected information.
 #[test]
-fn test_val_origin_and_val_use_debug() -> Result<(), IRError<TestDialect>> {
+fn test_val_origin_and_val_use_debug() -> Result<(), IRError<TestLang>> {
     use crate::{ValOrigin, ValUse};
 
-    let mut store: IR<TestDialect> = IR::empty();
-    let (op_id, _v) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
+    let mut store: IR<TestLang> = IR::empty();
+    let (op_id, _v) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
 
     let origin = ValOrigin {
         opid: op_id,
@@ -1895,14 +1895,14 @@ fn test_val_origin_and_val_use_debug() -> Result<(), IRError<TestDialect>> {
 /// This verifies that the position tracking works correctly when accessed through
 /// the standard IR iteration methods like get_args_iter() and get_users_iter().
 #[test]
-fn test_position_tracking_with_iterators() -> Result<(), IRError<TestDialect>> {
-    let mut store: IR<TestDialect> = IR::empty();
+fn test_position_tracking_with_iterators() -> Result<(), IRError<TestLang>> {
+    let mut store: IR<TestLang> = IR::empty();
 
     // Build a more complex graph to test iterator integration
-    let (_input1_id, v1) = store.add_op(Operations::IntInput { pos: 0 }, svec![])?;
-    let (_input2_id, v2) = store.add_op(Operations::IntInput { pos: 1 }, svec![])?;
-    let (divrem_id, v_divrem) = store.add_op(Operations::DivRem, svec![v1[0], v2[0]])?;
-    let (add_id, _v_add) = store.add_op(Operations::Add, svec![v_divrem[0], v_divrem[1]])?;
+    let (_input1_id, v1) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
+    let (_input2_id, v2) = store.add_op(TestInstructionSet::IntInput { pos: 1 }, svec![])?;
+    let (divrem_id, v_divrem) = store.add_op(TestInstructionSet::DivRem, svec![v1[0], v2[0]])?;
+    let (add_id, _v_add) = store.add_op(TestInstructionSet::Add, svec![v_divrem[0], v_divrem[1]])?;
 
     // Test that get_args_iter provides values with correct position tracking
     let add_op = store.get_op(add_id);
