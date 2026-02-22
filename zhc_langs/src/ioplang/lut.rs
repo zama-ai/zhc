@@ -3,7 +3,13 @@ use zhc_crypto::integer_semantics::{
     lut::{LookupCheck, lookup, lookup2, lookup4, lookup8},
 };
 
-/// Enumeration of all available LUT1.
+/// Single-output lookup table definitions for [`Pbs`](super::IopInstructionSet::Pbs).
+///
+/// Each variant names a `CiphertextBlock → CiphertextBlock` function
+/// defined in `zhc_crypto`. Variants are used as symbolic identifiers
+/// at the IOP level; the pipeline maps them to numeric
+/// [`LutId`](crate::hpulang::LutId) values during translation to
+/// the HPU dialect.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Lut1Def {
     None,
@@ -146,7 +152,11 @@ impl Lut1Def {
     }
 }
 
-/// Enumeration of all available LUT2.
+/// Two-output lookup table definitions for [`Pbs2`](super::IopInstructionSet::Pbs2).
+///
+/// Each variant names a pair of `CiphertextBlock → CiphertextBlock`
+/// functions defined in `zhc_crypto`, evaluated jointly via a single
+/// many-LUT PBS. Padding is unconditionally checked on both outputs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Lut2Def {
     ManyGenProp,
@@ -210,7 +220,10 @@ impl Lut2Def {
     }
 }
 
-/// Enumeration of all available LUT4.
+/// Four-output lookup table definitions for [`Pbs4`](super::IopInstructionSet::Pbs4).
+///
+/// Placeholder — currently uninhabited. The enum exists to reserve the
+/// structural slot for future 4-output many-LUT PBS definitions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Lut4Def {}
 
@@ -240,7 +253,10 @@ impl Lut4Def {
     }
 }
 
-/// Enumeration of all available LUT8.
+/// Eight-output lookup table definitions for [`Pbs8`](super::IopInstructionSet::Pbs8).
+///
+/// Placeholder — currently uninhabited. The enum exists to reserve the
+/// structural slot for future 8-output many-LUT PBS definitions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Lut8Def {}
 

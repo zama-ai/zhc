@@ -5,42 +5,55 @@ use serde::Serialize;
 use std::fmt::{Debug, Display};
 use zhc_ir::{DialectInstructionSet, Signature, sig};
 
+/// Register address mask that compares all bits (single-output PBS or
+/// plain register).
 pub const MASK_NONE: usize = usize::MAX;
+/// Register address mask that ignores the lowest bit, grouping pairs
+/// of consecutive registers produced by a 2-output PBS.
 pub const MASK_PBS2: usize = usize::MAX << 1;
+/// Register address mask that ignores the two lowest bits, grouping
+/// quads of consecutive registers produced by a 4-output PBS.
 pub const MASK_PBS4: usize = usize::MAX << 2;
+/// Register address mask that ignores the three lowest bits, grouping
+/// octets of consecutive registers produced by an 8-output PBS.
 pub const MASK_PBS8: usize = usize::MAX << 3;
 
-/// A type representing the different kinds of operands that may occur in a dop stream.
+/// Inline operand carried by DOP instructions.
 ///
-/// # Note:
+/// Supports two stream modes. *Unpatched* streams use symbolic
+/// variables (`CtVar`, `PtVar`) that the microcontroller resolves at
+/// load time into physical addresses and constants. *Patched* streams
+/// carry resolved memory locations (`CtHeap`, `CtIo`) and constant
+/// immediates (`PtConst`), as produced by the microcontroller or read
+/// back from execution traces.
 ///
-/// The doplang dialect is meant to support both pathed and unpatched streams:
-/// + Unpatched streams are exported to the hpu memory. They support variable ciphertext and
-///   plaintext, which are meant to be patched on the fly by the ucore.
-/// + Patched streams are streamed by the ucore to the hpu. They contain memory adresses instead of
-///   ciphertext variables, and constant immediates instead of plaintext variables.
-///
-/// Essentially, supporting unpatched streams allows to generate programs for the hpu, and
-/// supporting patched streams allows to load execution traces from the hpu.
+/// `CtReg` equality uses a masked comparison: only the bits selected
+/// by the intersection of both masks are compared. This allows
+/// multi-output PBS results (which occupy consecutive aligned
+/// registers) to compare equal when their masks reflect the output
+/// arity.
 #[derive(Debug, Clone, Eq, Hash)]
 pub enum Argument {
-    /// A constant immediate plaintext.
+    /// Constant immediate plaintext value.
     PtConst { val: u8 },
-    /// A ciphertext located on the heap.
+    /// Ciphertext block located on the heap.
     CtHeap { addr: usize },
-    /// A ciphertext located in the io memory.
+    /// Ciphertext block located in I/O memory.
     CtIo { addr: usize },
-    /// A ciphertext variable. Patched to a CtMemory by the ucore.
+    /// Symbolic ciphertext variable, patched to a physical address by
+    /// the microcontroller.
     CtVar { id: usize, block: usize },
-    /// A plaintext variable. Patched to a PtConst by the ucore.
+    /// Symbolic plaintext variable, patched to a `PtConst` by the
+    /// microcontroller.
     PtVar { id: usize, block: usize },
-    /// A ciphertext register.
+    /// Physical ciphertext register with an alignment mask.
     CtReg { mask: usize, addr: usize },
-    /// A lut identifier.
+    /// Lookup table identifier.
     LutId { id: usize },
 }
 
 impl Argument {
+    /// Creates a `CtReg` with [`MASK_NONE`] (all bits significant).
     pub fn ct_reg(addr: impl Into<usize>) -> Self {
         Argument::CtReg {
             mask: MASK_NONE,
@@ -48,6 +61,7 @@ impl Argument {
         }
     }
 
+    /// Creates a `CtReg` with [`MASK_PBS2`] (lowest bit ignored).
     pub fn ct_reg2(addr: impl Into<usize>) -> Self {
         Argument::CtReg {
             mask: MASK_PBS2,
@@ -55,6 +69,7 @@ impl Argument {
         }
     }
 
+    /// Creates a `CtReg` with [`MASK_PBS4`] (two lowest bits ignored).
     pub fn ct_reg4(addr: impl Into<usize>) -> Self {
         Argument::CtReg {
             mask: MASK_PBS4,
@@ -62,6 +77,7 @@ impl Argument {
         }
     }
 
+    /// Creates a `CtReg` with [`MASK_PBS8`] (three lowest bits ignored).
     pub fn ct_reg8(addr: impl Into<usize>) -> Self {
         Argument::CtReg {
             mask: MASK_PBS8,
@@ -69,26 +85,32 @@ impl Argument {
         }
     }
 
+    /// Creates a symbolic ciphertext variable operand.
     pub fn ct_var(id: usize, block: usize) -> Self {
         Argument::CtVar { id, block }
     }
 
+    /// Creates a symbolic plaintext variable operand.
     pub fn pt_var(id: usize, block: usize) -> Self {
         Argument::PtVar { id, block }
     }
 
+    /// Creates a heap-addressed ciphertext operand.
     pub fn ct_heap(heap_slot: usize) -> Self {
         Argument::CtHeap { addr: heap_slot }
     }
 
+    /// Creates an I/O-addressed ciphertext operand.
     pub fn ct_io(io_slot: usize) -> Self {
         Argument::CtIo { addr: io_slot }
     }
 
+    /// Creates a constant plaintext immediate operand.
     pub fn pt_const(val: u8) -> Self {
         Argument::PtConst { val }
     }
 
+    /// Creates a lookup table identifier operand from a [`LutId`].
     pub fn lut_id(val: LutId) -> Self {
         Argument::LutId { id: val.0 }
     }
@@ -154,11 +176,16 @@ impl Display for Argument {
     }
 }
 
+/// Hardware pipeline lane to which a DOP instruction is dispatched.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum Affinity {
+    /// Arithmetic-logic unit: register-to-register operations.
     Alu,
+    /// Memory unit: load and store operations.
     Mem,
+    /// Programmable bootstrapping unit.
     Pbs,
+    /// Control: synchronization and initialization.
     Ctl,
 }
 
@@ -173,94 +200,122 @@ impl Display for Affinity {
     }
 }
 
+/// HPU hardware instruction set.
+///
+/// Each variant corresponds to a single hardware opcode. Operands are
+/// carried inline as [`Argument`] values rather than through IR SSA
+/// references — the DOP stream is a flat, register-allocated
+/// instruction sequence.
+///
+/// Instructions fall into four categories matching the [`Affinity`]
+/// lanes: register arithmetic (`ADD`, `SUB`, `MAC`, `ADDS`, `SUBS`,
+/// `SSUB`, `MULS`), memory transfer (`LD`, `ST`), programmable
+/// bootstrapping (`PBS` family), and control (`_INIT`, `SYNC`).
+/// Scalar-operand arithmetic variants (`ADDS`, `SUBS`, `SSUB`,
+/// `MULS`) take a plaintext constant in `cst`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[allow(non_camel_case_types)]
 pub enum DopInstructionSet {
+    /// `dst = src1 + src2` — ciphertext addition.
     ADD {
         dst: Argument,
         src1: Argument,
         src2: Argument,
     },
+    /// `dst = src1 - src2` — ciphertext subtraction.
     SUB {
         dst: Argument,
         src1: Argument,
         src2: Argument,
     },
+    /// `dst = src1 * cst + src2` — multiply-accumulate.
     MAC {
         dst: Argument,
         src1: Argument,
         src2: Argument,
         cst: Argument,
     },
+    /// `dst = src + cst` — ciphertext-scalar addition.
     ADDS {
         dst: Argument,
         src: Argument,
         cst: Argument,
     },
+    /// `dst = src - cst` — ciphertext minus scalar.
     SUBS {
         dst: Argument,
         src: Argument,
         cst: Argument,
     },
+    /// `dst = cst - src` — scalar minus ciphertext.
     SSUB {
         dst: Argument,
         src: Argument,
         cst: Argument,
     },
+    /// `dst = src * cst` — ciphertext-scalar multiplication.
     MULS {
         dst: Argument,
         src: Argument,
         cst: Argument,
     },
-    LD {
-        dst: Argument,
-        src: Argument,
-    },
-    ST {
-        dst: Argument,
-        src: Argument,
-    },
+    /// Loads a ciphertext block from memory into a register.
+    LD { dst: Argument, src: Argument },
+    /// Stores a ciphertext register to memory.
+    ST { dst: Argument, src: Argument },
+    /// Single-output programmable bootstrapping.
     PBS {
         dst: Argument,
         src: Argument,
         lut: Argument,
     },
+    /// 2-output many-LUT programmable bootstrapping.
     PBS_ML2 {
         dst: Argument,
         src: Argument,
         lut: Argument,
     },
+    /// 4-output many-LUT programmable bootstrapping.
     PBS_ML4 {
         dst: Argument,
         src: Argument,
         lut: Argument,
     },
+    /// 8-output many-LUT programmable bootstrapping.
     PBS_ML8 {
         dst: Argument,
         src: Argument,
         lut: Argument,
     },
+    /// Single-output PBS with flush (batch boundary marker).
     PBS_F {
         dst: Argument,
         src: Argument,
         lut: Argument,
     },
+    /// 2-output many-LUT PBS with flush.
     PBS_ML2_F {
         dst: Argument,
         src: Argument,
         lut: Argument,
     },
+    /// 4-output many-LUT PBS with flush.
     PBS_ML4_F {
         dst: Argument,
         src: Argument,
         lut: Argument,
     },
+    /// 8-output many-LUT PBS with flush.
     PBS_ML8_F {
         dst: Argument,
         src: Argument,
         lut: Argument,
     },
+    /// Stream initialization marker. Produces the initial context
+    /// token.
     _INIT,
+    /// Synchronization barrier. Consumes the context token, ensuring
+    /// all preceding instructions have completed.
     SYNC,
 }
 
@@ -297,6 +352,7 @@ impl Display for DopInstructionSet {
 }
 
 impl DopInstructionSet {
+    /// Returns true if this instruction is a PBS flush variant.
     pub fn is_pbs_flush(&self) -> bool {
         use DopInstructionSet::*;
         match self {
@@ -305,6 +361,7 @@ impl DopInstructionSet {
         }
     }
 
+    /// Returns the hardware pipeline lane for this instruction.
     pub fn affinity(&self) -> Affinity {
         use Affinity::*;
         use DopInstructionSet::*;
@@ -331,6 +388,10 @@ impl DopInstructionSet {
         }
     }
 
+    /// Returns true if this instruction reads from the given argument.
+    ///
+    /// Only checks ciphertext source operands (`src`, `src1`, `src2`),
+    /// not `cst` or `lut` fields. Returns false for `_INIT` and `SYNC`.
     pub fn has_source(&self, arg: &Argument) -> bool {
         use DopInstructionSet::*;
         match self {
@@ -356,6 +417,7 @@ impl DopInstructionSet {
         }
     }
 
+    /// Returns the destination operand, or `None` for `_INIT` and `SYNC`.
     pub fn get_dst(&self) -> Option<&Argument> {
         use DopInstructionSet::*;
         match self {
@@ -381,6 +443,8 @@ impl DopInstructionSet {
         }
     }
 
+    /// Returns the first source operand, or `None` for `_INIT` and
+    /// `SYNC`.
     pub fn get_src1(&self) -> Option<&Argument> {
         use DopInstructionSet::*;
         match self {
@@ -406,6 +470,10 @@ impl DopInstructionSet {
         }
     }
 
+    /// Returns the second source operand, or `None` for instructions
+    /// with fewer than two ciphertext sources.
+    ///
+    /// Only `ADD`, `SUB`, and `MAC` carry a second source.
     pub fn get_src2(&self) -> Option<&Argument> {
         use DopInstructionSet::*;
         match self {

@@ -7,6 +7,12 @@ use zhc_ir::interpretation::{Interpretable, Interpretation, InterpretsTo};
 use zhc_utils::small::SmallVec;
 use zhc_utils::{FastMap, svec};
 
+/// Interpretation domain for IOP programs.
+///
+/// Wraps `zhc_crypto` emulated values so that an `IR<IopLang>` can be
+/// executed via the `zhc_ir` interpretation framework. Each variant
+/// corresponds to the matching [`IopTypeSystem`](super::IopTypeSystem)
+/// type.
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub enum IopValue {
     Ciphertext(EmulatedCiphertext),
@@ -16,6 +22,11 @@ pub enum IopValue {
 }
 
 impl IopValue {
+    /// Extracts the inner `EmulatedCiphertext`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if self is not the `Ciphertext` variant.
     pub fn unwrap_ciphertext(self) -> EmulatedCiphertext {
         match self {
             Self::Ciphertext(v) => v,
@@ -23,6 +34,11 @@ impl IopValue {
         }
     }
 
+    /// Extracts the inner `EmulatedPlaintext`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if self is not the `Plaintext` variant.
     pub fn unwrap_plaintext(self) -> EmulatedPlaintext {
         match self {
             Self::Plaintext(v) => v,
@@ -30,6 +46,11 @@ impl IopValue {
         }
     }
 
+    /// Extracts the inner `EmulatedCiphertextBlock`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if self is not the `CiphertextBlock` variant.
     pub fn unwrap_ciphertext_block(self) -> EmulatedCiphertextBlock {
         match self {
             Self::CiphertextBlock(v) => v,
@@ -37,6 +58,11 @@ impl IopValue {
         }
     }
 
+    /// Extracts the inner `EmulatedPlaintextBlock`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if self is not the `PlaintextBlock` variant.
     pub fn unwrap_plaintext_block(self) -> EmulatedPlaintextBlock {
         match self {
             Self::PlaintextBlock(v) => v,
@@ -69,6 +95,20 @@ impl InterpretsTo<IopValue> for super::IopTypeSystem {
     }
 }
 
+/// Execution context for IOP program interpretation.
+///
+/// Holds the cryptographic parameters (`spec`), the program inputs
+/// keyed by positional slot, and the outputs collected during execution.
+/// The `inputs` map must contain an entry for every `Input` operation in
+/// the IR, with values whose types match the builder signature. The
+/// `outputs` map should be empty before interpretation; each `Output`
+/// operation inserts its value at the corresponding slot.
+///
+/// # Panics
+///
+/// Interpretation panics if an `Input` slot is missing from `inputs`,
+/// if an `Output` slot is written twice, or if an input value does not
+/// match the expected type.
 #[derive(Debug)]
 pub struct IopInterepreterContext {
     pub spec: CiphertextSpec,

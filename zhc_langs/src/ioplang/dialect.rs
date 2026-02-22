@@ -4,6 +4,13 @@ use zhc_ir::{
 };
 use zhc_utils::iter::CollectInSmallVec;
 
+/// Dialect tag for the Intermediate Operation language.
+///
+/// Unit struct binding [`IopTypeSystem`](super::IopTypeSystem) and
+/// [`IopInstructionSet`](super::IopInstructionSet) into a concrete
+/// [`Dialect`] implementation. Also implements
+/// [`AllowCse`](zhc_ir::cse::AllowCse) with commutative normalization
+/// for the addition variants (`AddCt`, `WrappingAddCt`, `TemperAddCt`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct IopLang;
 

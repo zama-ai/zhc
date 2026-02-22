@@ -5,6 +5,7 @@ use zhc_utils::iter::CollectInSmallVec;
 
 use super::{HpuLang, type_system::HpuTypeSystem};
 
+/// Plaintext constant inlined into an HPU instruction.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Immediate(pub u8);
 
@@ -14,6 +15,10 @@ impl Display for Immediate {
     }
 }
 
+/// Ciphertext input source identifier.
+///
+/// Encodes which input ciphertext (`src_pos`) and which block within
+/// it (`block_pos`) a [`SrcLd`](HpuInstructionSet::SrcLd) loads from.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TSrcId {
     pub src_pos: u32,
@@ -26,6 +31,10 @@ impl Display for TSrcId {
     }
 }
 
+/// Ciphertext output destination identifier.
+///
+/// Encodes which output ciphertext (`dst_pos`) and which block within
+/// it (`block_pos`) a [`DstSt`](HpuInstructionSet::DstSt) stores to.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TDstId {
     pub dst_pos: u32,
@@ -38,6 +47,12 @@ impl Display for TDstId {
     }
 }
 
+/// Numeric lookup table identifier.
+///
+/// Mapped from symbolic [`Lut1Def`](crate::ioplang::Lut1Def) /
+/// [`Lut2Def`](crate::ioplang::Lut2Def) names during IOP-to-HPU
+/// translation. Carried through to the DOP dialect and encoded into
+/// the hardware translation table.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct LutId(pub usize);
 
@@ -47,6 +62,11 @@ impl Display for LutId {
     }
 }
 
+/// Plaintext input immediate identifier.
+///
+/// Encodes which plaintext input (`imm_pos`) and which block within
+/// it (`block_pos`) an [`ImmLd`](HpuInstructionSet::ImmLd) loads from.
+/// The actual value is resolved at patch time by the microcontroller.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TImmId {
     pub imm_pos: u32,
@@ -59,33 +79,112 @@ impl Display for TImmId {
     }
 }
 
+/// Instruction set for the HPU dialect.
+///
+/// Instructions fall into five categories:
+///
+/// **Register arithmetic.** Two-operand ciphertext ops (`AddCt`,
+/// `SubCt`, `Mac`) and mixed ciphertext-plaintext ops (`AddPt`,
+/// `SubPt`, `PtSub`, `MulPt`) take register operands. Constant-scalar
+/// variants (`AddCst`, `SubCst`, `CstSub`, `MulCst`) inline the
+/// plaintext value as an [`Immediate`], eliminating the need for a
+/// separate plaintext register operand. `CstCt` materializes a
+/// constant ciphertext register.
+///
+/// **Memory transfer.** `SrcLd` loads a ciphertext block from an input
+/// slot, `DstSt` stores one to an output slot, and `ImmLd` loads a
+/// plaintext immediate from an input slot. The slot coordinates are
+/// encoded in [`TSrcId`], [`TDstId`], and [`TImmId`] respectively.
+///
+/// **PBS.** Regular (`Pbs`, `Pbs2`, `Pbs4`, `Pbs8`) and flush
+/// (`PbsF`, `Pbs2F`, `Pbs4F`, `Pbs8F`) variants. Flush variants
+/// mark the last PBS in a batch group. The output arity matches the
+/// numeric suffix (1, 2, 4, or 8 ciphertext registers).
+///
+/// **Batching.** `Batch` wraps a nested `IR<HpuLang>` sub-program
+/// containing a group of PBS operations. `BatchArg` and `BatchRet`
+/// appear inside the nested IR to define the batch boundary interface.
+///
+/// All signatures are available via the [`DialectInstructionSet`] impl.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum HpuInstructionSet {
+    /// Addition of two ciphertext registers.
+    /// `(CtRegister, CtRegister) → (CtRegister)`
     AddCt,
+    /// Subtraction of two ciphertext registers.
+    /// `(CtRegister, CtRegister) → (CtRegister)`
     SubCt,
+    /// Multiply-accumulate: `src1 * cst + src2` (pack operation).
+    /// `(CtRegister, CtRegister) → (CtRegister)`
     Mac { cst: Immediate },
+    /// Addition of a ciphertext register and a plaintext immediate
+    /// register. `(CtRegister, PtImmediate) → (CtRegister)`
     AddPt,
+    /// Subtraction: ciphertext minus plaintext immediate register.
+    /// `(CtRegister, PtImmediate) → (CtRegister)`
     SubPt,
+    /// Subtraction: plaintext immediate register minus ciphertext.
+    /// `(PtImmediate, CtRegister) → (CtRegister)`
     PtSub,
+    /// Multiplication of a ciphertext register by a plaintext immediate
+    /// register. `(CtRegister, PtImmediate) → (CtRegister)`
     MulPt,
+    /// Addition of a ciphertext register and an inline constant.
+    /// `(CtRegister) → (CtRegister)`
     AddCst { cst: Immediate },
+    /// Subtraction: ciphertext minus inline constant.
+    /// `(CtRegister) → (CtRegister)`
     SubCst { cst: Immediate },
+    /// Subtraction: inline constant minus ciphertext.
+    /// `(CtRegister) → (CtRegister)`
     CstSub { cst: Immediate },
+    /// Multiplication of a ciphertext register by an inline constant.
+    /// `(CtRegister) → (CtRegister)`
     MulCst { cst: Immediate },
+    /// Materializes an inline constant into a ciphertext register.
+    /// `() → (CtRegister)`
     CstCt { cst: Immediate },
+    /// Loads a plaintext immediate from an input slot.
+    /// `() → (PtImmediate)`
     ImmLd { from: TImmId },
+    /// Stores a ciphertext register to an output slot.
+    /// `(CtRegister) → ()`
     DstSt { to: TDstId },
+    /// Loads a ciphertext block from an input slot into a register.
+    /// `() → (CtRegister)`
     SrcLd { from: TSrcId },
+    /// Single-output PBS. `(CtRegister) → (CtRegister)`
     Pbs { lut: LutId },
+    /// 2-output many-LUT PBS.
+    /// `(CtRegister) → (CtRegister, CtRegister)`
     Pbs2 { lut: LutId },
+    /// 4-output many-LUT PBS.
+    /// `(CtRegister) → (CtRegister × 4)`
     Pbs4 { lut: LutId },
+    /// 8-output many-LUT PBS.
+    /// `(CtRegister) → (CtRegister × 8)`
     Pbs8 { lut: LutId },
+    /// Single-output PBS with flush (batch boundary marker).
+    /// `(CtRegister) → (CtRegister)`
     PbsF { lut: LutId },
+    /// 2-output many-LUT PBS with flush.
+    /// `(CtRegister) → (CtRegister, CtRegister)`
     Pbs2F { lut: LutId },
+    /// 4-output many-LUT PBS with flush.
+    /// `(CtRegister) → (CtRegister × 4)`
     Pbs4F { lut: LutId },
+    /// 8-output many-LUT PBS with flush.
+    /// `(CtRegister) → (CtRegister × 8)`
     Pbs8F { lut: LutId },
+    /// Nested sub-program grouping a batch of PBS operations. The
+    /// signature is derived from the `BatchArg` and `BatchRet` ops
+    /// inside `block`.
     Batch { block: Box<IR<HpuLang>> },
+    /// Batch input at positional slot `pos`. Appears inside a
+    /// [`Batch`](Self::Batch) block. `() → (ty)`
     BatchArg { pos: u8, ty: HpuTypeSystem },
+    /// Batch output at positional slot `pos`. Appears inside a
+    /// [`Batch`](Self::Batch) block. `(ty) → ()`
     BatchRet { pos: u8, ty: HpuTypeSystem },
 }
 
