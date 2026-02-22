@@ -10,14 +10,17 @@ use zhc_utils::small::SmallVec;
 pub struct Signature<T>(pub SmallVec<T>, pub SmallVec<T>);
 
 impl<T> Signature<T> {
+    /// Creates a signature with no argument and no return types.
     pub fn empty() -> Self {
         Signature(SmallVec::new(), SmallVec::new())
     }
 
+    /// Appends an argument type to the signature.
     pub fn push_arg(&mut self, typ: T) {
         self.0.push(typ);
     }
 
+    /// Appends a return type to the signature.
     pub fn push_ret(&mut self, typ: T) {
         self.1.push(typ);
     }

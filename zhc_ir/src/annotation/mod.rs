@@ -42,7 +42,11 @@ pub enum Analysing<A> {
 }
 
 impl<A> Analysing<A> {
-    /// Extracts the inner value, panicking if the slot is still pending.
+    /// Extracts the inner value.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the slot is still [`Pending`](Analysing::Pending).
     pub fn unwrap_analyzed(self) -> A {
         match self {
             Analysing::Pending => panic!("Tried to unwrap a pending analysis."),

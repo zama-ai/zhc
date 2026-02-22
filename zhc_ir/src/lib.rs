@@ -1,9 +1,26 @@
-//! Intermediate representation and optimization framework for compiler infrastructure.
+//! Dialect-parameterized intermediate representation framework.
 //!
-//! This crate provides a generic IR framework that supports multiple dialects,
-//! along with common compiler optimizations like dead code elimination and
-//! common subexpression elimination. The IR uses a graph-based representation
-//! with typed operations and values.
+//! The core type [`IR<D>`] holds a set of typed operations and values for a given
+//! [`Dialect`]. Each operation carries a [`Signature`] that describes its argument
+//! and return types, and each value tracks its producing operation ([`ValOrigin`])
+//! and its consumers ([`ValUse`]). Operations and values are identified by [`OpId`]
+//! and [`ValId`] respectively, and follow an active/inactive lifecycle.
+//!
+//! Immutable views into the IR are provided by [`OpRef`] and [`ValRef`], which
+//! expose dependency traversal, reachability queries, and formatting. Mutable
+//! operations on the IR — adding operations, replacing value uses, and deleting
+//! operations — are methods on [`IR`] itself.
+//!
+//! The annotation layer ([`AnnIR`], [`AnnOpRef`], [`AnnValRef`]) extends the base
+//! IR with per-operation and per-value metadata through parallel [`OpMap`] and
+//! [`ValMap`] containers, enabling dataflow analyses that produce typed annotations
+//! without modifying the underlying IR.
+//!
+//! Built-in passes include dead code elimination ([`dce`]), common subexpression
+//! elimination ([`cse`]), and an interpretation framework ([`interpretation`]).
+//! The [`scheduling`] module provides forward list scheduling, [`translation`]
+//! defines cross-dialect translation, and [`traversal`] offers walker verification
+//! utilities.
 
 pub mod cse;
 pub mod dce;
@@ -30,7 +47,7 @@ mod val_origin;
 mod val_ref;
 mod val_use;
 
-pub(crate) use annotation::*;
+pub use annotation::*;
 pub use dialect::*;
 pub use formatting::*;
 pub use id::*;

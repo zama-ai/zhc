@@ -1,3 +1,12 @@
+//! Common subexpression elimination pass.
+//!
+//! Uses local value numbering to identify operations that compute identical
+//! expressions. When a duplicate is found, all uses of the redundant value are
+//! replaced with the original, and dead code elimination removes the now-unused
+//! operation. Dialects opt in via [`AllowCse`], which also provides a hook
+//! for normalizing commutative argument orderings so that permuted operands
+//! are recognized as equivalent.
+
 use zhc_utils::{FastMap, Store, small::SmallVec};
 
 use super::{Dialect, DialectInstructionSet, IR, ValId, ValueNumber, dce::eliminate_dead_code};

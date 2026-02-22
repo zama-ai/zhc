@@ -59,7 +59,11 @@ impl<V: Interpretation> InterpState<V> {
         matches!(self, InterpState::Poisoned | InterpState::Panicked(_))
     }
 
-    /// Unwraps the interpreted value, panicking if not `Interpreted`.
+    /// Extracts the interpreted value.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the state is not [`Interpreted`](InterpState::Interpreted).
     pub fn unwrap_interpreted(self) -> V {
         match self {
             InterpState::Interpreted(v) => v,
@@ -77,7 +81,11 @@ impl<V: Interpretation> InterpState<V> {
         }
     }
 
-    /// Returns `self` if not `Pending`, otherwise panics with the given message.
+    /// Returns `self` unchanged if not pending.
+    ///
+    /// # Panics
+    ///
+    /// Panics with `msg` if the state is [`Pending`](InterpState::Pending).
     pub fn ensure_not_pending(&self, msg: &str) -> &Self {
         if matches!(self, InterpState::Pending) {
             panic!("{msg}")

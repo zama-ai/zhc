@@ -6,11 +6,11 @@ use crate::val_use::ValUse;
 use crate::{OpRef, ValOrigin, ValOriginRef, ValRefFormatter, ValUseRef};
 use zhc_utils::iter::Deduped;
 
-/// A reference to a value within an IR graph.
+/// Borrowed view of a value within an [`IR`].
 ///
-/// Provides access to value metadata, type information, and graph
-/// relationships. The reference is tied to the lifetime of the IR it
-/// references and maintains cached pointers to value data for efficient access.
+/// Provides access to value metadata, type information, origin, and consumer
+/// queries. The reference is tied to the lifetime of the [`IR`] it was
+/// obtained from. Derefs to [`ValId`].
 #[derive(Debug, Clone)]
 pub struct ValRef<'ir, D: Dialect> {
     pub(super) id: ValId,
@@ -83,13 +83,20 @@ impl<'ir, D: Dialect> ValRef<'ir, D> {
         self.typ.clone()
     }
 
-    /// Returns a reference to the operation that produces this value.
+    /// Returns the producing operation and return position for this value.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the producing operation is inactive.
     pub fn get_origin(&self) -> ValOriginRef<'ir, D> {
         let output = self.raw_get_origin();
         assert!(output.opref.is_active());
         output
     }
 
+    /// Returns an iterator over use-sites of this value with position information.
+    ///
+    /// Only use-sites from active operations are included.
     pub fn get_uses_iter(&self) -> impl Iterator<Item = ValUseRef<'ir, D>> + use<'ir, D> {
         self.raw_get_uses_iter().filter(|u| u.opref.is_active())
     }
@@ -110,6 +117,7 @@ impl<'ir, D: Dialect> ValRef<'ir, D> {
         self.get_users_iter().next().is_some()
     }
 
+    /// Creates a configurable formatter for this value.
     pub fn format(&self) -> ValRefFormatter<'_, 'ir, D> {
         ValRefFormatter::new(self)
     }

@@ -7,7 +7,7 @@ A compiler infrastructure for FHE integer computation targeting the HPU (Homomor
 | Crate | Description |
 |-------|-------------|
 | `zhc_ir` | Generic graph-based IR framework with dialect support |
-| `zhc_langs` | Language dialects: IOP, HOP, DOP |
+| `zhc_langs` | Language dialects: IOP, HPU, DOP |
 | `zhc_pipeline` | Compilation pipeline orchestration |
 | `zhc_builder` | High-level operation builders |
 | `zhc_sim` | Hardware simulation and configuration |

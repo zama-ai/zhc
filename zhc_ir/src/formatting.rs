@@ -48,36 +48,47 @@ impl<'ir, D: Dialect> IRFormatter<'ir, D> {
         }
     }
 
+    /// Sets the indentation level in spaces.
     pub fn with_indent(mut self, indent: usize) -> Self {
         self.indent += indent;
         self
     }
 
+    /// Controls whether inactive (erased) operations are shown.
     pub fn show_erased_ops(mut self, show: bool) -> Self {
         self.show_erased_ops = show;
         self
     }
 
+    /// Controls whether value types are shown.
     pub fn show_types(mut self, show: bool) -> Self {
         self.show_types = show;
         self
     }
 
+    /// Controls whether operation IDs are shown.
     pub fn show_opid(mut self, show: bool) -> Self {
         self.show_opid = show;
         self
     }
 
+    /// Controls whether operation comments are shown.
     pub fn show_comments(mut self, show: bool) -> Self {
         self.show_comments = show;
         self
     }
 
+    /// Sets the traversal order for printing operations.
     pub fn with_walker(mut self, walker: PrintWalker) -> Self {
         self.walker = walker;
         self
     }
 
+    /// Prints this element to stdout and panics.
+    ///
+    /// # Panics
+    ///
+    /// Always.
     pub fn dump(&self) -> ! {
         println!("{self}");
         panic!("dump");
@@ -150,56 +161,71 @@ impl<'r, 'ir, D: Dialect, OpAnn: Annotation, ValAnn: Annotation>
         }
     }
 
+    /// Sets the indentation level in spaces.
     pub fn with_indent(mut self, indent: usize) -> Self {
         self.indent += indent;
         self
     }
 
+    /// Controls whether operation IDs are shown.
     pub fn show_opid(mut self, show: bool) -> Self {
         self.show_opid = show;
         self
     }
 
+    /// Controls whether inactive (erased) operations are shown.
     pub fn show_erased_ops(mut self, show: bool) -> Self {
         self.show_erased_ops = show;
         self
     }
 
+    /// Controls whether value types are shown.
     pub fn show_types(mut self, show: bool) -> Self {
         self.show_types = show;
         self
     }
 
+    /// Controls whether operation comments are shown.
     pub fn show_comments(mut self, show: bool) -> Self {
         self.show_comments = show;
         self
     }
 
+    /// Controls whether operation annotations are shown.
     pub fn show_op_ann(mut self, show: bool) -> Self {
         self.show_op_ann = show;
         self
     }
 
+    /// Controls whether operation annotations use alternate formatting.
     pub fn show_op_ann_alternate(mut self, alternate: bool) -> Self {
         self.show_op_ann_alternate = alternate;
         self
     }
 
+    /// Controls whether value annotations are shown.
     pub fn show_val_ann(mut self, show: bool) -> Self {
         self.show_val_ann = show;
         self
     }
 
+    /// Controls whether value annotations use alternate formatting.
     pub fn show_val_ann_alternate(mut self, alternate: bool) -> Self {
         self.show_val_ann_alternate = alternate;
         self
     }
 
+    /// Sets the traversal order for printing operations.
     pub fn with_walker(mut self, walker: PrintWalker) -> Self {
         self.walker = walker;
         self
     }
 
+    /// Prints this element to stdout and panics.
+    ///
+    /// # Panics
+    ///
+    /// Always.
     pub fn dump(&self) -> ! {
         println!("{self}");
         panic!("dump");
@@ -254,6 +280,7 @@ pub struct OpRefFormatter<'r, 'ir, D: Dialect> {
 }
 
 impl<'r, 'ir, D: Dialect> OpRefFormatter<'r, 'ir, D> {
+    /// Creates a new formatter with default settings.
     pub fn new(opref: &'r OpRef<'ir, D>) -> Self {
         Self {
             opref,
@@ -265,31 +292,41 @@ impl<'r, 'ir, D: Dialect> OpRefFormatter<'r, 'ir, D> {
         }
     }
 
+    /// Sets the indentation level in spaces.
     pub fn with_indent(mut self, indent: usize) -> Self {
         self.indent += indent;
         self
     }
 
+    /// Controls whether inactive (erased) operations are shown.
     pub fn show_erased(mut self, show: bool) -> Self {
         self.show_erased = show;
         self
     }
 
+    /// Controls whether value types are shown.
     pub fn show_types(mut self, show: bool) -> Self {
         self.show_types = show;
         self
     }
 
+    /// Controls whether operation IDs are shown.
     pub fn show_opid(mut self, show: bool) -> Self {
         self.show_opid = show;
         self
     }
 
+    /// Controls whether operation comments are shown.
     pub fn show_comments(mut self, show: bool) -> Self {
         self.show_comments = show;
         self
     }
 
+    /// Prints this element to stdout and panics.
+    ///
+    /// # Panics
+    ///
+    /// Always.
     pub fn dump(&self) -> ! {
         println!("{self}");
         panic!("dump");
@@ -329,6 +366,7 @@ pub struct ValRefFormatter<'r, 'ir, D: Dialect> {
 }
 
 impl<'r, 'ir, D: Dialect> ValRefFormatter<'r, 'ir, D> {
+    /// Creates a new formatter with default settings.
     pub fn new(valref: &'r ValRef<'ir, D>) -> Self {
         Self {
             valref,
@@ -336,11 +374,17 @@ impl<'r, 'ir, D: Dialect> ValRefFormatter<'r, 'ir, D> {
         }
     }
 
+    /// Controls whether the value type is shown.
     pub fn show_type(mut self, show: bool) -> Self {
         self.show_type = show;
         self
     }
 
+    /// Prints this element to stdout and panics.
+    ///
+    /// # Panics
+    ///
+    /// Always.
     pub fn dump(&self) -> ! {
         println!("{self}");
         panic!("dump");
@@ -370,6 +414,7 @@ pub struct AnnOpRefFormatter<'r, 'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAn
 impl<'r, 'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation>
     AnnOpRefFormatter<'r, 'ir, 'ann, D, OpAnn, ValAnn>
 {
+    /// Creates a new formatter with default settings.
     pub fn new(opref: &'r AnnOpRef<'ir, 'ann, D, OpAnn, ValAnn>) -> Self {
         Self {
             opref,
@@ -385,51 +430,65 @@ impl<'r, 'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation>
         }
     }
 
+    /// Sets the indentation level in spaces.
     pub fn with_indent(mut self, indent: usize) -> Self {
         self.indent += indent;
         self
     }
 
+    /// Controls whether inactive (erased) operations are shown.
     pub fn show_erased(mut self, show: bool) -> Self {
         self.show_erased = show;
         self
     }
 
+    /// Controls whether value types are shown.
     pub fn show_types(mut self, show: bool) -> Self {
         self.show_types = show;
         self
     }
 
+    /// Controls whether operation IDs are shown.
     pub fn show_opid(mut self, show: bool) -> Self {
         self.show_opid = show;
         self
     }
 
+    /// Controls whether operation comments are shown.
     pub fn show_comments(mut self, show: bool) -> Self {
         self.show_comments = show;
         self
     }
 
+    /// Controls whether operation annotations are shown.
     pub fn show_op_ann(mut self, show: bool) -> Self {
         self.show_op_ann = show;
         self
     }
 
+    /// Controls whether operation annotations use alternate formatting.
     pub fn show_op_ann_alternate(mut self, alternate: bool) -> Self {
         self.show_op_ann_alternate = alternate;
         self
     }
 
+    /// Controls whether value annotations are shown.
     pub fn show_val_ann(mut self, show: bool) -> Self {
         self.show_val_ann = show;
         self
     }
 
+    /// Controls whether value annotations use alternate formatting.
     pub fn show_val_ann_alternate(mut self, alternate: bool) -> Self {
         self.show_val_ann_alternate = alternate;
         self
     }
 
+    /// Prints this element to stdout and panics.
+    ///
+    /// # Panics
+    ///
+    /// Always.
     pub fn dump(&self) -> ! {
         println!("{self}");
         panic!("dump");
@@ -479,6 +538,7 @@ pub struct AnnValRefFormatter<'r, 'ir, 'ann, D: Dialect, OpAnn: Annotation, ValA
 impl<'r, 'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation>
     AnnValRefFormatter<'r, 'ir, 'ann, D, OpAnn, ValAnn>
 {
+    /// Creates a new formatter with default settings.
     pub fn new(valref: &'r AnnValRef<'ir, 'ann, D, OpAnn, ValAnn>) -> Self {
         Self {
             valref,
@@ -488,21 +548,29 @@ impl<'r, 'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation>
         }
     }
 
+    /// Controls whether the value type is shown.
     pub fn show_type(mut self, show: bool) -> Self {
         self.show_type = show;
         self
     }
 
+    /// Controls whether the value annotation is shown.
     pub fn show_ann(mut self, show: bool) -> Self {
         self.show_ann = show;
         self
     }
 
+    /// Controls whether the value annotation uses alternate formatting.
     pub fn show_ann_alternate(mut self, alternate: bool) -> Self {
         self.show_ann_alternate = alternate;
         self
     }
 
+    /// Prints this element to stdout and panics.
+    ///
+    /// # Panics
+    ///
+    /// Always.
     pub fn dump(&self) -> ! {
         println!("{self}");
         panic!("dump");

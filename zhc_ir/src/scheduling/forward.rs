@@ -29,6 +29,9 @@ pub trait ForwardSimulator {
     fn advance(&mut self) -> impl Iterator<Item = Retired>;
 }
 
+/// Extension of [`ForwardSimulator`] that drives the full scheduling loop.
+///
+/// Automatically implemented for all [`ForwardSimulator`] implementors.
 pub trait ForwardScheduler: ForwardSimulator {
     /// Performs forward list scheduling on the given IR using the specified scheduler.
     ///

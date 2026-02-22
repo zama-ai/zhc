@@ -109,6 +109,7 @@ impl<'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation>
         })
     }
 
+    /// Creates a configurable formatter for this annotated operation.
     pub fn format(&self) -> AnnOpRefFormatter<'_, 'ir, 'ann, D, OpAnn, ValAnn> {
         AnnOpRefFormatter::new(self)
     }

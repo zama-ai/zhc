@@ -34,6 +34,7 @@ impl<'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation>
         }
     }
 
+    /// Returns an iterator over use-sites of this value with position and annotation data.
     pub fn get_uses_iter(
         &self,
     ) -> impl Iterator<Item = AnnValUseRef<'ir, 'ann, D, OpAnn, ValAnn>> + use<'ir, 'ann, D, OpAnn, ValAnn>
@@ -66,6 +67,7 @@ impl<'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation>
         })
     }
 
+    /// Creates a configurable formatter for this annotated value.
     pub fn format(&self) -> AnnValRefFormatter<'_, 'ir, 'ann, D, OpAnn, ValAnn> {
         AnnValRefFormatter::new(self)
     }

@@ -1,3 +1,8 @@
+//! Cross-dialect IR translation.
+//!
+//! Defines the [`Translator`] trait for converting an [`IR`] from one
+//! [`Dialect`] to another while preserving semantic equivalence.
+
 use crate::{Dialect, IR};
 
 /// Translates IR from one dialect to another.

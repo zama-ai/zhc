@@ -1,3 +1,9 @@
+//! Operation walker verification utilities.
+//!
+//! Provides [`OpWalkerVerifier`], an extension trait on operation-ID iterators
+//! that checks whether the iteration order respects topological dependency
+//! constraints within an [`IR`].
+
 use crate::{Dialect, IR, OpId};
 
 /// An operation walker that can verify topological ordering properties.

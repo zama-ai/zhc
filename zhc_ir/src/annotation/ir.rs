@@ -160,7 +160,17 @@ impl<'ir, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> AnnIR<'ir, D, OpAnn
         })
     }
 
-    /// Performs backward dataflow analysis on the IR operations.
+    /// Performs backward dataflow analysis with access to existing annotations.
+    ///
+    /// Operations are visited in reverse topological order. The callback
+    /// receives the in-progress annotated ref (with [`Analysing`] wrappers)
+    /// and the existing annotated ref from `self`, and must return an
+    /// operation annotation and one value annotation per return value.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the callback returns a number of value annotations that
+    /// differs from the operation's return arity.
     pub fn backward_dataflow_analysis<OpAnnNew: Annotation, ValAnnNew: Annotation>(
         &self,
         mut f: impl FnMut(
@@ -198,7 +208,17 @@ impl<'ir, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> AnnIR<'ir, D, OpAnn
         }
     }
 
-    /// Performs forward dataflow analysis on the IR operations.
+    /// Performs forward dataflow analysis with access to existing annotations.
+    ///
+    /// Operations are visited in topological order. The callback receives the
+    /// in-progress annotated ref (with [`Analysing`] wrappers) and the
+    /// existing annotated ref from `self`, and must return an operation
+    /// annotation and one value annotation per return value.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the callback returns a number of value annotations that
+    /// differs from the operation's return arity.
     pub fn forward_dataflow_analysis<OpAnnNew: Annotation, ValAnnNew: Annotation>(
         &self,
         mut f: impl FnMut(
@@ -262,18 +282,22 @@ impl<'ir, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> AnnIR<'ir, D, OpAnn
         AnnIR::new(self.ir, self.op_annotations.clone(), valmap)
     }
 
+    /// Creates a configurable formatter for the annotated IR.
     pub fn format(&self) -> AnnIRFormatter<'_, 'ir, D, OpAnn, ValAnn> {
         AnnIRFormatter::new(self)
     }
 
+    /// Consumes the annotated IR and returns the operation annotations map.
     pub fn into_opmap(self) -> OpMap<OpAnn> {
         self.op_annotations
     }
 
+    /// Consumes the annotated IR and returns the value annotations map.
     pub fn into_valmap(self) -> ValMap<ValAnn> {
         self.val_annotations
     }
 
+    /// Consumes the annotated IR and returns both annotation maps.
     pub fn into_maps(self) -> (OpMap<OpAnn>, ValMap<ValAnn>) {
         (self.op_annotations, self.val_annotations)
     }

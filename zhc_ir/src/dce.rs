@@ -1,3 +1,11 @@
+//! Dead code elimination pass.
+//!
+//! An operation is considered *live* if it is an effect (zero return values) or
+//! if any operation transitively consuming its return values is an effect. All
+//! other operations are *dead* and can be removed without changing observable
+//! behavior. [`DeadCodeAnalysis`] computes per-operation liveness, and
+//! [`eliminate_dead_code`] applies it destructively to an [`IR`].
+
 use zhc_utils::iter::CollectInSmallVec;
 
 use crate::OpMap;

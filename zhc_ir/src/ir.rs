@@ -9,10 +9,11 @@ use zhc_utils::svec;
 use zhc_utils::{Store, small::SmallVec};
 
 use super::{
-    Dialect, DialectInstructionSet, IRError, Op, OpId, OpIdRaw, OpMut, OpRef, Signature, State,
-    Val, ValId, ValIdRaw, ValMut, op_map::OpMap,
+    Dialect, DialectInstructionSet, Op, OpId, OpIdRaw, OpMut, OpRef, Signature, State, Val, ValId,
+    ValIdRaw, ValMut, op_map::OpMap,
 };
 
+/// Operation depth relative to the IR inputs, used for topological ordering.
 pub type Depth = u16;
 
 fn val_active<'a, D: Dialect>(val: &ValRef<'a, D>) -> bool {
@@ -23,12 +24,13 @@ fn op_active<'a, D: Dialect>(op: &OpRef<'a, D>) -> bool {
     op.is_active()
 }
 
-/// The main intermediate representation structure for a dataflow graph.
+/// The core intermediate representation container for a [`Dialect`].
 ///
-/// Maintains the complete graph of operations and values for a program, providing
-/// efficient access to operation metadata, value usage information, and graph
-/// traversal capabilities. The IR enforces type safety through the dialect system
-/// and maintains structural integrity through automatic bookkeeping.
+/// Holds a set of operations and values with their type signatures, use-def
+/// relationships, and active/inactive lifecycle state. Operations are added
+/// via [`add_op`](Self::add_op), queried via [`get_op`](Self::get_op) and
+/// walker iterators, and removed via [`delete_op`](Self::delete_op). Equality
+/// and hashing are based on identity (pointer equality).
 #[derive(Clone)]
 pub struct IR<D: Dialect> {
     pub(super) op_operations: Store<OpId, D::InstructionSet>,
@@ -395,33 +397,39 @@ impl<D: Dialect> IR<D> {
         });
     }
 
-    /// Adds a new operation to the IR with the specified arguments.
+    /// Adds a new operation to the IR.
     ///
-    /// Returns the ID of the created operation and the IDs of its return values.
-    /// The operation's signature is validated against the argument types, and
-    /// use-def chains are automatically updated.
+    /// Returns the [`OpId`] of the created operation and the [`ValId`]s of its
+    /// return values. The operation's signature is validated against the
+    /// argument types, and use-def chains are automatically updated.
     ///
     /// # Panics
     ///
-    /// Panics if any argument value ID is invalid or inactive, or if depth
-    /// computation overflows.
+    /// Panics if any argument value ID is unknown or inactive, if the argument
+    /// types do not match the operation's signature, or if depth computation
+    /// overflows.
     pub fn add_op(
         &mut self,
         op: D::InstructionSet,
         args: SmallVec<ValId>,
-    ) -> Result<(OpId, SmallVec<ValId>), IRError<D>> {
+    ) -> (OpId, SmallVec<ValId>) {
         self.add_op_impl(op, args, None)
     }
 
-    /// Adds a new operation to the IR with the specified arguments and a comment.
+    /// Adds a new operation to the IR with a comment attached.
     ///
-    /// Same as `add_op`, but attaches a comment to the operation for debugging.
+    /// Behaves identically to [`add_op`](Self::add_op) but attaches `comment`
+    /// to the operation for debugging and formatting purposes.
+    ///
+    /// # Panics
+    ///
+    /// Same as [`add_op`](Self::add_op).
     pub fn add_op_with_comment(
         &mut self,
         op: D::InstructionSet,
         args: SmallVec<ValId>,
         comment: String,
-    ) -> Result<(OpId, SmallVec<ValId>), IRError<D>> {
+    ) -> (OpId, SmallVec<ValId>) {
         self.add_op_impl(op, args, Some(comment))
     }
 
@@ -430,7 +438,7 @@ impl<D: Dialect> IR<D> {
         op: D::InstructionSet,
         args: SmallVec<ValId>,
         comment: Option<String>,
-    ) -> Result<(OpId, SmallVec<ValId>), IRError<D>> {
+    ) -> (OpId, SmallVec<ValId>) {
         // Check that the args are live.
         args.iter().for_each(|valid| {
             assert!(self.has_valid(*valid), "Unknown valid");
@@ -442,11 +450,10 @@ impl<D: Dialect> IR<D> {
             .map(|a| self.get_val(*a).get_type())
             .collect::<Vec<_>>();
         if sig.get_args() != actual {
-            return Err(IRError::OpSig {
-                op,
-                recv: actual,
-                exp: sig.get_args().into(),
-            });
+            panic!(
+                "Signature Error: {op} received {actual:?} instead of {:?}",
+                sig.get_args()
+            );
         }
 
         // We compute the depth from the inputs.
@@ -513,16 +520,20 @@ impl<D: Dialect> IR<D> {
             .extend(valids.as_slice().iter().cloned());
 
         // All good
-        Ok((opid, valids))
+        (opid, valids)
     }
 
-    /// Replace all the uses of a value by another one.
+    /// Replaces all uses of a value with another value.
     ///
-    /// Panics:
-    /// =======
+    /// Every operation that consumes `old` will be rewritten to consume `new`
+    /// instead. If `old` and `new` are the same, this is a no-op. Use-def
+    /// chains and operation depths are updated automatically.
     ///
-    /// If the new value has a different type.
-    /// If the new value is reachable from one of the users.
+    /// # Panics
+    ///
+    /// Panics if either value ID is unknown or inactive, if `old` and `new`
+    /// have different types, or if the replacement would introduce a cycle
+    /// (i.e. `new` is reachable from a consumer of `old`).
     pub fn replace_val_use(&mut self, old: ValId, new: ValId) {
         assert!(self.has_valid(old), "Unknown valid.");
         assert!(self.has_valid(new), "Unknown valid.");
@@ -592,12 +603,14 @@ impl<D: Dialect> IR<D> {
             .for_each(|(opid, _)| self.delete_op(opid));
     }
 
-    /// Deletes an operation from the IR.
+    /// Deletes an operation and its return values from the IR.
     ///
-    /// Panics:
-    /// =======
+    /// The operation and all its return values transition to inactive state.
     ///
-    /// If the operation has active users, the operation will panic.
+    /// # Panics
+    ///
+    /// Panics if the operation is already inactive, or if any of its return
+    /// values still have active consumers.
     pub fn delete_op(&mut self, opid: OpId) {
         assert!(
             !self.raw_get_op(opid).is_inactive(),
@@ -619,11 +632,13 @@ impl<D: Dialect> IR<D> {
         self.op_count -= 1;
     }
 
-    /// Dump the IR and stop the program.
-    /// Prints the IR to stdout and panics.
+    /// Prints the formatted IR to stdout and panics.
     ///
-    /// This is a debugging utility that displays the current IR state
-    /// before terminating the program.
+    /// Debugging utility for inspecting the IR state at a specific point.
+    ///
+    /// # Panics
+    ///
+    /// Always.
     pub fn dump(&self) {
         println!("{}", self.format());
         panic!();
@@ -677,7 +692,19 @@ impl<D: Dialect> IR<D> {
         ValMap::new_totally_mapped(self, f)
     }
 
-    /// Performs backward dataflow analysis on the IR operations.
+    /// Performs backward dataflow analysis over all active operations.
+    ///
+    /// Operations are visited in reverse topological order. The callback
+    /// receives an [`AnnOpRef`] whose annotations are [`Analysing::Pending`]
+    /// for not-yet-visited operations and [`Analysing::Analyzed`] for already
+    /// visited ones, and must return an operation annotation and one value
+    /// annotation per return value. The returned [`AnnIR`] contains the
+    /// unwrapped annotations.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the callback returns a number of value annotations that
+    /// differs from the operation's return arity.
     pub fn backward_dataflow_analysis<OpAnn: Annotation, ValAnn: Annotation>(
         &self,
         mut f: impl FnMut(AnnOpRef<D, Analysing<OpAnn>, Analysing<ValAnn>>) -> (OpAnn, SmallVec<ValAnn>),
@@ -712,7 +739,19 @@ impl<D: Dialect> IR<D> {
         }
     }
 
-    /// Performs forward dataflow analysis on the IR operations.
+    /// Performs forward dataflow analysis over all active operations.
+    ///
+    /// Operations are visited in topological order. The callback receives an
+    /// [`AnnOpRef`] whose annotations are [`Analysing::Pending`] for
+    /// not-yet-visited operations and [`Analysing::Analyzed`] for already
+    /// visited ones, and must return an operation annotation and one value
+    /// annotation per return value. The returned [`AnnIR`] contains the
+    /// unwrapped annotations.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the callback returns a number of value annotations that
+    /// differs from the operation's return arity.
     pub fn forward_dataflow_analysis<OpAnn: Annotation, ValAnn: Annotation>(
         &self,
         mut f: impl FnMut(AnnOpRef<D, Analysing<OpAnn>, Analysing<ValAnn>>) -> (OpAnn, SmallVec<ValAnn>),
@@ -775,6 +814,7 @@ impl<D: Dialect> IR<D> {
         }
     }
 
+    /// Creates a configurable formatter for the entire IR.
     pub fn format(&self) -> IRFormatter<'_, D> {
         IRFormatter::new(self)
     }

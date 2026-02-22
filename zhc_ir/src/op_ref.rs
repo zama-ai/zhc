@@ -4,11 +4,11 @@ use zhc_utils::FastSet;
 
 use super::{Depth, Dialect, IR, OpId, Signature, State, ValId, val_ref::ValRef};
 
-/// A reference to an operation within an IR graph.
+/// Borrowed view of an operation within an [`IR`].
 ///
-/// Provides access to operation metadata, arguments, return values, and graph
-/// traversal methods. The reference is tied to the lifetime of the IR it
-/// references and maintains cached pointers to operation data for efficient access.
+/// Provides access to operation metadata, arguments, return values, and
+/// dependency traversal methods. The reference is tied to the lifetime of the
+/// [`IR`] it was obtained from. Derefs to [`OpId`].
 #[derive(Debug, Clone)]
 pub struct OpRef<'ir, D: Dialect> {
     pub(super) id: OpId,
@@ -93,7 +93,7 @@ impl<'ir, D: Dialect> OpRef<'ir, D> {
         self.operation.clone()
     }
 
-    /// Returns the depth of the operation within the IR graph from the inputs.
+    /// Returns the depth of the operation relative to the IR inputs.
     pub fn get_depth(&self) -> Depth {
         *self.depth
     }
@@ -185,12 +185,9 @@ impl<'ir, D: Dialect> OpRef<'ir, D> {
         output.into_iter()
     }
 
-    /// Returns an iterator over all operations that can reach the current operation, including
-    /// itself.
+    /// Returns an iterator over all operations that can reach this operation, including itself.
     ///
-    /// Combines the results of `get_reached_iter()` with the current operation to provide
-    /// a complete set of all operations in the forward reachability cone starting from
-    /// this operation.
+    /// Equivalent to [`get_reaching_iter`](Self::get_reaching_iter) with `self` appended.
     pub fn get_inc_reaching_iter(&self) -> impl Iterator<Item = OpRef<'ir, D>> + use<'ir, D> {
         self.get_reaching_iter()
             .chain(std::iter::once(self.to_owned()))
@@ -215,9 +212,9 @@ impl<'ir, D: Dialect> OpRef<'ir, D> {
 
     /// Checks if this operation can reach the specified `other` operation.
     ///
-    /// Returns `true` if this operation produces values that are directly or
+    /// Returns true if this operation produces values that are directly or
     /// indirectly used by `other`, or if this operation and `other` are the
-    /// same operation. Uses depth information to optimize the search when possible.
+    /// same operation.
     pub fn reaches<'o>(&self, other: &OpRef<'o, D>) -> bool {
         if self == other {
             return true;
@@ -231,6 +228,7 @@ impl<'ir, D: Dialect> OpRef<'ir, D> {
             .any(|a| a.get_id() == other.get_id() || a.reaches(other))
     }
 
+    /// Creates a configurable formatter for this operation.
     pub fn format(&self) -> OpRefFormatter<'_, 'ir, D> {
         OpRefFormatter::new(self)
     }

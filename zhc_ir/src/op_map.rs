@@ -233,7 +233,10 @@ impl<T> OpMap<T> {
             })
     }
 
-    /// Acknowledge eventual changes
+    /// Acknowledges and resets the change flag.
+    ///
+    /// Returns true if any mutation occurred since the last acknowledgement
+    /// (or since creation), then resets the flag to false.
     pub fn ack_changes(&mut self) -> bool {
         std::mem::replace(&mut self.changed, false)
     }
