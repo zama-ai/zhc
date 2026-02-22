@@ -48,42 +48,5 @@ pub use val_origin::*;
 pub use val_ref::*;
 pub use val_use::*;
 
-/// Errors that can occur during IR construction or manipulation.
-#[derive(Clone, Debug)]
-pub enum IRError<D: Dialect> {
-    /// Operation signature mismatch between expected and received argument types.
-    OpSig {
-        /// The operation that caused the signature error.
-        op: D::InstructionSet,
-        /// The types that were actually received as arguments.
-        recv: Vec<D::TypeSystem>,
-        /// The types that were expected as arguments.
-        exp: Vec<D::TypeSystem>,
-    },
-    /// Value cannot be represented with the specified type.
-    Range {
-        /// The type that cannot represent the value.
-        typ: D::TypeSystem,
-    },
-}
-
-impl<D: Dialect> std::fmt::Display for IRError<D> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            IRError::OpSig { op, recv, exp } => {
-                write!(
-                    f,
-                    "Signature Error: {op} received {recv:?} instead of {exp:?}"
-                )
-            }
-            IRError::Range { typ } => {
-                write!(f, "Range Error: value could not be represented with {typ}")
-            }
-        }
-    }
-}
-
-impl<D: Dialect> std::error::Error for IRError<D> {}
-
 #[cfg(test)]
 mod tests;

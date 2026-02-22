@@ -51,57 +51,49 @@ impl<'a> Batcher<'a> {
         let mut batch = IR::empty();
         let mut batch_map = SmallMap::new();
         for (i, val) in inputs.iter().enumerate() {
-            let (_, batch_arg) = batch
-                .add_op(
-                    HpuInstructionSet::BatchArg {
-                        pos: i.try_into().unwrap(),
-                        ty: val.get_type(),
-                    },
-                    svec![],
-                )
-                .unwrap();
+            let (_, batch_arg) = batch.add_op(
+                HpuInstructionSet::BatchArg {
+                    pos: i.try_into().unwrap(),
+                    ty: val.get_type(),
+                },
+                svec![],
+            );
             batch_map.insert(val.get_id(), batch_arg[0]);
         }
         for op in self.0.iter() {
-            let (_, batch_op_rets) = batch
-                .add_op(
-                    op.get_instruction(),
-                    op.get_arg_valids()
-                        .iter()
-                        .map(|k| batch_map.get(k).unwrap())
-                        .copied()
-                        .collect(),
-                )
-                .unwrap();
+            let (_, batch_op_rets) = batch.add_op(
+                op.get_instruction(),
+                op.get_arg_valids()
+                    .iter()
+                    .map(|k| batch_map.get(k).unwrap())
+                    .copied()
+                    .collect(),
+            );
             for (k, v) in (op.get_return_valids().iter(), batch_op_rets.into_iter()).mzip() {
                 batch_map.insert(*k, v);
             }
         }
         for (i, val) in outputs.iter().enumerate() {
-            batch
-                .add_op(
-                    HpuInstructionSet::BatchRet {
-                        pos: i.try_into().unwrap(),
-                        ty: val.get_type(),
-                    },
-                    svec![*batch_map.get(&val.get_id()).unwrap()],
-                )
-                .unwrap();
+            batch.add_op(
+                HpuInstructionSet::BatchRet {
+                    pos: i.try_into().unwrap(),
+                    ty: val.get_type(),
+                },
+                svec![*batch_map.get(&val.get_id()).unwrap()],
+            );
         }
 
         // We add the batch op in the new IR.
-        let (_, valids) = output
-            .add_op(
-                HpuInstructionSet::Batch {
-                    block: Box::new(batch),
-                },
-                inputs
-                    .iter()
-                    .map(|a| output_map.get(&a.get_id()).unwrap())
-                    .copied()
-                    .collect(),
-            )
-            .unwrap();
+        let (_, valids) = output.add_op(
+            HpuInstructionSet::Batch {
+                block: Box::new(batch),
+            },
+            inputs
+                .iter()
+                .map(|a| output_map.get(&a.get_id()).unwrap())
+                .copied()
+                .collect(),
+        );
         for (k, v) in (outputs.into_iter().map(|a| a.get_id()), valids.into_iter()).mzip() {
             output_map.insert(k, v);
         }
@@ -119,28 +111,23 @@ pub fn batch(ir: &IR<HpuLang>) -> IR<HpuLang> {
         use zhc_langs::hpulang::HpuInstructionSet::*;
         match op.get_instruction() {
             AddCt | SubCt | Mac { .. } | AddPt | SubPt | PtSub | MulPt => {
-                let (_, valids) = output
-                    .add_op(
-                        op.get_instruction(),
-                        svec![map[op.get_arg_valids()[0]], map[op.get_arg_valids()[1]]],
-                    )
-                    .unwrap();
+                let (_, valids) = output.add_op(
+                    op.get_instruction(),
+                    svec![map[op.get_arg_valids()[0]], map[op.get_arg_valids()[1]]],
+                );
                 map.insert(op.get_return_valids()[0], valids[0]);
             }
             AddCst { .. } | SubCst { .. } | CstSub { .. } | MulCst { .. } => {
-                let (_, valids) = output
-                    .add_op(op.get_instruction(), svec![map[op.get_arg_valids()[0]]])
-                    .unwrap();
+                let (_, valids) =
+                    output.add_op(op.get_instruction(), svec![map[op.get_arg_valids()[0]]]);
                 map.insert(op.get_return_valids()[0], valids[0]);
             }
             ImmLd { .. } | SrcLd { .. } | CstCt { .. } => {
-                let (_, valids) = output.add_op(op.get_instruction(), svec![]).unwrap();
+                let (_, valids) = output.add_op(op.get_instruction(), svec![]);
                 map.insert(op.get_return_valids()[0], valids[0]);
             }
             DstSt { .. } => {
-                output
-                    .add_op(op.get_instruction(), svec![map[op.get_arg_valids()[0]]])
-                    .unwrap();
+                output.add_op(op.get_instruction(), svec![map[op.get_arg_valids()[0]]]);
             }
             Pbs { .. } | Pbs2 { .. } | Pbs4 { .. } | Pbs8 { .. } => {
                 batcher.push_op(op);

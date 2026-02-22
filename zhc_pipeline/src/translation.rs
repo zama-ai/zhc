@@ -177,56 +177,46 @@ impl Translator for IoplangToHpulang {
                     panic!("Unexpected Alias op encountered.");
                 }
                 IopInstructionSet::LetCiphertextBlock { value } => {
-                    let (_, valids) = output
-                        .add_op(
-                            HpuInstructionSet::CstCt {
-                                cst: Immediate(value),
-                            },
-                            svec![],
-                        )
-                        .unwrap();
+                    let (_, valids) = output.add_op(
+                        HpuInstructionSet::CstCt {
+                            cst: Immediate(value),
+                        },
+                        svec![],
+                    );
                     map.insert(op.get_return_valids()[0], valids[0]);
                 }
                 IopInstructionSet::AddCt
                 | IopInstructionSet::WrappingAddCt
                 | IopInstructionSet::TemperAddCt => {
-                    let (_, valids) = output
-                        .add_op(
-                            HpuInstructionSet::AddCt,
-                            svec![map[op.get_arg_valids()[0]], map[op.get_arg_valids()[1]]],
-                        )
-                        .unwrap();
+                    let (_, valids) = output.add_op(
+                        HpuInstructionSet::AddCt,
+                        svec![map[op.get_arg_valids()[0]], map[op.get_arg_valids()[1]]],
+                    );
                     map.insert(op.get_return_valids()[0], valids[0]);
                 }
                 IopInstructionSet::SubCt => {
-                    let (_, valids) = output
-                        .add_op(
-                            HpuInstructionSet::SubCt,
-                            svec![map[op.get_arg_valids()[0]], map[op.get_arg_valids()[1]]],
-                        )
-                        .unwrap();
+                    let (_, valids) = output.add_op(
+                        HpuInstructionSet::SubCt,
+                        svec![map[op.get_arg_valids()[0]], map[op.get_arg_valids()[1]]],
+                    );
                     map.insert(op.get_return_valids()[0], valids[0]);
                 }
                 IopInstructionSet::PackCt { mul } => {
-                    let (_, valids) = output
-                        .add_op(
-                            HpuInstructionSet::Mac {
-                                cst: Immediate(mul as u8),
-                            },
-                            svec![map[op.get_arg_valids()[0]], map[op.get_arg_valids()[1]]],
-                        )
-                        .unwrap();
+                    let (_, valids) = output.add_op(
+                        HpuInstructionSet::Mac {
+                            cst: Immediate(mul as u8),
+                        },
+                        svec![map[op.get_arg_valids()[0]], map[op.get_arg_valids()[1]]],
+                    );
                     map.insert(op.get_return_valids()[0], valids[0]);
                 }
                 IopInstructionSet::AddPt | IopInstructionSet::WrappingAddPt => {
                     let (_, valids) = if map.contains_key(&op.get_arg_valids()[1]) {
                         // The plaintext input is not constant.
-                        output
-                            .add_op(
-                                HpuInstructionSet::AddPt,
-                                svec![map[op.get_arg_valids()[0]], map[op.get_arg_valids()[1]]],
-                            )
-                            .unwrap()
+                        output.add_op(
+                            HpuInstructionSet::AddPt,
+                            svec![map[op.get_arg_valids()[0]], map[op.get_arg_valids()[1]]],
+                        )
                     } else {
                         // The plaintext input is constant.
                         let IopInstructionSet::LetPlaintextBlock { value: cst } = op
@@ -239,26 +229,22 @@ impl Translator for IoplangToHpulang {
                         else {
                             unreachable!()
                         };
-                        output
-                            .add_op(
-                                HpuInstructionSet::AddCst {
-                                    cst: Immediate(cst as u8),
-                                },
-                                svec![map[op.get_arg_valids()[0]]],
-                            )
-                            .unwrap()
+                        output.add_op(
+                            HpuInstructionSet::AddCst {
+                                cst: Immediate(cst as u8),
+                            },
+                            svec![map[op.get_arg_valids()[0]]],
+                        )
                     };
                     map.insert(op.get_return_valids()[0], valids[0]);
                 }
                 IopInstructionSet::SubPt => {
                     let (_, valids) = if map.contains_key(&op.get_arg_valids()[1]) {
                         // The plaintext input is not constant.
-                        output
-                            .add_op(
-                                HpuInstructionSet::SubPt,
-                                svec![map[op.get_arg_valids()[0]], map[op.get_arg_valids()[1]]],
-                            )
-                            .unwrap()
+                        output.add_op(
+                            HpuInstructionSet::SubPt,
+                            svec![map[op.get_arg_valids()[0]], map[op.get_arg_valids()[1]]],
+                        )
                     } else {
                         // The plaintext input is constant.
                         let IopInstructionSet::LetPlaintextBlock { value: cst } = op
@@ -271,26 +257,22 @@ impl Translator for IoplangToHpulang {
                         else {
                             unreachable!()
                         };
-                        output
-                            .add_op(
-                                HpuInstructionSet::SubCst {
-                                    cst: Immediate(cst as u8),
-                                },
-                                svec![map[op.get_arg_valids()[0]]],
-                            )
-                            .unwrap()
+                        output.add_op(
+                            HpuInstructionSet::SubCst {
+                                cst: Immediate(cst as u8),
+                            },
+                            svec![map[op.get_arg_valids()[0]]],
+                        )
                     };
                     map.insert(op.get_return_valids()[0], valids[0]);
                 }
                 IopInstructionSet::PtSub => {
                     let (_, valids) = if map.contains_key(&op.get_arg_valids()[0]) {
                         // The plaintext input is not constant.
-                        output
-                            .add_op(
-                                HpuInstructionSet::PtSub,
-                                svec![map[op.get_arg_valids()[0]], map[op.get_arg_valids()[1]]],
-                            )
-                            .unwrap()
+                        output.add_op(
+                            HpuInstructionSet::PtSub,
+                            svec![map[op.get_arg_valids()[0]], map[op.get_arg_valids()[1]]],
+                        )
                     } else {
                         // The plaintext input is constant.
                         let IopInstructionSet::LetPlaintextBlock { value: cst } = op
@@ -303,26 +285,22 @@ impl Translator for IoplangToHpulang {
                         else {
                             unreachable!()
                         };
-                        output
-                            .add_op(
-                                HpuInstructionSet::CstSub {
-                                    cst: Immediate(cst as u8),
-                                },
-                                svec![map[op.get_arg_valids()[1]]],
-                            )
-                            .unwrap()
+                        output.add_op(
+                            HpuInstructionSet::CstSub {
+                                cst: Immediate(cst as u8),
+                            },
+                            svec![map[op.get_arg_valids()[1]]],
+                        )
                     };
                     map.insert(op.get_return_valids()[0], valids[0]);
                 }
                 IopInstructionSet::MulPt => {
                     let (_, valids) = if map.contains_key(&op.get_arg_valids()[1]) {
                         // The plaintext input is not constant.
-                        output
-                            .add_op(
-                                HpuInstructionSet::MulPt,
-                                svec![map[op.get_arg_valids()[0]], map[op.get_arg_valids()[1]]],
-                            )
-                            .unwrap()
+                        output.add_op(
+                            HpuInstructionSet::MulPt,
+                            svec![map[op.get_arg_valids()[0]], map[op.get_arg_valids()[1]]],
+                        )
                     } else {
                         // The plaintext input is constant.
                         let IopInstructionSet::LetPlaintextBlock { value: cst } = op
@@ -335,14 +313,12 @@ impl Translator for IoplangToHpulang {
                         else {
                             unreachable!()
                         };
-                        output
-                            .add_op(
-                                HpuInstructionSet::MulCst {
-                                    cst: Immediate(cst as u8),
-                                },
-                                svec![map[op.get_arg_valids()[0]]],
-                            )
-                            .unwrap()
+                        output.add_op(
+                            HpuInstructionSet::MulCst {
+                                cst: Immediate(cst as u8),
+                            },
+                            svec![map[op.get_arg_valids()[0]]],
+                        )
                     };
                     map.insert(op.get_return_valids()[0], valids[0]);
                 }
@@ -362,17 +338,15 @@ impl Translator for IoplangToHpulang {
                             _ => None,
                         })
                         .unwrap();
-                    let (_, valids) = output
-                        .add_op(
-                            HpuInstructionSet::SrcLd {
-                                from: TSrcId {
-                                    src_pos: src_pos.try_into().unwrap(),
-                                    block_pos: index.try_into().unwrap(),
-                                },
+                    let (_, valids) = output.add_op(
+                        HpuInstructionSet::SrcLd {
+                            from: TSrcId {
+                                src_pos: src_pos.try_into().unwrap(),
+                                block_pos: index.try_into().unwrap(),
                             },
-                            svec![],
-                        )
-                        .unwrap();
+                        },
+                        svec![],
+                    );
                     map.insert(op.get_return_valids()[0], valids[0]);
                 }
                 IopInstructionSet::ExtractPtBlock { index } => {
@@ -391,17 +365,15 @@ impl Translator for IoplangToHpulang {
                             _ => None,
                         })
                         .unwrap();
-                    let (_, valids) = output
-                        .add_op(
-                            HpuInstructionSet::ImmLd {
-                                from: TImmId {
-                                    imm_pos: imm_pos.try_into().unwrap(),
-                                    block_pos: index.try_into().unwrap(),
-                                },
+                    let (_, valids) = output.add_op(
+                        HpuInstructionSet::ImmLd {
+                            from: TImmId {
+                                imm_pos: imm_pos.try_into().unwrap(),
+                                block_pos: index.try_into().unwrap(),
                             },
-                            svec![],
-                        )
-                        .unwrap();
+                        },
+                        svec![],
+                    );
                     map.insert(op.get_return_valids()[0], valids[0]);
                 }
                 IopInstructionSet::StoreCtBlock { index } => {
@@ -419,29 +391,25 @@ impl Translator for IoplangToHpulang {
                             _ => None,
                         })
                         .unwrap();
-                    output
-                        .add_op(
-                            HpuInstructionSet::DstSt {
-                                to: TDstId {
-                                    dst_pos: dst_pos.try_into().unwrap(),
-                                    block_pos: index.try_into().unwrap(),
-                                },
+                    output.add_op(
+                        HpuInstructionSet::DstSt {
+                            to: TDstId {
+                                dst_pos: dst_pos.try_into().unwrap(),
+                                block_pos: index.try_into().unwrap(),
                             },
-                            svec![map[op.get_arg_valids()[0]]],
-                        )
-                        .unwrap();
+                        },
+                        svec![map[op.get_arg_valids()[0]]],
+                    );
                 }
                 IopInstructionSet::Pbs { lut, .. } => {
                     let lut = match GIDS1.get(&lut) {
                         Some(v) => *v,
                         None => panic!("Failed to lookup the gid for key: {lut:?}"),
                     };
-                    let (_, valids) = output
-                        .add_op(
-                            HpuInstructionSet::Pbs { lut },
-                            svec![map[op.get_arg_valids()[0]]],
-                        )
-                        .unwrap();
+                    let (_, valids) = output.add_op(
+                        HpuInstructionSet::Pbs { lut },
+                        svec![map[op.get_arg_valids()[0]]],
+                    );
                     map.insert(op.get_return_valids()[0], valids[0]);
                 }
                 IopInstructionSet::Pbs2 { lut } => {
@@ -449,12 +417,10 @@ impl Translator for IoplangToHpulang {
                         Some(v) => *v,
                         None => panic!("Failed to lookup the gid for key: {lut:?}"),
                     };
-                    let (_, valids) = output
-                        .add_op(
-                            HpuInstructionSet::Pbs2 { lut },
-                            svec![map[op.get_arg_valids()[0]]],
-                        )
-                        .unwrap();
+                    let (_, valids) = output.add_op(
+                        HpuInstructionSet::Pbs2 { lut },
+                        svec![map[op.get_arg_valids()[0]]],
+                    );
                     map.insert(op.get_return_valids()[0], valids[0]);
                     map.insert(op.get_return_valids()[1], valids[1]);
                 }
@@ -463,12 +429,10 @@ impl Translator for IoplangToHpulang {
                         Some(v) => *v,
                         None => panic!("Failed to lookup the gid for key: {lut:?}"),
                     };
-                    let (_, valids) = output
-                        .add_op(
-                            HpuInstructionSet::Pbs4 { lut },
-                            svec![map[op.get_arg_valids()[0]]],
-                        )
-                        .unwrap();
+                    let (_, valids) = output.add_op(
+                        HpuInstructionSet::Pbs4 { lut },
+                        svec![map[op.get_arg_valids()[0]]],
+                    );
                     map.insert(op.get_return_valids()[0], valids[0]);
                     map.insert(op.get_return_valids()[1], valids[1]);
                     map.insert(op.get_return_valids()[2], valids[2]);
@@ -479,12 +443,10 @@ impl Translator for IoplangToHpulang {
                         Some(v) => *v,
                         None => panic!("Failed to lookup the gid for key: {lut:?}"),
                     };
-                    let (_, valids) = output
-                        .add_op(
-                            HpuInstructionSet::Pbs8 { lut },
-                            svec![map[op.get_arg_valids()[0]]],
-                        )
-                        .unwrap();
+                    let (_, valids) = output.add_op(
+                        HpuInstructionSet::Pbs8 { lut },
+                        svec![map[op.get_arg_valids()[0]]],
+                    );
                     map.insert(op.get_return_valids()[0], valids[0]);
                     map.insert(op.get_return_valids()[1], valids[1]);
                     map.insert(op.get_return_valids()[2], valids[2]);

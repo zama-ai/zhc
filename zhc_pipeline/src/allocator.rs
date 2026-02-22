@@ -426,7 +426,7 @@ impl<'ir> Allocator<'ir> {
         let translation_map = ir.empty_valmap();
         let input = ir;
         let mut output = IR::empty();
-        let (_, rets) = output.add_op(DopInstructionSet::_INIT, svec![]).unwrap();
+        let (_, rets) = output.add_op(DopInstructionSet::_INIT, svec![]);
         let current_ctx = rets[0];
         let point = 0;
         let heap = Heap::empty();
@@ -443,7 +443,7 @@ impl<'ir> Allocator<'ir> {
     }
 
     fn add_dop(&mut self, dop: DopInstructionSet) -> OpId {
-        let (opid, rets) = self.output.add_op(dop, svec![self.current_ctx]).unwrap();
+        let (opid, rets) = self.output.add_op(dop, svec![self.current_ctx]);
         self.current_ctx = rets[0];
         opid
     }

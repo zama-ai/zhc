@@ -192,12 +192,12 @@ mod test {
     }
 
     #[test]
-    fn test_duplicate_inc() -> Result<(), IRError<TestLang>> {
+    fn test_duplicate_inc() {
         let mut ir = IR::<TestLang>::empty();
-        let (_input_op, input_vals) = ir.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
-        let (inc1, _inc1_vals) = ir.add_op(TestInstructionSet::Inc, input_vals.clone())?;
-        let (inc2, inc2_vals) = ir.add_op(TestInstructionSet::Inc, input_vals.clone())?;
-        let (_ret, _ret_vals) = ir.add_op(TestInstructionSet::Return, inc2_vals)?;
+        let (_input_op, input_vals) = ir.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![]);
+        let (inc1, _inc1_vals) = ir.add_op(TestInstructionSet::Inc, input_vals.clone());
+        let (inc2, inc2_vals) = ir.add_op(TestInstructionSet::Inc, input_vals.clone());
+        let (_ret, _ret_vals) = ir.add_op(TestInstructionSet::Return, inc2_vals);
 
         assert_display_is!(
             ir.format(),
@@ -223,18 +223,17 @@ mod test {
             return(%1 : Int);
         "#
         );
-        Ok(())
     }
 
     #[test]
-    fn test_commutative_add() -> Result<(), IRError<TestLang>> {
+    fn test_commutative_add() {
         let mut ir = IR::<TestLang>::empty();
-        let (_in1, v1) = ir.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
-        let (_in2, v2) = ir.add_op(TestInstructionSet::IntInput { pos: 1 }, svec![])?;
+        let (_in1, v1) = ir.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![]);
+        let (_in2, v2) = ir.add_op(TestInstructionSet::IntInput { pos: 1 }, svec![]);
         // Create two adds that differ only by argument order.
-        let (add1, _a1_vals) = ir.add_op(TestInstructionSet::Add, svec![v1[0], v2[0]])?;
-        let (add2, a2_vals) = ir.add_op(TestInstructionSet::Add, svec![v2[0], v1[0]])?;
-        let (_ret, _ret_vals) = ir.add_op(TestInstructionSet::Return, a2_vals)?;
+        let (add1, _a1_vals) = ir.add_op(TestInstructionSet::Add, svec![v1[0], v2[0]]);
+        let (add2, a2_vals) = ir.add_op(TestInstructionSet::Add, svec![v2[0], v1[0]]);
+        let (_ret, _ret_vals) = ir.add_op(TestInstructionSet::Return, a2_vals);
 
         assert_display_is!(
             ir.format(),
@@ -261,23 +260,23 @@ mod test {
             return(%2 : Int);
         "#
         );
-        Ok(())
     }
 
     #[test]
-    fn test_multi_return_divrem() -> Result<(), IRError<TestLang>> {
+    fn test_multi_return_divrem() {
         // DivRem returns two values. If computed twice with same operands,
         // both return values should be commoned.
         let mut ir = IR::<TestLang>::empty();
-        let (_, in1_vals) = ir.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![])?;
-        let (_, in2_vals) = ir.add_op(TestInstructionSet::IntInput { pos: 1 }, svec![])?;
+        let (_, in1_vals) = ir.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![]);
+        let (_, in2_vals) = ir.add_op(TestInstructionSet::IntInput { pos: 1 }, svec![]);
         let (div1_op, div1_vals) =
-            ir.add_op(TestInstructionSet::DivRem, svec![in1_vals[0], in2_vals[0]])?;
+            ir.add_op(TestInstructionSet::DivRem, svec![in1_vals[0], in2_vals[0]]);
         let (div2_op, div2_vals) =
-            ir.add_op(TestInstructionSet::DivRem, svec![in1_vals[0], in2_vals[0]])?;
+            ir.add_op(TestInstructionSet::DivRem, svec![in1_vals[0], in2_vals[0]]);
         // Make a consumer that uses both results of div2 so we can ensure replacement happened.
-        let (add_op, add_vals) = ir.add_op(TestInstructionSet::Add, svec![div2_vals[0], div1_vals[1]])?;
-        let (_, _) = ir.add_op(TestInstructionSet::Return, add_vals)?;
+        let (add_op, add_vals) =
+            ir.add_op(TestInstructionSet::Add, svec![div2_vals[0], div1_vals[1]]);
+        let (_, _) = ir.add_op(TestInstructionSet::Return, add_vals);
 
         // Pre-check
         assert!(ir.has_opid(div1_op));
@@ -322,7 +321,5 @@ mod test {
             return(%6 : Int);
         "#
         );
-
-        Ok(())
     }
 }

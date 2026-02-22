@@ -53,15 +53,13 @@ pub fn schedule<'a, 'b>(ir: &'a IR<HpuLang>, config: &'b HpuConfig) -> IR<HpuLan
     let mut output = IR::empty();
     let mut valmap: ValMap<ValId> = ir.empty_valmap();
     for op in ir.walk_ops_with(schedule.get_walker()) {
-        let (_, new_valids) = output
-            .add_op(
-                flusher(&op),
-                op.get_arg_valids()
-                    .iter()
-                    .map(|a| valmap.get(a).unwrap().to_owned())
-                    .collect(),
-            )
-            .unwrap();
+        let (_, new_valids) = output.add_op(
+            flusher(&op),
+            op.get_arg_valids()
+                .iter()
+                .map(|a| valmap.get(a).unwrap().to_owned())
+                .collect(),
+        );
         for (new_valid, old_valid) in (new_valids.iter(), op.get_return_valids().iter()).mzip() {
             valmap.insert(*old_valid, *new_valid);
         }

@@ -82,8 +82,8 @@ impl InnerBuilder {
         comment: Option<String>,
     ) -> (zhc_ir::OpId, SmallVec<zhc_ir::ValId>) {
         match comment {
-            Some(comment) => self.ir.add_op_with_comment(op, args, comment).unwrap(),
-            None => self.ir.add_op(op, args).unwrap(),
+            Some(comment) => self.ir.add_op_with_comment(op, args, comment),
+            None => self.ir.add_op(op, args),
         }
     }
 
