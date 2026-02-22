@@ -17,7 +17,7 @@ pub fn skip_store_load(ir: &mut IR<IopLang>) {
         NotConcerned,
     }
 
-    let ann_ir = ir.forward_dataflow_analysis(|_, valmap, op| {
+    let ann_ir = ir.forward_dataflow_analysis(|op| {
         use super::IopInstructionSet::*;
         match op.get_instruction() {
             DeclareCiphertext => ((), svec![ValAnn::StoresBlocks(FastMap::new())]),
@@ -25,7 +25,14 @@ pub fn skip_store_load(ir: &mut IR<IopLang>) {
                 ((), svec![ValAnn::StoresBlocks(FastMap::new())])
             }
             StoreCtBlock { index } => {
-                let ValAnn::StoresBlocks(map) = valmap.get(&op.get_arg_valids()[1]).unwrap() else {
+                let ValAnn::StoresBlocks(map) = op
+                    .get_args_iter()
+                    .nth(1)
+                    .unwrap()
+                    .get_annotation()
+                    .clone()
+                    .unwrap_analyzed()
+                else {
                     panic!()
                 };
                 let mut map = map.clone();
@@ -33,7 +40,14 @@ pub fn skip_store_load(ir: &mut IR<IopLang>) {
                 ((), svec![ValAnn::StoresBlocks(map)])
             }
             ExtractCtBlock { index } => {
-                let ValAnn::StoresBlocks(map) = valmap.get(&op.get_arg_valids()[0]).unwrap() else {
+                let ValAnn::StoresBlocks(map) = op
+                    .get_args_iter()
+                    .nth(0)
+                    .unwrap()
+                    .get_annotation()
+                    .clone()
+                    .unwrap_analyzed()
+                else {
                     panic!()
                 };
                 match map.get(&index) {

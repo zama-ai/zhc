@@ -27,3 +27,26 @@ pub use traits::*;
 pub use val_origin::*;
 pub use val_ref::*;
 pub use val_use::*;
+
+/// Tracks whether an annotation slot has been filled during an analysis pass.
+///
+/// Used as `Analysing<Ann>` inside op/val maps during annotation traversals:
+/// slots start as [`Pending`](Analysing::Pending) and transition to
+/// [`Analyzed`](Analysing::Analyzed) once the analysis callback produces a
+/// result. After the pass completes, all slots are unwrapped via
+/// [`unwrap_analyzed`](Analysing::unwrap_analyzed).
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub enum Analysing<A> {
+    Pending,
+    Analyzed(A),
+}
+
+impl<A> Analysing<A> {
+    /// Extracts the inner value, panicking if the slot is still pending.
+    pub fn unwrap_analyzed(self) -> A {
+        match self {
+            Analysing::Pending => panic!("Tried to unwrap a pending analysis."),
+            Analysing::Analyzed(a) => a,
+        }
+    }
+}

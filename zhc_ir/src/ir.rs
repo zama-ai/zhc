@@ -2,7 +2,7 @@ use crate::interpretation::{
     InterpState, Interpretable, Interpretation, InterpretsTo, interpret_ir,
 };
 use crate::val_ref::ValRef;
-use crate::{AnnIR, Annotation, IRFormatter, ValMap, ValOrigin, ValUse};
+use crate::{Analysing, AnnIR, AnnOpRef, Annotation, IRFormatter, ValMap, ValOrigin, ValUse};
 use std::{cmp::max, fmt::Debug};
 use zhc_utils::iter::MultiZip;
 use zhc_utils::svec;
@@ -680,43 +680,71 @@ impl<D: Dialect> IR<D> {
     /// Performs backward dataflow analysis on the IR operations.
     pub fn backward_dataflow_analysis<OpAnn: Annotation, ValAnn: Annotation>(
         &self,
-        mut f: impl FnMut(&OpMap<OpAnn>, &ValMap<ValAnn>, &OpRef<D>) -> (OpAnn, SmallVec<ValAnn>),
+        mut f: impl FnMut(AnnOpRef<D, Analysing<OpAnn>, Analysing<ValAnn>>) -> (OpAnn, SmallVec<ValAnn>),
     ) -> AnnIR<'_, D, OpAnn, ValAnn> {
-        let mut opmap = self.empty_opmap();
-        let mut valmap = self.empty_valmap();
+        let mut ann_ir = AnnIR {
+            op_annotations: self.filled_opmap(Analysing::Pending),
+            val_annotations: self.filled_valmap(Analysing::Pending),
+            ir: self,
+        };
         for opref in self.walk_ops_topological().rev() {
-            assert!(opref.get_users_iter().all(|k| opmap.contains_key(&k)));
-            let (opann, valanns) = f(&opmap, &valmap, &opref);
+            let (opann, valanns) = f(ann_ir.get_op(opref.id));
             assert_eq!(valanns.len(), opref.get_return_valids().len());
-            assert!(opmap.insert(*opref, opann).is_none());
+            assert!(matches!(
+                ann_ir
+                    .op_annotations
+                    .insert(*opref, Analysing::Analyzed(opann)),
+                Some(Analysing::Pending)
+            ));
             for (valann, valref) in (valanns.into_iter(), opref.get_return_valids().iter()).mzip() {
-                assert!(valmap.insert(*valref, valann).is_none());
+                assert!(matches!(
+                    ann_ir
+                        .val_annotations
+                        .insert(*valref, Analysing::Analyzed(valann)),
+                    Some(Analysing::Pending)
+                ));
             }
         }
-        AnnIR::new(self, opmap, valmap)
+        AnnIR {
+            ir: self,
+            op_annotations: ann_ir.op_annotations.map(Analysing::unwrap_analyzed),
+            val_annotations: ann_ir.val_annotations.map(Analysing::unwrap_analyzed),
+        }
     }
 
     /// Performs forward dataflow analysis on the IR operations.
     pub fn forward_dataflow_analysis<OpAnn: Annotation, ValAnn: Annotation>(
         &self,
-        mut f: impl FnMut(&OpMap<OpAnn>, &ValMap<ValAnn>, &OpRef<D>) -> (OpAnn, SmallVec<ValAnn>),
+        mut f: impl FnMut(AnnOpRef<D, Analysing<OpAnn>, Analysing<ValAnn>>) -> (OpAnn, SmallVec<ValAnn>),
     ) -> AnnIR<'_, D, OpAnn, ValAnn> {
-        let mut opmap = self.empty_opmap();
-        let mut valmap = self.empty_valmap();
+        let mut ann_ir = AnnIR {
+            op_annotations: self.filled_opmap(Analysing::Pending),
+            val_annotations: self.filled_valmap(Analysing::Pending),
+            ir: self,
+        };
         for opref in self.walk_ops_topological() {
-            assert!(
-                opref
-                    .get_predecessors_iter()
-                    .all(|k| opmap.contains_key(&k))
-            );
-            let (opann, valanns) = f(&opmap, &valmap, &opref);
+            let (opann, valanns) = f(ann_ir.get_op(opref.id));
             assert_eq!(valanns.len(), opref.get_return_valids().len());
-            assert!(opmap.insert(*opref, opann).is_none());
+            assert!(matches!(
+                ann_ir
+                    .op_annotations
+                    .insert(*opref, Analysing::Analyzed(opann)),
+                Some(Analysing::Pending)
+            ));
             for (valann, valref) in (valanns.into_iter(), opref.get_return_valids().iter()).mzip() {
-                assert!(valmap.insert(*valref, valann).is_none());
+                assert!(matches!(
+                    ann_ir
+                        .val_annotations
+                        .insert(*valref, Analysing::Analyzed(valann)),
+                    Some(Analysing::Pending)
+                ));
             }
         }
-        AnnIR::new(self, opmap, valmap)
+        AnnIR {
+            ir: self,
+            op_annotations: ann_ir.op_annotations.map(Analysing::unwrap_analyzed),
+            val_annotations: ann_ir.val_annotations.map(Analysing::unwrap_analyzed),
+        }
     }
 
     /// Interprets the IR with the given context and returns the annotated result.

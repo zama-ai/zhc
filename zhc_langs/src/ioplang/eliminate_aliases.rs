@@ -20,11 +20,18 @@ pub fn eliminate_aliases(ir: &mut IR<IopLang>) {
         ReplaceWith(ValId),
     }
 
-    let ann_ir = ir.forward_dataflow_analysis(|_, valmap, op| {
+    let ann_ir = ir.forward_dataflow_analysis(|op| {
         use super::IopInstructionSet::*;
         match op.get_instruction() {
             Alias { .. } => {
-                let valid = match valmap[op.get_arg_valids()[0]] {
+                let valid = match op
+                    .get_args_iter()
+                    .next()
+                    .unwrap()
+                    .get_annotation()
+                    .clone()
+                    .unwrap_analyzed()
+                {
                     ValAction::Keep(valid) => valid,
                     ValAction::ReplaceWith(valid) => valid,
                 };
@@ -33,7 +40,7 @@ pub fn eliminate_aliases(ir: &mut IR<IopLang>) {
             _ => (
                 OpAction::Keep,
                 op.get_returns_iter()
-                    .map(|val| ValAction::Keep(*val))
+                    .map(|val| ValAction::Keep(val.get_id()))
                     .collect(),
             ),
         }

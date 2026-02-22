@@ -22,7 +22,7 @@ use zhc_utils::{
     svec,
 };
 
-use crate::{AnnIR, Annotation, Dialect, DialectInstructionSet, DialectTypeSystem, IR, ValMap};
+use crate::{AnnIR, Annotation, Dialect, DialectInstructionSet, DialectTypeSystem, IR};
 
 /// State of a value during interpretation.
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -60,7 +60,7 @@ impl<V: Interpretation> InterpState<V> {
     }
 
     /// Unwraps the interpreted value, panicking if not `Interpreted`.
-    pub fn unwrap(self) -> V {
+    pub fn unwrap_interpreted(self) -> V {
         match self {
             InterpState::Interpreted(v) => v,
             InterpState::Pending => panic!("Called unwrap on Pending"),
@@ -78,7 +78,7 @@ impl<V: Interpretation> InterpState<V> {
     }
 
     /// Returns `self` if not `Pending`, otherwise panics with the given message.
-    pub fn expect_not_pending(&self, msg: &str) -> &Self {
+    pub fn ensure_not_pending(&self, msg: &str) -> &Self {
         if matches!(self, InterpState::Pending) {
             panic!("{msg}")
         }
@@ -138,30 +138,32 @@ where
 {
     let mut had_failure = false;
 
-    let annotated = ir.forward_dataflow_analysis(|_, valmap: &ValMap<InterpState<V>>, opref| {
-        let sig = opref.get_instruction().get_signature();
+    let annotated = ir.forward_dataflow_analysis::<(), InterpState<V>>(|ann_opref| {
+        let sig = ann_opref.get_instruction().get_signature();
         let n_returns = sig.get_returns().len();
 
         // Retrieve arguments and check for upstream failures
-        let arguments = opref
-            .get_arg_valids()
-            .iter()
-            .map(|valid| {
-                let state = valmap
-                    .get(valid)
-                    .expect("Annotation not available in valmap.")
-                    .expect_not_pending("Pending value encountered during interpretation");
-                state.clone()
+        let arguments: SmallVec<InterpState<V>> = ann_opref
+            .get_args_iter()
+            .map(|arg| {
+                arg.get_annotation()
+                    .clone()
+                    .unwrap_analyzed()
+                    .ensure_not_pending("Pending value encountered during interpretation")
+                    .to_owned()
             })
             .cosvec();
 
         // If any input failed, outputs are poisoned
-        if arguments.iter().any(|arg| arg.is_failed()) {
+        if arguments.iter().any(|arg: &InterpState<V>| arg.is_failed()) {
             return ((), svec![InterpState::Poisoned; n_returns]);
         }
 
         // Extract interpreted values (none are failed/pending at this point)
-        let interpreted_args = arguments.into_iter().map(InterpState::unwrap).cosvec();
+        let interpreted_args = arguments
+            .into_iter()
+            .map(InterpState::unwrap_interpreted)
+            .cosvec();
 
         // Typecheck the arguments
         for (i, (arg, expected_type)) in (interpreted_args.iter(), sig.get_args().iter())
@@ -172,7 +174,7 @@ where
                 panic!(
                     "Unexpected argument type encountered while interpreting {}. \
                      At position {i}, expected type {expected_type}, but encountered {}.",
-                    opref.format(),
+                    ann_opref.format(),
                     D::TypeSystem::type_of(arg)
                 )
             }
@@ -180,7 +182,9 @@ where
 
         // Interpret with panic catching
         let interpret_result = catch_unwind(AssertUnwindSafe(|| {
-            opref.get_instruction().interpret(context, interpreted_args)
+            ann_opref
+                .get_instruction()
+                .interpret(context, interpreted_args)
         }));
 
         match interpret_result {
@@ -194,7 +198,7 @@ where
                         panic!(
                             "Unexpected return type encountered while interpreting {}. \
                              At position {i}, expected type {expected_type}, but encountered {}.",
-                            opref.format(),
+                            ann_opref.format(),
                             D::TypeSystem::type_of(ret)
                         )
                     }
@@ -214,6 +218,6 @@ where
         Err(annotated)
     } else {
         // Unwrap all InterpState::Interpreted to V
-        Ok(annotated.map_valann(|valref| valref.get_annotation().clone().unwrap()))
+        Ok(annotated.map_valann(|valref| valref.get_annotation().clone().unwrap_interpreted()))
     }
 }

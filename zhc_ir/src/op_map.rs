@@ -237,6 +237,33 @@ impl<T> OpMap<T> {
     pub fn ack_changes(&mut self) -> bool {
         std::mem::replace(&mut self.changed, false)
     }
+
+    /// Transforms stored values by applying `f`, preserving map structure.
+    ///
+    /// Active slots with a value are mapped through `f`; empty active slots
+    /// and inactive slots remain unchanged. Counters and change flag are
+    /// carried over as-is.
+    pub fn map<TN>(self, mut f: impl FnMut(T) -> TN) -> OpMap<TN> {
+        let OpMap {
+            store,
+            n_stored,
+            n_inactive,
+            changed,
+        } = self;
+        let store = store
+            .into_iter()
+            .map(|a| match a {
+                State::Active(o) => State::Active(o.map(&mut f)),
+                State::Inactive(_) => State::Inactive(None),
+            })
+            .collect();
+        OpMap {
+            store,
+            n_stored,
+            n_inactive,
+            changed,
+        }
+    }
 }
 
 impl<T> Index<OpId> for OpMap<T> {
