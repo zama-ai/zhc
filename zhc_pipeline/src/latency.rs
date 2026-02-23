@@ -41,7 +41,7 @@ mod test {
         test::{get_add_ir, get_cmp_ir},
         translation::lower_iop_to_hpu,
     };
-    use zhc_builder::{CiphertextSpec, count_0};
+    use zhc_builder::{CiphertextSpec, count_0, mul_lsb, overflow_mul_lsb};
     use zhc_ir::IR;
     use zhc_langs::ioplang::IopLang;
     use zhc_sim::{
@@ -88,6 +88,28 @@ mod test {
             r#"
             11251.065us
         "#
+        );
+    }
+
+    #[test]
+    fn test_latency_mul_lsb_ir() {
+        let lat = pipeline(&mul_lsb(CiphertextSpec::new(64, 2, 2)).into_ir());
+        assert_display_is!(
+            format!("{}us", lat.as_ts(MHz(400).period())),
+            r#"
+                142953.8125us
+            "#
+        );
+    }
+
+    #[test]
+    fn test_latency_overflow_mul_lsb_ir() {
+        let lat = pipeline(&overflow_mul_lsb(CiphertextSpec::new(64, 2, 2)).into_ir());
+        assert_display_is!(
+            format!("{}us", lat.as_ts(MHz(400).period())),
+            r#"
+                193757.97us
+            "#
         );
     }
 }

@@ -90,6 +90,7 @@
 //! ```
 
 const NU: usize = 5;
+const NU_BOOL: usize = 8;
 
 mod builder;
 mod iops;

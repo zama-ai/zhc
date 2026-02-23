@@ -362,4 +362,31 @@ impl EmulatedCiphertext {
             spec: self.spec,
         }
     }
+
+    /// Describe multiplication behavior when MSB are dropped
+    pub fn mul_lsb(self, other: Self) -> EmulatedCiphertext {
+        assert_eq!(self.spec, other.spec(), "Spec mismatch.");
+        let storage = self.storage.wrapping_mul(other.storage) & self.spec.int_mask();
+        EmulatedCiphertext {
+            storage,
+            spec: self.spec,
+        }
+    }
+    /// Describe multiplication behavior with overflow detection when MSB are dropped
+    pub fn overflow_mul_lsb(self, other: Self) -> (EmulatedCiphertext, EmulatedCiphertext) {
+        assert_eq!(self.spec, other.spec(), "Spec mismatch.");
+        let raw_mul = self.storage.wrapping_mul(other.storage);
+        let mul_lsb = raw_mul & self.spec.int_mask();
+        let overflow_flag = (raw_mul >> self.spec.int_mask()) != 0;
+        (
+            EmulatedCiphertext {
+                storage: overflow_flag as u128,
+                spec: self.spec,
+            },
+            EmulatedCiphertext {
+                storage: mul_lsb,
+                spec: self.spec,
+            },
+        )
+    }
 }
