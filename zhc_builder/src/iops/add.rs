@@ -1,10 +1,7 @@
 use zhc_crypto::integer_semantics::CiphertextSpec;
 use zhc_langs::ioplang::{Lut1Def, Lut2Def};
 use zhc_utils::{
-    iter::{
-        ChunkIt, CollectInSmallVec, IterMapFirst, MultiZip, ReconcilerOf2, Slide,
-        filter_out_postludes,
-    },
+    iter::{ChunkIt, CollectInSmallVec, IterMapFirst, MultiZip, ReconcilerOf2, Slide, SliderExt},
     svec,
 };
 
@@ -177,7 +174,7 @@ impl Builder {
                 // Prelude will be useful for the first chunk, as we will see,
                 // but Postlude is not needed.
                 .slide::<2>()
-                .filter(filter_out_postludes)
+                .skip_postludes()
                 // The first chunk of the result is already solved at the previous level.
                 // We get it from the prelude of the slide, and call it a day.
                 .map_first(|slider| {
@@ -221,7 +218,7 @@ impl Builder {
         let carries = (group_states.into_iter(), group_carries.into_iter())
             .mzip()
             .slide::<2>()
-            .filter(filter_out_postludes)
+            .skip_postludes()
             .map_first(|slider| {
                 let (states, carry) = slider.unwrap_prelude()[0];
                 let b1 = self.block_lookup(&states[1], Lut1Def::SolvePropGroupFinal0);
@@ -269,7 +266,7 @@ impl Builder {
         self.pop_comment();
 
         self.comment("Join")
-            .join_ciphertext(&result.as_slice()[..output_size])
+            .join_ciphertext(&result.as_slice()[..output_size], None)
     }
 }
 
@@ -289,8 +286,8 @@ mod test {
                 .show_comments(true)
                 .show_types(false),
             r#"
-                                                   | %0 = input<0, Ct>();
-                                                   | %1 = input<1, Ct>();
+                                                   | %0 = input_ciphertext<0, 18>();
+                                                   | %1 = input_ciphertext<1, 18>();
                                                    | %2 = extract_ct_block<0>(%0);
                                                    | %3 = extract_ct_block<1>(%0);
                                                    | %4 = extract_ct_block<2>(%0);
@@ -363,7 +360,7 @@ mod test {
                 // Cleanup                         | %154 = pbs<Protect, MsgOnly>(%138);
                 // Cleanup                         | %155 = pbs<Protect, MsgOnly>(%139);
                 // Cleanup                         | %156 = pbs<Protect, MsgOnly>(%140);
-                // Join                            | %164 = decl_ct();
+                // Join                            | %164 = decl_ct<18>();
                 // Join                            | %165 = store_ct_block<0>(%148, %164);
                 // Join                            | %166 = store_ct_block<1>(%149, %165);
                 // Join                            | %167 = store_ct_block<2>(%150, %166);
@@ -373,7 +370,7 @@ mod test {
                 // Join                            | %171 = store_ct_block<6>(%154, %170);
                 // Join                            | %172 = store_ct_block<7>(%155, %171);
                 // Join                            | %173 = store_ct_block<8>(%156, %172);
-                                                   | output<0, Ct>(%173);
+                                                   | output<0>(%173);
             "#
         );
     }

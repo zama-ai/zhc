@@ -341,6 +341,87 @@ pub fn filter_out_noncompletes<A, const N: usize>(inp: &Slider<A, N>) -> bool {
     matches!(inp, Slider::Complete(_))
 }
 
+/// Extension trait for iterators yielding [`Slider`] values, providing convenience methods
+/// to filter out specific phases.
+///
+/// This trait is automatically implemented for any iterator whose items are [`Slider`] values.
+/// It provides methods that are more ergonomic than manually calling [`Iterator::filter`] with
+/// the filter predicates.
+pub trait SliderExt: Iterator + Sized {
+    /// Filters out prelude windows, keeping only complete and postlude windows.
+    ///
+    /// This is equivalent to calling `.filter(filter_out_preludes)` but is more concise
+    /// and self-documenting.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use zhc_utils::iter::{Slide, SliderExt};
+    /// let without_preludes: Vec<_> = [1, 2, 3]
+    ///     .into_iter()
+    ///     .slide::<2>()
+    ///     .skip_preludes()
+    ///     .collect();
+    /// // Contains only Complete([1,2]), Complete([2,3]), and Postlude([3])
+    /// ```
+    fn skip_preludes(self) -> impl Iterator<Item = Self::Item>;
+
+    /// Filters out postlude windows, keeping only prelude and complete windows.
+    ///
+    /// This is equivalent to calling `.filter(filter_out_postludes)` but is more concise
+    /// and self-documenting.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use zhc_utils::iter::{Slide, SliderExt};
+    /// let without_postludes: Vec<_> = [1, 2, 3]
+    ///     .into_iter()
+    ///     .slide::<2>()
+    ///     .skip_postludes()
+    ///     .collect();
+    /// // Contains only Prelude([1]), Complete([1,2]), and Complete([2,3])
+    /// ```
+    fn skip_postludes(self) -> impl Iterator<Item = Self::Item>;
+
+    /// Filters out prelude and postlude windows, keeping only complete windows.
+    ///
+    /// This is equivalent to calling `.filter(filter_out_noncompletes)` but is more concise
+    /// and self-documenting. This is the most common filtering operation when you want
+    /// standard sliding window behavior without partial windows at the boundaries.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use zhc_utils::iter::{Slide, SliderExt};
+    /// let complete_only: Vec<_> = [1, 2, 3, 4]
+    ///     .into_iter()
+    ///     .slide::<2>()
+    ///     .skip_noncompletes()
+    ///     .map(|s| s.unwrap_complete())
+    ///     .collect();
+    /// // [[1,2], [2,3], [3,4]]
+    /// ```
+    fn skip_noncompletes(self) -> impl Iterator<Item = Self::Item>;
+}
+
+impl<I, A, const N: usize> SliderExt for I
+where
+    I: Iterator<Item = Slider<A, N>> + Sized,
+{
+    fn skip_preludes(self) -> impl Iterator<Item = Self::Item> {
+        self.filter(filter_out_preludes)
+    }
+
+    fn skip_postludes(self) -> impl Iterator<Item = Self::Item> {
+        self.filter(filter_out_postludes)
+    }
+
+    fn skip_noncompletes(self) -> impl Iterator<Item = Self::Item> {
+        self.filter(filter_out_noncompletes)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

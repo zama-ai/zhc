@@ -137,7 +137,7 @@ impl InnerBuilder {
 /// let input = builder.input_ciphertext(8);
 /// let blocks = builder.split_ciphertext(&input);
 /// // ... operate on blocks ...
-/// let output = builder.join_ciphertext(&blocks);
+/// let output = builder.join_ciphertext(&blocks, None);
 /// builder.output_ciphertext(&output);
 /// let ir = builder.into_ir();
 /// ```
@@ -473,10 +473,7 @@ impl Builder {
         let spec = self.spec.ciphertext_spec(int_size);
         let pos = self.inner_mut().push_arg_type(Type::Ciphertext(spec));
         let (_, inp) = self.inner_mut().insert_op(
-            IopInstructionSet::Input {
-                pos,
-                typ: IopTypeSystem::Ciphertext,
-            },
+            IopInstructionSet::InputCiphertext { pos, int_size },
             svec![],
             self.current_comment(),
         );
@@ -523,10 +520,7 @@ impl Builder {
             .plaintext_spec(int_size);
         let pos = self.inner_mut().push_arg_type(Type::Plaintext(spec));
         let (_, inp) = self.inner_mut().insert_op(
-            IopInstructionSet::Input {
-                pos,
-                typ: IopTypeSystem::Plaintext,
-            },
+            IopInstructionSet::InputPlaintext { pos, int_size },
             svec![],
             self.current_comment(),
         );
@@ -561,8 +555,15 @@ impl Builder {
     /// Reassembles a slice of radix blocks into a single [`Ciphertext`].
     ///
     /// The blocks are stored in order, with block 0 as the least-significant radix block.
-    /// The total integer bit-width of the resulting ciphertext is
-    /// `blocks.len() * message_size`.
+    /// When `int_size` is None, the total bit-width is inferred as
+    /// `blocks.len() * message_size`. When `int_size` is `Some`, it overrides the
+    /// bit-width explicitly. This is useful if the expected bit-width is not a multiple of
+    /// the message size.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `int_size` is `Some` and the number of blocks exceeds the
+    /// capacity implied by the given bit-width.
     ///
     /// # Examples
     ///
@@ -572,15 +573,31 @@ impl Builder {
     /// let input = builder.input_ciphertext(8);
     /// let blocks = builder.split_ciphertext(&input);
     /// // ... operate on blocks ...
-    /// let ct = builder.join_ciphertext(&blocks);
+    /// let ct = builder.join_ciphertext(&blocks, None);
     /// builder.output_ciphertext(&ct);
     /// ```
-    pub fn join_ciphertext(&self, blocks: impl AsRef<[CiphertextBlock]>) -> Ciphertext {
+    pub fn join_ciphertext(
+        &self,
+        blocks: impl AsRef<[CiphertextBlock]>,
+        int_size: Option<u16>,
+    ) -> Ciphertext {
         let blocks = blocks.as_ref();
-        let int_size = blocks.len() as u16 * self.spec.message_size() as u16;
+        let int_size = match int_size {
+            Some(int_size) => {
+                let max_blocks_count = int_size.next_multiple_of(self.spec().message_size() as u16);
+                if max_blocks_count < blocks.len() as u16 {
+                    panic!(
+                        "Tried to join ciphertext with specific int_size, but was given more blocks then expected. Expected {max_blocks_count}, found {}.",
+                        blocks.len()
+                    );
+                }
+                int_size
+            }
+            None => blocks.len() as u16 * self.spec.message_size() as u16,
+        };
         let spec = self.spec.ciphertext_spec(int_size);
         let (_, acc) = self.inner_mut().insert_op(
-            IopInstructionSet::DeclareCiphertext,
+            IopInstructionSet::DeclareCiphertext { int_size },
             svec![],
             self.current_comment(),
         );
@@ -606,10 +623,7 @@ impl Builder {
         let ct = ct.as_ref();
         let pos = self.inner_mut().push_ret_type(Type::Ciphertext(ct.spec()));
         self.inner_mut().insert_op(
-            IopInstructionSet::Output {
-                pos,
-                typ: IopTypeSystem::Ciphertext,
-            },
+            IopInstructionSet::OutputCiphertext { pos },
             svec![ct.valid],
             self.current_comment(),
         );
@@ -936,6 +950,12 @@ impl Builder {
         }
     }
 
+    /// Applies a single-output PBS lookup allowing output padding overflow.
+    ///
+    /// Like [`block_lookup`](Self::block_lookup), but the bootstrapping allows the result
+    /// to overflow into the output padding bit. The input padding bit must still be clear
+    /// (protect semantics on the input side). This is useful when a subsequent operation
+    /// will consume the padding bit before the next lookup.
     pub fn block_padding_lookup(
         &self,
         src: impl AsRef<CiphertextBlock>,
@@ -1231,6 +1251,27 @@ impl Builder {
             .cloned()
             .chain(repeat_n(self.block_let_ciphertext(0), size - inp.len()))
             .collect()
+    }
+
+    /// Reduces a block slice to a single block by summing all elements (protect flavor).
+    ///
+    /// Folds [`block_add`](Self::block_add) across every element, returning their
+    /// cumulative sum. This is useful for combining partial results from parallel
+    /// computations into a single accumulator block.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `inp` is empty.
+    pub fn vector_add_reduce(&self, inp: impl AsRef<[CiphertextBlock]>) -> CiphertextBlock {
+        let inp = inp.as_ref();
+        assert!(
+            !inp.is_empty(),
+            "Tried add-reduce an empty vector of blocks."
+        );
+        inp.iter()
+            .cloned()
+            .reduce(|a, n| self.block_add(a, n))
+            .unwrap()
     }
 }
 

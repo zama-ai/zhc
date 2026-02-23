@@ -82,7 +82,7 @@
 //!     .collect();
 //!
 //! // 4. Reassemble and declare the output.
-//! let result = builder.join_ciphertext(&sum_blocks);
+//! let result = builder.join_ciphertext(&sum_blocks, None);
 //! builder.output_ciphertext(&result);
 //!
 //! // 5. Finalize — this runs dead-code elimination and CSE.

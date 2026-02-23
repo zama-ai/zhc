@@ -286,7 +286,7 @@ impl Builder {
             _ => unreachable!(),
         };
 
-        self.join_ciphertext([cmp_res])
+        self.join_ciphertext([cmp_res], None)
     }
 }
 
@@ -304,10 +304,10 @@ mod test {
         assert_display_is!(
             ir.into_ir().format().show_comments(true).show_opid(true),
             r#"
-                @00                              | %0 : Ct = input<0, Ct>();
-                @01                              | %1 : Ct = input<1, Ct>();
+                @00                              | %0 : Ct = input_ciphertext<0, 16>();
+                @01                              | %1 : Ct = input_ciphertext<1, 16>();
                 @36   // Compare blocks / 0-th   | %36 : PtBlock = let_pt_block<1>();
-                @56                              | %56 : Ct = decl_ct();
+                @56                              | %56 : Ct = decl_ct<2>();
                 @02                              | %2 : CtBlock = extract_ct_block<0>(%0 : Ct);
                 @03                              | %3 : CtBlock = extract_ct_block<1>(%0 : Ct);
                 @04                              | %4 : CtBlock = extract_ct_block<2>(%0 : Ct);
@@ -359,7 +359,7 @@ mod test {
                 @54                              | %54 : CtBlock = pack_ct<4>(%53 : CtBlock, %52 : CtBlock);
                 @55                              | %55 : CtBlock = pbs<Protect, CmpEqMrg>(%54 : CtBlock);
                 @57                              | %57 : Ct = store_ct_block<0>(%55 : CtBlock, %56 : Ct);
-                @58                              | output<0, Ct>(%57 : Ct);
+                @58                              | output<0>(%57 : Ct);
             "#
         );
     }

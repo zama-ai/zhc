@@ -117,6 +117,32 @@ impl<A> Chunk<A> {
             Chunk::Rest(_) => panic!(),
         }
     }
+
+    /// Extracts the inner vector, panicking if this is a complete chunk.
+    ///
+    /// Use this method when you expect a partial chunk (the remainder) and want to treat a
+    /// complete chunk as a programming error. For fallible extraction, match on the enum directly.
+    ///
+    /// # Panics
+    ///
+    /// Panics if called on a [`Chunk::Complete`] variant.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_utils::iter::{ChunkIt, Chunk};
+    /// let data = vec![1, 2, 3, 4, 5];
+    /// let mut chunks: Vec<_> = data.into_iter().chunk(3).collect();
+    /// let last = chunks.pop().unwrap();
+    /// let items = last.unwrap_rest(); // Safe: 5 is not divisible by 3
+    /// assert_eq!(items.len(), 2);
+    /// ```
+    pub fn unwrap_rest(self) -> SmallVec<A> {
+        match self {
+            Chunk::Rest(small_vec) => small_vec,
+            Chunk::Complete(_) => panic!(),
+        }
+    }
 }
 
 /// An iterator that yields fixed-size chunks from an underlying iterator.
@@ -143,6 +169,55 @@ impl<A: Iterator> Iterator for Chunked<A> {
             }
         }
         Some(Chunk::Complete(output))
+    }
+}
+
+/// An extension trait that adds an unwrapping method to chunked iterators.
+///
+/// This trait provides a convenient way to extract the underlying [`SmallVec`] from each chunk,
+/// discarding the distinction between complete and partial chunks.
+pub trait UnwrapChunks<A: Iterator> {
+    /// Consumes the chunked iterator and returns an iterator over the inner vectors.
+    ///
+    /// This method strips away the [`Chunk`] wrapper, yielding just the [`SmallVec`] contents
+    /// regardless of whether each chunk was complete or partial. Use this when you need to
+    /// process all chunks uniformly without caring about the complete/rest distinction.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_utils::iter::{ChunkIt, UnwrapChunks};
+    /// let data = vec![1, 2, 3, 4, 5];
+    /// let vecs: Vec<_> = data.into_iter().chunk(2).unwrap_chunks().collect();
+    /// assert_eq!(vecs.len(), 3);
+    /// assert_eq!(vecs[0].len(), 2); // [1, 2]
+    /// assert_eq!(vecs[1].len(), 2); // [3, 4]
+    /// assert_eq!(vecs[2].len(), 1); // [5]
+    /// ```
+    fn unwrap_chunks(self) -> UnwrapChunksIter<A>;
+}
+
+impl<A: Iterator> UnwrapChunks<A> for Chunked<A> {
+    fn unwrap_chunks(self) -> UnwrapChunksIter<A> {
+        UnwrapChunksIter { chunked: self }
+    }
+}
+
+/// An iterator that yields the inner [`SmallVec`] from each chunk.
+///
+/// Created by calling [`unwrap_chunks`](UnwrapChunks::unwrap_chunks) on a [`Chunked`] iterator.
+pub struct UnwrapChunksIter<A: Iterator> {
+    chunked: Chunked<A>,
+}
+
+impl<A: Iterator> Iterator for UnwrapChunksIter<A> {
+    type Item = SmallVec<A::Item>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.chunked.next().map(|chunk| match chunk {
+            Chunk::Complete(vec) => vec,
+            Chunk::Rest(vec) => vec,
+        })
     }
 }
 

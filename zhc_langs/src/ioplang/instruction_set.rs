@@ -14,10 +14,11 @@ use crate::ioplang::{
 ///
 /// Instructions fall into five categories:
 ///
-/// **I/O and aliasing.** `Input` and `Output` mark program entry/exit
-/// points at a given positional slot. `Alias` forwards a value unchanged
-/// and is eliminated by [`eliminate_aliases`](super::eliminate_aliases)
-/// before downstream processing.
+/// **I/O and aliasing.** `InputCiphertext`, `InputPlaintext`, and
+/// `OutputCiphertext` mark program entry/exit points at a given
+/// positional slot. `Alias` forwards a value unchanged and is eliminated
+/// by [`eliminate_aliases`](super::eliminate_aliases) before downstream
+/// processing.
 ///
 /// **Constants and declarations.** `DeclareCiphertext` produces a
 /// zero-initialized composite ciphertext. `LetPlaintextBlock` and
@@ -46,16 +47,23 @@ use crate::ioplang::{
 /// All signatures are available via the [`DialectInstructionSet`] impl.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum IopInstructionSet {
-    /// Program input at positional slot `pos`. `() → (typ)`
-    Input { pos: usize, typ: IopTypeSystem },
-    /// Program output at positional slot `pos`. `(typ) → ()`
-    Output { pos: usize, typ: IopTypeSystem },
+    /// Ciphertext program input at positional slot `pos`, with
+    /// `int_size` radix blocks. `() → (Ciphertext)`
+    InputCiphertext { pos: usize, int_size: u16 },
+    /// Plaintext program input at positional slot `pos`, with
+    /// `int_size` radix blocks. `() → (Plaintext)`
+    InputPlaintext { pos: usize, int_size: u16 },
+    /// Ciphertext program output at positional slot `pos`.
+    /// `(Ciphertext) → ()`
+    OutputCiphertext { pos: usize },
+    /// Debug-only value sink. `(typ) → ()`
+    _Consume { typ: IopTypeSystem },
     /// Identity forwarding. `(typ) → (typ)`.
     /// Eliminated by [`eliminate_aliases`](super::eliminate_aliases)
     /// before downstream passes.
     Alias { typ: IopTypeSystem },
     /// Zero-initialized composite ciphertext. `() → (Ciphertext)`
-    DeclareCiphertext,
+    DeclareCiphertext { int_size: u16 },
     /// Plaintext block constant. `() → (PlaintextBlock)`
     LetPlaintextBlock { value: u8 },
     /// Ciphertext block constant. `() → (CiphertextBlock)`
@@ -125,10 +133,16 @@ pub enum IopInstructionSet {
 impl Display for IopInstructionSet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            IopInstructionSet::Input { pos, typ } => write!(f, "input<{pos}, {typ}>"),
-            IopInstructionSet::Output { pos, typ } => write!(f, "output<{pos}, {typ}>"),
+            IopInstructionSet::InputCiphertext { pos, int_size } => {
+                write!(f, "input_ciphertext<{pos}, {int_size}>")
+            }
+            IopInstructionSet::InputPlaintext { pos, int_size } => {
+                write!(f, "input_plaintext<{pos}, {int_size}>")
+            }
+            IopInstructionSet::OutputCiphertext { pos } => write!(f, "output<{pos}>"),
+            IopInstructionSet::_Consume { typ } => write!(f, "_consume<{typ}>"),
             IopInstructionSet::Alias { .. } => write!(f, "alias"),
-            IopInstructionSet::DeclareCiphertext => write!(f, "decl_ct"),
+            IopInstructionSet::DeclareCiphertext { int_size } => write!(f, "decl_ct<{int_size}>"),
             IopInstructionSet::LetPlaintextBlock { value } => write!(f, "let_pt_block<{value}>"),
             IopInstructionSet::LetCiphertextBlock { value } => write!(f, "let_ct_block<{value}>"),
             IopInstructionSet::PackCt { mul } => write!(f, "pack_ct<{mul}>"),
@@ -158,9 +172,11 @@ impl DialectInstructionSet for IopInstructionSet {
     fn get_signature(&self) -> Signature<Self::TypeSystem> {
         use IopTypeSystem::*;
         match self {
-            IopInstructionSet::Input { typ, .. } => sig![() -> (typ.clone())],
-            IopInstructionSet::Output { typ, .. } => sig![(typ.clone()) -> ()],
-            IopInstructionSet::DeclareCiphertext => sig![() -> (Ciphertext)],
+            IopInstructionSet::InputCiphertext { .. } => sig![() -> (Ciphertext)],
+            IopInstructionSet::InputPlaintext { .. } => sig![() -> (Plaintext)],
+            IopInstructionSet::OutputCiphertext { .. } => sig![(Ciphertext) -> ()],
+            IopInstructionSet::_Consume { typ } => sig![(typ.clone()) -> ()],
+            IopInstructionSet::DeclareCiphertext { .. } => sig![() -> (Ciphertext)],
             IopInstructionSet::LetPlaintextBlock { .. } => sig![() -> (PlaintextBlock)],
             IopInstructionSet::LetCiphertextBlock { .. } => sig![() -> (CiphertextBlock)],
             IopInstructionSet::AddCt => {

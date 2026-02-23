@@ -80,7 +80,7 @@ impl Builder {
             })
             .cosvec();
 
-        self.join_ciphertext(output_blocks)
+        self.join_ciphertext(output_blocks, None)
     }
 }
 
@@ -96,10 +96,10 @@ mod test {
         assert_display_is!(
             ir.format(),
             r#"
-                %0 : Ct = input<0, Ct>();
-                %1 : Ct = input<1, Ct>();
-                %2 : Ct = input<2, Ct>();
-                %60 : Ct = decl_ct();
+                %0 : Ct = input_ciphertext<0, 16>();
+                %1 : Ct = input_ciphertext<1, 16>();
+                %2 : Ct = input_ciphertext<2, 2>();
+                %60 : Ct = decl_ct<16>();
                 %3 : CtBlock = extract_ct_block<0>(%0 : Ct);
                 %4 : CtBlock = extract_ct_block<1>(%0 : Ct);
                 %5 : CtBlock = extract_ct_block<2>(%0 : Ct);
@@ -165,7 +165,7 @@ mod test {
                 %66 : Ct = store_ct_block<5>(%49 : CtBlock, %65 : Ct);
                 %67 : Ct = store_ct_block<6>(%54 : CtBlock, %66 : Ct);
                 %68 : Ct = store_ct_block<7>(%59 : CtBlock, %67 : Ct);
-                output<0, Ct>(%68 : Ct);
+                output<0>(%68 : Ct);
             "#
         );
     }

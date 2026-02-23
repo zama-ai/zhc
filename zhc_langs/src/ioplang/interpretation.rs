@@ -125,7 +125,7 @@ impl Interpretable<IopValue> for super::IopInstructionSet {
     ) -> SmallVec<IopValue> {
         use super::IopInstructionSet::*;
         match self {
-            Input { pos, .. } => {
+            InputCiphertext { pos, .. } => {
                 assert!(
                     context.inputs.contains_key(pos),
                     "Input {pos} is missing from context."
@@ -133,7 +133,15 @@ impl Interpretable<IopValue> for super::IopInstructionSet {
                 let input_value = context.inputs.get(pos).unwrap();
                 svec![input_value.clone()]
             }
-            Output { pos, .. } => {
+            InputPlaintext { pos, .. } => {
+                assert!(
+                    context.inputs.contains_key(pos),
+                    "Input {pos} is missing from context."
+                );
+                let input_value = context.inputs.get(pos).unwrap();
+                svec![input_value.clone()]
+            }
+            OutputCiphertext { pos, .. } => {
                 assert!(
                     !context.outputs.contains_key(pos),
                     "Output {pos} already returned in interpreter context."
@@ -141,7 +149,8 @@ impl Interpretable<IopValue> for super::IopInstructionSet {
                 context.outputs.insert(*pos, arguments[0].clone());
                 svec![]
             }
-            DeclareCiphertext => {
+            _Consume { .. } => panic!("Tried to interpret a _consume operation"),
+            DeclareCiphertext { .. } => {
                 svec![IopValue::Ciphertext(context.spec.from_int(0))]
             }
             LetPlaintextBlock { value } => {
@@ -246,7 +255,6 @@ impl Interpretable<IopValue> for super::IopInstructionSet {
                 };
                 svec![IopValue::CiphertextBlock(left.wrapping_add_pt(right))]
             }
-
             SubPt => {
                 let (IopValue::CiphertextBlock(left), IopValue::PlaintextBlock(right)) =
                     (arguments[0].clone(), arguments[1].clone())

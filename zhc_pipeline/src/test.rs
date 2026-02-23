@@ -31,9 +31,9 @@ fn test_add_ir() {
     assert_display_is!(
         ir.format(),
         r#"
-            %0 : Ct = input<0, Ct>();
-            %1 : Ct = input<1, Ct>();
-            %89 : Ct = decl_ct();
+            %0 : Ct = input_ciphertext<0, 16>();
+            %1 : Ct = input_ciphertext<1, 16>();
+            %89 : Ct = decl_ct<16>();
             %2 : CtBlock = extract_ct_block<0>(%0 : Ct);
             %3 : CtBlock = extract_ct_block<1>(%0 : Ct);
             %4 : CtBlock = extract_ct_block<2>(%0 : Ct);
@@ -102,7 +102,7 @@ fn test_add_ir() {
             %95 : Ct = store_ct_block<5>(%86 : CtBlock, %94 : Ct);
             %96 : Ct = store_ct_block<6>(%87 : CtBlock, %95 : Ct);
             %97 : Ct = store_ct_block<7>(%88 : CtBlock, %96 : Ct);
-            output<0, Ct>(%97 : Ct);
+            output<0>(%97 : Ct);
         "#
     );
 }
@@ -113,10 +113,10 @@ fn test_cmp_ir() {
     assert_display_is!(
         ir.format(),
         r#"
-            %0 : Ct = input<0, Ct>();
-            %1 : Ct = input<1, Ct>();
+            %0 : Ct = input_ciphertext<0, 16>();
+            %1 : Ct = input_ciphertext<1, 16>();
             %36 : PtBlock = let_pt_block<1>();
-            %56 : Ct = decl_ct();
+            %56 : Ct = decl_ct<2>();
             %2 : CtBlock = extract_ct_block<0>(%0 : Ct);
             %3 : CtBlock = extract_ct_block<1>(%0 : Ct);
             %4 : CtBlock = extract_ct_block<2>(%0 : Ct);
@@ -168,7 +168,7 @@ fn test_cmp_ir() {
             %54 : CtBlock = pack_ct<4>(%53 : CtBlock, %52 : CtBlock);
             %55 : CtBlock = pbs<Protect, CmpGtMrg>(%54 : CtBlock);
             %57 : Ct = store_ct_block<0>(%55 : CtBlock, %56 : Ct);
-            output<0, Ct>(%57 : Ct);
+            output<0>(%57 : Ct);
         "#
     );
 }

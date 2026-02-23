@@ -136,7 +136,7 @@ impl Builder {
             kind.lut(),
             crate::ExtensionBehavior::Panic,
         );
-        self.join_ciphertext(res)
+        self.join_ciphertext(res, None)
     }
 }
 
@@ -153,8 +153,8 @@ mod test {
         assert_display_is!(
             ir.format().with_walker(zhc_ir::PrintWalker::Linear),
             r#"
-                %0 : Ct = input<0, Ct>();
-                %1 : Ct = input<1, Ct>();
+                %0 : Ct = input_ciphertext<0, 64>();
+                %1 : Ct = input_ciphertext<1, 64>();
                 %2 : CtBlock = extract_ct_block<0>(%0 : Ct);
                 %3 : CtBlock = extract_ct_block<1>(%0 : Ct);
                 %4 : CtBlock = extract_ct_block<2>(%0 : Ct);
@@ -283,7 +283,7 @@ mod test {
                 %127 : CtBlock = pbs<Protect, BwAnd>(%126 : CtBlock);
                 %128 : CtBlock = pack_ct<4>(%33 : CtBlock, %65 : CtBlock);
                 %129 : CtBlock = pbs<Protect, BwAnd>(%128 : CtBlock);
-                %130 : Ct = decl_ct();
+                %130 : Ct = decl_ct<64>();
                 %131 : Ct = store_ct_block<0>(%67 : CtBlock, %130 : Ct);
                 %132 : Ct = store_ct_block<1>(%69 : CtBlock, %131 : Ct);
                 %133 : Ct = store_ct_block<2>(%71 : CtBlock, %132 : Ct);
@@ -316,7 +316,7 @@ mod test {
                 %160 : Ct = store_ct_block<29>(%125 : CtBlock, %159 : Ct);
                 %161 : Ct = store_ct_block<30>(%127 : CtBlock, %160 : Ct);
                 %162 : Ct = store_ct_block<31>(%129 : CtBlock, %161 : Ct);
-                output<0, Ct>(%162 : Ct);
+                output<0>(%162 : Ct);
             "#
         );
     }
