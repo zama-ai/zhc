@@ -32,12 +32,14 @@
 mod add;
 mod bitwise;
 mod cmp;
+mod count;
 mod if_then_else;
 mod if_then_zero;
 
 pub use add::*;
 pub use bitwise::*;
 pub use cmp::*;
+pub use count::*;
 pub use if_then_else::*;
 pub use if_then_zero::*;
 

@@ -89,6 +89,8 @@
 //! let ir = builder.into_ir();
 //! ```
 
+const NU: usize = 5;
+
 mod builder;
 mod iops;
 
