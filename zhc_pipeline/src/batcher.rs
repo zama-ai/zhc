@@ -1,8 +1,8 @@
 use zhc_ir::{IR, OpRef, ValId, ValMap};
 use zhc_langs::hpulang::{HpuInstructionSet, HpuLang};
 use zhc_utils::{
-    iter::MultiZip,
-    small::{SmallMap, SmallSet, SmallVec},
+    iter::{CollectInSmallVec, MultiZip},
+    small::SmallMap,
     svec,
 };
 
@@ -28,9 +28,7 @@ impl<'a> Batcher<'a> {
                 // To be a batch input, an op arg origin must not be in the batch.
                 !self.0.as_slice().contains(&arg.get_origin().opref)
             })
-            .collect::<SmallSet<_>>()
-            .into_iter()
-            .collect::<SmallVec<_>>();
+            .cosvec();
         inputs.sort_unstable_by_key(|a| a.get_id());
         let mut outputs = self
             .0
@@ -38,13 +36,14 @@ impl<'a> Batcher<'a> {
             .map(|op| op.get_returns_iter())
             .flatten()
             .filter(|arg| {
-                // To be a batch ouptut, an op ret must have one user outside of the batch.
-                arg.get_users_iter()
+                // To be a batch ouptut, a value must be produced by an operation that has users,
+                // and which have at least one user outside of the batch.
+                arg.get_origin()
+                    .opref
+                    .get_users_iter()
                     .any(|user| !self.0.as_slice().contains(&user))
             })
-            .collect::<SmallSet<_>>()
-            .into_iter()
-            .collect::<SmallVec<_>>();
+            .cosvec();
         outputs.sort_unstable_by_key(|a| a.get_id());
 
         // Now we write the batch IR

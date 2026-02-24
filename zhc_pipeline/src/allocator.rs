@@ -350,21 +350,21 @@ impl BatchMap {
         let HpuInstructionSet::Batch { block } = op.get_instruction() else {
             unreachable!()
         };
-        let mut ordered_batch_arg_valids = block
+        let mut ordered_batch_arg = block
             .walk_ops_linear()
             .filter(|op| matches!(op.get_instruction(), HpuInstructionSet::BatchArg { .. }))
             .covec();
-        ordered_batch_arg_valids.sort_unstable_by_key(|op| {
+        ordered_batch_arg.sort_unstable_by_key(|op| {
             let HpuInstructionSet::BatchArg { pos, .. } = op.get_instruction() else {
                 unreachable!()
             };
             pos
         });
-        let mut ordered_batch_ret_valids = block
+        let mut ordered_batch_ret = block
             .walk_ops_linear()
             .filter(|op| matches!(op.get_instruction(), HpuInstructionSet::BatchRet { .. }))
             .covec();
-        ordered_batch_ret_valids.sort_unstable_by_key(|op| {
+        ordered_batch_ret.sort_unstable_by_key(|op| {
             let HpuInstructionSet::BatchRet { pos, .. } = op.get_instruction() else {
                 unreachable!()
             };
@@ -372,7 +372,7 @@ impl BatchMap {
         });
         for (outer_valid, inner_valid) in (
             args.iter(),
-            ordered_batch_arg_valids
+            ordered_batch_arg
                 .into_iter()
                 .map(|a| a.get_return_valids()[0]),
         )
@@ -382,9 +382,7 @@ impl BatchMap {
         }
         for (outer_valid, inner_valid) in (
             rets.iter(),
-            ordered_batch_ret_valids
-                .into_iter()
-                .map(|a| a.get_arg_valids()[0]),
+            ordered_batch_ret.into_iter().map(|a| a.get_arg_valids()[0]),
         )
             .mzip()
         {
