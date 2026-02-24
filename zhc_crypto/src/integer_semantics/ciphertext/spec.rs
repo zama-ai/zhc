@@ -66,11 +66,6 @@ impl CiphertextSpec {
             block_message_size, 0,
             "Tried to create malformed ciphertext spec."
         );
-        assert_eq!(
-            int_size.rem_euclid(block_message_size as u16),
-            0,
-            "Tried to create malformed ciphertext spec."
-        );
         Self {
             int_size,
             block: CiphertextBlockSpec(block_carry_size, block_message_size),
@@ -86,7 +81,7 @@ impl CiphertextSpec {
     }
 
     pub fn int_mask(&self) -> EmulatedCiphertextStorage {
-        (1 << (self.block_count() * self.block.message_size())) - 1
+        (1 << self.int_size()) - 1
     }
 
     /// Returns the block specification shared by all blocks in this integer.
@@ -96,9 +91,9 @@ impl CiphertextSpec {
 
     /// Returns the number of blocks in this integer.
     ///
-    /// Computed as `int_size / block_message_size`.
+    /// Computed as `ceil(int_size / block_message_size)`.
     pub fn block_count(&self) -> u8 {
-        self.int_size.div_euclid(self.block.1 as u16) as u8
+        self.int_size.div_ceil(self.block.1 as u16) as u8
     }
 
     /// Returns a bitmask selecting the message bits of the `ith` block within the integer.

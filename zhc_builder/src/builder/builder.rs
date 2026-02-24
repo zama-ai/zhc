@@ -267,17 +267,8 @@ impl Builder {
     ///
     /// Always panics after printing, regardless of whether interpretation succeeded.
     pub fn dump_eval_and_panic(&self, inputs: impl AsRef<[IopValue]>) {
-        let max_int_size = inputs
-            .as_ref()
-            .iter()
-            .filter_map(|a| match a {
-                IopValue::Ciphertext(ciphertext) => Some(ciphertext.spec().int_size()),
-                _ => None,
-            })
-            .max()
-            .unwrap();
         let context = IopInterepreterContext {
-            spec: self.spec.ciphertext_spec(max_int_size),
+            spec: self.spec,
             inputs: inputs.as_ref().iter().cloned().enumerate().collect(),
             outputs: FastMap::new(),
         };
@@ -337,16 +328,8 @@ impl Builder {
     /// ```
     pub fn eval(&self, inputs: impl AsRef<[IopValue]>) -> Vec<IopValue> {
         let inputs = inputs.as_ref();
-        let max_int_size = inputs
-            .iter()
-            .filter_map(|a| match a {
-                IopValue::Ciphertext(ciphertext) => Some(ciphertext.spec().int_size()),
-                _ => None,
-            })
-            .max()
-            .unwrap();
         let context = IopInterepreterContext {
-            spec: self.spec.ciphertext_spec(max_int_size),
+            spec: self.spec,
             inputs: inputs.iter().cloned().enumerate().collect(),
             outputs: FastMap::new(),
         };
@@ -584,7 +567,7 @@ impl Builder {
         let blocks = blocks.as_ref();
         let int_size = match int_size {
             Some(int_size) => {
-                let max_blocks_count = int_size.next_multiple_of(self.spec().message_size() as u16);
+                let max_blocks_count = int_size.div_ceil(self.spec().message_size() as u16);
                 if max_blocks_count < blocks.len() as u16 {
                     panic!(
                         "Tried to join ciphertext with specific int_size, but was given more blocks then expected. Expected {max_blocks_count}, found {}.",

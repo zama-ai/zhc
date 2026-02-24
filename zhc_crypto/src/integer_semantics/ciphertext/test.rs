@@ -230,12 +230,6 @@ fn spec_creation_zero_message_panics() {
 }
 
 #[test]
-#[should_panic(expected = "Tried to create malformed ciphertext spec")]
-fn spec_creation_misaligned_int_size_panics() {
-    CiphertextSpec::new(9, 2, 4);
-}
-
-#[test]
 #[should_panic(expected = "exceeds maximum value for int size")]
 fn from_int_overflow_panics() {
     let spec = CiphertextSpec::new(8, 2, 4);

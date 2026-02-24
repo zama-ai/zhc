@@ -1,7 +1,8 @@
 use std::fmt::Debug;
 use zhc_crypto::integer_semantics::{
-    CiphertextSpec, EmulatedCiphertext, EmulatedCiphertextBlock, EmulatedCiphertextBlockStorage,
-    EmulatedPlaintext, EmulatedPlaintextBlock, EmulatedPlaintextBlockStorage,
+    CiphertextBlockSpec, EmulatedCiphertext, EmulatedCiphertextBlock,
+    EmulatedCiphertextBlockStorage, EmulatedPlaintext, EmulatedPlaintextBlock,
+    EmulatedPlaintextBlockStorage,
 };
 use zhc_ir::interpretation::{Interpretable, Interpretation, InterpretsTo};
 use zhc_utils::small::SmallVec;
@@ -111,7 +112,7 @@ impl InterpretsTo<IopValue> for super::IopTypeSystem {
 /// match the expected type.
 #[derive(Debug)]
 pub struct IopInterepreterContext {
-    pub spec: CiphertextSpec,
+    pub spec: CiphertextBlockSpec,
     pub inputs: FastMap<usize, IopValue>,
     pub outputs: FastMap<usize, IopValue>,
 }
@@ -125,20 +126,39 @@ impl Interpretable<IopValue> for super::IopInstructionSet {
     ) -> SmallVec<IopValue> {
         use super::IopInstructionSet::*;
         match self {
-            InputCiphertext { pos, .. } => {
+            InputCiphertext { pos, int_size } => {
                 assert!(
                     context.inputs.contains_key(pos),
                     "Input {pos} is missing from context."
                 );
                 let input_value = context.inputs.get(pos).unwrap();
+                let IopValue::Ciphertext(ct) = input_value else {
+                    panic!("Expected Ciphertext, got:\n{:#?}", input_value);
+                };
+                assert_eq!(
+                    context.spec.ciphertext_spec(*int_size),
+                    ct.spec(),
+                    "Spec mismatch."
+                );
                 svec![input_value.clone()]
             }
-            InputPlaintext { pos, .. } => {
+            InputPlaintext { pos, int_size } => {
                 assert!(
                     context.inputs.contains_key(pos),
                     "Input {pos} is missing from context."
                 );
                 let input_value = context.inputs.get(pos).unwrap();
+                let IopValue::Plaintext(pt) = input_value else {
+                    panic!("Expected Planitext, got:\n{:#?}", input_value);
+                };
+                assert_eq!(
+                    context
+                        .spec
+                        .matching_plaintext_block_spec()
+                        .plaintext_spec(*int_size),
+                    pt.spec(),
+                    "Spec mismatch"
+                );
                 svec![input_value.clone()]
             }
             OutputCiphertext { pos, .. } => {
@@ -150,15 +170,16 @@ impl Interpretable<IopValue> for super::IopInstructionSet {
                 svec![]
             }
             _Consume { .. } => panic!("Tried to interpret a _consume operation"),
-            DeclareCiphertext { .. } => {
-                svec![IopValue::Ciphertext(context.spec.from_int(0))]
+            DeclareCiphertext { int_size } => {
+                svec![IopValue::Ciphertext(
+                    context.spec.ciphertext_spec(*int_size).from_int(0)
+                )]
             }
             LetPlaintextBlock { value } => {
                 svec![IopValue::PlaintextBlock(
                     context
                         .spec
-                        .matching_plaintext_spec()
-                        .block_spec()
+                        .matching_plaintext_block_spec()
                         .from_message(*value as EmulatedPlaintextBlockStorage)
                 )]
             }
@@ -166,7 +187,6 @@ impl Interpretable<IopValue> for super::IopInstructionSet {
                 svec![IopValue::CiphertextBlock(
                     context
                         .spec
-                        .block_spec()
                         .from_message(*value as EmulatedCiphertextBlockStorage)
                 )]
             }
@@ -217,8 +237,7 @@ impl Interpretable<IopValue> for super::IopInstructionSet {
             PackCt { mul } => {
                 assert_eq!(
                     *mul as EmulatedPlaintextBlockStorage,
-                    (2 as EmulatedPlaintextBlockStorage)
-                        .pow(context.spec.block_spec().message_size() as u32)
+                    (2 as EmulatedPlaintextBlockStorage).pow(context.spec.message_size() as u32)
                 );
                 let (IopValue::CiphertextBlock(left), IopValue::CiphertextBlock(right)) =
                     (arguments[0].clone(), arguments[1].clone())
@@ -229,7 +248,7 @@ impl Interpretable<IopValue> for super::IopInstructionSet {
                     )
                 };
                 svec![IopValue::CiphertextBlock(
-                    left.protect_shl(context.spec.block_spec().message_size())
+                    left.protect_shl(context.spec.message_size())
                         .protect_add(right)
                 )]
             }
