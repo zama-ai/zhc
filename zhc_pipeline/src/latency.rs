@@ -42,6 +42,7 @@ mod test {
         test::{get_add_ir, get_cmp_ir},
         translation::IoplangToHpulang,
     };
+    use zhc_builder::{CiphertextSpec, count_0};
     use zhc_ir::{IR, translation::Translator};
     use zhc_langs::ioplang::IopLang;
     use zhc_sim::{
@@ -70,5 +71,12 @@ mod test {
         let lat = pipeline(&get_cmp_ir(128, 2, 2));
         assert_eq!(lat, Cycle(5759543));
         println!("{}us", lat.as_ts(MHz(300).period()));
+    }
+
+    #[test]
+    fn test_latency_count0() {
+        let lat = pipeline(&count_0(CiphertextSpec::new(128, 2, 2)).into_ir());
+        println!("{}us", lat.as_ts(MHz(300).period()));
+        assert_eq!(lat, Cycle(6111606));
     }
 }
