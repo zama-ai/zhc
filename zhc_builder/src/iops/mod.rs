@@ -43,7 +43,6 @@ pub use count::*;
 pub use if_then_else::*;
 pub use if_then_zero::*;
 
-// ADD
 // SUB
 // MUL
 // DIV
@@ -78,8 +77,6 @@ pub use if_then_zero::*;
 // ERC_20
 // MEMCPY
 //
-// COUNT0
-// COUNT1
 // ILOG2
 // LEAD0
 // LEAD1
