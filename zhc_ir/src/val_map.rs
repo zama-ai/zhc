@@ -1,6 +1,9 @@
-use std::{fmt::Debug, ops::Index};
+use std::{
+    fmt::Debug,
+    ops::{Index, IndexMut},
+};
 
-use zhc_utils::{ChangeGuard, Store};
+use zhc_utils::Store;
 
 use crate::val_ref::ValRef;
 
@@ -17,7 +20,6 @@ pub struct ValMap<T> {
     store: Store<ValId, State<Option<T>>>,
     n_stored: u16,
     n_inactive: u16,
-    changed: bool,
 }
 
 impl<T> ValMap<T> {
@@ -41,7 +43,6 @@ impl<T> ValMap<T> {
                 .collect(),
             n_stored: 0,
             n_inactive: ir.raw_n_vals() - ir.n_vals(),
-            changed: false,
         }
     }
 
@@ -64,7 +65,6 @@ impl<T> ValMap<T> {
                 .collect(),
             n_stored: ir.n_vals(),
             n_inactive: ir.raw_n_vals() - ir.n_vals(),
-            changed: false,
         }
     }
 
@@ -90,7 +90,6 @@ impl<T> ValMap<T> {
                 .collect(),
             n_stored: ir.n_vals(),
             n_inactive: ir.raw_n_vals() - ir.n_vals(),
-            changed: false,
         }
     }
 
@@ -112,7 +111,6 @@ impl<T> ValMap<T> {
                 .collect(),
             n_stored: ir.n_vals(),
             n_inactive: ir.raw_n_vals() - ir.n_vals(),
-            changed: false,
         }
     }
 
@@ -161,16 +159,9 @@ impl<T> ValMap<T> {
     /// # Panics
     ///
     /// Panics if the value ID is out of bounds or refers to an inactive value.
-    pub fn get_mut(&mut self, k: &ValId) -> Option<ChangeGuard<'_, T>>
-    where
-        T: Clone + PartialEq,
-    {
+    pub fn get_mut(&mut self, k: &ValId) -> Option<&mut T> {
         assert!(self.may_store(k));
-        if let Some(value) = self.store[k].as_mut_ref().unwrap_active().as_mut() {
-            Some(ChangeGuard::new(value, &mut self.changed))
-        } else {
-            None
-        }
+        self.store[k].as_mut_ref().unwrap_active().as_mut()
     }
 
     /// Stores data for the specified value.
@@ -186,9 +177,6 @@ impl<T> ValMap<T> {
     {
         assert!(self.may_store(&k));
         let v = State::Active(Some(v));
-        if v == self.store[k] {
-            self.changed = true;
-        }
         let out = std::mem::replace(&mut self.store[k], v).unwrap_active();
         if out.is_none() {
             self.n_stored += 1;
@@ -210,7 +198,6 @@ impl<T> ValMap<T> {
         if out.is_some() {
             self.n_stored -= 1;
         }
-        self.changed = true;
         out
     }
 
@@ -242,14 +229,6 @@ impl<T> ValMap<T> {
             })
     }
 
-    /// Acknowledges and resets the change flag.
-    ///
-    /// Returns true if any mutation occurred since the last acknowledgement
-    /// (or since creation), then resets the flag to false.
-    pub fn ack_changes(&mut self) -> bool {
-        std::mem::replace(&mut self.changed, false)
-    }
-
     /// Transforms stored values by applying `f`, preserving map structure.
     ///
     /// Active slots with a value are mapped through `f`; empty active slots
@@ -260,7 +239,6 @@ impl<T> ValMap<T> {
             store,
             n_stored,
             n_inactive,
-            changed,
         } = self;
         let store = store
             .into_iter()
@@ -273,7 +251,6 @@ impl<T> ValMap<T> {
             store,
             n_stored,
             n_inactive,
-            changed,
         }
     }
 }
@@ -283,6 +260,15 @@ impl<T> Index<ValId> for ValMap<T> {
 
     fn index(&self, index: ValId) -> &Self::Output {
         match self.get(&index) {
+            Some(a) => a,
+            None => panic!("Tried to get unmapped index {:?}", index),
+        }
+    }
+}
+
+impl<T> IndexMut<ValId> for ValMap<T> {
+    fn index_mut(&mut self, index: ValId) -> &mut Self::Output {
+        match self.get_mut(&index) {
             Some(a) => a,
             None => panic!("Tried to get unmapped index {:?}", index),
         }
