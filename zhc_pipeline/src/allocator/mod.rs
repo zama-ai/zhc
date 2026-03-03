@@ -25,13 +25,19 @@ pub fn allocate_registers(ir: &IR<HpuLang>, config: &HpuConfig) -> IR<DopLang> {
 
 #[cfg(test)]
 mod test {
-    use zhc_builder::{CiphertextSpec, add, cmp_gt};
+    use zhc_builder::{
+        Builder, CiphertextSpec, add, bitwise_and, bitwise_or, bitwise_xor, cmp_gt, if_then_else,
+        if_then_zero, mul_lsb,
+    };
     use zhc_ir::{IR, PrintWalker};
     use zhc_langs::{doplang::DopLang, ioplang::IopLang};
     use zhc_sim::hpu::{HpuConfig, PhysicalConfig};
     use zhc_utils::assert_display_is;
 
-    use crate::{batch_scheduler::batch_schedule, translation::lower_iop_to_hpu};
+    use crate::{
+        batch_scheduler::batch_schedule, test::check_iop_dop_equivalence,
+        translation::lower_iop_to_hpu,
+    };
 
     use super::allocate_registers;
 
@@ -182,5 +188,26 @@ mod test {
                 %51 : Ctx = ST<TC(0, 0), R(1)>(%50 : Ctx);
             "#
         );
+    }
+
+    #[test]
+    fn allocator_correctness() {
+        let config = HpuConfig::from(PhysicalConfig::gaussian_64b());
+        let check = |b: Builder| {
+            let spec = *b.spec();
+            let iop_ir = b.into_ir();
+            let dop_ir = pipeline(&iop_ir);
+            check_iop_dop_equivalence(&iop_ir, &dop_ir, spec, config.regf_size, 100);
+        };
+        for size in 2..=64 {
+            let spec = CiphertextSpec::new(size, 2, 2);
+            check(add(spec));
+            check(bitwise_and(spec));
+            check(bitwise_or(spec));
+            check(bitwise_xor(spec));
+            check(if_then_else(spec));
+            check(if_then_zero(spec));
+            check(mul_lsb(spec));
+        }
     }
 }
