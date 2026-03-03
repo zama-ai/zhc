@@ -24,10 +24,12 @@
 //! and [`BatchRet`](HpuInstructionSet::BatchRet) define the batch
 //! boundary interface inside the nested IR.
 
+mod batch_statistics;
 mod dialect;
 mod instruction_set;
 mod type_system;
 
+pub use batch_statistics::*;
 pub use dialect::*;
 pub use instruction_set::*;
 pub use type_system::*;

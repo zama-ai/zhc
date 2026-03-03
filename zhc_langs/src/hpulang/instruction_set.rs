@@ -188,6 +188,26 @@ pub enum HpuInstructionSet {
     BatchRet { pos: u8, ty: HpuTypeSystem },
 }
 
+impl HpuInstructionSet {
+    pub fn is_pbs(&self) -> bool {
+        match self {
+            HpuInstructionSet::Pbs { .. }
+            | HpuInstructionSet::Pbs2 { .. }
+            | HpuInstructionSet::Pbs4 { .. }
+            | HpuInstructionSet::Pbs8 { .. }
+            | HpuInstructionSet::PbsF { .. }
+            | HpuInstructionSet::Pbs2F { .. }
+            | HpuInstructionSet::Pbs4F { .. }
+            | HpuInstructionSet::Pbs8F { .. } => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_batch(&self) -> bool {
+        matches!(self, HpuInstructionSet::Batch { .. })
+    }
+}
+
 impl Display for HpuInstructionSet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
