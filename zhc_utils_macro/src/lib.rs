@@ -89,6 +89,18 @@ pub fn fsm(_args: TokenStream, input: TokenStream) -> TokenStream {
                 let old_state = std::mem::replace(self, Self::__INVALID);
                 *self = transitioner(old_state);
             }
+
+            /// Like [`transition`], but the closure returns a `(NewState, T)` pair,
+            /// allowing extraction of data during the state change.
+            pub fn transition_with<F, T>(&mut self, transitioner: F) -> T
+            where
+                F: FnOnce(Self) -> (Self, T)
+            {
+                let old_state = std::mem::replace(self, Self::__INVALID);
+                let (new_state, val) = transitioner(old_state);
+                *self = new_state;
+                val
+            }
         }
     };
 
