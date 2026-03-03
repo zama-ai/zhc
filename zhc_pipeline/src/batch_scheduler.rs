@@ -149,7 +149,13 @@ impl<'a, 'b> Batch<'a, 'b> {
         }
     }
 
-    pub fn gen_batch_ir(&self) -> (IR<HpuLang>, Vec<DepthedValRef<'a, 'b>>, Vec<DepthedValRef<'a, 'b>>) {
+    pub fn gen_batch_ir(
+        &self,
+    ) -> (
+        IR<HpuLang>,
+        Vec<DepthedValRef<'a, 'b>>,
+        Vec<DepthedValRef<'a, 'b>>,
+    ) {
         // We collect the inputs and outputs of the batch.
         let mut inputs = self
             .ops
@@ -307,11 +313,7 @@ impl<'a, 'b> Batches<'a, 'b> {
     pub fn into_batch_map(self) -> FastMap<OpId, Rc<Batch<'a, 'b>>> {
         self.into_batch_iter()
             .map(Rc::new)
-            .flat_map(|batch| {
-                (0..batch.len()).map(move |i| {
-                    (batch.ops[i].get_id(), batch.clone())
-                })
-            })
+            .flat_map(|batch| (0..batch.len()).map(move |i| (batch.ops[i].get_id(), batch.clone())))
             .collect()
     }
 }
@@ -348,7 +350,6 @@ fn extract_batches<'a, 'b>(dir: &'b DepthedIR<'a>, batch_size: usize) -> Batches
     }
     batches
 }
-
 
 pub fn batch_schedule<'a, 'b>(ir: &'a IR<HpuLang>, config: &'b HpuConfig) -> IR<HpuLang> {
     let dir = analyze_pbs_depth(ir);
@@ -396,7 +397,10 @@ pub fn batch_schedule<'a, 'b>(ir: &'a IR<HpuLang>, config: &'b HpuConfig) -> IR<
                 let batch = batchmap.get(&*opref).unwrap();
                 let (batch_ir, inputs, outputs) = batch.gen_batch_ir();
                 let block = Box::new(batch_ir);
-                let new_args = inputs.into_iter().map(|arg| engine.translate_val((*arg).clone())).collect();
+                let new_args = inputs
+                    .into_iter()
+                    .map(|arg| engine.translate_val((*arg).clone()))
+                    .collect();
                 let new_rets = engine.add_op(Batch { block }, new_args);
                 (outputs.into_iter(), new_rets.into_iter())
                     .mzip()
@@ -542,13 +546,14 @@ mod test {
 // =====
 //
 // [1]: The reachability analysis is less costly than it might appear at first. Recall that the IR holds its own Depth
-// metric (largest distance to an input), which is equivalent in spirit to the PbsDepth computed here but accounts for
-// every kind of operation along the paths, while the PbsDepth analysis only accounts for PBS operations. Given how these
-// metrics are computed, we can assume that, given a candidate and a batch member,
-// if PbsDepth(candidate) <= PbsDepth(member) then Depth(candidate) <= Depth(member).
-// By default, the reachability analysis recursively exhausts the reached nodes, checking for equality of the reached
-// node's opid with the queried node's. Fortunately, a depth-based cut-off is used to discard portions of the search space
-// that we know can't contain the queried node.
-// Initially, Depth(candidate) <= Depth(member), which means the opid will be checked. However, as the analysis
-// recursively searches deeper in the IR, Depth(candidate_reachable_node) eventually becomes > Depth(member), at which point the
+// metric (largest distance to an input), which is equivalent in spirit to the PbsDepth computed
+// here but accounts for every kind of operation along the paths, while the PbsDepth analysis only
+// accounts for PBS operations. Given how these metrics are computed, we can assume that, given a
+// candidate and a batch member, if PbsDepth(candidate) <= PbsDepth(member) then Depth(candidate) <=
+// Depth(member). By default, the reachability analysis recursively exhausts the reached nodes,
+// checking for equality of the reached node's opid with the queried node's. Fortunately, a
+// depth-based cut-off is used to discard portions of the search space that we know can't contain
+// the queried node. Initially, Depth(candidate) <= Depth(member), which means the opid will be
+// checked. However, as the analysis recursively searches deeper in the IR,
+// Depth(candidate_reachable_node) eventually becomes > Depth(member), at which point the
 // search is cut off.

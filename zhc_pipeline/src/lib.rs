@@ -6,23 +6,22 @@
 //! operation scheduling, register allocation, and final code generation.
 
 use allocator::allocate_registers;
-use batcher::batch;
-use scheduler::schedule;
-use translation::IoplangToHpulang;
+// use batcher::batch;
+// use scheduler::schedule;
 use translation_table::{DOpRepr, generate_translation_table};
 use zhc_builder::if_then_else;
 use zhc_builder::if_then_zero;
 use zhc_builder::{cmp_eq, cmp_gt, cmp_gte, cmp_lt, cmp_lte, cmp_neq};
 use zhc_ir::cse::eliminate_common_subexpressions;
 use zhc_ir::dce::eliminate_dead_code;
-use zhc_ir::translation::Translator;
 use zhc_langs::ioplang::eliminate_aliases;
 
 pub mod allocator;
-pub mod batcher;
+pub mod batch_scheduler;
+// pub mod batcher;
 pub mod interpreter;
 pub mod latency;
-pub mod scheduler;
+// pub mod scheduler;
 pub mod translation;
 pub mod translation_table;
 
@@ -44,6 +43,9 @@ pub enum Iop {
 
 pub use zhc_builder::CiphertextSpec;
 
+use crate::batch_scheduler::batch_schedule;
+use crate::translation::lower_iop_to_hpu;
+
 fn pipeline(hpu_config: &HpuConfig, spec: CiphertextSpec, iop: Iop) -> Vec<DOpRepr> {
     let mut ir = match iop {
         Iop::CmpGt => cmp_gt(spec).into_ir(),
@@ -58,9 +60,10 @@ fn pipeline(hpu_config: &HpuConfig, spec: CiphertextSpec, iop: Iop) -> Vec<DOpRe
     eliminate_aliases(&mut ir);
     eliminate_dead_code(&mut ir);
     eliminate_common_subexpressions(&mut ir);
-    let unscheduled = IoplangToHpulang.translate(&ir);
-    let scheduled = schedule(&unscheduled, hpu_config);
-    let batched = batch(&scheduled);
+    let unscheduled = lower_iop_to_hpu(&ir);
+    // let scheduled = schedule(&unscheduled, hpu_config);
+    // let batched = batch(&scheduled, hpu_config.pbs_min_batch_size);
+    let batched = batch_schedule(&unscheduled, &hpu_config);
     let allocated = allocate_registers(&batched, &hpu_config);
     generate_translation_table(&allocated)
 }

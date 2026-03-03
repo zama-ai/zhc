@@ -37,24 +37,23 @@ mod test {
     use super::compute_latency;
     use crate::{
         allocator::allocate_registers,
-        batcher::batch,
-        scheduler::schedule,
+        batch_scheduler::batch_schedule,
         test::{get_add_ir, get_cmp_ir},
-        translation::IoplangToHpulang,
+        translation::lower_iop_to_hpu,
     };
     use zhc_builder::{CiphertextSpec, count_0};
-    use zhc_ir::{IR, translation::Translator};
+    use zhc_ir::IR;
     use zhc_langs::ioplang::IopLang;
     use zhc_sim::{
         Cycle, MHz,
         hpu::{HpuConfig, PhysicalConfig},
     };
+    use zhc_utils::assert_display_is;
 
     fn pipeline(ir: &IR<IopLang>) -> Cycle {
-        let ir = IoplangToHpulang.translate(&ir);
-        let config = HpuConfig::from(PhysicalConfig::gaussian_64b());
-        let scheduled = schedule(&ir, &config);
-        let batched = batch(&scheduled);
+        let ir = lower_iop_to_hpu(&ir);
+        let config = HpuConfig::from(PhysicalConfig::tuniform_64b_pfail128_psi64());
+        let batched = batch_schedule(&ir, &config);
         let allocated = allocate_registers(&batched, &config);
         compute_latency(&allocated, config)
     }
@@ -62,21 +61,33 @@ mod test {
     #[test]
     fn test_latency_add_ir() {
         let lat = pipeline(&get_add_ir(16, 2, 2));
-        assert_eq!(lat, Cycle(1798901));
-        println!("{}us", lat.as_ts(MHz(300).period()));
+        assert_display_is!(
+            format!("{}us", lat.as_ts(MHz(400).period())),
+            r#"
+            3245.425us
+        "#
+        );
     }
 
     #[test]
     fn test_latency_cmp_ir() {
         let lat = pipeline(&get_cmp_ir(128, 2, 2));
-        assert_eq!(lat, Cycle(5759543));
-        println!("{}us", lat.as_ts(MHz(300).period()));
+        assert_display_is!(
+            format!("{}us", lat.as_ts(MHz(400).period())),
+            r#"
+            13059.3725us
+        "#
+        );
     }
 
     #[test]
     fn test_latency_count0() {
         let lat = pipeline(&count_0(CiphertextSpec::new(128, 2, 2)).into_ir());
-        println!("{}us", lat.as_ts(MHz(300).period()));
-        assert_eq!(lat, Cycle(6111606));
+        assert_display_is!(
+            format!("{}us", lat.as_ts(MHz(400).period())),
+            r#"
+            11251.065us
+        "#
+        );
     }
 }

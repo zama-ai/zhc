@@ -15,3 +15,7 @@ zhc_langs.workspace = true
 zhc_builder.workspace = true
 serde.workspace = true
 bitfield-struct.workspace = true
+
+[[bin]]
+name = "bench_broken"
+path = "bench/bench_broken.rs"
