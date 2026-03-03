@@ -7,7 +7,7 @@
 
 use std::{collections::HashMap, sync::LazyLock};
 
-use zhc_ir::{IR, OpId, ValId, translation::Translator};
+use zhc_ir::{IR, translation::eager_translate_ann};
 use zhc_langs::{
     hpulang::{HpuInstructionSet, HpuLang, Immediate, LutId, TDstId, TImmId, TSrcId},
     ioplang::{IopInstructionSet, IopLang, Lut1Def, Lut2Def, Lut4Def, Lut8Def},
@@ -104,377 +104,272 @@ static GIDS4: LazyLock<FastMap<Lut4Def, LutId>> = LazyLock::new(|| HashMap::from
 
 static GIDS8: LazyLock<FastMap<Lut8Def, LutId>> = LazyLock::new(|| HashMap::from([]));
 
-/// Translator from IOP language to HPU language intermediate representations.
-pub struct IoplangToHpulang;
-
-impl Translator for IoplangToHpulang {
-    type InputDialect = IopLang;
-    type OutputDialect = HpuLang;
-
-    fn translate(
-        &mut self,
-        input: &zhc_ir::IR<Self::InputDialect>,
-    ) -> zhc_ir::IR<Self::OutputDialect> {
-        // This translator performs a flow-following translation of an IR in Ioplang to an IR in
-        // Hpulang. It is very simple, and as such pretty fast. Every operation is matched
-        // against its optype, and translated to an equivalent operation in the Hpulang.
-        let mut output = IR::empty();
-        let mut map = input.empty_valmap::<ValId>();
-
-        // Ioplang has a value semantics. This means that dst are defined by use, and as such, only
-        // known at the end of the program when `output` ops are given. Hpulang has a
-        // register semantics, and as such, the return position must be known beforehand.
-        // For this reason, we need to gather the output position for each `let` ops
-        // upfront, to be able to correctly set the TDstId of the `dst_st` ops
-        let let_map: FastMap<OpId, usize> = input
-            .walk_ops_linear()
-            .filter(|op| {
-                // Keep the ciphertext output ops.
-                matches!(
-                    op.get_instruction(),
-                    IopInstructionSet::OutputCiphertext { .. }
+pub fn lower_iop_to_hpu(ir: &IR<IopLang>) -> IR<HpuLang> {
+    let ann_ir = ir
+        .forward_dataflow_analysis(|a| {
+            use IopInstructionSet::*;
+            let opann = match a.get_instruction() {
+                InputCiphertext { pos, .. } | InputPlaintext { pos, .. } => Some(pos),
+                ExtractCtBlock { .. } | ExtractPtBlock { .. } => a
+                    .get_args_iter()
+                    .next()
+                    .unwrap()
+                    .get_origin()
+                    .opref
+                    .get_annotation()
+                    .clone()
+                    .unwrap_analyzed(),
+                _ => None,
+            };
+            let valanns = svec![(); a.get_return_arity()];
+            (opann, valanns)
+        })
+        .backward_dataflow_analysis(|a, prev| {
+            use IopInstructionSet::*;
+            let opann = match a.get_instruction() {
+                OutputCiphertext { pos, .. } => Some(pos),
+                StoreCtBlock { .. } => {
+                    let ret = a.get_returns_iter().next().unwrap();
+                    assert_eq!(ret.get_users_iter().count(), 1);
+                    ret.get_users_iter()
+                        .next()
+                        .unwrap()
+                        .get_annotation()
+                        .clone()
+                        .unwrap_analyzed()
+                }
+                _ => *prev.get_annotation(),
+            };
+            let valanns = svec![(); a.get_return_arity()];
+            (opann, valanns)
+        });
+    eager_translate_ann(&ann_ir, |op, translator| {
+        match op.get_instruction() {
+            IopInstructionSet::_Consume { .. } => {
+                panic!("Tried to translate a _consume op");
+            }
+            IopInstructionSet::InputCiphertext { .. }
+            | IopInstructionSet::InputPlaintext { .. }
+            | IopInstructionSet::LetPlaintextBlock { .. } => {
+                // Handled in consumers.
+            }
+            IopInstructionSet::OutputCiphertext { .. } => {
+                // No-op
+            }
+            IopInstructionSet::DeclareCiphertext { .. } => {
+                // DeclareCiphertext has no semantics in hpulang.
+                // We just verify that it is not used in an unexpected way.
+                assert!(
+                    op.get_reached_iter().all(|reached| matches!(
+                        reached.get_instruction(),
+                        IopInstructionSet::StoreCtBlock { .. }
+                            | IopInstructionSet::OutputCiphertext { .. }
+                    )),
+                    "Unexpectd use of DeclareCiphertext encountered."
                 )
-            })
-            .map(|oup_op| {
-                // For the output, we search the let reaching this output.
-                let let_pred = oup_op
-                    .get_inc_reaching_iter()
-                    .find(|pr| {
-                        matches!(
-                            pr.get_instruction(),
-                            IopInstructionSet::DeclareCiphertext { .. }
-                        )
-                    })
-                    .expect("Failed to find the declaration predecessor of an `output` op.");
-                let IopInstructionSet::OutputCiphertext { pos } = oup_op.get_instruction() else {
-                    unreachable!()
-                };
-                (let_pred.get_id(), pos)
-            })
-            .collect();
-
-        for op in input.walk_ops_topological() {
-            match op.get_instruction() {
-                IopInstructionSet::_Consume { .. } => {
-                    panic!("Tried to translate a _consoume op");
-                }
-                IopInstructionSet::InputCiphertext { .. }
-                | IopInstructionSet::InputPlaintext { .. }
-                | IopInstructionSet::LetPlaintextBlock { .. } => {
-                    // Handled in consumers.
-                }
-                IopInstructionSet::OutputCiphertext { .. } => {
-                    // No-op
-                }
-                IopInstructionSet::DeclareCiphertext { .. } => {
-                    // DeclareCiphertext has no semantics in hpulang.
-                    // We just verify that it is not used in an unexpected way.
-                    assert!(
-                        op.get_reached_iter().all(|reached| matches!(
-                            reached.get_instruction(),
-                            IopInstructionSet::StoreCtBlock { .. }
-                                | IopInstructionSet::OutputCiphertext { .. }
-                        )),
-                        "Unexpectd use of DeclareCiphertext encountered."
-                    )
-                }
-                IopInstructionSet::Alias { .. } => {
-                    // Aliases have no semantics in hpulang. And they may prevent CSE so there
-                    // should be no aliases remaining here,
-                    panic!("Unexpected Alias op encountered.");
-                }
-                IopInstructionSet::LetCiphertextBlock { value } => {
-                    let (_, valids) = output.add_op(
-                        HpuInstructionSet::CstCt {
-                            cst: Immediate(value),
-                        },
-                        svec![],
-                    );
-                    map.insert(op.get_return_valids()[0], valids[0]);
-                }
-                IopInstructionSet::AddCt
-                | IopInstructionSet::WrappingAddCt
-                | IopInstructionSet::TemperAddCt => {
-                    let (_, valids) = output.add_op(
-                        HpuInstructionSet::AddCt,
-                        svec![map[op.get_arg_valids()[0]], map[op.get_arg_valids()[1]]],
-                    );
-                    map.insert(op.get_return_valids()[0], valids[0]);
-                }
-                IopInstructionSet::SubCt => {
-                    let (_, valids) = output.add_op(
-                        HpuInstructionSet::SubCt,
-                        svec![map[op.get_arg_valids()[0]], map[op.get_arg_valids()[1]]],
-                    );
-                    map.insert(op.get_return_valids()[0], valids[0]);
-                }
-                IopInstructionSet::PackCt { mul } => {
-                    let (_, valids) = output.add_op(
-                        HpuInstructionSet::Mac {
-                            cst: Immediate(mul as u8),
-                        },
-                        svec![map[op.get_arg_valids()[0]], map[op.get_arg_valids()[1]]],
-                    );
-                    map.insert(op.get_return_valids()[0], valids[0]);
-                }
-                IopInstructionSet::AddPt | IopInstructionSet::WrappingAddPt => {
-                    let (_, valids) = if map.contains_key(&op.get_arg_valids()[1]) {
-                        // The plaintext input is not constant.
-                        output.add_op(
-                            HpuInstructionSet::AddPt,
-                            svec![map[op.get_arg_valids()[0]], map[op.get_arg_valids()[1]]],
-                        )
-                    } else {
-                        // The plaintext input is constant.
-                        let IopInstructionSet::LetPlaintextBlock { value: cst } = op
-                            .get_args_iter()
-                            .nth(1)
-                            .unwrap()
-                            .get_origin()
-                            .opref
-                            .get_instruction()
-                        else {
-                            unreachable!()
-                        };
-                        output.add_op(
+            }
+            IopInstructionSet::Alias { .. } => {
+                // Aliases have no semantics in hpulang. And they may prevent CSE so there
+                // should be no aliases remaining here,
+                panic!("Unexpected Alias op encountered.");
+            }
+            IopInstructionSet::LetCiphertextBlock { value } => {
+                translator.direct_translation(
+                    op,
+                    HpuInstructionSet::CstCt {
+                        cst: Immediate(value),
+                    },
+                );
+            }
+            IopInstructionSet::AddCt
+            | IopInstructionSet::WrappingAddCt
+            | IopInstructionSet::TemperAddCt => {
+                translator.direct_translation(op, HpuInstructionSet::AddCt);
+            }
+            IopInstructionSet::SubCt => {
+                translator.direct_translation(op, HpuInstructionSet::SubCt);
+            }
+            IopInstructionSet::PackCt { mul } => {
+                translator.direct_translation(
+                    op,
+                    HpuInstructionSet::Mac {
+                        cst: Immediate(mul as u8),
+                    },
+                );
+            }
+            IopInstructionSet::AddPt | IopInstructionSet::WrappingAddPt => {
+                match op
+                    .get_args_iter()
+                    .nth(1)
+                    .unwrap()
+                    .get_origin()
+                    .opref
+                    .get_instruction()
+                {
+                    IopInstructionSet::LetPlaintextBlock { value } => {
+                        let new_rets = translator.add_op(
                             HpuInstructionSet::AddCst {
-                                cst: Immediate(cst as u8),
+                                cst: Immediate(value as u8),
                             },
-                            svec![map[op.get_arg_valids()[0]]],
-                        )
-                    };
-                    map.insert(op.get_return_valids()[0], valids[0]);
-                }
-                IopInstructionSet::SubPt => {
-                    let (_, valids) = if map.contains_key(&op.get_arg_valids()[1]) {
-                        // The plaintext input is not constant.
-                        output.add_op(
-                            HpuInstructionSet::SubPt,
-                            svec![map[op.get_arg_valids()[0]], map[op.get_arg_valids()[1]]],
-                        )
-                    } else {
-                        // The plaintext input is constant.
-                        let IopInstructionSet::LetPlaintextBlock { value: cst } = op
-                            .get_args_iter()
-                            .nth(1)
-                            .unwrap()
-                            .get_origin()
-                            .opref
-                            .get_instruction()
-                        else {
-                            unreachable!()
-                        };
-                        output.add_op(
-                            HpuInstructionSet::SubCst {
-                                cst: Immediate(cst as u8),
-                            },
-                            svec![map[op.get_arg_valids()[0]]],
-                        )
-                    };
-                    map.insert(op.get_return_valids()[0], valids[0]);
-                }
-                IopInstructionSet::PtSub => {
-                    let (_, valids) = if map.contains_key(&op.get_arg_valids()[0]) {
-                        // The plaintext input is not constant.
-                        output.add_op(
-                            HpuInstructionSet::PtSub,
-                            svec![map[op.get_arg_valids()[0]], map[op.get_arg_valids()[1]]],
-                        )
-                    } else {
-                        // The plaintext input is constant.
-                        let IopInstructionSet::LetPlaintextBlock { value: cst } = op
-                            .get_args_iter()
-                            .nth(0)
-                            .unwrap()
-                            .get_origin()
-                            .opref
-                            .get_instruction()
-                        else {
-                            unreachable!()
-                        };
-                        output.add_op(
-                            HpuInstructionSet::CstSub {
-                                cst: Immediate(cst as u8),
-                            },
-                            svec![map[op.get_arg_valids()[1]]],
-                        )
-                    };
-                    map.insert(op.get_return_valids()[0], valids[0]);
-                }
-                IopInstructionSet::MulPt => {
-                    let (_, valids) = if map.contains_key(&op.get_arg_valids()[1]) {
-                        // The plaintext input is not constant.
-                        output.add_op(
-                            HpuInstructionSet::MulPt,
-                            svec![map[op.get_arg_valids()[0]], map[op.get_arg_valids()[1]]],
-                        )
-                    } else {
-                        // The plaintext input is constant.
-                        let IopInstructionSet::LetPlaintextBlock { value: cst } = op
-                            .get_args_iter()
-                            .nth(1)
-                            .unwrap()
-                            .get_origin()
-                            .opref
-                            .get_instruction()
-                        else {
-                            unreachable!()
-                        };
-                        output.add_op(
-                            HpuInstructionSet::MulCst {
-                                cst: Immediate(cst as u8),
-                            },
-                            svec![map[op.get_arg_valids()[0]]],
-                        )
-                    };
-                    map.insert(op.get_return_valids()[0], valids[0]);
-                }
-                IopInstructionSet::ExtractCtBlock { index } => {
-                    let src_pos = op
-                        .get_args_iter()
-                        .nth(0) // ct arg.
-                        .unwrap()
-                        .get_origin()
-                        .opref
-                        .get_inc_reaching_iter()
-                        .find_map(|op| match op.get_instruction() {
-                            IopInstructionSet::InputCiphertext { pos, .. } => Some(pos),
-                            _ => None,
-                        })
-                        .unwrap();
-                    let (_, valids) = output.add_op(
-                        HpuInstructionSet::SrcLd {
-                            from: TSrcId {
-                                src_pos: src_pos.try_into().unwrap(),
-                                block_pos: index.try_into().unwrap(),
-                            },
-                        },
-                        svec![],
-                    );
-                    map.insert(op.get_return_valids()[0], valids[0]);
-                }
-                IopInstructionSet::ExtractPtBlock { index } => {
-                    let imm_pos = op
-                        .get_args_iter()
-                        .nth(0) // pt arg.
-                        .unwrap()
-                        .get_origin()
-                        .opref
-                        .get_inc_reaching_iter()
-                        .find_map(|op| match op.get_instruction() {
-                            IopInstructionSet::InputPlaintext { pos, .. } => Some(pos),
-                            _ => None,
-                        })
-                        .unwrap();
-                    let (_, valids) = output.add_op(
-                        HpuInstructionSet::ImmLd {
-                            from: TImmId {
-                                imm_pos: imm_pos.try_into().unwrap(),
-                                block_pos: index.try_into().unwrap(),
-                            },
-                        },
-                        svec![],
-                    );
-                    map.insert(op.get_return_valids()[0], valids[0]);
-                }
-                IopInstructionSet::StoreCtBlock { index } => {
-                    let dst_pos = op
-                        .get_args_iter()
-                        .nth(1) // ct arg.
-                        .unwrap()
-                        .get_origin()
-                        .opref
-                        .get_inc_reaching_iter()
-                        .find_map(|op| match op.get_instruction() {
-                            IopInstructionSet::DeclareCiphertext { .. } => {
-                                let_map.get(&op.get_id()).cloned()
-                            }
-                            _ => None,
-                        })
-                        .unwrap();
-                    output.add_op(
-                        HpuInstructionSet::DstSt {
-                            to: TDstId {
-                                dst_pos: dst_pos.try_into().unwrap(),
-                                block_pos: index.try_into().unwrap(),
-                            },
-                        },
-                        svec![map[op.get_arg_valids()[0]]],
-                    );
-                }
-                IopInstructionSet::Pbs { lut, .. } => {
-                    let lut = match GIDS1.get(&lut) {
-                        Some(v) => *v,
-                        None => panic!("Failed to lookup the gid for key: {lut:?}"),
-                    };
-                    let (_, valids) = output.add_op(
-                        HpuInstructionSet::Pbs { lut },
-                        svec![map[op.get_arg_valids()[0]]],
-                    );
-                    map.insert(op.get_return_valids()[0], valids[0]);
-                }
-                IopInstructionSet::Pbs2 { lut } => {
-                    let lut = match GIDS2.get(&lut) {
-                        Some(v) => *v,
-                        None => panic!("Failed to lookup the gid for key: {lut:?}"),
-                    };
-                    let (_, valids) = output.add_op(
-                        HpuInstructionSet::Pbs2 { lut },
-                        svec![map[op.get_arg_valids()[0]]],
-                    );
-                    map.insert(op.get_return_valids()[0], valids[0]);
-                    map.insert(op.get_return_valids()[1], valids[1]);
-                }
-                IopInstructionSet::Pbs4 { lut } => {
-                    let lut = match GIDS4.get(&lut) {
-                        Some(v) => *v,
-                        None => panic!("Failed to lookup the gid for key: {lut:?}"),
-                    };
-                    let (_, valids) = output.add_op(
-                        HpuInstructionSet::Pbs4 { lut },
-                        svec![map[op.get_arg_valids()[0]]],
-                    );
-                    map.insert(op.get_return_valids()[0], valids[0]);
-                    map.insert(op.get_return_valids()[1], valids[1]);
-                    map.insert(op.get_return_valids()[2], valids[2]);
-                    map.insert(op.get_return_valids()[3], valids[3]);
-                }
-                IopInstructionSet::Pbs8 { lut } => {
-                    let lut = match GIDS8.get(&lut) {
-                        Some(v) => *v,
-                        None => panic!("Failed to lookup the gid for key: {lut:?}"),
-                    };
-                    let (_, valids) = output.add_op(
-                        HpuInstructionSet::Pbs8 { lut },
-                        svec![map[op.get_arg_valids()[0]]],
-                    );
-                    map.insert(op.get_return_valids()[0], valids[0]);
-                    map.insert(op.get_return_valids()[1], valids[1]);
-                    map.insert(op.get_return_valids()[2], valids[2]);
-                    map.insert(op.get_return_valids()[3], valids[3]);
-                    map.insert(op.get_return_valids()[4], valids[4]);
-                    map.insert(op.get_return_valids()[5], valids[5]);
-                    map.insert(op.get_return_valids()[6], valids[6]);
-                    map.insert(op.get_return_valids()[7], valids[7]);
+                            svec![translator.translate_val(op.get_arg_valids()[0])],
+                        );
+                        translator.register_translation(op.get_return_valids()[0], new_rets[0]);
+                    }
+                    _ => {
+                        translator.direct_translation(op, HpuInstructionSet::AddPt);
+                    }
                 }
             }
+            IopInstructionSet::SubPt => {
+                match op
+                    .get_args_iter()
+                    .nth(1)
+                    .unwrap()
+                    .get_origin()
+                    .opref
+                    .get_instruction()
+                {
+                    IopInstructionSet::LetPlaintextBlock { value } => {
+                        let new_rets = translator.add_op(
+                            HpuInstructionSet::SubCst {
+                                cst: Immediate(value as u8),
+                            },
+                            svec![translator.translate_val(op.get_arg_valids()[0])],
+                        );
+                        translator.register_translation(op.get_return_valids()[0], new_rets[0]);
+                    }
+                    _ => {
+                        translator.direct_translation(op, HpuInstructionSet::SubPt);
+                    }
+                }
+            }
+            IopInstructionSet::PtSub => {
+                match op
+                    .get_args_iter()
+                    .nth(0)
+                    .unwrap()
+                    .get_origin()
+                    .opref
+                    .get_instruction()
+                {
+                    IopInstructionSet::LetPlaintextBlock { value } => {
+                        let new_rets = translator.add_op(
+                            HpuInstructionSet::CstSub {
+                                cst: Immediate(value as u8),
+                            },
+                            svec![translator.translate_val(op.get_arg_valids()[1])],
+                        );
+                        translator.register_translation(op.get_return_valids()[0], new_rets[0]);
+                    }
+                    _ => {
+                        translator.direct_translation(op, HpuInstructionSet::PtSub);
+                    }
+                }
+            }
+            IopInstructionSet::MulPt => {
+                match op
+                    .get_args_iter()
+                    .nth(1)
+                    .unwrap()
+                    .get_origin()
+                    .opref
+                    .get_instruction()
+                {
+                    IopInstructionSet::LetPlaintextBlock { value } => {
+                        let new_rets = translator.add_op(
+                            HpuInstructionSet::MulCst {
+                                cst: Immediate(value as u8),
+                            },
+                            svec![translator.translate_val(op.get_arg_valids()[0])],
+                        );
+                        translator.register_translation(op.get_return_valids()[0], new_rets[0]);
+                    }
+                    _ => {
+                        translator.direct_translation(op, HpuInstructionSet::MulPt);
+                    }
+                }
+            }
+            IopInstructionSet::ExtractCtBlock { index } => {
+                let new_rets = translator.add_op(
+                    HpuInstructionSet::SrcLd {
+                        from: TSrcId {
+                            src_pos: op.get_annotation().unwrap().try_into().unwrap(),
+                            block_pos: index.try_into().unwrap(),
+                        },
+                    },
+                    svec![],
+                );
+                translator.register_translation(op.get_return_valids()[0], new_rets[0]);
+            }
+            IopInstructionSet::ExtractPtBlock { index } => {
+                let new_rets = translator.add_op(
+                    HpuInstructionSet::ImmLd {
+                        from: TImmId {
+                            imm_pos: op.get_annotation().unwrap().try_into().unwrap(),
+                            block_pos: index.try_into().unwrap(),
+                        },
+                    },
+                    svec![],
+                );
+                translator.register_translation(op.get_return_valids()[0], new_rets[0]);
+            }
+            IopInstructionSet::StoreCtBlock { index } => {
+                let new_arg = translator.translate_val(op.get_arg_valids()[0]);
+                translator.add_op(
+                    HpuInstructionSet::DstSt {
+                        to: TDstId {
+                            dst_pos: op.get_annotation().unwrap().try_into().unwrap(),
+                            block_pos: index.try_into().unwrap(),
+                        },
+                    },
+                    svec![new_arg],
+                );
+            }
+            IopInstructionSet::Pbs { lut, .. } => {
+                let lut = match GIDS1.get(&lut) {
+                    Some(v) => *v,
+                    None => panic!("Failed to lookup the gid for key: {lut:?}"),
+                };
+                translator.direct_translation(op, HpuInstructionSet::Pbs { lut });
+            }
+            IopInstructionSet::Pbs2 { lut } => {
+                let lut = match GIDS2.get(&lut) {
+                    Some(v) => *v,
+                    None => panic!("Failed to lookup the gid for key: {lut:?}"),
+                };
+                translator.direct_translation(op, HpuInstructionSet::Pbs2 { lut });
+            }
+            IopInstructionSet::Pbs4 { lut } => {
+                let lut = match GIDS4.get(&lut) {
+                    Some(v) => *v,
+                    None => panic!("Failed to lookup the gid for key: {lut:?}"),
+                };
+                translator.direct_translation(op, HpuInstructionSet::Pbs4 { lut });
+            }
+            IopInstructionSet::Pbs8 { lut } => {
+                let lut = match GIDS8.get(&lut) {
+                    Some(v) => *v,
+                    None => panic!("Failed to lookup the gid for key: {lut:?}"),
+                };
+                translator.direct_translation(op, HpuInstructionSet::Pbs8 { lut });
+            }
         }
-
-        return output;
-    }
+    })
 }
+
 #[cfg(test)]
 mod test {
-    use zhc_ir::{IR, translation::Translator};
+    use zhc_ir::IR;
     use zhc_langs::{hpulang::HpuLang, ioplang::IopLang};
     use zhc_utils::assert_display_is;
 
-    use crate::test::{get_add_ir, get_cmp_ir};
-
-    use super::IoplangToHpulang;
+    use crate::{
+        test::{get_add_ir, get_cmp_ir},
+        translation::lower_iop_to_hpu,
+    };
 
     fn pipeline(ir: &IR<IopLang>) -> IR<HpuLang> {
-        IoplangToHpulang.translate(&ir)
+        lower_iop_to_hpu(&ir)
     }
 
     #[test]
@@ -515,39 +410,39 @@ mod test {
                 %30 : CtRegister = pbs<Lut@48>(%21 : CtRegister);
                 %31 : CtRegister = pbs<Lut@49>(%22 : CtRegister);
                 %32 : CtRegister = add_ct(%25 : CtRegister, %26 : CtRegister);
-                %33 : CtRegister = add_ct(%29 : CtRegister, %30 : CtRegister);
-                %34 : CtRegister = add_ct(%17 : CtRegister, %25 : CtRegister);
-                %35 : CtRegister = pbs<Lut@1>(%24 : CtRegister);
-                %36 : CtRegister = add_ct(%32 : CtRegister, %27 : CtRegister);
-                %37 : CtRegister = add_ct(%33 : CtRegister, %31 : CtRegister);
+                %36 : CtRegister = add_ct(%29 : CtRegister, %30 : CtRegister);
+                %46 : CtRegister = add_ct(%17 : CtRegister, %25 : CtRegister);
+                %53 : CtRegister = pbs<Lut@1>(%24 : CtRegister);
+                %33 : CtRegister = add_ct(%32 : CtRegister, %27 : CtRegister);
+                %37 : CtRegister = add_ct(%36 : CtRegister, %31 : CtRegister);
                 %38 : CtRegister = pbs<Lut@44>(%32 : CtRegister);
-                %39 : CtRegister = pbs<Lut@1>(%34 : CtRegister);
-                dst_st<0.0_tdst>(%35 : CtRegister);
-                %40 : CtRegister = add_ct(%36 : CtRegister, %28 : CtRegister);
-                %41 : CtRegister = pbs<Lut@45>(%36 : CtRegister);
-                %42 : CtRegister = add_ct(%18 : CtRegister, %38 : CtRegister);
-                dst_st<0.1_tdst>(%39 : CtRegister);
-                %43 : CtRegister = pbs<Lut@46>(%40 : CtRegister);
-                %44 : CtRegister = add_ct(%19 : CtRegister, %41 : CtRegister);
-                %45 : CtRegister = pbs<Lut@1>(%42 : CtRegister);
-                %46 : CtRegister = add_ct(%29 : CtRegister, %43 : CtRegister);
-                %47 : CtRegister = add_ct(%33 : CtRegister, %43 : CtRegister);
-                %48 : CtRegister = add_ct(%37 : CtRegister, %43 : CtRegister);
-                %49 : CtRegister = add_ct(%20 : CtRegister, %43 : CtRegister);
-                %50 : CtRegister = pbs<Lut@1>(%44 : CtRegister);
-                dst_st<0.2_tdst>(%45 : CtRegister);
-                %51 : CtRegister = pbs<Lut@44>(%46 : CtRegister);
-                %52 : CtRegister = pbs<Lut@45>(%47 : CtRegister);
-                %53 : CtRegister = pbs<Lut@46>(%48 : CtRegister);
-                %54 : CtRegister = pbs<Lut@1>(%49 : CtRegister);
-                dst_st<0.3_tdst>(%50 : CtRegister);
-                %55 : CtRegister = add_ct(%21 : CtRegister, %51 : CtRegister);
-                %56 : CtRegister = add_ct(%22 : CtRegister, %52 : CtRegister);
-                %57 : CtRegister = add_ct(%23 : CtRegister, %53 : CtRegister);
-                dst_st<0.4_tdst>(%54 : CtRegister);
-                %58 : CtRegister = pbs<Lut@1>(%55 : CtRegister);
-                %59 : CtRegister = pbs<Lut@1>(%56 : CtRegister);
-                %60 : CtRegister = pbs<Lut@1>(%57 : CtRegister);
+                %54 : CtRegister = pbs<Lut@1>(%46 : CtRegister);
+                dst_st<0.0_tdst>(%53 : CtRegister);
+                %34 : CtRegister = add_ct(%33 : CtRegister, %28 : CtRegister);
+                %39 : CtRegister = pbs<Lut@45>(%33 : CtRegister);
+                %47 : CtRegister = add_ct(%18 : CtRegister, %38 : CtRegister);
+                dst_st<0.1_tdst>(%54 : CtRegister);
+                %35 : CtRegister = pbs<Lut@46>(%34 : CtRegister);
+                %48 : CtRegister = add_ct(%19 : CtRegister, %39 : CtRegister);
+                %55 : CtRegister = pbs<Lut@1>(%47 : CtRegister);
+                %40 : CtRegister = add_ct(%29 : CtRegister, %35 : CtRegister);
+                %42 : CtRegister = add_ct(%36 : CtRegister, %35 : CtRegister);
+                %44 : CtRegister = add_ct(%37 : CtRegister, %35 : CtRegister);
+                %49 : CtRegister = add_ct(%20 : CtRegister, %35 : CtRegister);
+                %56 : CtRegister = pbs<Lut@1>(%48 : CtRegister);
+                dst_st<0.2_tdst>(%55 : CtRegister);
+                %41 : CtRegister = pbs<Lut@44>(%40 : CtRegister);
+                %43 : CtRegister = pbs<Lut@45>(%42 : CtRegister);
+                %45 : CtRegister = pbs<Lut@46>(%44 : CtRegister);
+                %57 : CtRegister = pbs<Lut@1>(%49 : CtRegister);
+                dst_st<0.3_tdst>(%56 : CtRegister);
+                %50 : CtRegister = add_ct(%21 : CtRegister, %41 : CtRegister);
+                %51 : CtRegister = add_ct(%22 : CtRegister, %43 : CtRegister);
+                %52 : CtRegister = add_ct(%23 : CtRegister, %45 : CtRegister);
+                dst_st<0.4_tdst>(%57 : CtRegister);
+                %58 : CtRegister = pbs<Lut@1>(%50 : CtRegister);
+                %59 : CtRegister = pbs<Lut@1>(%51 : CtRegister);
+                %60 : CtRegister = pbs<Lut@1>(%52 : CtRegister);
                 dst_st<0.5_tdst>(%58 : CtRegister);
                 dst_st<0.6_tdst>(%59 : CtRegister);
                 dst_st<0.7_tdst>(%60 : CtRegister);
@@ -561,58 +456,58 @@ mod test {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : CtRegister = src_ld<0.0_tsrc>();
-            %1 : CtRegister = src_ld<0.1_tsrc>();
-            %2 : CtRegister = src_ld<0.2_tsrc>();
-            %3 : CtRegister = src_ld<0.3_tsrc>();
-            %4 : CtRegister = src_ld<0.4_tsrc>();
-            %5 : CtRegister = src_ld<0.5_tsrc>();
-            %6 : CtRegister = src_ld<0.6_tsrc>();
-            %7 : CtRegister = src_ld<0.7_tsrc>();
-            %8 : CtRegister = src_ld<1.0_tsrc>();
-            %9 : CtRegister = src_ld<1.1_tsrc>();
-            %10 : CtRegister = src_ld<1.2_tsrc>();
-            %11 : CtRegister = src_ld<1.3_tsrc>();
-            %12 : CtRegister = src_ld<1.4_tsrc>();
-            %13 : CtRegister = src_ld<1.5_tsrc>();
-            %14 : CtRegister = src_ld<1.6_tsrc>();
-            %15 : CtRegister = src_ld<1.7_tsrc>();
-            %16 : CtRegister = mac<4_imm>(%1 : CtRegister, %0 : CtRegister);
-            %17 : CtRegister = mac<4_imm>(%3 : CtRegister, %2 : CtRegister);
-            %18 : CtRegister = mac<4_imm>(%5 : CtRegister, %4 : CtRegister);
-            %19 : CtRegister = mac<4_imm>(%7 : CtRegister, %6 : CtRegister);
-            %20 : CtRegister = mac<4_imm>(%9 : CtRegister, %8 : CtRegister);
-            %21 : CtRegister = mac<4_imm>(%11 : CtRegister, %10 : CtRegister);
-            %22 : CtRegister = mac<4_imm>(%13 : CtRegister, %12 : CtRegister);
-            %23 : CtRegister = mac<4_imm>(%15 : CtRegister, %14 : CtRegister);
-            %24 : CtRegister = pbs<Lut@0>(%16 : CtRegister);
-            %25 : CtRegister = pbs<Lut@0>(%17 : CtRegister);
-            %26 : CtRegister = pbs<Lut@0>(%18 : CtRegister);
-            %27 : CtRegister = pbs<Lut@0>(%19 : CtRegister);
-            %28 : CtRegister = pbs<Lut@0>(%20 : CtRegister);
-            %29 : CtRegister = pbs<Lut@0>(%21 : CtRegister);
-            %30 : CtRegister = pbs<Lut@0>(%22 : CtRegister);
-            %31 : CtRegister = pbs<Lut@0>(%23 : CtRegister);
-            %32 : CtRegister = sub_ct(%24 : CtRegister, %28 : CtRegister);
-            %33 : CtRegister = sub_ct(%25 : CtRegister, %29 : CtRegister);
-            %34 : CtRegister = sub_ct(%26 : CtRegister, %30 : CtRegister);
-            %35 : CtRegister = sub_ct(%27 : CtRegister, %31 : CtRegister);
-            %36 : CtRegister = pbs<Lut@10>(%32 : CtRegister);
-            %37 : CtRegister = pbs<Lut@10>(%33 : CtRegister);
-            %38 : CtRegister = pbs<Lut@10>(%34 : CtRegister);
-            %39 : CtRegister = pbs<Lut@10>(%35 : CtRegister);
-            %40 : CtRegister = add_cst<1_imm>(%36 : CtRegister);
-            %41 : CtRegister = add_cst<1_imm>(%37 : CtRegister);
-            %42 : CtRegister = add_cst<1_imm>(%38 : CtRegister);
-            %43 : CtRegister = add_cst<1_imm>(%39 : CtRegister);
-            %44 : CtRegister = mac<4_imm>(%41 : CtRegister, %40 : CtRegister);
-            %45 : CtRegister = mac<4_imm>(%43 : CtRegister, %42 : CtRegister);
-            %46 : CtRegister = pbs<Lut@11>(%44 : CtRegister);
-            %47 : CtRegister = pbs<Lut@11>(%45 : CtRegister);
-            %48 : CtRegister = mac<4_imm>(%47 : CtRegister, %46 : CtRegister);
-            %49 : CtRegister = pbs<Lut@27>(%48 : CtRegister);
-            dst_st<0.0_tdst>(%49 : CtRegister);
-        "#
+                %0 : CtRegister = src_ld<0.0_tsrc>();
+                %1 : CtRegister = src_ld<0.1_tsrc>();
+                %2 : CtRegister = src_ld<0.2_tsrc>();
+                %3 : CtRegister = src_ld<0.3_tsrc>();
+                %4 : CtRegister = src_ld<0.4_tsrc>();
+                %5 : CtRegister = src_ld<0.5_tsrc>();
+                %6 : CtRegister = src_ld<0.6_tsrc>();
+                %7 : CtRegister = src_ld<0.7_tsrc>();
+                %8 : CtRegister = src_ld<1.0_tsrc>();
+                %9 : CtRegister = src_ld<1.1_tsrc>();
+                %10 : CtRegister = src_ld<1.2_tsrc>();
+                %11 : CtRegister = src_ld<1.3_tsrc>();
+                %12 : CtRegister = src_ld<1.4_tsrc>();
+                %13 : CtRegister = src_ld<1.5_tsrc>();
+                %14 : CtRegister = src_ld<1.6_tsrc>();
+                %15 : CtRegister = src_ld<1.7_tsrc>();
+                %16 : CtRegister = mac<4_imm>(%1 : CtRegister, %0 : CtRegister);
+                %18 : CtRegister = mac<4_imm>(%3 : CtRegister, %2 : CtRegister);
+                %20 : CtRegister = mac<4_imm>(%5 : CtRegister, %4 : CtRegister);
+                %22 : CtRegister = mac<4_imm>(%7 : CtRegister, %6 : CtRegister);
+                %24 : CtRegister = mac<4_imm>(%9 : CtRegister, %8 : CtRegister);
+                %26 : CtRegister = mac<4_imm>(%11 : CtRegister, %10 : CtRegister);
+                %28 : CtRegister = mac<4_imm>(%13 : CtRegister, %12 : CtRegister);
+                %30 : CtRegister = mac<4_imm>(%15 : CtRegister, %14 : CtRegister);
+                %17 : CtRegister = pbs<Lut@0>(%16 : CtRegister);
+                %19 : CtRegister = pbs<Lut@0>(%18 : CtRegister);
+                %21 : CtRegister = pbs<Lut@0>(%20 : CtRegister);
+                %23 : CtRegister = pbs<Lut@0>(%22 : CtRegister);
+                %25 : CtRegister = pbs<Lut@0>(%24 : CtRegister);
+                %27 : CtRegister = pbs<Lut@0>(%26 : CtRegister);
+                %29 : CtRegister = pbs<Lut@0>(%28 : CtRegister);
+                %31 : CtRegister = pbs<Lut@0>(%30 : CtRegister);
+                %32 : CtRegister = sub_ct(%17 : CtRegister, %25 : CtRegister);
+                %35 : CtRegister = sub_ct(%19 : CtRegister, %27 : CtRegister);
+                %38 : CtRegister = sub_ct(%21 : CtRegister, %29 : CtRegister);
+                %41 : CtRegister = sub_ct(%23 : CtRegister, %31 : CtRegister);
+                %33 : CtRegister = pbs<Lut@10>(%32 : CtRegister);
+                %36 : CtRegister = pbs<Lut@10>(%35 : CtRegister);
+                %39 : CtRegister = pbs<Lut@10>(%38 : CtRegister);
+                %42 : CtRegister = pbs<Lut@10>(%41 : CtRegister);
+                %34 : CtRegister = add_cst<1_imm>(%33 : CtRegister);
+                %37 : CtRegister = add_cst<1_imm>(%36 : CtRegister);
+                %40 : CtRegister = add_cst<1_imm>(%39 : CtRegister);
+                %43 : CtRegister = add_cst<1_imm>(%42 : CtRegister);
+                %44 : CtRegister = mac<4_imm>(%37 : CtRegister, %34 : CtRegister);
+                %45 : CtRegister = mac<4_imm>(%43 : CtRegister, %40 : CtRegister);
+                %46 : CtRegister = pbs<Lut@11>(%44 : CtRegister);
+                %47 : CtRegister = pbs<Lut@11>(%45 : CtRegister);
+                %48 : CtRegister = mac<4_imm>(%47 : CtRegister, %46 : CtRegister);
+                %49 : CtRegister = pbs<Lut@27>(%48 : CtRegister);
+                dst_st<0.0_tdst>(%49 : CtRegister);
+            "#
         );
     }
 }
