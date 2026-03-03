@@ -4,7 +4,7 @@ use super::*;
 use std::path::Path;
 use zhc_utils::tracing::Microseconds;
 
-static ACTIVATE_TRACING: bool = cfg!(debug_assertions);
+static ACTIVATE_TRACING: bool = false;
 static S_IN_US: f64 = 1_000_000.;
 
 /// Represents a frequency in megahertz for simulation timing.

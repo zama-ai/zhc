@@ -68,6 +68,15 @@ impl Simulatable for Hpu {
         tracer.add_simulatable(at, &self.pe_alu);
         tracer.add_simulatable(at, &self.pe_ctl);
         tracer.add_simulatable(at, &self.retirement);
+
+        // PE loading counters
+        tracer.add_counter(at, "pe_alu_busy", self.pe_alu.busy() as u8 as f64);
+        tracer.add_counter(at, "pe_mem_busy", self.pe_mem.busy() as u8 as f64);
+        tracer.add_counter(
+            at,
+            "pe_pbs_working",
+            self.pe_pbs.memory().n_working() as f64,
+        );
     }
 }
 
