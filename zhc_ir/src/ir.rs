@@ -14,6 +14,8 @@ use super::{
 };
 
 /// Operation depth relative to the IR inputs, used for topological ordering.
+///
+/// The depth is the length of the longest path between an input of the IR and the op.
 pub type Depth = u16;
 
 fn val_active<'a, D: Dialect>(val: &ValRef<'a, D>) -> bool {
@@ -640,7 +642,14 @@ impl<D: Dialect> IR<D> {
     ///
     /// Always.
     pub fn dump(&self) {
-        println!("{}", self.format());
+        println!(
+            "{}",
+            self.format()
+                .with_walker(crate::PrintWalker::Linear)
+                .show_types(false)
+                .show_opid(true)
+                .show_comments(true)
+        );
         panic!();
     }
 

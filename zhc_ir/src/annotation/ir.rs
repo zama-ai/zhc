@@ -301,6 +301,25 @@ impl<'ir, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> AnnIR<'ir, D, OpAnn
     pub fn into_maps(self) -> (OpMap<OpAnn>, ValMap<ValAnn>) {
         (self.op_annotations, self.val_annotations)
     }
+
+    /// Prints the formatted Annotated IR to stdout and panics.
+    ///
+    /// Debugging utility for inspecting the IR state at a specific point.
+    ///
+    /// # Panics
+    ///
+    /// Always.
+    pub fn dump(&self) {
+        println!(
+            "{}",
+            self.format()
+                .with_walker(crate::PrintWalker::Linear)
+                .show_types(false)
+                .show_opid(true)
+                .show_comments(true)
+        );
+        panic!();
+    }
 }
 
 impl<'ir, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> Deref

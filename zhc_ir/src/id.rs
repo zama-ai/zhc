@@ -16,7 +16,7 @@ macro_rules! impl_index {
 
         #[doc = $doc]
         #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-        pub struct $name(pub(super) $raw);
+        pub struct $name(pub $raw);
 
         impl Add<$raw> for $name {
             type Output = $name;
