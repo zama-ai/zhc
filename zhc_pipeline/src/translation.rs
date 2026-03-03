@@ -14,7 +14,7 @@ use zhc_langs::{
 };
 use zhc_utils::{FastMap, svec};
 
-static GIDS1: LazyLock<FastMap<Lut1Def, LutId>> = LazyLock::new(|| {
+pub(crate) static GIDS1: LazyLock<FastMap<Lut1Def, LutId>> = LazyLock::new(|| {
     HashMap::from([
         (Lut1Def::None, LutId(0)),
         (Lut1Def::MsgOnly, LutId(1)),
@@ -80,7 +80,7 @@ static GIDS1: LazyLock<FastMap<Lut1Def, LutId>> = LazyLock::new(|| {
     ])
 });
 
-static GIDS2: LazyLock<FastMap<Lut2Def, LutId>> = LazyLock::new(|| {
+pub(crate) static GIDS2: LazyLock<FastMap<Lut2Def, LutId>> = LazyLock::new(|| {
     HashMap::from([
         (Lut2Def::ManyGenProp, LutId(18)),
         (Lut2Def::ManyCarryMsg, LutId(26)),
@@ -100,9 +100,9 @@ static GIDS2: LazyLock<FastMap<Lut2Def, LutId>> = LazyLock::new(|| {
     ])
 });
 
-static GIDS4: LazyLock<FastMap<Lut4Def, LutId>> = LazyLock::new(|| HashMap::from([]));
+pub(crate) static GIDS4: LazyLock<FastMap<Lut4Def, LutId>> = LazyLock::new(|| HashMap::from([]));
 
-static GIDS8: LazyLock<FastMap<Lut8Def, LutId>> = LazyLock::new(|| HashMap::from([]));
+pub(crate) static GIDS8: LazyLock<FastMap<Lut8Def, LutId>> = LazyLock::new(|| HashMap::from([]));
 
 pub fn lower_iop_to_hpu(ir: &IR<IopLang>) -> IR<HpuLang> {
     let ann_ir = ir
@@ -359,14 +359,15 @@ pub fn lower_iop_to_hpu(ir: &IR<IopLang>) -> IR<HpuLang> {
 
 #[cfg(test)]
 mod test {
+    use zhc_builder::{
+        Builder, CiphertextSpec, add, bitwise_and, bitwise_or, bitwise_xor, cmp_gt, if_then_else,
+        if_then_zero, mul_lsb,
+    };
     use zhc_ir::IR;
     use zhc_langs::{hpulang::HpuLang, ioplang::IopLang};
     use zhc_utils::assert_display_is;
 
-    use crate::{
-        test::{get_add_ir, get_cmp_ir},
-        translation::lower_iop_to_hpu,
-    };
+    use crate::{test::check_iop_hpu_equivalence, translation::lower_iop_to_hpu};
 
     fn pipeline(ir: &IR<IopLang>) -> IR<HpuLang> {
         lower_iop_to_hpu(&ir)
@@ -374,7 +375,7 @@ mod test {
 
     #[test]
     fn test_translate_add_ir() {
-        let ir = pipeline(&get_add_ir(16, 2, 2));
+        let ir = pipeline(&add(CiphertextSpec::new(16, 2, 2)).into_ir());
         assert_display_is!(
             ir.format(),
             r#"
@@ -452,7 +453,7 @@ mod test {
 
     #[test]
     fn test_translate_cmp_ir() {
-        let ir = pipeline(&get_cmp_ir(16, 2, 2));
+        let ir = pipeline(&cmp_gt(CiphertextSpec::new(16, 2, 2)).into_ir());
         assert_display_is!(
             ir.format(),
             r#"
@@ -509,5 +510,25 @@ mod test {
                 dst_st<0.0_tdst>(%49 : CtRegister);
             "#
         );
+    }
+
+    #[test]
+    fn correctness() {
+        let check = |b: Builder| {
+            let spec = *b.spec();
+            let iop_ir = b.into_ir();
+            let hpu_ir = pipeline(&iop_ir);
+            check_iop_hpu_equivalence(&iop_ir, &hpu_ir, spec, 100);
+        };
+        for size in 2..=64 {
+            let spec = CiphertextSpec::new(size, 2, 2);
+            check(add(spec));
+            check(bitwise_and(spec));
+            check(bitwise_or(spec));
+            check(bitwise_xor(spec));
+            check(if_then_else(spec));
+            check(if_then_zero(spec));
+            check(mul_lsb(spec));
+        }
     }
 }

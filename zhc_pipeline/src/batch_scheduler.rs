@@ -416,13 +416,19 @@ pub fn batch_schedule<'a, 'b>(ir: &'a IR<HpuLang>, config: &'b HpuConfig) -> IR<
 
 #[cfg(test)]
 mod test {
-    use zhc_builder::{CiphertextSpec, count_0};
+    use zhc_builder::{
+        Builder, CiphertextSpec, add, bitwise_and, bitwise_or, bitwise_xor, count_0, if_then_else,
+        if_then_zero, mul_lsb,
+    };
     use zhc_ir::IR;
     use zhc_langs::{hpulang::HpuLang, ioplang::IopLang};
     use zhc_sim::hpu::{HpuConfig, PhysicalConfig};
     use zhc_utils::assert_display_is;
 
-    use crate::{batch_scheduler::batch_schedule, translation::lower_iop_to_hpu};
+    use crate::{
+        batch_scheduler::batch_schedule, test::check_iop_hpu_equivalence,
+        translation::lower_iop_to_hpu,
+    };
 
     fn pipeline(ir: &IR<IopLang>) -> IR<HpuLang> {
         let ir = lower_iop_to_hpu(&ir);
@@ -539,6 +545,26 @@ mod test {
                 dst_st<0.2_tdst>(%55);
             "#
         )
+    }
+
+    #[test]
+    fn correctness() {
+        let check = |b: Builder| {
+            let spec = *b.spec();
+            let iop_ir = b.into_ir();
+            let hpu_ir = pipeline(&iop_ir);
+            check_iop_hpu_equivalence(&iop_ir, &hpu_ir, spec, 100);
+        };
+        for size in 2..=64 {
+            let spec = CiphertextSpec::new(size, 2, 2);
+            check(add(spec));
+            check(bitwise_and(spec));
+            check(bitwise_or(spec));
+            check(bitwise_xor(spec));
+            check(if_then_else(spec));
+            check(if_then_zero(spec));
+            check(mul_lsb(spec));
+        }
     }
 }
 

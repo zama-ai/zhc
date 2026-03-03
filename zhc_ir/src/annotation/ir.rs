@@ -309,7 +309,7 @@ impl<'ir, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> AnnIR<'ir, D, OpAnn
     /// # Panics
     ///
     /// Always.
-    pub fn dump(&self) {
+    pub fn dump(&self) -> ! {
         println!(
             "{}",
             self.format()

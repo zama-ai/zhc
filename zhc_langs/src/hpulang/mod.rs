@@ -27,9 +27,11 @@
 mod batch_statistics;
 mod dialect;
 mod instruction_set;
+pub mod interpretation;
 mod type_system;
 
 pub use batch_statistics::*;
 pub use dialect::*;
 pub use instruction_set::*;
+pub use interpretation::*;
 pub use type_system::*;

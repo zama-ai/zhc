@@ -25,16 +25,13 @@ pub fn allocate_registers(ir: &IR<HpuLang>, config: &HpuConfig) -> IR<DopLang> {
 
 #[cfg(test)]
 mod test {
+    use zhc_builder::{CiphertextSpec, add, cmp_gt};
     use zhc_ir::{IR, PrintWalker};
     use zhc_langs::{doplang::DopLang, ioplang::IopLang};
     use zhc_sim::hpu::{HpuConfig, PhysicalConfig};
     use zhc_utils::assert_display_is;
 
-    use crate::{
-        batch_scheduler::batch_schedule,
-        test::{get_add_ir, get_cmp_ir},
-        translation::lower_iop_to_hpu,
-    };
+    use crate::{batch_scheduler::batch_schedule, translation::lower_iop_to_hpu};
 
     use super::allocate_registers;
 
@@ -48,7 +45,7 @@ mod test {
 
     #[test]
     fn test_allocate_add_ir() {
-        let ir = pipeline(&get_add_ir(16, 2, 2));
+        let ir = pipeline(&add(CiphertextSpec::new(16, 2, 2)).into_ir());
         assert_display_is!(
             ir.format(),
             r#"
@@ -127,7 +124,7 @@ mod test {
 
     #[test]
     fn test_allocate_cmp_ir() {
-        let ir = pipeline(&get_cmp_ir(16, 2, 2));
+        let ir = pipeline(&cmp_gt(CiphertextSpec::new(16, 2, 2)).into_ir());
         assert_display_is!(
             ir.format().with_walker(PrintWalker::Linear),
             r#"

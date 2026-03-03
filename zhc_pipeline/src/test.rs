@@ -1,33 +1,133 @@
-use zhc_builder::{CiphertextSpec, add, cmp_gt};
-use zhc_ir::{IR, cse::eliminate_common_subexpressions, dce::eliminate_dead_code};
-use zhc_langs::ioplang::IopLang;
-use zhc_utils::assert_display_is;
+use zhc_builder::{CiphertextBlockSpec, CiphertextSpec, add, cmp_gt};
+use zhc_ir::IR;
+use zhc_langs::{
+    hpulang::{HpuInterpreterContext, HpuLang, HpuValue, LutId, TDstId, TImmId, TSrcId},
+    ioplang::{IopInstructionSet, IopInterepreterContext, IopLang, IopValue, Lut1Def, Lut2Def},
+};
+use zhc_utils::{FastMap, assert_display_is};
 
-pub fn get_add_ir(integer_w: i64, msg_w: i64, carry_w: i64) -> IR<IopLang> {
-    let ir = add(CiphertextSpec::new(
-        integer_w as u16,
-        msg_w as u8,
-        carry_w as u8,
-    ))
-    .into_ir();
-    ir
-}
+use crate::translation::{GIDS1, GIDS2};
 
-pub fn get_cmp_ir(integer_w: i64, msg_w: i64, carry_w: i64) -> IR<IopLang> {
-    let mut ir = cmp_gt(CiphertextSpec::new(
-        integer_w as u16,
-        msg_w as u8,
-        carry_w as u8,
-    ))
-    .into_ir();
-    eliminate_dead_code(&mut ir);
-    eliminate_common_subexpressions(&mut ir);
-    ir
+pub fn check_iop_hpu_equivalence(
+    iop_ir: &IR<IopLang>,
+    hpu_ir: &IR<HpuLang>,
+    spec: CiphertextBlockSpec,
+    nreps: usize,
+) {
+    // Build reverse LUT tables.
+    let lut1: FastMap<LutId, Lut1Def> = GIDS1.iter().map(|(k, v)| (*v, *k)).collect();
+    let lut2: FastMap<LutId, Lut2Def> = GIDS2.iter().map(|(k, v)| (*v, *k)).collect();
+
+    // Discover input slots from the IOP IR.
+    let mut input_slots: Vec<(usize, bool, u16)> = Vec::new(); // (pos, is_ct, int_size)
+    for op in iop_ir.walk_ops_linear() {
+        match op.get_instruction() {
+            IopInstructionSet::InputCiphertext { pos, int_size } => {
+                input_slots.push((pos, true, int_size));
+            }
+            IopInstructionSet::InputPlaintext { pos, int_size } => {
+                input_slots.push((pos, false, int_size));
+            }
+            _ => {}
+        }
+    }
+    input_slots.sort_by_key(|(pos, _, _)| *pos);
+
+    for _ in 0..nreps {
+        // Generate random IOP inputs.
+        let iop_inputs: Vec<IopValue> = input_slots
+            .iter()
+            .map(|(_, is_ct, int_size)| {
+                if *is_ct {
+                    IopValue::Ciphertext(spec.ciphertext_spec(*int_size).random())
+                } else {
+                    IopValue::Plaintext(
+                        spec.matching_plaintext_block_spec()
+                            .plaintext_spec(*int_size)
+                            .random(),
+                    )
+                }
+            })
+            .collect();
+
+        // Interpret IOP.
+        let iop_ctx = IopInterepreterContext {
+            spec,
+            inputs: iop_inputs.iter().cloned().enumerate().collect(),
+            outputs: FastMap::new(),
+        };
+        let (_, iop_ctx) = iop_ir
+            .interpret::<IopValue>(iop_ctx)
+            .expect("IOP interpretation failed");
+
+        // Populate HPU context: decompose IOP inputs into block-level entries.
+        let mut hpu_ctx = HpuInterpreterContext::new(spec);
+        hpu_ctx.lut1_table = lut1.clone();
+        hpu_ctx.lut2_table = lut2.clone();
+        for (pos, val) in iop_inputs.iter().enumerate() {
+            match val {
+                IopValue::Ciphertext(ct) => {
+                    for i in 0..ct.len() {
+                        hpu_ctx.sources.insert(
+                            TSrcId {
+                                src_pos: pos as u32,
+                                block_pos: i as u32,
+                            },
+                            ct.get_block(i),
+                        );
+                    }
+                }
+                IopValue::Plaintext(pt) => {
+                    for i in 0..pt.len() {
+                        hpu_ctx.immediates.insert(
+                            TImmId {
+                                imm_pos: pos as u32,
+                                block_pos: i as u32,
+                            },
+                            pt.get_block(i),
+                        );
+                    }
+                }
+                _ => panic!("Unexpected input type"),
+            }
+        }
+
+        // Interpret HPU.
+        let hpu_ctx = match hpu_ir.interpret::<HpuValue>(hpu_ctx) {
+            Ok((_, ctx)) => ctx,
+            Err((ann_ir, _)) => ann_ir.dump(),
+        };
+
+        // println!("iop_outputs:{:#?}", iop_ctx.outputs);
+        // println!("hpu_outputs:{:#?}", hpu_ctx.destinations);
+
+        // Compare: check each output block matches.
+        for (pos, iop_output) in &iop_ctx.outputs {
+            let IopValue::Ciphertext(expected_ct) = iop_output else {
+                panic!("Expected Ciphertext output at position {pos}");
+            };
+            for i in 0..expected_ct.len() {
+                let tdst = TDstId {
+                    dst_pos: *pos as u32,
+                    block_pos: i as u32,
+                };
+                let hpu_block = hpu_ctx
+                    .destinations
+                    .get(&tdst)
+                    .unwrap_or_else(|| panic!("Missing HPU output at {tdst}"));
+                assert_eq!(
+                    hpu_block.mask_message(),
+                    expected_ct.get_block(i),
+                    "Output mismatch at pos={pos}, block={i}"
+                );
+            }
+        }
+    }
 }
 
 #[test]
 fn test_add_ir() {
-    let ir = get_add_ir(16, 2, 2);
+    let ir = add(CiphertextSpec::new(16, 2, 2)).into_ir();
     assert_display_is!(
         ir.format(),
         r#"
@@ -109,7 +209,7 @@ fn test_add_ir() {
 
 #[test]
 fn test_cmp_ir() {
-    let ir = get_cmp_ir(16, 2, 2);
+    let ir = cmp_gt(CiphertextSpec::new(16, 2, 2)).into_ir();
     assert_display_is!(
         ir.format(),
         r#"

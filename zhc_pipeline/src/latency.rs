@@ -36,12 +36,10 @@ pub fn compute_latency(ir: &IR<DopLang>, config: HpuConfig) -> Cycle {
 mod test {
     use super::compute_latency;
     use crate::{
-        allocator::allocate_registers,
-        batch_scheduler::batch_schedule,
-        test::{get_add_ir, get_cmp_ir},
+        allocator::allocate_registers, batch_scheduler::batch_schedule,
         translation::lower_iop_to_hpu,
     };
-    use zhc_builder::{CiphertextSpec, count_0, mul_lsb, overflow_mul_lsb};
+    use zhc_builder::{CiphertextSpec, add, cmp_gt, count_0, mul_lsb, overflow_mul_lsb};
     use zhc_ir::IR;
     use zhc_langs::ioplang::IopLang;
     use zhc_sim::{
@@ -60,7 +58,7 @@ mod test {
 
     #[test]
     fn test_latency_add_ir() {
-        let lat = pipeline(&get_add_ir(16, 2, 2));
+        let lat = pipeline(&add(CiphertextSpec::new(16, 2, 2)).into_ir());
         assert_display_is!(
             format!("{}us", lat.as_ts(MHz(400).period())),
             r#"
@@ -71,7 +69,7 @@ mod test {
 
     #[test]
     fn test_latency_cmp_ir() {
-        let lat = pipeline(&get_cmp_ir(128, 2, 2));
+        let lat = pipeline(&cmp_gt(CiphertextSpec::new(128, 2, 2)).into_ir());
         assert_display_is!(
             format!("{}us", lat.as_ts(MHz(400).period())),
             r#"
