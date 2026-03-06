@@ -49,7 +49,7 @@ pub fn translate<'ir>(ir: &AnnIR<'ir, HpuLang, Alloc, ()>) -> IR<DopLang> {
             SrcLd { from } => {
                 add_op(DopInstructionSet::LD {
                     dst: Argument::ct_reg(dsts[0].0),
-                    src: Argument::ct_var(
+                    src: Argument::ct_src_var(
                         from.src_pos.try_into().unwrap(),
                         from.block_pos.try_into().unwrap(),
                     ),
@@ -58,7 +58,7 @@ pub fn translate<'ir>(ir: &AnnIR<'ir, HpuLang, Alloc, ()>) -> IR<DopLang> {
             DstSt { to } => {
                 add_op(DopInstructionSet::ST {
                     src: Argument::ct_reg(srcs[0].0),
-                    dst: Argument::ct_var(
+                    dst: Argument::ct_dst_var(
                         to.dst_pos.try_into().unwrap(),
                         to.block_pos.try_into().unwrap(),
                     ),
@@ -104,7 +104,7 @@ pub fn translate<'ir>(ir: &AnnIR<'ir, HpuLang, Alloc, ()>) -> IR<DopLang> {
                 add_op(DopInstructionSet::ADDS {
                     dst: Argument::ct_reg(dsts[0].0),
                     src: Argument::ct_reg(srcs[0].0),
-                    cst: Argument::pt_var(
+                    cst: Argument::pt_src_var(
                         from.imm_pos.try_into().unwrap(),
                         from.block_pos.try_into().unwrap(),
                     ),
@@ -124,7 +124,7 @@ pub fn translate<'ir>(ir: &AnnIR<'ir, HpuLang, Alloc, ()>) -> IR<DopLang> {
                 add_op(DopInstructionSet::SUBS {
                     dst: Argument::ct_reg(dsts[0].0),
                     src: Argument::ct_reg(srcs[0].0),
-                    cst: Argument::pt_var(
+                    cst: Argument::pt_src_var(
                         from.imm_pos.try_into().unwrap(),
                         from.block_pos.try_into().unwrap(),
                     ),
@@ -144,7 +144,7 @@ pub fn translate<'ir>(ir: &AnnIR<'ir, HpuLang, Alloc, ()>) -> IR<DopLang> {
                 add_op(DopInstructionSet::SSUB {
                     dst: Argument::ct_reg(dsts[0].0),
                     src: Argument::ct_reg(srcs[0].0),
-                    cst: Argument::pt_var(
+                    cst: Argument::pt_src_var(
                         from.imm_pos.try_into().unwrap(),
                         from.block_pos.try_into().unwrap(),
                     ),
@@ -164,7 +164,7 @@ pub fn translate<'ir>(ir: &AnnIR<'ir, HpuLang, Alloc, ()>) -> IR<DopLang> {
                 add_op(DopInstructionSet::MULS {
                     dst: Argument::ct_reg(dsts[0].0),
                     src: Argument::ct_reg(srcs[0].0),
-                    cst: Argument::pt_var(
+                    cst: Argument::pt_src_var(
                         from.imm_pos.try_into().unwrap(),
                         from.block_pos.try_into().unwrap(),
                     ),
