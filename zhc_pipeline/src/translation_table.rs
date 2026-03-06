@@ -197,7 +197,7 @@ pub fn generate_translation_table(ir: &IR<DopLang>) -> Vec<DOpRepr> {
                 dst: CtReg { addr: dst, .. },
                 src: CtReg { addr: src, .. },
                 cst:
-                    PtVar {
+                    PtSrcVar {
                         id: tid,
                         block: bid,
                     },
@@ -227,7 +227,7 @@ pub fn generate_translation_table(ir: &IR<DopLang>) -> Vec<DOpRepr> {
                 dst: CtReg { addr: dst, .. },
                 src: CtReg { addr: src, .. },
                 cst:
-                    PtVar {
+                    PtSrcVar {
                         id: tid,
                         block: bid,
                     },
@@ -257,7 +257,7 @@ pub fn generate_translation_table(ir: &IR<DopLang>) -> Vec<DOpRepr> {
                 dst: CtReg { addr: dst, .. },
                 src: CtReg { addr: src, .. },
                 cst:
-                    PtVar {
+                    PtSrcVar {
                         id: tid,
                         block: bid,
                     },
@@ -287,7 +287,7 @@ pub fn generate_translation_table(ir: &IR<DopLang>) -> Vec<DOpRepr> {
                 dst: CtReg { addr: dst, .. },
                 src: CtReg { addr: src, .. },
                 cst:
-                    PtVar {
+                    PtSrcVar {
                         id: tid,
                         block: bid,
                     },
@@ -329,7 +329,7 @@ pub fn generate_translation_table(ir: &IR<DopLang>) -> Vec<DOpRepr> {
             LD {
                 dst: CtReg { addr: dst, .. },
                 src:
-                    CtVar {
+                    CtSrcVar {
                         id: tid,
                         block: bid,
                     },
@@ -371,7 +371,7 @@ pub fn generate_translation_table(ir: &IR<DopLang>) -> Vec<DOpRepr> {
             }
             ST {
                 dst:
-                    CtVar {
+                    CtDstVar {
                         id: tid,
                         block: bid,
                     },

@@ -5,6 +5,85 @@ use serde::Serialize;
 use std::fmt::{Debug, Display};
 use zhc_ir::{DialectInstructionSet, Signature, sig};
 
+const LUT_ALIASES: [&str; 76] = [
+    "None",
+    "MsgOnly",
+    "CarryOnly",
+    "CarryInMsg",
+    "MultCarryMsg",
+    "MultCarryMsgLsb",
+    "MultCarryMsgMsb",
+    "BwAnd",
+    "BwOr",
+    "BwXor",
+    "CmpSign",
+    "CmpReduce",
+    "CmpGt",
+    "CmpGte",
+    "CmpLt",
+    "CmpLte",
+    "CmpEq",
+    "CmpNeq",
+    "ManyGenProp",
+    "ReduceCarry2",
+    "ReduceCarry3",
+    "ReduceCarryPad",
+    "GenPropAdd",
+    "IfTrueZeroed",
+    "IfFalseZeroed",
+    "Ripple2GenProp",
+    "ManyCarryMsg",
+    "CmpGtMrg",
+    "CmpGteMrg",
+    "CmpLtMrg",
+    "CmpLteMrg",
+    "CmpEqMrg",
+    "CmpNeqMrg",
+    "IsSome",
+    "CarryIsSome",
+    "CarryIsNone",
+    "MultCarryMsgIsSome",
+    "MultCarryMsgMsbIsSome",
+    "IsNull",
+    "IsNullPos1",
+    "NotNull",
+    "MsgNotNull",
+    "MsgNotNullPos1",
+    "ManyMsgSplitShift1",
+    "SolvePropGroupFinal0",
+    "SolvePropGroupFinal1",
+    "SolvePropGroupFinal2",
+    "ExtractPropGroup0",
+    "ExtractPropGroup1",
+    "ExtractPropGroup2",
+    "ExtractPropGroup3",
+    "SolveProp",
+    "SolvePropCarry",
+    "SolveQuotient",
+    "SolveQuotientPos1",
+    "IfPos1FalseZeroed",
+    "IfPos1FalseZeroedMsgCarry1",
+    "ShiftLeftByCarryPos0Msg",
+    "ShiftLeftByCarryPos0MsgNext",
+    "ShiftRightByCarryPos0Msg",
+    "ShiftRightByCarryPos0MsgNext",
+    "IfPos0TrueZeroed",
+    "IfPos0FalseZeroed",
+    "IfPos1TrueZeroed",
+    "ManyInv1CarryMsg",
+    "ManyInv2CarryMsg",
+    "ManyInv3CarryMsg",
+    "ManyInv4CarryMsg",
+    "ManyInv5CarryMsg",
+    "ManyInv6CarryMsg",
+    "ManyInv7CarryMsg",
+    "ManyMsgSplit",
+    "Manym2lPropBit1MsgSplit",
+    "Manym2lPropBit0MsgSplit",
+    "Manyl2mPropBit1MsgSplit",
+    "Manyl2mPropBit0MsgSplit",
+];
+
 /// Register address mask that compares all bits (single-output PBS or
 /// plain register).
 pub const MASK_NONE: usize = usize::MAX;
@@ -35,21 +114,52 @@ pub const MASK_PBS8: usize = usize::MAX << 3;
 #[derive(Debug, Clone, Eq, Hash)]
 pub enum Argument {
     /// Constant immediate plaintext value.
-    PtConst { val: u8 },
+    PtConst {
+        val: u8,
+    },
     /// Ciphertext block located on the heap.
-    CtHeap { addr: usize },
+    CtHeap {
+        addr: usize,
+    },
     /// Ciphertext block located in I/O memory.
-    CtIo { addr: usize },
+    CtIo {
+        addr: usize,
+    },
     /// Symbolic ciphertext variable, patched to a physical address by
     /// the microcontroller.
-    CtVar { id: usize, block: usize },
+    CtSrcVar {
+        id: usize,
+        block: usize,
+    },
+    /// Symbolic ciphertext variable, patched to a physical address by
+    /// the microcontroller.
+    CtDstVar {
+        id: usize,
+        block: usize,
+    },
     /// Symbolic plaintext variable, patched to a `PtConst` by the
     /// microcontroller.
-    PtVar { id: usize, block: usize },
+    PtSrcVar {
+        id: usize,
+        block: usize,
+    },
     /// Physical ciphertext register with an alignment mask.
-    CtReg { mask: usize, addr: usize },
+    CtReg {
+        mask: usize,
+        addr: usize,
+    },
     /// Lookup table identifier.
-    LutId { id: usize },
+    LutId {
+        id: usize,
+    },
+    // Event uid
+    UserFlag {
+        flag: u8,
+    },
+    // Board identifier
+    VirtId {
+        id: u8,
+    },
 }
 
 impl Argument {
@@ -85,14 +195,19 @@ impl Argument {
         }
     }
 
-    /// Creates a symbolic ciphertext variable operand.
-    pub fn ct_var(id: usize, block: usize) -> Self {
-        Argument::CtVar { id, block }
+    /// Creates a symbolic ciphertext source variable operand.
+    pub fn ct_src_var(id: usize, block: usize) -> Self {
+        Argument::CtSrcVar { id, block }
     }
 
-    /// Creates a symbolic plaintext variable operand.
-    pub fn pt_var(id: usize, block: usize) -> Self {
-        Argument::PtVar { id, block }
+    /// Creates a symbolic ciphertext destination variable operand.
+    pub fn ct_dst_var(id: usize, block: usize) -> Self {
+        Argument::CtDstVar { id, block }
+    }
+
+    /// Creates a symbolic plaintext source variable operand.
+    pub fn pt_src_var(id: usize, block: usize) -> Self {
+        Argument::PtSrcVar { id, block }
     }
 
     /// Creates a heap-addressed ciphertext operand.
@@ -114,6 +229,21 @@ impl Argument {
     pub fn lut_id(val: LutId) -> Self {
         Argument::LutId { id: val.0 }
     }
+
+    pub fn asm(&self) -> String {
+        match self {
+            Argument::PtConst { val } => format!("{val}"),
+            Argument::CtHeap { addr } => format!("TH.{addr}"),
+            Argument::CtIo { addr } => format!("@{addr}"),
+            Argument::CtSrcVar { id, block } => format!("TS[{id}].{block}"),
+            Argument::CtDstVar { id, block } => format!("TD[{id}].{block}"),
+            Argument::PtSrcVar { id, block } => format!("TI[{id}].{block}"),
+            Argument::CtReg { addr, .. } => format!("R{addr}"),
+            Argument::LutId { id } => LUT_ALIASES[*id].into(),
+            Argument::UserFlag { flag } => format!("F{flag}"),
+            Argument::VirtId { id } => format!("N{id}"),
+        }
+    }
 }
 
 impl PartialEq for Argument {
@@ -133,26 +263,40 @@ impl PartialEq for Argument {
                 },
             ) => ((lhs ^ rhs) & (lhs_m & rhs_m)) == 0,
             (
-                Argument::CtVar {
+                Argument::CtSrcVar {
                     id: lhs_id,
                     block: lhs_block,
                 },
-                Argument::CtVar {
+                Argument::CtSrcVar {
                     id: rhs_id,
                     block: rhs_block,
                 },
             ) => (lhs_id, lhs_block) == (rhs_id, rhs_block),
             (
-                Argument::PtVar {
+                Argument::CtDstVar {
                     id: lhs_id,
                     block: lhs_block,
                 },
-                Argument::PtVar {
+                Argument::CtDstVar {
+                    id: rhs_id,
+                    block: rhs_block,
+                },
+            ) => (lhs_id, lhs_block) == (rhs_id, rhs_block),
+            (
+                Argument::PtSrcVar {
+                    id: lhs_id,
+                    block: lhs_block,
+                },
+                Argument::PtSrcVar {
                     id: rhs_id,
                     block: rhs_block,
                 },
             ) => (lhs_id, lhs_block) == (rhs_id, rhs_block),
             (Argument::LutId { id: lhs_id }, Argument::LutId { id: rhs_id }) => lhs_id == rhs_id,
+            (Argument::UserFlag { flag: lhs_flag }, Argument::UserFlag { flag: rhs_flag }) => {
+                lhs_flag == rhs_flag
+            }
+            (Argument::VirtId { id: lhs_id }, Argument::VirtId { id: rhs_id }) => lhs_id == rhs_id,
             _ => false,
         }
     }
@@ -161,17 +305,21 @@ impl PartialEq for Argument {
 impl Display for Argument {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Argument::PtConst { val } => write!(f, "PT_I({})", val),
-            Argument::CtHeap { addr } => write!(f, "CT_H({})", addr),
-            Argument::CtIo { addr } => write!(f, "CT_IO({})", addr),
-            Argument::CtReg { mask, addr } if *mask == MASK_NONE => write!(f, "R({})", addr),
-            Argument::CtReg { mask, addr } if *mask == MASK_PBS2 => write!(f, "R({}, 2)", addr),
-            Argument::CtReg { mask, addr } if *mask == MASK_PBS4 => write!(f, "R({}, 4)", addr),
-            Argument::CtReg { mask, addr } if *mask == MASK_PBS8 => write!(f, "R({}, 8)", addr),
-            Argument::CtVar { id, block } => write!(f, "TC({}, {})", id, block),
-            Argument::PtVar { id, block } => write!(f, "TI({}, {})", id, block),
-            Argument::LutId { id } => write!(f, "LUT({})", id),
-            _ => unreachable!(),
+            Argument::PtConst { val } => write!(f, "PT_I({val})"),
+            Argument::CtHeap { addr } => write!(f, "CT_H({addr})"),
+            Argument::CtIo { addr } => write!(f, "CT_IO({addr})"),
+            Argument::CtReg { mask, addr } if *mask == MASK_NONE => write!(f, "R({addr})"),
+            Argument::CtReg { mask, addr } if *mask == MASK_PBS2 => write!(f, "R({addr}, 2)"),
+            Argument::CtReg { mask, addr } if *mask == MASK_PBS4 => write!(f, "R({addr}, 4)"),
+            Argument::CtReg { mask, addr } if *mask == MASK_PBS8 => write!(f, "R({addr}, 8)"),
+            Argument::CtReg { .. } => unreachable!(),
+            Argument::CtSrcVar { id, block } | Argument::CtDstVar { id, block } => {
+                write!(f, "TC({id}, {block})")
+            }
+            Argument::PtSrcVar { id, block } => write!(f, "TI({id}, {block})"),
+            Argument::LutId { id } => write!(f, "LUT({id})"),
+            Argument::UserFlag { flag } => write!(f, "F({flag})"),
+            Argument::VirtId { id } => write!(f, "N({id})"),
         }
     }
 }
@@ -317,36 +465,59 @@ pub enum DopInstructionSet {
     /// Synchronization barrier. Consumes the context token, ensuring
     /// all preceding instructions have completed.
     SYNC,
+    /// Wait virtual op for Multi-HPU
+    WAIT {
+        flag: Argument,
+        slot: Option<Argument>,
+    },
+    /// Notify virtual op for Multi-HPU
+    NOTIFY {
+        virt_id: Argument,
+        flag: Argument,
+        slot: Argument,
+    },
+    /// Load B2B virtual op for Multi-HPU
+    LOAD_B2B { flag: Argument, slot: Argument },
 }
 
 impl Display for DopInstructionSet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use DopInstructionSet::*;
         match self {
-            ADD { dst, src1, src2 } => write!(f, "ADD<{}, {}, {}>", dst, src1, src2),
-            SUB { dst, src1, src2 } => write!(f, "SUB<{}, {}, {}>", dst, src1, src2),
+            ADD { dst, src1, src2 } => write!(f, "ADD<{dst}, {src1}, {src2}>"),
+            SUB { dst, src1, src2 } => write!(f, "SUB<{dst}, {src1}, {src2}>"),
             MAC {
                 dst,
                 src1,
                 src2,
                 cst,
-            } => write!(f, "MAC<{}, {}, {}, {}>", dst, src1, src2, cst),
-            ADDS { dst, src, cst } => write!(f, "ADDS<{}, {}, {}>", dst, src, cst),
-            SUBS { dst, src, cst } => write!(f, "SUBS<{}, {}, {}>", dst, src, cst),
-            SSUB { dst, src, cst } => write!(f, "SSUB<{}, {}, {}>", dst, src, cst),
-            MULS { dst, src, cst } => write!(f, "MULS<{}, {}, {}>", dst, src, cst),
-            LD { dst, src } => write!(f, "LD<{}, {}>", dst, src),
-            ST { dst, src } => write!(f, "ST<{}, {}>", dst, src),
-            PBS { dst, src, lut } => write!(f, "PBS<{}, {}, {}>", dst, src, lut),
-            PBS_ML2 { dst, src, lut } => write!(f, "PBS2<{}, {}, {}>", dst, src, lut),
-            PBS_ML4 { dst, src, lut } => write!(f, "PBS4<{}, {}, {}>", dst, src, lut),
-            PBS_ML8 { dst, src, lut } => write!(f, "PBS8<{}, {}, {}>", dst, src, lut),
-            PBS_F { dst, src, lut } => write!(f, "PBSF<{}, {}, {}>", dst, src, lut),
-            PBS_ML2_F { dst, src, lut } => write!(f, "PBS2F<{}, {}, {}>", dst, src, lut),
-            PBS_ML4_F { dst, src, lut } => write!(f, "PBS4F<{}, {}, {}>", dst, src, lut),
-            PBS_ML8_F { dst, src, lut } => write!(f, "PBS8F<{}, {}, {}>", dst, src, lut),
+            } => write!(f, "MAC<{dst}, {src1}, {src2}, {cst}>"),
+            ADDS { dst, src, cst } => write!(f, "ADDS<{dst}, {src}, {cst}>"),
+            SUBS { dst, src, cst } => write!(f, "SUBS<{dst}, {src}, {cst}>"),
+            SSUB { dst, src, cst } => write!(f, "SSUB<{dst}, {src}, {cst}>"),
+            MULS { dst, src, cst } => write!(f, "MULS<{dst}, {src}, {cst}>"),
+            LD { dst, src } => write!(f, "LD<{dst}, {src}>"),
+            ST { dst, src } => write!(f, "ST<{dst}, {src}>"),
+            PBS { dst, src, lut } => write!(f, "PBS<{dst}, {src}, {lut}>"),
+            PBS_ML2 { dst, src, lut } => write!(f, "PBS2<{dst}, {src}, {lut}>"),
+            PBS_ML4 { dst, src, lut } => write!(f, "PBS4<{dst}, {src}, {lut}>"),
+            PBS_ML8 { dst, src, lut } => write!(f, "PBS8<{dst}, {src}, {lut}>"),
+            PBS_F { dst, src, lut } => write!(f, "PBSF<{dst}, {src}, {lut}>"),
+            PBS_ML2_F { dst, src, lut } => write!(f, "PBS2F<{dst}, {src}, {lut}>"),
+            PBS_ML4_F { dst, src, lut } => write!(f, "PBS4F<{dst}, {src}, {lut}>"),
+            PBS_ML8_F { dst, src, lut } => write!(f, "PBS8F<{dst}, {src}, {lut}>"),
             _INIT => write!(f, "_INIT"),
             SYNC => write!(f, "SYNC"),
+            WAIT { flag, slot } => match slot {
+                Some(slot) => write!(f, "WAIT<{flag}, {slot}>"),
+                None => write!(f, "WAIT<{flag}>"),
+            },
+            NOTIFY {
+                virt_id,
+                flag,
+                slot,
+            } => write!(f, "NOTIFY<{virt_id}, {flag}, {slot}>"),
+            LOAD_B2B { flag, slot } => write!(f, "LOAD_B2B<{flag}, {slot}>"),
         }
     }
 }
@@ -385,6 +556,9 @@ impl DopInstructionSet {
             PBS_ML8_F { .. } => Pbs,
             _INIT => Ctl,
             SYNC => Ctl,
+            NOTIFY { .. } => Ctl,
+            WAIT { .. } => Ctl,
+            LOAD_B2B { .. } => Ctl,
         }
     }
 
@@ -414,6 +588,7 @@ impl DopInstructionSet {
             PBS_ML8_F { src, .. } => arg == src,
             _INIT => false,
             SYNC => false,
+            LOAD_B2B { .. } | WAIT { .. } | NOTIFY { .. } => panic!(),
         }
     }
 
@@ -440,6 +615,7 @@ impl DopInstructionSet {
             PBS_ML8_F { dst, .. } => Some(dst),
             _INIT => None,
             SYNC => None,
+            LOAD_B2B { .. } | WAIT { .. } | NOTIFY { .. } => panic!(),
         }
     }
 
@@ -467,6 +643,7 @@ impl DopInstructionSet {
             PBS_ML8_F { src, .. } => Some(src),
             _INIT => None,
             SYNC => None,
+            LOAD_B2B { .. } | WAIT { .. } | NOTIFY { .. } => panic!(),
         }
     }
 
@@ -496,6 +673,7 @@ impl DopInstructionSet {
             PBS_ML8_F { .. } => None,
             _INIT => None,
             SYNC => None,
+            LOAD_B2B { .. } | WAIT { .. } | NOTIFY { .. } => panic!(),
         }
     }
 }
@@ -523,7 +701,10 @@ impl DialectInstructionSet for DopInstructionSet {
             | PBS_F { .. }
             | PBS_ML2_F { .. }
             | PBS_ML4_F { .. }
-            | PBS_ML8_F { .. } => sig![(Ctx(0)) -> (Ctx(0))],
+            | PBS_ML8_F { .. }
+            | WAIT { .. }
+            | NOTIFY { .. }
+            | LOAD_B2B { .. } => sig![(Ctx(0)) -> (Ctx(0))],
             _INIT => sig![() -> (Ctx(0))],
             SYNC => sig![(Ctx(0)) -> ()],
         }
