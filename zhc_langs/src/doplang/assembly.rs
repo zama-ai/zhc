@@ -96,6 +96,22 @@ pub fn emit_assembly(ir: &IR<DopLang>) -> String {
             ),
             SYNC => writeln!(output, "SYNC"),
             _INIT => Ok(()),
+            WAIT { flag, slot } => match slot {
+                Some(slot) => writeln!(output, "WAIT {} {}", flag.asm(), slot.asm()),
+                None => writeln!(output, "WAIT {}", flag.asm()),
+            },
+            NOTIFY {
+                virt_id,
+                flag,
+                slot,
+            } => writeln!(
+                output,
+                "NOTIFY {} {} {}",
+                virt_id.asm(),
+                flag.asm(),
+                slot.asm()
+            ),
+            LD_B2B { flag, slot } => writeln!(output, "LD_B2B {} {}", flag.asm(), slot.asm()),
         }
         .unwrap();
     }
@@ -371,6 +387,26 @@ pub fn parse_assembly(input: &str) -> Result<IR<DopLang>, ParseError> {
                 DopInstructionSet::PBS_ML8_F { dst, src, lut }
             }
             "SYNC" => DopInstructionSet::SYNC,
+            "WAIT" => {
+                let flag = parse_arg(0, MASK_NONE)?;
+                let slot = parse_arg(1, MASK_NONE).map_or(None, |a| Some(a));
+                DopInstructionSet::WAIT { flag, slot }
+            }
+            "NOTIFY" => {
+                let virt_id = parse_arg(0, MASK_NONE)?;
+                let flag = parse_arg(1, MASK_NONE)?;
+                let slot = parse_arg(2, MASK_NONE)?;
+                DopInstructionSet::NOTIFY {
+                    virt_id,
+                    flag,
+                    slot,
+                }
+            }
+            "LD_B2B" => {
+                let flag = parse_arg(0, MASK_NONE)?;
+                let slot = parse_arg(1, MASK_NONE)?;
+                DopInstructionSet::LD_B2B { flag, slot }
+            }
             _ => {
                 return Err(ParseError {
                     line: line_num,

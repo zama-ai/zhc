@@ -10,10 +10,20 @@ use std::path::Path;
 
 use allocator::allocate_registers;
 use zhc_builder::Builder;
+use zhc_builder::CiphertextSpec;
+use zhc_builder::if_then_else;
+use zhc_builder::if_then_zero;
+use zhc_builder::mh_mul_lsb;
+use zhc_builder::{cmp_eq, cmp_gt, cmp_gte, cmp_lt, cmp_lte, cmp_neq};
 use zhc_ir::IR;
+use zhc_ir::cse::eliminate_common_subexpressions;
+use zhc_ir::dce::eliminate_dead_code;
 use zhc_langs::doplang::DopLang;
-use zhc_langs::hpulang::get_batch_statistics;
+use zhc_langs::doplang::emit_assembly;
+use zhc_langs::ioplang::IopInstructionSet;
 use zhc_langs::ioplang::IopLang;
+use zhc_langs::ioplang::cut_transfers;
+use zhc_langs::ioplang::eliminate_aliases;
 use zhc_sim::MHz;
 use zhc_sim::hpu::HpuConfig;
 
@@ -21,56 +31,17 @@ pub mod allocator;
 pub mod batch_scheduler;
 pub mod batcher;
 pub mod compat;
-pub mod draw_slack;
-pub mod gpu_metrics;
-pub mod hpu_metrics;
+pub mod interpreter;
 pub mod latency;
-pub mod pbs_metrics;
+pub mod statistics;
 pub mod tracing;
 pub mod translation;
 pub mod translation_table;
 
-/// Computes HPU-level performance metrics for a circuit.
-///
-/// Runs the full compilation pipeline and simulates execution to collect timing
-/// and batching statistics. Uses default HPU configuration.
-pub fn compute_hpu_metrics(builder: &Builder) -> hpu_metrics::HpuMetrics {
-    let ir = builder.optimize_ir();
-    let unscheduled = translation::lower_iop_to_hpu(&ir);
-    let batched = batcher::batch(&unscheduled, &HpuConfig::default());
-    let scheduled = batch_scheduler::schedule(&batched, &HpuConfig::default());
-    let allocated = allocate_registers(&scheduled, &HpuConfig::default());
-    hpu_metrics::compute_hpu_metrics(&allocated, &batched)
-}
-
-/// Computes GPU-level performance metrics for a circuit.
-///
-/// Returns batch statistics.
-pub fn compute_gpu_metrics(
-    builder: &Builder,
-    optimal_batch_size: usize,
-) -> gpu_metrics::GpuMetrics {
-    let ir = builder.optimize_ir();
-    let unscheduled = translation::lower_iop_to_hpu(&ir);
-    let mut config = HpuConfig::default();
-    config.pbs_min_batch_size = optimal_batch_size;
-    config.pbs_max_batch_size = optimal_batch_size;
-    let batched = batcher::batch(&unscheduled, &config);
-    let stats = get_batch_statistics(&batched);
-    gpu_metrics::GpuMetrics {
-        batch_stats: stats,
-        ir: batched,
-    }
-}
-
-/// Computes PBS-level metrics for a circuit.
-///
-/// Analyzes the optimized IOP-level IR to compute PBS count, critical path length,
-/// and slack distribution.
-pub fn compute_pbs_metrics(builder: &Builder) -> pbs_metrics::PbsMetrics {
-    let ir = builder.optimize_ir();
-    pbs_metrics::compute_pbs_metrics(&ir)
-}
+use zhc_langs::ioplang::isolate_subgraphs;
+pub use zhc_sim::hpu::HpuConfig;
+use zhc_sim::hpu::PhysicalConfig;
+pub use zhc_sim::{Cycle, MHz};
 
 /// Traces the execution of a computation graph to a perfetto file.
 ///
@@ -78,7 +49,7 @@ pub fn compute_pbs_metrics(builder: &Builder) -> pbs_metrics::PbsMetrics {
 /// generates an execution trace showing how operations execute on the HPU.
 /// The trace is written to the specified path and can be opened in perfetto.
 pub fn trace_execution(builder: &Builder, config: HpuConfig, path: impl AsRef<Path>) {
-    let ir = builder.optimize_ir();
+    let ir = builder.ir().to_owned();
     let allocated = regular_pipeline(ir, &config);
     tracing::trace_execution(&allocated, &config, path);
 }
@@ -89,23 +60,109 @@ pub fn trace_execution(builder: &Builder, config: HpuConfig, path: impl AsRef<Pa
 /// execution time in seconds based on the HPU configuration and clock frequency.
 /// Returns the latency as a floating-point number of micro-seconds.
 pub fn compute_latency(builder: &Builder, config: HpuConfig, freq: MHz) -> f64 {
-    let ir = builder.optimize_ir();
+    let ir = builder.ir().to_owned();
     let allocated = regular_pipeline(ir, &config);
-    latency::compute_latency(&allocated, &config)
-        .0
-        .as_ts(freq.period())
+    latency::compute_latency(&allocated, &config).as_ts(freq.period())
 }
 
-pub fn draw_slack(builder: &Builder, path: impl AsRef<Path>) {
-    draw_slack::draw_slack(builder, path);
-}
-
-fn regular_pipeline(ir: IR<IopLang>, config: &HpuConfig) -> IR<DopLang> {
+fn regular_pipeline(mut ir: IR<IopLang>, config: &HpuConfig) -> IR<DopLang> {
+    eliminate_aliases(&mut ir);
+    eliminate_dead_code(&mut ir);
+    eliminate_common_subexpressions(&mut ir);
     let unscheduled = translation::lower_iop_to_hpu(&ir);
     let batched = batcher::batch(&unscheduled, config);
     let scheduled = batch_scheduler::schedule(&batched, config);
     allocate_registers(&scheduled, config)
 }
 
+#[allow(unused)]
+fn multi_hpu_pipeline(mut ir: IR<IopLang>, config: &HpuConfig) -> Vec<IR<DopLang>> {
+    eliminate_aliases(&mut ir);
+    eliminate_dead_code(&mut ir);
+    eliminate_common_subexpressions(&mut ir);
+    cut_transfers(&mut ir);
+    let components = isolate_subgraphs(&ir, |op| {
+        use IopInstructionSet::*;
+        match op {
+            InputCiphertext { .. }
+            | InputPlaintext { .. }
+            | ExtractCtBlock { .. }
+            | ExtractPtBlock { .. }
+            | DeclareCiphertext { .. }
+            | LetCiphertextBlock { .. }
+            | LetPlaintextBlock { .. } => true,
+            _ => false,
+        }
+    });
+    let mut output = Vec::new();
+    for comp in components.into_iter() {
+        let unscheduled = translation::lower_iop_to_hpu(&comp);
+        let batched = batcher::batch(&unscheduled, config);
+        let scheduled = batch_scheduler::schedule(&batched, config);
+        let allocated = allocate_registers(&scheduled, config);
+        output.push(allocated);
+    }
+    output
+}
+
 #[cfg(test)]
 mod test;
+
+//#[test]
+#[allow(unused)]
+fn test_dump_trace() {
+    let bd = zhc_builder::mul_lsb(CiphertextSpec::new(64, 2, 2));
+    let config = HpuConfig::from(zhc_sim::hpu::PhysicalConfig::tuniform_64b_pfail128_psi64());
+    let pbses_count = regular_pipeline(bd.ir().to_owned(), &config)
+        .walk_ops_linear()
+        .filter(|op| op.get_instruction().affinity() == zhc_langs::doplang::Affinity::Pbs)
+        .count();
+    let lower_bound = latency::compute_lower_bound(pbses_count, &config).as_ts(MHz(400).period());
+    let mut min = f64::INFINITY;
+    for _ in 0..1000 {
+        let allocated = regular_pipeline(bd.ir().to_owned(), &config);
+        let new_lat = latency::compute_latency(&allocated, &config).as_ts(MHz(400).period());
+        if new_lat < min {
+            min = new_lat;
+            tracing::trace_execution(&allocated, &config, "smallest.json");
+        }
+        println!("{}/{lower_bound}   {}", min, min / lower_bound)
+    }
+}
+
+#[test]
+fn mh_mul() {
+    let hpu_config = HpuConfig::from(PhysicalConfig::tuniform_64b_pfail128_psi64());
+    let mut ir = mh_mul_lsb(CiphertextSpec::new(64, 2, 2), 2).into_ir();
+
+    cut_transfers(&mut ir);
+    let components = isolate_subgraphs(&ir, |op| {
+        use IopInstructionSet::*;
+        match op {
+            InputCiphertext { .. }
+            | InputPlaintext { .. }
+            | ExtractCtBlock { .. }
+            | ExtractPtBlock { .. }
+            | DeclareCiphertext { .. }
+            | LetCiphertextBlock { .. }
+            | LetPlaintextBlock { .. } => true,
+            _ => false,
+        }
+    });
+
+    println!("{components:?}");
+    assert_eq!(components.len(), 2);
+
+    for (i, comp) in components.into_iter().enumerate() {
+        let unscheduled = translation::lower_iop_to_hpu(&comp);
+        let batched = batcher::batch(&unscheduled, &hpu_config);
+        let scheduled = batch_scheduler::schedule(&batched, &hpu_config);
+        let allocated = allocate_registers(&scheduled, &hpu_config);
+        use std::fs::File;
+        use std::io::Write;
+        let filename = format!("output_{}.asm", i);
+        let mut file = File::create(&filename).expect("Failed to create .asm file");
+        file.write_all(emit_assembly(&allocated).as_bytes())
+            .expect("Failed to write to .asm file");
+    }
+}

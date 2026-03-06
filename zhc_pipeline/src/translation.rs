@@ -362,6 +362,16 @@ pub fn lower_iop_to_hpu(ir: &IR<IopLang>) -> IR<HpuLang> {
         });
     translate_ann(&ann_ir, Order::Linear, |op, translator| {
         match op.get_instruction() {
+            IopInstructionSet::Transfer => {
+                // Transfer should have been cut and split into different graphs at this point.
+                panic!("Unexpected Transfer op encountered.");
+            }
+            IopInstructionSet::TransferIn { uid } => {
+                translator.direct_translation(op, HpuInstructionSet::TransferIn { tid: uid });
+            }
+            IopInstructionSet::TransferOut { uid } => {
+                translator.direct_translation(op, HpuInstructionSet::TransferOut { tid: uid });
+            }
             IopInstructionSet::_Consume { .. } => {
                 panic!("Tried to translate a _consume op");
             }

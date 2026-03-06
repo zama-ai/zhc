@@ -160,6 +160,9 @@ impl Format for IopInstructionSet {
             IopInstructionSet::StoreCtBlock { index } => write!(f, "store_ct_block<{index}>"),
             IopInstructionSet::Pbs { check, lut } => write!(f, "pbs<{check:?}, {lut:?}>"),
             IopInstructionSet::Pbs2 { check, lut } => write!(f, "pbs2<{check:?}, {lut:?}>"),
+            IopInstructionSet::Transfer => write!(f, "transfer"),
+            IopInstructionSet::TransferIn { uid } => write!(f, "transfer_in<#{uid}>"),
+            IopInstructionSet::TransferOut { uid } => write!(f, "transfer_out<#{uid}>"),
         }
     }
 }
@@ -226,6 +229,9 @@ impl DialectInstructionSet for IopInstructionSet {
                 sig![(CiphertextBlock) -> (CiphertextBlock, CiphertextBlock)]
             }
             IopInstructionSet::Inspect { typ } => sig![(typ.clone()) -> (typ.clone())],
+            IopInstructionSet::Transfer => sig![(CiphertextBlock) -> (CiphertextBlock)],
+            IopInstructionSet::TransferIn { .. } => sig![() -> (CiphertextBlock)],
+            IopInstructionSet::TransferOut { .. } => sig![(CiphertextBlock) -> ()],
         }
     }
 }

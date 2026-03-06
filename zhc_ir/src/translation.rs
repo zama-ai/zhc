@@ -81,18 +81,69 @@ impl<ID: Dialect, OD: Dialect> Translator<ID, OD> {
             "Tried to register a translation twice for {old}"
         );
     }
+}
 
-    /// Performs a one-to-one operation translation.
-    ///
-    /// Translates every argument of `op` via [`translate_val`](Self::translate_val),
-    /// emits a single output operation with instruction `instr` and those
-    /// translated arguments, then registers the return-value correspondences.
+/// Translates an [`IR<ID>`] into an [`IR<OD>`] by visiting every operation in
+/// insertion order.
+///
+/// The `driver` is invoked once per operation in `ir`. It receives an
+/// [`OpRef`] into the source IR and a mutable [`EagerTranslator`] handle,
+/// and must emit corresponding output operations and register all value
+/// translations so that subsequent driver calls can resolve their arguments.
+pub fn eager_translate<'a, ID: Dialect, OD: Dialect>(
+    ir: &'a IR<ID>,
+    driver: impl Fn(OpRef<'a, ID>, &mut EagerTranslator<ID, OD>),
+) -> IR<OD> {
+    let output = IR::empty();
+    let valmap = ir.empty_valmap();
+    let mut translator = EagerTranslator {
+        output,
+        valmap,
+        phantom: PhantomData,
+    };
+    for op in ir.walk_ops_linear() {
+        driver(op, &mut translator)
+    }
+    translator.output
+}
+
+/// Mutable translation state for eager translation of annotation-carrying IR.
+///
+/// Annotation-aware variant of [`EagerTranslator`]. Passed to the driver by
+/// [`eager_translate_ann`], giving the driver access to per-operation and
+/// per-value annotations through the [`AnnOpRef`] it receives.
+pub struct AnnEagerTranslator<ID: Dialect, OpAnn: Annotation, ValAnn: Annotation, OD: Dialect> {
+    output: IR<OD>,
+    valmap: ValMap<ValId>,
+    phantom: PhantomData<(ID, OpAnn, ValAnn)>,
+}
+
+impl<ID: Dialect, OpAnn: Annotation, ValAnn: Annotation, OD: Dialect>
+    AnnEagerTranslator<ID, OpAnn, ValAnn, OD>
+{
+    /// Returns the output-dialect [`ValId`] corresponding to `old`.
     ///
     /// # Panics
     ///
-    /// Panics if any argument lacks a registered translation, if the return
-    /// arity differs, or if any return value already has a translation.
-    pub fn direct_translation<'a, 'b, OpAnn: Annotation, ValAnn: Annotation>(
+    /// Panics if no translation has been registered for `old`.
+    pub fn translate_val(&self, old: ValId) -> ValId {
+        self.valmap.get(&old).unwrap().clone()
+    }
+
+    /// Performs a one-to-one operation translation.
+    ///
+    /// Translates every argument of `op` via
+    /// [`translate_val`](Self::translate_val), emits a single output operation
+    /// with instruction `instr` and those translated arguments, then registers
+    /// the return-value correspondences between `op`'s returns and the new
+    /// operation's returns.
+    ///
+    /// # Panics
+    ///
+    /// Panics if any argument of `op` lacks a registered translation, if the
+    /// return arity of `instr` differs from that of `op`, or if any return
+    /// value of `op` already has a registered translation.
+    pub fn direct_translation<'a, 'b>(
         &mut self,
         op: AnnOpRef<'a, 'b, ID, OpAnn, ValAnn>,
         instr: OD::InstructionSet,
@@ -107,6 +158,27 @@ impl<ID: Dialect, OD: Dialect> Translator<ID, OD> {
         (new_rets.into_iter(), op.get_return_valids().iter())
             .mzip()
             .for_each(|(new, old)| self.register_translation(*old, new));
+    }
+
+    /// Emits an operation in the output [`IR`] and returns the [`ValId`]s of
+    /// the newly created return values.
+    ///
+    /// Delegates to [`IR::add_op`]; see [`EagerTranslator::add_op`] for full
+    /// contract.
+    pub fn add_op(&mut self, instr: OD::InstructionSet, args: SmallVec<ValId>) -> SmallVec<ValId> {
+        self.output.add_op(instr, args).1
+    }
+
+    /// Records a mapping from source value `old` to output value `new`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a translation has already been registered for `old`.
+    pub fn register_translation(&mut self, old: ValId, new: ValId) {
+        assert!(
+            self.valmap.insert(old, new).is_none(),
+            "Tried to register a translation twice for {old}"
+        );
     }
 }
 

@@ -360,6 +360,9 @@ impl Interpretable<IopValue> for super::IopInstructionSet {
                 ]
             }
             Inspect { .. } => arguments,
+            Transfer | TransferIn { .. } | TransferOut { .. } => {
+                panic!("Interpretation of multi-hpu graphs is not supported.")
+            }
         }
     }
 }

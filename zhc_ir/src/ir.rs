@@ -1,14 +1,11 @@
-use crate::failure::Failure;
 use crate::interpretation::{
     InterpState, Interpretable, Interpretation, InterpretsTo, interpret_ir,
 };
 use crate::val_ref::ValRef;
-use crate::{
-    Analysing, AnnIR, AnnOpRef, Annotation, AsOpId, AsValId, Formatted, ValMap, ValOrigin, ValUse,
-};
+use crate::{Analysing, AnnIR, AnnOpRef, Annotation, Formatted, ValMap, ValOrigin, ValUse};
 use std::{cmp::max, fmt::Debug};
 use zhc_utils::iter::MultiZip;
-use zhc_utils::{Dumpable, SafeAs, svec};
+use zhc_utils::{Dumpable, svec};
 use zhc_utils::{Store, small::SmallVec};
 
 use super::{
@@ -19,7 +16,7 @@ use super::{
 /// Operation depth relative to the IR inputs, used for topological ordering.
 ///
 /// The depth is the length of the longest path between an input of the IR and the op.
-pub type Depth = OpIdRaw;
+pub type Depth = u16;
 
 fn val_active<'a, D: Dialect>(val: &ValRef<'a, D>) -> bool {
     val.is_active()
@@ -87,38 +84,36 @@ impl<D: Dialect> IR<D> {
         self.op_states.len()
     }
 
-    pub(crate) fn raw_has_opid(&self, opid: impl AsOpId) -> bool {
-        opid.op_id().0 < self.raw_n_ops()
+    pub(crate) fn raw_has_opid(&self, opid: OpId) -> bool {
+        opid.0 < self.raw_n_ops()
     }
 
-    pub(crate) fn raw_get_op(&self, opid: impl AsOpId) -> OpRef<'_, D> {
-        let opid = opid.op_id();
+    pub(crate) fn raw_get_op(&self, opid: OpId) -> OpRef<'_, D> {
         assert!(self.raw_has_opid(opid), "Unknown opid");
         OpRef {
             ir: self,
-            operation: &self.op_operations[&opid],
-            signature: &self.op_signatures[&opid],
-            args: self.op_arguments[&opid].as_slice(),
-            returns: self.op_returns[&opid].as_slice(),
+            operation: &self.op_operations[opid],
+            signature: &self.op_signatures[opid],
+            args: self.op_arguments[opid].as_slice(),
+            returns: self.op_returns[opid].as_slice(),
             id: opid,
-            state: &self.op_states[&opid],
-            depth: &self.op_depth[&opid],
-            comment: &self.op_comments[&opid],
+            state: &self.op_states[opid],
+            depth: &self.op_depth[opid],
+            comment: &self.op_comments[opid],
         }
     }
 
-    pub(crate) fn raw_get_op_mut(&mut self, opid: impl AsOpId) -> OpMut<'_, D> {
-        let opid = opid.op_id();
+    pub(crate) fn raw_get_op_mut(&mut self, opid: OpId) -> OpMut<'_, D> {
         assert!(self.raw_has_opid(opid), "Unknown opid");
         OpMut {
-            instruction: &mut self.op_operations[&opid],
-            signature: &mut self.op_signatures[&opid],
-            args: &mut self.op_arguments[&opid],
-            returns: &mut self.op_returns[&opid],
+            instruction: &mut self.op_operations[opid],
+            signature: &mut self.op_signatures[opid],
+            args: &mut self.op_arguments[opid],
+            returns: &mut self.op_returns[opid],
             id: opid,
-            state: &mut self.op_states[&opid],
-            depth: &mut self.op_depth[&opid],
-            comment: &mut self.op_comments[&opid],
+            state: &mut self.op_states[opid],
+            depth: &mut self.op_depth[opid],
+            comment: &mut self.op_comments[opid],
         }
     }
 
@@ -126,32 +121,30 @@ impl<D: Dialect> IR<D> {
         self.val_states.len()
     }
 
-    pub(crate) fn raw_has_valid(&self, valid: impl AsValId) -> bool {
-        valid.val_id().0 < self.raw_n_vals()
+    pub(crate) fn raw_has_valid(&self, valid: ValId) -> bool {
+        valid.0 < self.raw_n_vals()
     }
 
-    pub(crate) fn raw_get_val(&self, valid: impl AsValId) -> ValRef<'_, D> {
-        let valid = valid.val_id();
+    pub(crate) fn raw_get_val(&self, valid: ValId) -> ValRef<'_, D> {
         assert!(self.raw_has_valid(valid), "Unkown valid");
         ValRef {
             id: valid,
             ir: self,
-            users: self.val_users[&valid].as_slice(),
-            origin: &self.val_origins[&valid],
-            typ: &self.val_types[&valid],
-            state: &self.val_states[&valid],
+            users: self.val_users[valid].as_slice(),
+            origin: &self.val_origins[valid],
+            typ: &self.val_types[valid],
+            state: &self.val_states[valid],
         }
     }
 
-    pub(crate) fn raw_get_val_mut(&mut self, valid: impl AsValId) -> ValMut<'_, D> {
-        let valid = valid.val_id();
+    pub(crate) fn raw_get_val_mut(&mut self, valid: ValId) -> ValMut<'_, D> {
         assert!(self.raw_has_valid(valid), "Unkown valid");
         ValMut {
             id: valid,
-            users: &mut self.val_users[&valid],
-            origin: &mut self.val_origins[&valid],
-            typ: &mut self.val_types[&valid],
-            state: &mut self.val_states[&valid],
+            users: &mut self.val_users[valid],
+            origin: &mut self.val_origins[valid],
+            typ: &mut self.val_types[valid],
+            state: &mut self.val_states[valid],
         }
     }
 
@@ -165,9 +158,9 @@ impl<D: Dialect> IR<D> {
 
     pub(crate) fn raw_topological_opwalker(&self) -> impl DoubleEndedIterator<Item = OpId> {
         let max_depth = *self.op_depth.iter().max().unwrap_or(&0);
-        let mut depth_buckets = vec![svec![]; (max_depth + 1).sas()];
+        let mut depth_buckets = vec![svec![]; (max_depth + 1) as usize];
         for op in self.raw_walk_ops_linear() {
-            depth_buckets[op.get_depth().sas::<usize>()].push(op.get_id());
+            depth_buckets[op.get_depth() as usize].push(op.get_id());
         }
         depth_buckets.into_iter().flat_map(|b| b.into_iter())
     }
@@ -300,8 +293,7 @@ impl<D: Dialect> IR<D> {
     }
 
     /// Returns `true` if the specified operation ID exists and is active.
-    pub fn has_opid(&self, opid: impl AsOpId) -> bool {
-        let opid = opid.op_id();
+    pub fn has_opid(&self, opid: OpId) -> bool {
         self.raw_has_opid(opid) && self.raw_get_op(opid).is_active()
     }
 
@@ -311,8 +303,7 @@ impl<D: Dialect> IR<D> {
     }
 
     /// Returns `true` if the specified value ID exists and is active.
-    pub fn has_valid(&self, valid: impl AsValId) -> bool {
-        let valid = valid.val_id();
+    pub fn has_valid(&self, valid: ValId) -> bool {
         self.raw_has_valid(valid) && self.raw_get_val(valid).is_active()
     }
 
@@ -321,7 +312,7 @@ impl<D: Dialect> IR<D> {
     /// # Panics
     ///
     /// Panics if the operation ID does not exist or refers to an inactive operation.
-    pub fn get_op(&self, opid: impl AsOpId) -> OpRef<'_, D> {
+    pub fn get_op(&self, opid: OpId) -> OpRef<'_, D> {
         let op = self.raw_get_op(opid);
         assert!(op.is_active(), "Tried to get a dead op");
         op
@@ -332,7 +323,7 @@ impl<D: Dialect> IR<D> {
     /// # Panics
     ///
     /// Panics if the value ID does not exist or refers to an inactive value.
-    pub fn get_val(&self, valid: impl AsValId) -> ValRef<'_, D> {
+    pub fn get_val(&self, valid: ValId) -> ValRef<'_, D> {
         let val = self.raw_get_val(valid);
         assert!(val.is_active(), "Tried to get a dead val");
         val
@@ -382,32 +373,6 @@ impl<D: Dialect> IR<D> {
         walker.map(|valid| self.get_val(valid))
     }
 
-    /// Applies a mutation function to all active operations in linear order.
-    pub fn mutate_ops_linear(&mut self, f: impl FnMut(&mut D::InstructionSet)) {
-        self.mutate_ops_with(
-            self.raw_linear_opwalker()
-                .collect::<SmallVec<_>>()
-                .into_iter(),
-            f,
-        );
-    }
-
-    /// Applies a mutation function to operations visited by the specified walker.
-    ///
-    /// Only active operations are mutated; inactive operations are skipped.
-    pub fn mutate_ops_with(
-        &mut self,
-        walker: impl Iterator<Item = OpId>,
-        mut f: impl FnMut(&mut D::InstructionSet),
-    ) {
-        walker.for_each(|opid| {
-            let opmut = self.raw_get_op_mut(opid);
-            if opmut.state.is_active() {
-                f(opmut.instruction);
-            };
-        });
-    }
-
     /// Adds a new operation to the IR.
     ///
     /// Returns the [`OpId`] of the created operation and the [`ValId`]s of its
@@ -450,74 +415,21 @@ impl<D: Dialect> IR<D> {
         args: SmallVec<ValId>,
         comment: Option<String>,
     ) -> (OpId, SmallVec<ValId>) {
-        self.try_add_op_impl(op, args, comment)
-            .unwrap_or_else(|e| panic!("add_op failed: {e}"))
-    }
-
-    /// Adds a new operation to the IR, returning an error on validation failure.
-    ///
-    /// Returns the [`OpId`] of the created operation and the [`ValId`]s of its return values.
-    /// The operation's signature is validated against the argument types, and use-def chains are
-    /// automatically updated.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`Failure::UnknownValue`] if any argument ID does not exist,
-    /// [`Failure::InactiveValue`] if any argument has been deactivated,
-    /// [`Failure::SignatureMismatch`] if argument types do not match the operation's signature,
-    /// or [`Failure::DepthOverflow`] if depth computation overflows.
-    pub fn try_add_op(
-        &mut self,
-        op: D::InstructionSet,
-        args: SmallVec<ValId>,
-    ) -> Result<(OpId, SmallVec<ValId>), Failure<D>> {
-        self.try_add_op_impl(op, args, None)
-    }
-
-    /// Adds a new operation to the IR with a comment attached, returning an error on failure.
-    ///
-    /// Behaves identically to [`try_add_op`](Self::try_add_op) but attaches `comment` to the
-    /// operation for debugging and formatting purposes.
-    ///
-    /// # Errors
-    ///
-    /// Same as [`try_add_op`](Self::try_add_op).
-    pub fn try_add_op_with_comment(
-        &mut self,
-        op: D::InstructionSet,
-        args: SmallVec<ValId>,
-        comment: String,
-    ) -> Result<(OpId, SmallVec<ValId>), Failure<D>> {
-        self.try_add_op_impl(op, args, Some(comment))
-    }
-
-    fn try_add_op_impl(
-        &mut self,
-        op: D::InstructionSet,
-        args: SmallVec<ValId>,
-        comment: Option<String>,
-    ) -> Result<(OpId, SmallVec<ValId>), Failure<D>> {
-        // Check that the args exist and are live.
-        for valid in args.iter() {
-            if !self.raw_has_valid(*valid) {
-                return Err(Failure::UnknownValue(*valid));
-            }
-            if !self.raw_get_val(*valid).is_active() {
-                return Err(Failure::InactiveValue(*valid));
-            }
-        }
-
+        // Check that the args are live.
+        args.iter().for_each(|valid| {
+            assert!(self.has_valid(*valid), "Unknown valid");
+        });
         // Check that the signature matches the arguments types.
         let sig = op.get_signature();
-        let actual: SmallVec<_> = args
+        let actual = args
             .iter()
-            .map(|a| self.get_val(*a).get_type().clone())
-            .collect();
-        if sig.get_args() != actual.as_slice() {
-            return Err(Failure::SignatureMismatch {
-                expected: sig.get_args().iter().cloned().collect(),
-                actual,
-            });
+            .map(|a| self.get_val(*a).get_type())
+            .collect::<Vec<_>>();
+        if sig.get_args() != actual {
+            panic!(
+                "Signature Error: {op:?} received {actual:?} instead of {:?}",
+                sig.get_args()
+            );
         }
 
         // We compute the depth from the inputs.
@@ -530,14 +442,15 @@ impl<D: Dialect> IR<D> {
         } else {
             let (d, overflow) = arg_depth.unwrap().overflowing_add(1);
             if overflow {
-                return Err(Failure::DepthOverflow);
+                panic!("Overflow occured while computing the depth of a new operation.");
             }
             d
         };
 
         // Now we are ready to mutate the various stores.
 
-        // We begin by adding the op.
+        // We begin by adding the op. Note that for now the return values do not exist, and will be
+        // added once created.
         let op = Op {
             instruction: op,
             signature: sig.clone(),
@@ -549,12 +462,12 @@ impl<D: Dialect> IR<D> {
         };
         let opid = self.raw_insert_op(op);
 
-        // We update the arg users list to add the newly created operation.
+        // We update the arg users list to add the newly created operation
         for (i, arg) in args.iter().enumerate() {
             let arg = self.raw_get_val_mut(*arg);
             arg.users.push(ValUse {
                 opid,
-                position: i.sas(),
+                position: i as u8,
             });
         }
 
@@ -568,7 +481,7 @@ impl<D: Dialect> IR<D> {
                     users: svec![],
                     origin: ValOrigin {
                         opid,
-                        position: i.sas(),
+                        position: i as u8,
                     },
                     typ: ty,
                     state: State::Active(()),
@@ -577,12 +490,13 @@ impl<D: Dialect> IR<D> {
             })
             .collect::<SmallVec<_>>();
 
-        // We update the op returns according to our newly created values.
+        // We update the op returns according to our newly created values
         self.raw_get_op_mut(opid)
             .returns
             .extend(valids.as_slice().iter().cloned());
 
-        Ok((opid, valids))
+        // All good
+        (opid, valids)
     }
 
     /// Replaces all uses of a value with another value.
@@ -596,9 +510,7 @@ impl<D: Dialect> IR<D> {
     /// Panics if either value ID is unknown or inactive, if `old` and `new`
     /// have different types, or if the replacement would introduce a cycle
     /// (i.e. `new` is reachable from a consumer of `old`).
-    pub fn replace_val_use(&mut self, old: impl AsValId, new: impl AsValId) {
-        let old = old.val_id();
-        let new = new.val_id();
+    pub fn replace_val_use(&mut self, old: ValId, new: ValId) {
         assert!(self.has_valid(old), "Unknown valid.");
         assert!(self.has_valid(new), "Unknown valid.");
         if old == new {
@@ -675,8 +587,7 @@ impl<D: Dialect> IR<D> {
     ///
     /// Panics if the operation is already inactive, or if any of its return
     /// values still have active consumers.
-    pub fn delete_op(&mut self, opid: impl AsOpId) {
-        let opid = opid.op_id();
+    pub fn delete_op(&mut self, opid: OpId) {
         assert!(
             !self.raw_get_op(opid).is_inactive(),
             "Tried to delete an already inactive operation"
@@ -685,16 +596,51 @@ impl<D: Dialect> IR<D> {
             !self.get_op(opid).has_users(),
             "Tried to delete an operation whose return values are still in use."
         );
-        for valid in self.op_returns[&opid].iter().cloned() {
-            self.val_states[&valid].shutdown();
+        for valid in self.op_returns[opid].iter().cloned() {
+            self.val_states[valid].shutdown();
             // Decrementing the val count is valid since `shutdown` panics if the value is already
             // shutdown.
             self.val_count -= 1;
         }
-        self.op_states[&opid].shutdown();
+        self.op_states[opid].shutdown();
         // Decrementing the op count is valid since `shutdown` panics if the value is already
         // shutdown.
         self.op_count -= 1;
+    }
+
+    /// Prints the formatted IR to stdout and panics.
+    ///
+    /// Debugging utility for inspecting the IR state at a specific point.
+    ///
+    /// # Panics
+    ///
+    /// Always.
+    pub fn dump(&self) -> ! {
+        println!(
+            "{}",
+            self.format()
+                .with_walker(crate::PrintWalker::Linear)
+                .show_types(false)
+                .show_opid(true)
+                .show_comments(true)
+        );
+        panic!();
+    }
+
+    pub fn dump_and_wait(&self) {
+        println!(
+            "{}",
+            self.format()
+                .with_walker(crate::PrintWalker::Linear)
+                .show_types(false)
+                .show_opid(true)
+                .show_comments(true)
+        );
+        use std::io::{self, Write};
+        print!("Type any key to continue >>> ");
+        io::stdout().flush().unwrap();
+        let mut input = String::new();
+        io::stdin().read_line(&mut input).unwrap();
     }
 
     /// Creates an empty operation map for this IR.
@@ -768,19 +714,19 @@ impl<D: Dialect> IR<D> {
             ir: self,
         };
         for opref in self.walk_ops_topological().rev() {
-            let (opann, valanns) = f(ann_ir.get_op(&opref));
-            assert_eq!(valanns.len(), opref.get_return_arity());
+            let (opann, valanns) = f(ann_ir.get_op(opref.id));
+            assert_eq!(valanns.len(), opref.get_return_valids().len());
             assert!(matches!(
                 ann_ir
                     .op_annotations
-                    .insert(&opref, Analysing::Analyzed(opann)),
+                    .insert(*opref, Analysing::Analyzed(opann)),
                 Some(Analysing::Pending)
             ));
             for (valann, valref) in (valanns.into_iter(), opref.get_return_valids().iter()).mzip() {
                 assert!(matches!(
                     ann_ir
                         .val_annotations
-                        .insert(valref, Analysing::Analyzed(valann)),
+                        .insert(*valref, Analysing::Analyzed(valann)),
                     Some(Analysing::Pending)
                 ));
             }
@@ -815,19 +761,19 @@ impl<D: Dialect> IR<D> {
             ir: self,
         };
         for opref in self.walk_ops_topological() {
-            let (opann, valanns) = f(ann_ir.get_op(&opref));
+            let (opann, valanns) = f(ann_ir.get_op(opref.id));
             assert_eq!(valanns.len(), opref.get_return_valids().len());
             assert!(matches!(
                 ann_ir
                     .op_annotations
-                    .insert(&opref, Analysing::Analyzed(opann)),
+                    .insert(*opref, Analysing::Analyzed(opann)),
                 Some(Analysing::Pending)
             ));
             for (valann, valref) in (valanns.into_iter(), opref.get_return_valids().iter()).mzip() {
                 assert!(matches!(
                     ann_ir
                         .val_annotations
-                        .insert(valref, Analysing::Analyzed(valann)),
+                        .insert(*valref, Analysing::Analyzed(valann)),
                     Some(Analysing::Pending)
                 ));
             }
