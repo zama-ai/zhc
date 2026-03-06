@@ -7,8 +7,8 @@
 //! sequence of fully-resolved machine operations.
 //!
 //! The dialect supports two stream modes through the [`Argument`] enum:
-//! *unpatched* streams contain symbolic variables ([`CtVar`](Argument::CtVar),
-//! [`PtVar`](Argument::PtVar)) that the microcontroller patches at
+//! *unpatched* streams contain symbolic variables ([`CtSrcVar`](Argument::CtSrcVar),
+//! [`PtVar`](Argument::PtSrcVar)) that the microcontroller patches at
 //! load time into physical addresses, while *patched* streams carry
 //! resolved memory addresses ([`CtHeap`](Argument::CtHeap),
 //! [`CtIo`](Argument::CtIo)) and constant immediates
@@ -22,11 +22,13 @@
 //! scheduler uses affinity to dispatch instructions to the
 //! corresponding hardware functional unit.
 
+mod assembly;
 mod dialect;
 mod instruction_set;
-pub mod interpretation;
+mod interpretation;
 mod type_system;
 
+pub use assembly::*;
 pub use dialect::*;
 pub use instruction_set::*;
 pub use interpretation::*;

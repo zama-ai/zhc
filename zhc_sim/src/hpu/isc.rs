@@ -56,6 +56,13 @@ impl Pool {
     }
 
     pub fn refill(&mut self, dop: DOp) {
+        assert!(
+            !matches!(
+                dop.raw,
+                RawDOp::NOTIFY { .. } | RawDOp::WAIT { .. } | RawDOp::LOAD_B2B { .. }
+            ),
+            "Multi-HPU is not yet supported in simulation."
+        );
         assert!(self.slots_available());
         self.slots.push(Slot {
             read_lock: self.init_read_lock(&dop.raw),
