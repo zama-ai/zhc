@@ -124,6 +124,7 @@ impl Interpretable<HpuValue> for super::HpuInstructionSet {
     ) -> SmallVec<HpuValue> {
         use super::HpuInstructionSet::*;
         match self {
+            TransferIn { .. } | TransferOut { .. } => panic!("Interpretation of multi-hpu graphs is not supported."),
             // ── Memory transfer ──────────────────────────────────────
             SrcLd { from } => {
                 let ct = context

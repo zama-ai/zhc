@@ -36,6 +36,8 @@ mod instruction_set;
 mod interpretation;
 mod lut;
 mod skip_store_load;
+mod cut_transfers;
+mod isolate_subgraphs;
 mod type_system;
 
 pub use dialect::*;
@@ -45,3 +47,5 @@ pub use interpretation::*;
 pub use lut::*;
 pub use skip_store_load::*;
 pub use type_system::*;
+pub use cut_transfers::*;
+pub use isolate_subgraphs::*;

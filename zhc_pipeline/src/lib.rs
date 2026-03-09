@@ -14,6 +14,7 @@ use zhc_builder::if_then_zero;
 use zhc_builder::{cmp_eq, cmp_gt, cmp_gte, cmp_lt, cmp_lte, cmp_neq};
 use zhc_ir::cse::eliminate_common_subexpressions;
 use zhc_ir::dce::eliminate_dead_code;
+use zhc_langs::ioplang::cut_transfers;
 use zhc_langs::ioplang::eliminate_aliases;
 
 pub mod allocator;
@@ -25,6 +26,7 @@ pub mod latency;
 pub mod translation;
 pub mod translation_table;
 
+use zhc_langs::ioplang::isolate_subgraphs;
 pub use zhc_sim::hpu::HpuConfig;
 pub use zhc_sim::{Cycle, MHz};
 
@@ -46,7 +48,7 @@ pub use zhc_builder::CiphertextSpec;
 use crate::batch_scheduler::batch_schedule;
 use crate::translation::lower_iop_to_hpu;
 
-fn pipeline(hpu_config: &HpuConfig, spec: CiphertextSpec, iop: Iop) -> Vec<DOpRepr> {
+fn hpu_pipeline(hpu_config: &HpuConfig, spec: CiphertextSpec, iop: Iop) -> Vec<DOpRepr> {
     let mut ir = match iop {
         Iop::CmpGt => cmp_gt(spec).into_ir(),
         Iop::CmpGte => cmp_gte(spec).into_ir(),
@@ -61,11 +63,35 @@ fn pipeline(hpu_config: &HpuConfig, spec: CiphertextSpec, iop: Iop) -> Vec<DOpRe
     eliminate_dead_code(&mut ir);
     eliminate_common_subexpressions(&mut ir);
     let unscheduled = lower_iop_to_hpu(&ir);
-    // let scheduled = schedule(&unscheduled, hpu_config);
-    // let batched = batch(&scheduled, hpu_config.pbs_min_batch_size);
     let batched = batch_schedule(&unscheduled, &hpu_config);
     let allocated = allocate_registers(&batched, &hpu_config);
     generate_translation_table(&allocated)
+}
+
+fn multi_hpu_pipeline(hpu_config: &HpuConfig, spec: CiphertextSpec, iop: Iop) -> Vec<Vec<DOpRepr>> {
+    let mut ir = match iop {
+        Iop::CmpGt => cmp_gt(spec).into_ir(),
+        Iop::CmpGte => cmp_gte(spec).into_ir(),
+        Iop::CmpLt => cmp_lt(spec).into_ir(),
+        Iop::CmpLte => cmp_lte(spec).into_ir(),
+        Iop::CmpEq => cmp_eq(spec).into_ir(),
+        Iop::CmpNeq => cmp_neq(spec).into_ir(),
+        Iop::IfThenElse => if_then_else(spec).into_ir(),
+        Iop::IfThenZero => if_then_zero(spec).into_ir(),
+    };
+    eliminate_aliases(&mut ir);
+    eliminate_dead_code(&mut ir);
+    eliminate_common_subexpressions(&mut ir);
+    cut_transfers(&mut ir);
+    let components = isolate_subgraphs(&ir);
+    let mut output = Vec::new();
+    for comp in components.into_iter() {
+        let unscheduled = lower_iop_to_hpu(&comp);
+        let batched = batch_schedule(&unscheduled, &hpu_config);
+        let allocated = allocate_registers(&batched, &hpu_config);
+        output.push(generate_translation_table(&allocated));
+    }
+    output
 }
 
 /// Generates a translation table for the specified operation configuration.
@@ -78,7 +104,7 @@ pub fn get_translation_table(
     spec: CiphertextSpec,
     iop: Iop,
 ) -> Vec<DOpRepr> {
-    pipeline(hpu_config, spec, iop)
+    hpu_pipeline(hpu_config, spec, iop)
 }
 
 #[cfg(test)]

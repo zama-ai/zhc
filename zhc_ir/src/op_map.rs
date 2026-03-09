@@ -1,7 +1,7 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, ops::IndexMut};
 use std::ops::Index;
 
-use zhc_utils::{ChangeGuard, Store};
+use zhc_utils::Store;
 
 use crate::OpRef;
 
@@ -18,7 +18,6 @@ pub struct OpMap<T> {
     store: Store<OpId, State<Option<T>>>,
     n_stored: u16,
     n_inactive: u16,
-    changed: bool,
 }
 
 impl<T> OpMap<T> {
@@ -42,7 +41,6 @@ impl<T> OpMap<T> {
                 .collect(),
             n_stored: 0,
             n_inactive: ir.raw_n_ops() - ir.n_ops(),
-            changed: false,
         }
     }
 
@@ -65,7 +63,6 @@ impl<T> OpMap<T> {
                 .collect(),
             n_stored: ir.n_ops(),
             n_inactive: ir.raw_n_ops() - ir.n_ops(),
-            changed: false,
         }
     }
 
@@ -91,7 +88,6 @@ impl<T> OpMap<T> {
                 .collect(),
             n_stored: ir.n_ops(),
             n_inactive: ir.raw_n_ops() - ir.n_ops(),
-            changed: false,
         }
     }
 
@@ -113,7 +109,6 @@ impl<T> OpMap<T> {
                 .collect(),
             n_stored: ir.n_ops(),
             n_inactive: ir.raw_n_ops() - ir.n_ops(),
-            changed: false,
         }
     }
 
@@ -162,16 +157,10 @@ impl<T> OpMap<T> {
     /// # Panics
     ///
     /// Panics if the operation ID is out of bounds or refers to an inactive operation.
-    pub fn get_mut(&mut self, k: &OpId) -> Option<ChangeGuard<'_, T>>
-    where
-        T: Clone + PartialEq,
+    pub fn get_mut(&mut self, k: &OpId) -> Option<&mut T>
     {
         assert!(self.may_store(k));
-        if let Some(value) = self.store[k].as_mut_ref().unwrap_active().as_mut() {
-            Some(ChangeGuard::new(value, &mut self.changed))
-        } else {
-            None
-        }
+        self.store[k].as_mut_ref().unwrap_active().as_mut()
     }
 
     /// Stores a value for the specified operation.
@@ -187,9 +176,6 @@ impl<T> OpMap<T> {
     {
         assert!(self.may_store(&k));
         let v = State::Active(Some(v));
-        if v == self.store[k] {
-            self.changed = true;
-        }
         let out = std::mem::replace(&mut self.store[k], v).unwrap_active();
         if out.is_none() {
             self.n_stored += 1;
@@ -211,7 +197,6 @@ impl<T> OpMap<T> {
         if out.is_some() {
             self.n_stored -= 1;
         }
-        self.changed = true;
         out
     }
 
@@ -233,14 +218,6 @@ impl<T> OpMap<T> {
             })
     }
 
-    /// Acknowledges and resets the change flag.
-    ///
-    /// Returns true if any mutation occurred since the last acknowledgement
-    /// (or since creation), then resets the flag to false.
-    pub fn ack_changes(&mut self) -> bool {
-        std::mem::replace(&mut self.changed, false)
-    }
-
     /// Transforms stored values by applying `f`, preserving map structure.
     ///
     /// Active slots with a value are mapped through `f`; empty active slots
@@ -251,7 +228,6 @@ impl<T> OpMap<T> {
             store,
             n_stored,
             n_inactive,
-            changed,
         } = self;
         let store = store
             .into_iter()
@@ -264,7 +240,6 @@ impl<T> OpMap<T> {
             store,
             n_stored,
             n_inactive,
-            changed,
         }
     }
 }
@@ -274,6 +249,15 @@ impl<T> Index<OpId> for OpMap<T> {
 
     fn index(&self, index: OpId) -> &Self::Output {
         match self.get(&index) {
+            Some(a) => a,
+            None => panic!("Tried to get unmapped index {:?}", index),
+        }
+    }
+}
+
+impl<T> IndexMut<OpId> for OpMap<T> {
+    fn index_mut(&mut self, index: OpId) -> &mut Self::Output {
+        match self.get_mut(&index) {
             Some(a) => a,
             None => panic!("Tried to get unmapped index {:?}", index),
         }

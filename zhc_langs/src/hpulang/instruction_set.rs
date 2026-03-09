@@ -186,6 +186,8 @@ pub enum HpuInstructionSet {
     /// Batch output at positional slot `pos`. Appears inside a
     /// [`Batch`](Self::Batch) block. `(ty) → ()`
     BatchRet { pos: u8, ty: HpuTypeSystem },
+    TransferIn {tid: u8},
+    TransferOut {tid: u8}
 }
 
 impl HpuInstructionSet {
@@ -239,6 +241,8 @@ impl Display for HpuInstructionSet {
             }
             HpuInstructionSet::BatchArg { pos, ty } => write!(f, "batch_arg<{pos}, {ty}>"),
             HpuInstructionSet::BatchRet { pos, ty } => write!(f, "batch_ret<{pos}, {ty}>"),
+            HpuInstructionSet::TransferIn { tid } => write!(f, "transfer_in<#{tid}>"),
+            HpuInstructionSet::TransferOut { tid } => write!(f, "transfer_out<#{tid}>"),
         }
     }
 }
@@ -302,6 +306,8 @@ impl DialectInstructionSet for HpuInstructionSet {
             }
             HpuInstructionSet::BatchArg { ty, .. } => sig![() -> (ty.clone())],
             HpuInstructionSet::BatchRet { ty, .. } => sig![(ty.clone()) -> ()],
+            HpuInstructionSet::TransferIn { .. } => sig![() -> (CtRegister)],
+            HpuInstructionSet::TransferOut { .. } => sig![(CtRegister) -> ()],
         }
     }
 }

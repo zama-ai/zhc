@@ -376,7 +376,10 @@ pub fn batch_schedule<'a, 'b>(ir: &'a IR<HpuLang>, config: &'b HpuConfig) -> IR<
             | CstCt { .. }
             | ImmLd { .. }
             | DstSt { .. }
-            | SrcLd { .. } => {
+            | SrcLd { .. }
+            | TransferIn { .. }
+            | TransferOut { .. }
+            => {
                 let new_args = opref
                     .get_args_iter()
                     .map(|valref| engine.translate_val(valref))
@@ -484,37 +487,37 @@ mod test {
                     batch_ret<14, CtRegister>(%8 : CtRegister);
                     batch_ret<15, CtRegister>(%9 : CtRegister);
                 }(%0, %1, %2, %3, %4, %5, %6, %7);
-                %24 = add_ct(%8, %9);
-                %30 = add_ct(%15, %16);
-                %36 = add_ct(%22, %23);
-                %25 = add_ct(%24, %10);
-                %31 = add_ct(%30, %17);
-                %26 = add_ct(%25, %11);
-                %32 = add_ct(%31, %18);
-                %27 = add_ct(%26, %12);
-                %33 = add_ct(%32, %19);
-                %28 = add_ct(%27, %13);
-                %34 = add_ct(%33, %20);
-                %29 = add_ct(%28, %14);
-                %35 = add_ct(%34, %21);
+                %24 = add_ct(%22, %23);
+                %25 = add_ct(%8, %9);
+                %31 = add_ct(%15, %16);
+                %26 = add_ct(%25, %10);
+                %32 = add_ct(%31, %17);
+                %27 = add_ct(%26, %11);
+                %33 = add_ct(%32, %18);
+                %28 = add_ct(%27, %12);
+                %34 = add_ct(%33, %19);
+                %29 = add_ct(%28, %13);
+                %35 = add_ct(%34, %20);
+                %30 = add_ct(%29, %14);
+                %36 = add_ct(%35, %21);
                 %37, %38, %39, %40, %41, %42 = batch {
                     %0 : CtRegister = batch_arg<0, CtRegister>();
                     %1 : CtRegister = batch_arg<1, CtRegister>();
                     %2 : CtRegister = batch_arg<2, CtRegister>();
-                    %3 : CtRegister, %4 : CtRegister = pbs_2<Lut@70>(%1 : CtRegister);
-                    %5 : CtRegister, %6 : CtRegister = pbs_2<Lut@70>(%0 : CtRegister);
-                    %7 : CtRegister, %8 : CtRegister = pbs_2f<Lut@65>(%2 : CtRegister);
-                    batch_ret<0, CtRegister>(%5 : CtRegister);
-                    batch_ret<1, CtRegister>(%6 : CtRegister);
-                    batch_ret<2, CtRegister>(%3 : CtRegister);
-                    batch_ret<3, CtRegister>(%4 : CtRegister);
-                    batch_ret<4, CtRegister>(%7 : CtRegister);
-                    batch_ret<5, CtRegister>(%8 : CtRegister);
-                }(%29, %35, %36);
-                %43 = add_ct(%37, %39);
-                %45 = add_ct(%38, %40);
-                %44 = add_ct(%43, %41);
-                %46 = add_ct(%45, %42);
+                    %3 : CtRegister, %4 : CtRegister = pbs_2<Lut@70>(%2 : CtRegister);
+                    %5 : CtRegister, %6 : CtRegister = pbs_2<Lut@70>(%1 : CtRegister);
+                    %7 : CtRegister, %8 : CtRegister = pbs_2f<Lut@65>(%0 : CtRegister);
+                    batch_ret<0, CtRegister>(%7 : CtRegister);
+                    batch_ret<1, CtRegister>(%8 : CtRegister);
+                    batch_ret<2, CtRegister>(%5 : CtRegister);
+                    batch_ret<3, CtRegister>(%6 : CtRegister);
+                    batch_ret<4, CtRegister>(%3 : CtRegister);
+                    batch_ret<5, CtRegister>(%4 : CtRegister);
+                }(%24, %30, %36);
+                %43 = add_ct(%39, %41);
+                %45 = add_ct(%40, %42);
+                %44 = add_ct(%43, %37);
+                %46 = add_ct(%45, %38);
                 %47, %48, %49, %50 = batch {
                     %0 : CtRegister = batch_arg<0, CtRegister>();
                     %1 : CtRegister = batch_arg<1, CtRegister>();
