@@ -11,6 +11,7 @@ use std::path::Path;
 use allocator::allocate_registers;
 use translation_table::{DOpRepr, generate_translation_table};
 use zhc_builder::Builder;
+use zhc_builder::CiphertextSpec;
 use zhc_builder::if_then_else;
 use zhc_builder::if_then_zero;
 use zhc_builder::{cmp_eq, cmp_gt, cmp_gte, cmp_lt, cmp_lte, cmp_neq};
@@ -19,6 +20,7 @@ use zhc_ir::cse::eliminate_common_subexpressions;
 use zhc_ir::dce::eliminate_dead_code;
 use zhc_langs::doplang::DopLang;
 use zhc_langs::ioplang::IopLang;
+use zhc_langs::ioplang::cut_transfers;
 use zhc_langs::ioplang::eliminate_aliases;
 
 pub mod allocator;
@@ -31,7 +33,7 @@ pub mod tracing;
 pub mod translation;
 pub mod translation_table;
 
-pub use zhc_builder::CiphertextSpec;
+use zhc_langs::ioplang::isolate_subgraphs;
 pub use zhc_sim::hpu::HpuConfig;
 pub use zhc_sim::{Cycle, MHz};
 
@@ -102,6 +104,24 @@ fn regular_pipeline(mut ir: IR<IopLang>, config: &HpuConfig) -> IR<DopLang> {
     let batched = batcher::batch(&unscheduled, config);
     let scheduled = batch_scheduler::schedule(&batched, config);
     allocate_registers(&scheduled, config)
+}
+
+#[allow(unused)]
+fn multi_hpu_pipeline(mut ir: IR<IopLang>, config: &HpuConfig) -> Vec<IR<DopLang>> {
+    eliminate_aliases(&mut ir);
+    eliminate_dead_code(&mut ir);
+    eliminate_common_subexpressions(&mut ir);
+    cut_transfers(&mut ir);
+    let components = isolate_subgraphs(&ir);
+    let mut output = Vec::new();
+    for comp in components.into_iter() {
+        let unscheduled = translation::lower_iop_to_hpu(&comp);
+        let batched = batcher::batch(&unscheduled, config);
+        let scheduled = batch_scheduler::schedule(&batched, config);
+        let allocated = allocate_registers(&scheduled, config);
+        output.push(allocated);
+    }
+    output
 }
 
 #[cfg(test)]

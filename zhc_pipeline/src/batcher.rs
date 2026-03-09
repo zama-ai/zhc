@@ -577,6 +577,9 @@ pub fn batch<'a, 'b>(ir: &'a IR<HpuLang>, config: &'b HpuConfig) -> IR<HpuLang> 
             Batch { .. } | BatchArg { .. } | BatchRet { .. } => {
                 panic!("Unexpected batch operations encountered.")
             }
+            TransferIn { .. } | TransferOut { .. } => {
+                panic!("Unexpected.")
+            }
         }
     });
     ir
@@ -656,36 +659,36 @@ mod test {
                     batch_ret<7, CtRegister>(%a14);
                 }(%2, %5, %8, %11, %14, %17, %20);
                 %29 = add_ct(%22, %23);
-                %32 = add_ct(%5, %22);
-                %39 = add_ct(%26, %27);
-                %30 = add_ct(%29, %24);
-                %41 = add_ct(%39, %28);
-                %31 = add_ct(%30, %25);
+                %30 = add_ct(%5, %22);
+                %41 = add_ct(%26, %27);
+                %31 = add_ct(%29, %24);
+                %43 = add_ct(%41, %28);
+                %32 = add_ct(%31, %25);
                 %33, %34, %35, %36, %37 = batch {
                     %a0 = batch_arg<0, CtRegister>();
                     %a1 = batch_arg<1, CtRegister>();
                     %a2 = batch_arg<2, CtRegister>();
                     %a3 = batch_arg<3, CtRegister>();
                     %a4 = batch_arg<4, CtRegister>();
-                    %a5 = pbs<Lut@46>(%a3);
-                    %a6 = pbs<Lut@45>(%a2);
+                    %a5 = pbs<Lut@46>(%a4);
+                    %a6 = pbs<Lut@45>(%a3);
                     %a7 = pbs<Lut@44>(%a1);
-                    %a8 = pbs<Lut@1>(%a4);
+                    %a8 = pbs<Lut@1>(%a2);
                     %a9 = pbs_f<Lut@1>(%a0);
-                    batch_ret<0, CtRegister>(%a5);
+                    batch_ret<0, CtRegister>(%a9);
                     batch_ret<1, CtRegister>(%a7);
-                    batch_ret<2, CtRegister>(%a6);
-                    batch_ret<3, CtRegister>(%a9);
-                    batch_ret<4, CtRegister>(%a8);
+                    batch_ret<2, CtRegister>(%a8);
+                    batch_ret<3, CtRegister>(%a6);
+                    batch_ret<4, CtRegister>(%a5);
                 }(%21, %29, %30, %31, %32);
-                dst_st<0.0_tdst>(%36);
-                dst_st<0.1_tdst>(%37);
-                %38 = add_ct(%26, %33);
-                %40 = add_ct(%39, %33);
-                %42 = add_ct(%41, %33);
-                %43 = add_ct(%8, %34);
-                %44 = add_ct(%11, %35);
-                %45 = add_ct(%14, %33);
+                dst_st<0.0_tdst>(%33);
+                dst_st<0.1_tdst>(%35);
+                %38 = add_ct(%8, %34);
+                %39 = add_ct(%11, %36);
+                %40 = add_ct(%26, %37);
+                %42 = add_ct(%41, %37);
+                %44 = add_ct(%43, %37);
+                %45 = add_ct(%14, %37);
                 %46, %47, %48, %49, %50, %51 = batch {
                     %a0 = batch_arg<0, CtRegister>();
                     %a1 = batch_arg<1, CtRegister>();
@@ -693,25 +696,25 @@ mod test {
                     %a3 = batch_arg<3, CtRegister>();
                     %a4 = batch_arg<4, CtRegister>();
                     %a5 = batch_arg<5, CtRegister>();
-                    %a6 = pbs<Lut@44>(%a0);
-                    %a7 = pbs<Lut@45>(%a1);
-                    %a8 = pbs<Lut@46>(%a2);
+                    %a6 = pbs<Lut@44>(%a2);
+                    %a7 = pbs<Lut@45>(%a3);
+                    %a8 = pbs<Lut@46>(%a4);
                     %a9 = pbs<Lut@1>(%a5);
-                    %a10 = pbs<Lut@1>(%a4);
-                    %a11 = pbs_f<Lut@1>(%a3);
-                    batch_ret<0, CtRegister>(%a6);
-                    batch_ret<1, CtRegister>(%a7);
-                    batch_ret<2, CtRegister>(%a8);
-                    batch_ret<3, CtRegister>(%a11);
-                    batch_ret<4, CtRegister>(%a10);
+                    %a10 = pbs<Lut@1>(%a1);
+                    %a11 = pbs_f<Lut@1>(%a0);
+                    batch_ret<0, CtRegister>(%a11);
+                    batch_ret<1, CtRegister>(%a10);
+                    batch_ret<2, CtRegister>(%a6);
+                    batch_ret<3, CtRegister>(%a7);
+                    batch_ret<4, CtRegister>(%a8);
                     batch_ret<5, CtRegister>(%a9);
-                }(%38, %40, %42, %43, %44, %45);
-                dst_st<0.2_tdst>(%49);
-                dst_st<0.3_tdst>(%50);
+                }(%38, %39, %40, %42, %44, %45);
+                dst_st<0.2_tdst>(%46);
+                dst_st<0.3_tdst>(%47);
                 dst_st<0.4_tdst>(%51);
-                %52 = add_ct(%17, %46);
-                %53 = add_ct(%20, %47);
-                %57 = add_ct(%56, %48);
+                %52 = add_ct(%17, %48);
+                %53 = add_ct(%20, %49);
+                %57 = add_ct(%56, %50);
                 %58, %59, %60 = batch {
                     %a0 = batch_arg<0, CtRegister>();
                     %a1 = batch_arg<1, CtRegister>();

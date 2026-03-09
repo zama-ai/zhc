@@ -373,32 +373,6 @@ impl<D: Dialect> IR<D> {
         walker.map(|valid| self.get_val(valid))
     }
 
-    /// Applies a mutation function to all active operations in linear order.
-    pub fn mutate_ops(&mut self, f: impl FnMut(&mut D::InstructionSet)) {
-        self.mutate_ops_with_walker(
-            self.raw_linear_opwalker()
-                .collect::<SmallVec<_>>()
-                .into_iter(),
-            f,
-        );
-    }
-
-    /// Applies a mutation function to operations visited by the specified walker.
-    ///
-    /// Only active operations are mutated; inactive operations are skipped.
-    pub fn mutate_ops_with_walker(
-        &mut self,
-        walker: impl Iterator<Item = OpId>,
-        mut f: impl FnMut(&mut D::InstructionSet),
-    ) {
-        walker.for_each(|opid| {
-            let opmut = self.raw_get_op_mut(opid);
-            if opmut.state.is_active() {
-                f(opmut.instruction);
-            };
-        });
-    }
-
     /// Adds a new operation to the IR.
     ///
     /// Returns the [`OpId`] of the created operation and the [`ValId`]s of its
@@ -632,6 +606,25 @@ impl<D: Dialect> IR<D> {
         // Decrementing the op count is valid since `shutdown` panics if the value is already
         // shutdown.
         self.op_count -= 1;
+    }
+
+    /// Prints the formatted IR to stdout and panics.
+    ///
+    /// Debugging utility for inspecting the IR state at a specific point.
+    ///
+    /// # Panics
+    ///
+    /// Always.
+    pub fn dump(&self) -> ! {
+        println!(
+            "{}",
+            self.format()
+                .with_walker(crate::PrintWalker::Linear)
+                .show_types(false)
+                .show_opid(true)
+                .show_comments(true)
+        );
+        panic!();
     }
 
     /// Creates an empty operation map for this IR.

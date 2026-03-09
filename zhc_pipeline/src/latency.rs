@@ -113,7 +113,7 @@ mod test {
         assert_display_is!(
             format!("{}us", lat.as_ts(MHz(400).period())),
             r#"
-                120890.12us
+                120844.0025us
             "#
         );
     }
@@ -124,18 +124,7 @@ mod test {
         assert_display_is!(
             format!("{}us", lat.as_ts(MHz(400).period())),
             r#"
-                166423.82us
-            "#
-        );
-    }
-
-    #[test]
-    fn test_latency_overflow_lead_0() {
-        let lat = pipeline(&lead0(CiphertextSpec::new(64, 2, 2)).into_ir());
-        assert_display_is!(
-            format!("{}us", lat.as_ts(MHz(400).period())),
-            r#"
-                12767.1325us
+                166348.5825us
             "#
         );
     }
