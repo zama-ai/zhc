@@ -823,6 +823,19 @@ impl Builder {
         }
     }
 
+    pub fn block_transfer(&self, src: impl AsRef<CiphertextBlock>) -> CiphertextBlock {
+        let src = src.as_ref();
+        let (_node, ret) = self.inner_mut().insert_op(
+            IopInstructionSet::Transfer,
+            svec![src.valid],
+            self.current_comment(),
+        );
+        CiphertextBlock {
+            valid: ret[0],
+            spec: self.spec,
+        }
+    }
+
     /// Adds two ciphertext blocks (temper flavor).
     ///
     /// Computes `src_a + src_b` at the block level. Uses temper semantics — see

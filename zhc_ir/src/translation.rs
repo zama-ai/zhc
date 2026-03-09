@@ -197,7 +197,7 @@ pub fn eager_translate_ann<
         valmap,
         phantom: PhantomData,
     };
-    for op in ir.walk_ops_linear() {
+    for op in ir.walk_ops_topological() {
         driver(op, &mut translator)
     }
     translator.output

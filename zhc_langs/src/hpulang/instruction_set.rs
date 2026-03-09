@@ -116,7 +116,9 @@ pub enum HpuInstructionSet {
     SubCt,
     /// Multiply-accumulate: `src1 * cst + src2` (pack operation).
     /// `(CtRegister, CtRegister) → (CtRegister)`
-    Mac { cst: Immediate },
+    Mac {
+        cst: Immediate,
+    },
     /// Addition of a ciphertext register and a plaintext immediate
     /// register. `(CtRegister, PtImmediate) → (CtRegister)`
     AddPt,
@@ -131,61 +133,107 @@ pub enum HpuInstructionSet {
     MulPt,
     /// Addition of a ciphertext register and an inline constant.
     /// `(CtRegister) → (CtRegister)`
-    AddCst { cst: Immediate },
+    AddCst {
+        cst: Immediate,
+    },
     /// Subtraction: ciphertext minus inline constant.
     /// `(CtRegister) → (CtRegister)`
-    SubCst { cst: Immediate },
+    SubCst {
+        cst: Immediate,
+    },
     /// Subtraction: inline constant minus ciphertext.
     /// `(CtRegister) → (CtRegister)`
-    CstSub { cst: Immediate },
+    CstSub {
+        cst: Immediate,
+    },
     /// Multiplication of a ciphertext register by an inline constant.
     /// `(CtRegister) → (CtRegister)`
-    MulCst { cst: Immediate },
+    MulCst {
+        cst: Immediate,
+    },
     /// Materializes an inline constant into a ciphertext register.
     /// `() → (CtRegister)`
-    CstCt { cst: Immediate },
+    CstCt {
+        cst: Immediate,
+    },
     /// Loads a plaintext immediate from an input slot.
     /// `() → (PtImmediate)`
-    ImmLd { from: TImmId },
+    ImmLd {
+        from: TImmId,
+    },
     /// Stores a ciphertext register to an output slot.
     /// `(CtRegister) → ()`
-    DstSt { to: TDstId },
+    DstSt {
+        to: TDstId,
+    },
     /// Loads a ciphertext block from an input slot into a register.
     /// `() → (CtRegister)`
-    SrcLd { from: TSrcId },
+    SrcLd {
+        from: TSrcId,
+    },
     /// Single-output PBS. `(CtRegister) → (CtRegister)`
-    Pbs { lut: LutId },
+    Pbs {
+        lut: LutId,
+    },
     /// 2-output many-LUT PBS.
     /// `(CtRegister) → (CtRegister, CtRegister)`
-    Pbs2 { lut: LutId },
+    Pbs2 {
+        lut: LutId,
+    },
     /// 4-output many-LUT PBS.
     /// `(CtRegister) → (CtRegister × 4)`
-    Pbs4 { lut: LutId },
+    Pbs4 {
+        lut: LutId,
+    },
     /// 8-output many-LUT PBS.
     /// `(CtRegister) → (CtRegister × 8)`
-    Pbs8 { lut: LutId },
+    Pbs8 {
+        lut: LutId,
+    },
     /// Single-output PBS with flush (batch boundary marker).
     /// `(CtRegister) → (CtRegister)`
-    PbsF { lut: LutId },
+    PbsF {
+        lut: LutId,
+    },
     /// 2-output many-LUT PBS with flush.
     /// `(CtRegister) → (CtRegister, CtRegister)`
-    Pbs2F { lut: LutId },
+    Pbs2F {
+        lut: LutId,
+    },
     /// 4-output many-LUT PBS with flush.
     /// `(CtRegister) → (CtRegister × 4)`
-    Pbs4F { lut: LutId },
+    Pbs4F {
+        lut: LutId,
+    },
     /// 8-output many-LUT PBS with flush.
     /// `(CtRegister) → (CtRegister × 8)`
-    Pbs8F { lut: LutId },
+    Pbs8F {
+        lut: LutId,
+    },
     /// Nested sub-program grouping a batch of PBS operations. The
     /// signature is derived from the `BatchArg` and `BatchRet` ops
     /// inside `block`.
-    Batch { block: Box<IR<HpuLang>> },
+    Batch {
+        block: Box<IR<HpuLang>>,
+    },
     /// Batch input at positional slot `pos`. Appears inside a
     /// [`Batch`](Self::Batch) block. `() → (ty)`
-    BatchArg { pos: u8, ty: HpuTypeSystem },
+    BatchArg {
+        pos: u8,
+        ty: HpuTypeSystem,
+    },
     /// Batch output at positional slot `pos`. Appears inside a
     /// [`Batch`](Self::Batch) block. `(ty) → ()`
-    BatchRet { pos: u8, ty: HpuTypeSystem },
+    BatchRet {
+        pos: u8,
+        ty: HpuTypeSystem,
+    },
+    TransferIn {
+        tid: u8,
+    },
+    TransferOut {
+        tid: u8,
+    },
 }
 
 impl HpuInstructionSet {
@@ -243,6 +291,8 @@ impl Format for HpuInstructionSet {
             }
             HpuInstructionSet::BatchArg { pos, ty } => write!(f, "batch_arg<{pos}, {ty}>"),
             HpuInstructionSet::BatchRet { pos, ty } => write!(f, "batch_ret<{pos}, {ty}>"),
+            HpuInstructionSet::TransferIn { tid } => write!(f, "transfer_in<#{tid}>"),
+            HpuInstructionSet::TransferOut { tid } => write!(f, "transfer_out<#{tid}>"),
         }
     }
 }
@@ -313,6 +363,8 @@ impl DialectInstructionSet for HpuInstructionSet {
             }
             HpuInstructionSet::BatchArg { ty, .. } => sig![() -> (ty.clone())],
             HpuInstructionSet::BatchRet { ty, .. } => sig![(ty.clone()) -> ()],
+            HpuInstructionSet::TransferIn { .. } => sig![() -> (CtRegister)],
+            HpuInstructionSet::TransferOut { .. } => sig![(CtRegister) -> ()],
         }
     }
 }

@@ -30,18 +30,22 @@
 //! of IOP programs via the `zhc_ir` interpretation framework, enabling
 //! semantic validation against the `zhc_crypto` emulation layer.
 
+mod cut_transfers;
 mod dialect;
 mod eliminate_aliases;
 mod instruction_set;
 mod interpretation;
+mod isolate_subgraphs;
 mod lut;
 mod skip_store_load;
 mod type_system;
 
+pub use cut_transfers::*;
 pub use dialect::*;
 pub use eliminate_aliases::*;
 pub use instruction_set::*;
 pub use interpretation::*;
+pub use isolate_subgraphs::*;
 pub use lut::*;
 pub use skip_store_load::*;
 pub use type_system::*;
