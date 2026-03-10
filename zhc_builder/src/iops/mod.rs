@@ -35,6 +35,7 @@ mod cmp;
 mod count;
 mod if_then_else;
 mod if_then_zero;
+mod mh_mul;
 mod mul;
 
 pub use add::*;

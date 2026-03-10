@@ -141,7 +141,7 @@ impl Builder {
     /// product with carry extract
     /// Compute partial product until cut-off-point in a Hashmap then collect remaining overflow
     /// flag in a vector
-    fn expand_partprod(
+    pub(super) fn expand_partprod(
         &self,
         src_a_blocks: &Vec<CiphertextBlock>,
         src_b_blocks: &Vec<CiphertextBlock>,
@@ -186,7 +186,7 @@ impl Builder {
     // Partial product are sum until nu threshold is reach, then carry is extracted
     // and injected in the next stages
     // Merge for initial available level then push in post_map for post-process
-    fn merge_partprod(
+    pub(super) fn merge_partprod(
         &self,
         partprod_map: BTreeMap<usize, Vec<CiphertextBlock>>,
     ) -> (Vec<CiphertextBlock>, BTreeMap<usize, Vec<CiphertextBlock>>) {
@@ -237,15 +237,15 @@ impl Builder {
                         post_map.entry(k + 1).or_default().extend(nxt_stage);
                     }
                 }
-                self.pop_comment();
             }
+            self.pop_comment();
         }
         (data_blk, post_map)
     }
 
     /// Overflow Reduction
     /// Extract overflow flog of post_map carry and overflow_v
-    fn merge_overflow_flag(
+    pub(super) fn merge_overflow_flag(
         &self,
         post_map: BTreeMap<usize, Vec<CiphertextBlock>>,
         overflow_v: Vec<CiphertextBlock>,
