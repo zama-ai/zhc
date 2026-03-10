@@ -1,0 +1,39 @@
+# Verify a triggering actor
+name: verify_triggering_actor
+
+on:
+  workflow_call:
+    secrets:
+      ALLOWED_TEAM:
+        required: true
+      READ_ORG_TOKEN:
+        required: true
+
+permissions: {}
+
+# zizmor: ignore[concurrency-limits] caller workflow is responsible for the concurrency
+
+jobs:
+  check-actor:
+    name: verify_triggering_actor/check-actor
+    runs-on: ubuntu-latest
+    steps:
+      # Check triggering actor membership
+      - name: Actor verification
+        id: actor_check
+        uses: morfien101/actions-authorized-user@4a3cfbf0bcb3cafe4a71710a278920c5d94bb38b
+        with:
+          username: ${{ github.triggering_actor }}
+          org: ${{ github.repository_owner }}
+          team: ${{ secrets.ALLOWED_TEAM }}
+          github_token: ${{ secrets.READ_ORG_TOKEN }}
+
+      - name: Actor authorized
+        run: |
+          if [ "${ACTOR_CHECK_OUTPUT}" == "false" ]; then
+            echo "Actor '${TRIGGERING_ACTOR}' is not authorized to perform release"
+            exit 1
+          fi
+        env:
+          TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+          ACTOR_CHECK_OUTPUT: ${{ steps.actor_check.outputs.authorized }}
