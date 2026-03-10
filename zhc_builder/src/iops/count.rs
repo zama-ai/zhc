@@ -45,9 +45,9 @@ pub enum CountKind {
 /// ```
 pub fn count_0(spec: CiphertextSpec) -> Builder {
     let mut builder = Builder::new(spec.block_spec());
-    let src_a = builder.input_ciphertext(spec.int_size());
+    let src_a = builder.ciphertext_input(spec.int_size());
     let res = builder.iop_count(&src_a, CountKind::Zeros);
-    builder.output_ciphertext(res);
+    builder.ciphertext_output(res);
     builder
 }
 
@@ -72,9 +72,9 @@ pub fn count_0(spec: CiphertextSpec) -> Builder {
 /// ```
 pub fn count_1(spec: CiphertextSpec) -> Builder {
     let mut builder = Builder::new(spec.block_spec());
-    let src_a = builder.input_ciphertext(spec.int_size());
+    let src_a = builder.ciphertext_input(spec.int_size());
     let res = builder.iop_count(&src_a, CountKind::Ones);
-    builder.output_ciphertext(res);
+    builder.ciphertext_output(res);
     builder
 }
 
@@ -182,7 +182,7 @@ impl Builder {
     /// # use zhc_builder::{CiphertextSpec, Builder, CountKind};
     /// # let spec = CiphertextSpec::new(16, 2, 2);
     /// # let mut builder = Builder::new(spec.block_spec());
-    /// # let a = builder.input_ciphertext(spec.int_size());
+    /// # let a = builder.ciphertext_input(spec.int_size());
     /// let pop = builder.iop_count(&a, CountKind::Ones);
     /// ```
     pub fn iop_count(&mut self, inp: &Ciphertext, kind: CountKind) -> Ciphertext {
@@ -222,7 +222,7 @@ mod test {
                 .show_comments(true)
                 .show_types(false),
             r#"
-                                                                          | %0 = input_ciphertext<0, 18>();
+                                                                          | %0 = ciphertext_input<0, 18>();
                 // Split                                                  | %1 = extract_ct_block<0>(%0);
                 // Split                                                  | %2 = extract_ct_block<1>(%0);
                 // Split                                                  | %3 = extract_ct_block<2>(%0);

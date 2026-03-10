@@ -36,8 +36,8 @@
 //! padding bits — only the `message_size` message bits.
 //!
 //! All block-level operations (`block_*` methods) work on individual blocks, while
-//! multi-block integers must first be [`split`](Builder::split_ciphertext) into their radix
-//! digits and later [`join`](Builder::join_ciphertext)ed back.
+//! multi-block integers must first be [`split`](Builder::ciphertext_split) into their radix
+//! digits and later [`join`](Builder::ciphertext_join)ed back.
 //!
 //! # Operation Flavors
 //!
@@ -71,19 +71,19 @@
 //! let builder = Builder::new(CiphertextBlockSpec(2, 2));
 //!
 //! // 2. Declare circuit inputs.
-//! let a = builder.input_ciphertext(8);
-//! let b = builder.input_ciphertext(8);
+//! let a = builder.ciphertext_input(8);
+//! let b = builder.ciphertext_input(8);
 //!
 //! // 3. Decompose into blocks and operate.
-//! let a_blocks = builder.split_ciphertext(&a);
-//! let b_blocks = builder.split_ciphertext(&b);
+//! let a_blocks = builder.ciphertext_split(&a);
+//! let b_blocks = builder.ciphertext_split(&b);
 //! let sum_blocks: Vec<_> = a_blocks.iter().zip(b_blocks.iter())
 //!     .map(|(ab, bb)| builder.block_add(ab, bb))
 //!     .collect();
 //!
 //! // 4. Reassemble and declare the output.
-//! let result = builder.join_ciphertext(&sum_blocks, None);
-//! builder.output_ciphertext(&result);
+//! let result = builder.ciphertext_join(&sum_blocks, None);
+//! builder.ciphertext_output(&result);
 //!
 //! // 5. Finalize — this runs dead-code elimination and CSE.
 //! let ir = builder.into_ir();

@@ -27,10 +27,10 @@ use crate::builder::{Builder, Ciphertext, ExtensionBehavior};
 /// ```
 pub fn add(spec: CiphertextSpec) -> Builder {
     let mut builder = Builder::new(spec.block_spec());
-    let src_a = builder.input_ciphertext(spec.int_size());
-    let src_b = builder.input_ciphertext(spec.int_size());
+    let src_a = builder.ciphertext_input(spec.int_size());
+    let src_b = builder.ciphertext_input(spec.int_size());
     let res = builder.iop_add_hillis_steele(&src_a, &src_b);
-    builder.output_ciphertext(res);
+    builder.ciphertext_output(res);
     builder
 }
 
@@ -54,8 +54,8 @@ impl Builder {
     /// # use zhc_builder::{CiphertextSpec, Builder};
     /// # let spec = CiphertextSpec::new(16, 2, 2);
     /// # let mut builder = Builder::new(spec.block_spec());
-    /// # let a = builder.input_ciphertext(spec.int_size());
-    /// # let b = builder.input_ciphertext(spec.int_size());
+    /// # let a = builder.ciphertext_input(spec.int_size());
+    /// # let b = builder.ciphertext_input(spec.int_size());
     /// let sum = builder.iop_add_hillis_steele(&a, &b);
     /// ```
     pub fn iop_add_hillis_steele(&mut self, lhs: &Ciphertext, rhs: &Ciphertext) -> Ciphertext {
@@ -75,8 +75,8 @@ impl Builder {
         // the computation in a larger, more favorable case, and let DCE cut the un-necessary
         // computation. This improves code readability.
 
-        let lhs_blocks = self.split_ciphertext(lhs);
-        let rhs_blocks = self.split_ciphertext(rhs);
+        let lhs_blocks = self.ciphertext_split(lhs);
+        let rhs_blocks = self.ciphertext_split(rhs);
 
         let sums = self.comment("Raw sum").vector_add(
             &lhs_blocks,
@@ -266,7 +266,7 @@ impl Builder {
         self.pop_comment();
 
         self.comment("Join")
-            .join_ciphertext(&result.as_slice()[..output_size], None)
+            .ciphertext_join(&result.as_slice()[..output_size], None)
     }
 }
 

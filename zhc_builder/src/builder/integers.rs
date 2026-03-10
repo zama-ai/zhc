@@ -14,9 +14,9 @@ use zhc_langs::ioplang::IopValue;
 /// See the [module-level documentation](super::super) for the full layout diagram.
 ///
 /// Blocks are produced by
-/// [`Builder::split_ciphertext`](`super::Builder::split_ciphertext`) or by block-level
+/// [`Builder::ciphertext_split`](`super::Builder::ciphertext_split`) or by block-level
 /// arithmetic methods, and can be recombined into a full [`Ciphertext`] via
-/// [`Builder::join_ciphertext`](`super::Builder::join_ciphertext`).
+/// [`Builder::ciphertext_join`](`super::Builder::ciphertext_join`).
 ///
 /// This type cannot be constructed directly — it is always returned by
 /// [`Builder`](`super::Builder`) methods. Use [`make_value`](Self::make_value) to create a test
@@ -65,9 +65,9 @@ impl CiphertextBlock {
 /// records the total integer bit-width (`int_size`) and the per-block layout; the number
 /// of blocks is `int_size / message_size`.
 ///
-/// Use [`Builder::split_ciphertext`](`super::Builder::split_ciphertext`) to decompose it
+/// Use [`Builder::ciphertext_split`](`super::Builder::ciphertext_split`) to decompose it
 /// into individual radix digits for block-level operations, and
-/// [`Builder::join_ciphertext`](`super::Builder::join_ciphertext`) to reassemble.
+/// [`Builder::ciphertext_join`](`super::Builder::ciphertext_join`) to reassemble.
 ///
 /// This type cannot be constructed directly — it is always returned by
 /// [`Builder`](`super::Builder`) methods. Use [`make_value`](Self::make_value) to create a test
@@ -158,7 +158,7 @@ impl PlaintextBlock {
 /// A [`Plaintext`] represents an unencrypted integer stored as a radix-`2^message_size`
 /// decomposition across multiple [`PlaintextBlock`]s. Its [`PlaintextSpec`] records the
 /// total integer bit-width and the
-/// per-block layout. Use [`Builder::split_plaintext`](`super::Builder::split_plaintext`) to
+/// per-block layout. Use [`Builder::plaintext_split`](`super::Builder::plaintext_split`) to
 /// decompose it into individual blocks.
 ///
 /// This type cannot be constructed directly — it is always returned by

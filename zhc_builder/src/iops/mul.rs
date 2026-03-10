@@ -23,19 +23,19 @@ use zhc_langs::ioplang::Lut1Def;
 /// ```
 pub fn mul_lsb(spec: CiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src_a = builder.input_ciphertext(spec.int_size());
-    let src_b = builder.input_ciphertext(spec.int_size());
+    let src_a = builder.ciphertext_input(spec.int_size());
+    let src_b = builder.ciphertext_input(spec.int_size());
 
     // Get input as array of blk
-    let src_a_blocks = builder.split_ciphertext(&src_a);
-    let src_b_blocks = builder.split_ciphertext(&src_b);
+    let src_a_blocks = builder.ciphertext_split(&src_a);
+    let src_b_blocks = builder.ciphertext_split(&src_b);
     // Only kept LSB to obtain a IxI -> I operations
     let cut_off = spec.block_count();
 
     // Call inner function and construct results
     let (_flag, output) = builder.iop_mul_raw(&src_a_blocks, &src_b_blocks, cut_off);
-    let lsb_output = builder.join_ciphertext(&output, Some(spec.int_size()));
-    builder.output_ciphertext(lsb_output);
+    let lsb_output = builder.ciphertext_join(&output, Some(spec.int_size()));
+    builder.ciphertext_output(lsb_output);
     builder
 }
 
@@ -60,22 +60,22 @@ pub fn mul_lsb(spec: CiphertextSpec) -> Builder {
 /// ```
 pub fn overflow_mul_lsb(spec: CiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src_a = builder.input_ciphertext(spec.int_size());
-    let src_b = builder.input_ciphertext(spec.int_size());
+    let src_a = builder.ciphertext_input(spec.int_size());
+    let src_b = builder.ciphertext_input(spec.int_size());
 
     // Get input as array of blk
-    let src_a_blocks = builder.split_ciphertext(&src_a);
-    let src_b_blocks = builder.split_ciphertext(&src_b);
+    let src_a_blocks = builder.ciphertext_split(&src_a);
+    let src_b_blocks = builder.ciphertext_split(&src_b);
     // Only kept LSB to obtain a IxI -> I operations
     let cut_off = spec.block_count();
 
     // Call inner function and construct results
     let (flag_block, output) = builder.iop_mul_raw(&src_a_blocks, &src_b_blocks, cut_off);
-    let flag = builder.join_ciphertext(&[flag_block], Some(1)); // NB: This is a boolean flag
-    let lsb_output = builder.join_ciphertext(&output, Some(spec.int_size()));
+    let flag = builder.ciphertext_join(&[flag_block], Some(1)); // NB: This is a boolean flag
+    let lsb_output = builder.ciphertext_join(&output, Some(spec.int_size()));
 
-    builder.output_ciphertext(flag);
-    builder.output_ciphertext(lsb_output);
+    builder.ciphertext_output(flag);
+    builder.ciphertext_output(lsb_output);
     builder
 }
 
@@ -99,10 +99,10 @@ impl Builder {
     /// # use zhc_builder::{CiphertextSpec, Builder};
     /// # let spec = CiphertextSpec::new(16, 2, 2);
     /// # let builder = Builder::new(spec.block_spec());
-    /// # let a = builder.input_ciphertext(spec.int_size());
-    /// # let b = builder.input_ciphertext(spec.int_size());
-    /// # let a = builder.split_ciphertext(&a);
-    /// # let b = builder.split_ciphertext(&b);
+    /// # let a = builder.ciphertext_input(spec.int_size());
+    /// # let b = builder.ciphertext_input(spec.int_size());
+    /// # let a = builder.ciphertext_split(&a);
+    /// # let b = builder.ciphertext_split(&b);
     /// let (flag, res) = builder.iop_mul_raw(&a, &b, spec.block_count());
     /// ```
     pub fn iop_mul_raw(
