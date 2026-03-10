@@ -12,7 +12,7 @@ members = [
 resolver = "3"
 
 [workspace.package]
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 license = "BSD-3-Clause-Clear"
 repository = "https://github.com/zama-ai/zhc"
