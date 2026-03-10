@@ -22,7 +22,6 @@ jobs:
 
   publish_release:
     name: release/publish-release
-    needs: package
     runs-on: ubuntu-latest
     permissions:
       id-token: write # Needed for OIDC token exchange on crates.io
