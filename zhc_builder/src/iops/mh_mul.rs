@@ -15,7 +15,7 @@ use zhc_crypto::integer_semantics::CiphertextSpec;
 /// # Examples
 ///
 /// ```rust,no_run
-/// # use zhc_builder::{CiphertextSpec, mul_lsb};
+/// # use zhc_builder::{CiphertextSpec, mh_mul_lsb};
 /// # let spec = CiphertextSpec::new(16, 2, 2);
 /// let builder = mh_mul_lsb(spec, 2);
 /// let ir = builder.into_ir();
@@ -36,7 +36,7 @@ pub fn mh_mul_lsb(spec: CiphertextSpec, mh_factor: u8) -> Builder {
 /// # Examples
 ///
 /// ```rust,no_run
-/// # use zhc_builder::{CiphertextSpec, overflow_mul_lsb};
+/// # use zhc_builder::{CiphertextSpec, mh_overflow_mul_lsb};
 /// # let spec = CiphertextSpec::new(16, 2, 2);
 /// let builder = mh_overflow_mul_lsb(spec, 2);
 /// let ir = builder.into_ir();
@@ -59,7 +59,7 @@ pub fn mh_overflow_mul_lsb(spec: CiphertextSpec, mh_factor: u8) -> Builder {
 /// # Examples
 ///
 /// ```rust,no_run
-/// # use zhc_builder::{CiphertextSpec, overflow_mul_lsb};
+/// # use zhc_builder::{CiphertextSpec, mh_mul_lsb_with_opt};
 /// # let spec = CiphertextSpec::new(16, 2, 2);
 /// let builder = mh_mul_lsb_with_opt(spec, 2, true);
 /// let ir = builder.into_ir();
