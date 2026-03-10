@@ -376,8 +376,10 @@ impl Interpretable<IopValue> for super::IopInstructionSet {
                     IopValue::CiphertextBlock(ct7)
                 ]
             }
-            Alias { .. } => arguments,
-            Transfer | TransferIn { .. } | TransferOut { .. } => panic!("Interpretation of multi-hpu graphs is not supported.")
+            Alias { .. } | Transfer => arguments,
+            TransferIn { .. } | TransferOut { .. } => {
+                panic!("Interpretation of multi-hpu graphs is not supported.")
+            }
         }
     }
 }
