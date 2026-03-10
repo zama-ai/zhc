@@ -126,7 +126,7 @@ impl Builder {
             self.expand_partprod(src_a_blocks, src_b_blocks, cut_off_block);
 
         // Phase 2  Reduce data
-        let (data_blk, post_map) = self.merge_partprod(partprod_map);
+        let (data_blk, post_map) = self.merge_partprod(partprod_map, cut_off_block);
 
         // Phase 3 Reduce overflow
         let ovf_flag = self.merge_overflow_flag(post_map, overflow_v);
@@ -189,14 +189,19 @@ impl Builder {
     pub(super) fn merge_partprod(
         &self,
         partprod_map: BTreeMap<usize, Vec<CiphertextBlock>>,
+        cut_off_block: u8,
     ) -> (Vec<CiphertextBlock>, BTreeMap<usize, Vec<CiphertextBlock>>) {
-        let cut_off_block = partprod_map.keys().max().copied().unwrap_or_default();
+        let first_comp_block = partprod_map.keys().min().copied().unwrap_or_default();
+        let last_comp_block = std::cmp::min(
+            (cut_off_block - 1) as usize,
+            partprod_map.keys().max().copied().unwrap_or_default(),
+        );
         let mut data_blk = Vec::new();
 
         let mut partprod_map = partprod_map;
         let mut post_map = BTreeMap::<usize, Vec<CiphertextBlock>>::new();
 
-        for k in 0..cut_off_block {
+        for k in first_comp_block..=last_comp_block {
             self.push_comment(format!("reduction_{k}"));
             let stage_sum = partprod_map.remove(&k).unwrap_or_default();
             if !stage_sum.is_empty() {
@@ -229,7 +234,7 @@ impl Builder {
                 // Insert current stage carry in next stage
                 // NB: If outside of compute range push it in new map
                 if !nxt_stage.is_empty() {
-                    if k < cut_off_block {
+                    if k < last_comp_block {
                         // Insert in current map for direct computation
                         partprod_map.entry(k + 1).or_default().extend(nxt_stage);
                     } else {
@@ -240,6 +245,12 @@ impl Builder {
             }
             self.pop_comment();
         }
+
+        // Move uncomputed level in post_map
+        for (k, v) in partprod_map {
+            post_map.entry(k).or_default().extend(v);
+        }
+
         (data_blk, post_map)
     }
 
@@ -341,95 +352,103 @@ mod test {
                 .show_comments(true)
                 .show_opid(true),
             r#"
-                @00                    | %0 : Ct = input_ciphertext<0, 8>();
-                @01                    | %1 : Ct = input_ciphertext<1, 8>();
-                @02                    | %2 : CtBlock = extract_ct_block<0>(%0 : Ct);
-                @03                    | %3 : CtBlock = extract_ct_block<1>(%0 : Ct);
-                @04                    | %4 : CtBlock = extract_ct_block<2>(%0 : Ct);
-                @05                    | %5 : CtBlock = extract_ct_block<3>(%0 : Ct);
-                @06                    | %6 : CtBlock = extract_ct_block<0>(%1 : Ct);
-                @07                    | %7 : CtBlock = extract_ct_block<1>(%1 : Ct);
-                @08                    | %8 : CtBlock = extract_ct_block<2>(%1 : Ct);
-                @09                    | %9 : CtBlock = extract_ct_block<3>(%1 : Ct);
-                @10   // pack_0_0      | %10 : CtBlock = pack_ct<4>(%2 : CtBlock, %6 : CtBlock);
-                @11   // pp_0_0_lsb    | %11 : CtBlock = pbs<Protect, MultCarryMsgLsb>(%10 : CtBlock);
-                @12   // pp_0_0_msb    | %12 : CtBlock = pbs<Protect, MultCarryMsgMsb>(%10 : CtBlock);
-                @13   // pack_0_1      | %13 : CtBlock = pack_ct<4>(%2 : CtBlock, %7 : CtBlock);
-                @14   // pp_0_1_lsb    | %14 : CtBlock = pbs<Protect, MultCarryMsgLsb>(%13 : CtBlock);
-                @15   // pp_0_1_msb    | %15 : CtBlock = pbs<Protect, MultCarryMsgMsb>(%13 : CtBlock);
-                @16   // pack_0_2      | %16 : CtBlock = pack_ct<4>(%2 : CtBlock, %8 : CtBlock);
-                @17   // pp_0_2_lsb    | %17 : CtBlock = pbs<Protect, MultCarryMsgLsb>(%16 : CtBlock);
-                @18   // pp_0_2_msb    | %18 : CtBlock = pbs<Protect, MultCarryMsgMsb>(%16 : CtBlock);
-                @19   // pack_0_3      | %19 : CtBlock = pack_ct<4>(%2 : CtBlock, %9 : CtBlock);
-                @20   // pp_0_3_lsb    | %20 : CtBlock = pbs<Protect, MultCarryMsgLsb>(%19 : CtBlock);
-                @21   // pp_0_3_msb    | %21 : CtBlock = pbs<Protect, MultCarryMsgMsb>(%19 : CtBlock);
-                @22   // pack_1_0      | %22 : CtBlock = pack_ct<4>(%3 : CtBlock, %6 : CtBlock);
-                @23   // pp_1_0_lsb    | %23 : CtBlock = pbs<Protect, MultCarryMsgLsb>(%22 : CtBlock);
-                @24   // pp_1_0_msb    | %24 : CtBlock = pbs<Protect, MultCarryMsgMsb>(%22 : CtBlock);
-                @25   // pack_1_1      | %25 : CtBlock = pack_ct<4>(%3 : CtBlock, %7 : CtBlock);
-                @26   // pp_1_1_lsb    | %26 : CtBlock = pbs<Protect, MultCarryMsgLsb>(%25 : CtBlock);
-                @27   // pp_1_1_msb    | %27 : CtBlock = pbs<Protect, MultCarryMsgMsb>(%25 : CtBlock);
-                @28   // pack_1_2      | %28 : CtBlock = pack_ct<4>(%3 : CtBlock, %8 : CtBlock);
-                @29   // pp_1_2_lsb    | %29 : CtBlock = pbs<Protect, MultCarryMsgLsb>(%28 : CtBlock);
-                @30   // pp_1_2_msb    | %30 : CtBlock = pbs<Protect, MultCarryMsgMsb>(%28 : CtBlock);
-                @31   // ovf_1_3       | %31 : CtBlock = pack_ct<4>(%3 : CtBlock, %9 : CtBlock);
-                @32   // ovf_1_3       | %32 : CtBlock = pbs<Protect, MultCarryMsgIsSome>(%31 : CtBlock);
-                @33   // pack_2_0      | %33 : CtBlock = pack_ct<4>(%4 : CtBlock, %6 : CtBlock);
-                @34   // pp_2_0_lsb    | %34 : CtBlock = pbs<Protect, MultCarryMsgLsb>(%33 : CtBlock);
-                @35   // pp_2_0_msb    | %35 : CtBlock = pbs<Protect, MultCarryMsgMsb>(%33 : CtBlock);
-                @36   // pack_2_1      | %36 : CtBlock = pack_ct<4>(%4 : CtBlock, %7 : CtBlock);
-                @37   // pp_2_1_lsb    | %37 : CtBlock = pbs<Protect, MultCarryMsgLsb>(%36 : CtBlock);
-                @38   // pp_2_1_msb    | %38 : CtBlock = pbs<Protect, MultCarryMsgMsb>(%36 : CtBlock);
-                @39   // ovf_2_2       | %39 : CtBlock = pack_ct<4>(%4 : CtBlock, %8 : CtBlock);
-                @40   // ovf_2_2       | %40 : CtBlock = pbs<Protect, MultCarryMsgIsSome>(%39 : CtBlock);
-                @41   // ovf_2_3       | %41 : CtBlock = pack_ct<4>(%4 : CtBlock, %9 : CtBlock);
-                @42   // ovf_2_3       | %42 : CtBlock = pbs<Protect, MultCarryMsgIsSome>(%41 : CtBlock);
-                @43   // pack_3_0      | %43 : CtBlock = pack_ct<4>(%5 : CtBlock, %6 : CtBlock);
-                @44   // pp_3_0_lsb    | %44 : CtBlock = pbs<Protect, MultCarryMsgLsb>(%43 : CtBlock);
-                @45   // pp_3_0_msb    | %45 : CtBlock = pbs<Protect, MultCarryMsgMsb>(%43 : CtBlock);
-                @46   // ovf_3_1       | %46 : CtBlock = pack_ct<4>(%5 : CtBlock, %7 : CtBlock);
-                @47   // ovf_3_1       | %47 : CtBlock = pbs<Protect, MultCarryMsgIsSome>(%46 : CtBlock);
-                @48   // ovf_3_2       | %48 : CtBlock = pack_ct<4>(%5 : CtBlock, %8 : CtBlock);
-                @49   // ovf_3_2       | %49 : CtBlock = pbs<Protect, MultCarryMsgIsSome>(%48 : CtBlock);
-                @50   // ovf_3_3       | %50 : CtBlock = pack_ct<4>(%5 : CtBlock, %9 : CtBlock);
-                @51   // ovf_3_3       | %51 : CtBlock = pbs<Protect, MultCarryMsgIsSome>(%50 : CtBlock);
-                @52   // reduction_1   | %52 : CtBlock = add_ct(%14 : CtBlock, %12 : CtBlock);
-                @53   // reduction_1   | %53 : CtBlock = add_ct(%23 : CtBlock, %52 : CtBlock);
-                @54   // reduction_1   | %54 : CtBlock = pbs<Protect, CarryInMsg>(%53 : CtBlock);
-                @55   // reduction_1   | %55 : CtBlock = pbs<Protect, MsgOnly>(%53 : CtBlock);
-                @56   // reduction_2   | %56 : CtBlock = add_ct(%17 : CtBlock, %15 : CtBlock);
-                @57   // reduction_2   | %57 : CtBlock = add_ct(%24 : CtBlock, %56 : CtBlock);
-                @58   // reduction_2   | %58 : CtBlock = add_ct(%26 : CtBlock, %57 : CtBlock);
-                @59   // reduction_2   | %59 : CtBlock = add_ct(%34 : CtBlock, %58 : CtBlock);
-                @60   // reduction_2   | %60 : CtBlock = pbs<Protect, CarryInMsg>(%59 : CtBlock);
-                @61   // reduction_2   | %61 : CtBlock = pbs<Protect, MsgOnly>(%59 : CtBlock);
-                @62   // reduction_2   | %62 : CtBlock = add_ct(%54 : CtBlock, %61 : CtBlock);
-                @63   // reduction_2   | %63 : CtBlock = pbs<Protect, CarryInMsg>(%62 : CtBlock);
-                @64   // reduction_2   | %64 : CtBlock = pbs<Protect, MsgOnly>(%62 : CtBlock);
-                @65   // reduction_3   | %65 : CtBlock = add_ct(%20 : CtBlock, %18 : CtBlock);
-                @66   // reduction_3   | %66 : CtBlock = add_ct(%27 : CtBlock, %65 : CtBlock);
-                @67   // reduction_3   | %67 : CtBlock = add_ct(%29 : CtBlock, %66 : CtBlock);
-                @68   // reduction_3   | %68 : CtBlock = add_ct(%35 : CtBlock, %67 : CtBlock);
-                @69   // reduction_3   | %69 : CtBlock = pbs<Protect, CarryInMsg>(%68 : CtBlock);
-                @70   // reduction_3   | %70 : CtBlock = pbs<Protect, MsgOnly>(%68 : CtBlock);
-                @71   // reduction_3   | %71 : CtBlock = add_ct(%37 : CtBlock, %70 : CtBlock);
-                @72   // reduction_3   | %72 : CtBlock = add_ct(%44 : CtBlock, %71 : CtBlock);
-                @73   // reduction_3   | %73 : CtBlock = add_ct(%60 : CtBlock, %72 : CtBlock);
-                @74   // reduction_3   | %74 : CtBlock = add_ct(%63 : CtBlock, %73 : CtBlock);
-                @75   // reduction_3   | %75 : CtBlock = pbs<Protect, CarryInMsg>(%74 : CtBlock);
-                @76   // reduction_3   | %76 : CtBlock = pbs<Protect, MsgOnly>(%74 : CtBlock);
-                @77   // ovf / merge   | %77 : CtBlock = add_ct(%32 : CtBlock, %40 : CtBlock);
-                @78   // ovf / merge   | %78 : CtBlock = add_ct(%77 : CtBlock, %42 : CtBlock);
-                @79   // ovf / merge   | %79 : CtBlock = add_ct(%78 : CtBlock, %47 : CtBlock);
-                @80   // ovf / merge   | %80 : CtBlock = add_ct(%79 : CtBlock, %49 : CtBlock);
-                @81   // ovf / merge   | %81 : CtBlock = add_ct(%80 : CtBlock, %51 : CtBlock);
-                @82   // ovf / merge   | %82 : CtBlock = pbs<Protect, IsSome>(%81 : CtBlock);
-                @83                    | %83 : Ct = decl_ct<8>();
-                @84                    | %84 : Ct = store_ct_block<0>(%11 : CtBlock, %83 : Ct);
-                @85                    | %85 : Ct = store_ct_block<1>(%55 : CtBlock, %84 : Ct);
-                @86                    | %86 : Ct = store_ct_block<2>(%64 : CtBlock, %85 : Ct);
-                @87                    | %87 : Ct = store_ct_block<3>(%76 : CtBlock, %86 : Ct);
-                @88                    | output<0>(%87 : Ct);
+                @00                       | %0 : Ct = input_ciphertext<0, 8>();
+                @01                       | %1 : Ct = input_ciphertext<1, 8>();
+                @02                       | %2 : CtBlock = extract_ct_block<0>(%0 : Ct);
+                @03                       | %3 : CtBlock = extract_ct_block<1>(%0 : Ct);
+                @04                       | %4 : CtBlock = extract_ct_block<2>(%0 : Ct);
+                @05                       | %5 : CtBlock = extract_ct_block<3>(%0 : Ct);
+                @06                       | %6 : CtBlock = extract_ct_block<0>(%1 : Ct);
+                @07                       | %7 : CtBlock = extract_ct_block<1>(%1 : Ct);
+                @08                       | %8 : CtBlock = extract_ct_block<2>(%1 : Ct);
+                @09                       | %9 : CtBlock = extract_ct_block<3>(%1 : Ct);
+                @10   // pack_0_0         | %10 : CtBlock = pack_ct<4>(%2 : CtBlock, %6 : CtBlock);
+                @11   // pp_0_0_lsb       | %11 : CtBlock = pbs<Protect, MultCarryMsgLsb>(%10 : CtBlock);
+                @12   // pp_0_0_msb       | %12 : CtBlock = pbs<Protect, MultCarryMsgMsb>(%10 : CtBlock);
+                @13   // pack_0_1         | %13 : CtBlock = pack_ct<4>(%2 : CtBlock, %7 : CtBlock);
+                @14   // pp_0_1_lsb       | %14 : CtBlock = pbs<Protect, MultCarryMsgLsb>(%13 : CtBlock);
+                @15   // pp_0_1_msb       | %15 : CtBlock = pbs<Protect, MultCarryMsgMsb>(%13 : CtBlock);
+                @16   // pack_0_2         | %16 : CtBlock = pack_ct<4>(%2 : CtBlock, %8 : CtBlock);
+                @17   // pp_0_2_lsb       | %17 : CtBlock = pbs<Protect, MultCarryMsgLsb>(%16 : CtBlock);
+                @18   // pp_0_2_msb       | %18 : CtBlock = pbs<Protect, MultCarryMsgMsb>(%16 : CtBlock);
+                @19   // pack_0_3         | %19 : CtBlock = pack_ct<4>(%2 : CtBlock, %9 : CtBlock);
+                @20   // pp_0_3_lsb       | %20 : CtBlock = pbs<Protect, MultCarryMsgLsb>(%19 : CtBlock);
+                @21   // pp_0_3_msb       | %21 : CtBlock = pbs<Protect, MultCarryMsgMsb>(%19 : CtBlock);
+                @22   // pack_1_0         | %22 : CtBlock = pack_ct<4>(%3 : CtBlock, %6 : CtBlock);
+                @23   // pp_1_0_lsb       | %23 : CtBlock = pbs<Protect, MultCarryMsgLsb>(%22 : CtBlock);
+                @24   // pp_1_0_msb       | %24 : CtBlock = pbs<Protect, MultCarryMsgMsb>(%22 : CtBlock);
+                @25   // pack_1_1         | %25 : CtBlock = pack_ct<4>(%3 : CtBlock, %7 : CtBlock);
+                @26   // pp_1_1_lsb       | %26 : CtBlock = pbs<Protect, MultCarryMsgLsb>(%25 : CtBlock);
+                @27   // pp_1_1_msb       | %27 : CtBlock = pbs<Protect, MultCarryMsgMsb>(%25 : CtBlock);
+                @28   // pack_1_2         | %28 : CtBlock = pack_ct<4>(%3 : CtBlock, %8 : CtBlock);
+                @29   // pp_1_2_lsb       | %29 : CtBlock = pbs<Protect, MultCarryMsgLsb>(%28 : CtBlock);
+                @30   // pp_1_2_msb       | %30 : CtBlock = pbs<Protect, MultCarryMsgMsb>(%28 : CtBlock);
+                @31   // ovf_1_3          | %31 : CtBlock = pack_ct<4>(%3 : CtBlock, %9 : CtBlock);
+                @32   // ovf_1_3          | %32 : CtBlock = pbs<Protect, MultCarryMsgIsSome>(%31 : CtBlock);
+                @33   // pack_2_0         | %33 : CtBlock = pack_ct<4>(%4 : CtBlock, %6 : CtBlock);
+                @34   // pp_2_0_lsb       | %34 : CtBlock = pbs<Protect, MultCarryMsgLsb>(%33 : CtBlock);
+                @35   // pp_2_0_msb       | %35 : CtBlock = pbs<Protect, MultCarryMsgMsb>(%33 : CtBlock);
+                @36   // pack_2_1         | %36 : CtBlock = pack_ct<4>(%4 : CtBlock, %7 : CtBlock);
+                @37   // pp_2_1_lsb       | %37 : CtBlock = pbs<Protect, MultCarryMsgLsb>(%36 : CtBlock);
+                @38   // pp_2_1_msb       | %38 : CtBlock = pbs<Protect, MultCarryMsgMsb>(%36 : CtBlock);
+                @39   // ovf_2_2          | %39 : CtBlock = pack_ct<4>(%4 : CtBlock, %8 : CtBlock);
+                @40   // ovf_2_2          | %40 : CtBlock = pbs<Protect, MultCarryMsgIsSome>(%39 : CtBlock);
+                @41   // ovf_2_3          | %41 : CtBlock = pack_ct<4>(%4 : CtBlock, %9 : CtBlock);
+                @42   // ovf_2_3          | %42 : CtBlock = pbs<Protect, MultCarryMsgIsSome>(%41 : CtBlock);
+                @43   // pack_3_0         | %43 : CtBlock = pack_ct<4>(%5 : CtBlock, %6 : CtBlock);
+                @44   // pp_3_0_lsb       | %44 : CtBlock = pbs<Protect, MultCarryMsgLsb>(%43 : CtBlock);
+                @45   // pp_3_0_msb       | %45 : CtBlock = pbs<Protect, MultCarryMsgMsb>(%43 : CtBlock);
+                @46   // ovf_3_1          | %46 : CtBlock = pack_ct<4>(%5 : CtBlock, %7 : CtBlock);
+                @47   // ovf_3_1          | %47 : CtBlock = pbs<Protect, MultCarryMsgIsSome>(%46 : CtBlock);
+                @48   // ovf_3_2          | %48 : CtBlock = pack_ct<4>(%5 : CtBlock, %8 : CtBlock);
+                @49   // ovf_3_2          | %49 : CtBlock = pbs<Protect, MultCarryMsgIsSome>(%48 : CtBlock);
+                @50   // ovf_3_3          | %50 : CtBlock = pack_ct<4>(%5 : CtBlock, %9 : CtBlock);
+                @51   // ovf_3_3          | %51 : CtBlock = pbs<Protect, MultCarryMsgIsSome>(%50 : CtBlock);
+                @52   // reduction_1      | %52 : CtBlock = add_ct(%14 : CtBlock, %12 : CtBlock);
+                @53   // reduction_1      | %53 : CtBlock = add_ct(%23 : CtBlock, %52 : CtBlock);
+                @54   // reduction_1      | %54 : CtBlock = pbs<Protect, CarryInMsg>(%53 : CtBlock);
+                @55   // reduction_1      | %55 : CtBlock = pbs<Protect, MsgOnly>(%53 : CtBlock);
+                @56   // reduction_2      | %56 : CtBlock = add_ct(%17 : CtBlock, %15 : CtBlock);
+                @57   // reduction_2      | %57 : CtBlock = add_ct(%24 : CtBlock, %56 : CtBlock);
+                @58   // reduction_2      | %58 : CtBlock = add_ct(%26 : CtBlock, %57 : CtBlock);
+                @59   // reduction_2      | %59 : CtBlock = add_ct(%34 : CtBlock, %58 : CtBlock);
+                @60   // reduction_2      | %60 : CtBlock = pbs<Protect, CarryInMsg>(%59 : CtBlock);
+                @61   // reduction_2      | %61 : CtBlock = pbs<Protect, MsgOnly>(%59 : CtBlock);
+                @62   // reduction_2      | %62 : CtBlock = add_ct(%54 : CtBlock, %61 : CtBlock);
+                @63   // reduction_2      | %63 : CtBlock = pbs<Protect, CarryInMsg>(%62 : CtBlock);
+                @64   // reduction_2      | %64 : CtBlock = pbs<Protect, MsgOnly>(%62 : CtBlock);
+                @65   // reduction_3      | %65 : CtBlock = add_ct(%20 : CtBlock, %18 : CtBlock);
+                @66   // reduction_3      | %66 : CtBlock = add_ct(%27 : CtBlock, %65 : CtBlock);
+                @67   // reduction_3      | %67 : CtBlock = add_ct(%29 : CtBlock, %66 : CtBlock);
+                @68   // reduction_3      | %68 : CtBlock = add_ct(%35 : CtBlock, %67 : CtBlock);
+                @69   // reduction_3      | %69 : CtBlock = pbs<Protect, CarryInMsg>(%68 : CtBlock);
+                @70   // reduction_3      | %70 : CtBlock = pbs<Protect, MsgOnly>(%68 : CtBlock);
+                @71   // reduction_3      | %71 : CtBlock = add_ct(%37 : CtBlock, %70 : CtBlock);
+                @72   // reduction_3      | %72 : CtBlock = add_ct(%44 : CtBlock, %71 : CtBlock);
+                @73   // reduction_3      | %73 : CtBlock = add_ct(%60 : CtBlock, %72 : CtBlock);
+                @74   // reduction_3      | %74 : CtBlock = add_ct(%63 : CtBlock, %73 : CtBlock);
+                @75   // reduction_3      | %75 : CtBlock = pbs<Protect, CarryInMsg>(%74 : CtBlock);
+                @76   // reduction_3      | %76 : CtBlock = pbs<Protect, MsgOnly>(%74 : CtBlock);
+                @77   // ovf / post_map   | %77 : CtBlock = add_ct(%69 : CtBlock, %75 : CtBlock);
+                @78   // ovf / post_map   | %78 : CtBlock = add_ct(%77 : CtBlock, %21 : CtBlock);
+                @79   // ovf / post_map   | %79 : CtBlock = add_ct(%78 : CtBlock, %30 : CtBlock);
+                @80   // ovf / post_map   | %80 : CtBlock = add_ct(%79 : CtBlock, %38 : CtBlock);
+                @81   // ovf / post_map   | %81 : CtBlock = pbs<Protect, IsSome>(%80 : CtBlock);
+                @82   // ovf / post_map   | %82 : CtBlock = pbs<Protect, IsSome>(%45 : CtBlock);
+                @83   // ovf / merge      | %83 : CtBlock = add_ct(%32 : CtBlock, %40 : CtBlock);
+                @84   // ovf / merge      | %84 : CtBlock = add_ct(%83 : CtBlock, %42 : CtBlock);
+                @85   // ovf / merge      | %85 : CtBlock = add_ct(%84 : CtBlock, %47 : CtBlock);
+                @86   // ovf / merge      | %86 : CtBlock = add_ct(%85 : CtBlock, %49 : CtBlock);
+                @87   // ovf / merge      | %87 : CtBlock = add_ct(%86 : CtBlock, %51 : CtBlock);
+                @88   // ovf / merge      | %88 : CtBlock = add_ct(%87 : CtBlock, %81 : CtBlock);
+                @89   // ovf / merge      | %89 : CtBlock = add_ct(%88 : CtBlock, %82 : CtBlock);
+                @90   // ovf / merge      | %90 : CtBlock = pbs<Protect, IsSome>(%89 : CtBlock);
+                @91                       | %91 : Ct = decl_ct<8>();
+                @92                       | %92 : Ct = store_ct_block<0>(%11 : CtBlock, %91 : Ct);
+                @93                       | %93 : Ct = store_ct_block<1>(%55 : CtBlock, %92 : Ct);
+                @94                       | %94 : Ct = store_ct_block<2>(%64 : CtBlock, %93 : Ct);
+                @95                       | %95 : Ct = store_ct_block<3>(%76 : CtBlock, %94 : Ct);
+                @96                       | output<0>(%95 : Ct);
             "#
         );
     }
