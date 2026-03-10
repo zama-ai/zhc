@@ -168,7 +168,7 @@ pub fn lower_iop_to_hpu(ir: &IR<IopLang>) -> IR<HpuLang> {
                     "Unexpectd use of DeclareCiphertext encountered."
                 )
             }
-            IopInstructionSet::Alias { .. } => {
+            IopInstructionSet::Inspect { .. } => {
                 // Aliases have no semantics in hpulang. And they may prevent CSE so there
                 // should be no aliases remaining here,
                 panic!("Unexpected Alias op encountered.");

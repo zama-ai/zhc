@@ -2,7 +2,7 @@ use crate::ioplang::IopLang;
 use zhc_ir::{IR, ValId};
 use zhc_utils::svec;
 
-/// Removes all `Alias` operations from the IR.
+/// Removes all alias operations from the IR.
 ///
 /// Each alias output value is replaced by the alias's input value throughout the IR, transitively
 /// collapsing alias chains. The alias operations themselves are deleted. All other operations
@@ -23,7 +23,7 @@ pub fn eliminate_aliases(ir: &mut IR<IopLang>) {
     let ann_ir = ir.forward_dataflow_analysis(|op| {
         use super::IopInstructionSet::*;
         match op.get_instruction() {
-            Alias { .. } => {
+            Inspect { .. } => {
                 let valid = match op
                     .get_args_iter()
                     .next()
@@ -75,7 +75,7 @@ mod tests {
 
         let (_, inp) = ir.add_op(IopInstructionSet::LetCiphertextBlock { value: 0 }, svec![]);
         let (_, aliased) = ir.add_op(
-            IopInstructionSet::Alias {
+            IopInstructionSet::Inspect {
                 typ: IopTypeSystem::CiphertextBlock,
             },
             svec![inp[0]],
@@ -90,10 +90,10 @@ mod tests {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : CtBlock = let_ct_block<0>();
-            %1 : CtBlock = alias(%0 : CtBlock);
-            _consume<CtBlock>(%1 : CtBlock);
-        "#
+                %0 : CtBlock = let_ct_block<0>();
+                %1 : CtBlock = inspect(%0 : CtBlock);
+                _consume<CtBlock>(%1 : CtBlock);
+            "#
         );
 
         eliminate_aliases(&mut ir);
@@ -115,19 +115,19 @@ mod tests {
 
         let (_, inp) = ir.add_op(IopInstructionSet::LetCiphertextBlock { value: 0 }, svec![]);
         let (_, a1) = ir.add_op(
-            IopInstructionSet::Alias {
+            IopInstructionSet::Inspect {
                 typ: IopTypeSystem::CiphertextBlock,
             },
             svec![inp[0]],
         );
         let (_, a2) = ir.add_op(
-            IopInstructionSet::Alias {
+            IopInstructionSet::Inspect {
                 typ: IopTypeSystem::CiphertextBlock,
             },
             svec![a1[0]],
         );
         let (_, a3) = ir.add_op(
-            IopInstructionSet::Alias {
+            IopInstructionSet::Inspect {
                 typ: IopTypeSystem::CiphertextBlock,
             },
             svec![a2[0]],
@@ -142,12 +142,12 @@ mod tests {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : CtBlock = let_ct_block<0>();
-            %1 : CtBlock = alias(%0 : CtBlock);
-            %2 : CtBlock = alias(%1 : CtBlock);
-            %3 : CtBlock = alias(%2 : CtBlock);
-            _consume<CtBlock>(%3 : CtBlock);
-        "#
+                %0 : CtBlock = let_ct_block<0>();
+                %1 : CtBlock = inspect(%0 : CtBlock);
+                %2 : CtBlock = inspect(%1 : CtBlock);
+                %3 : CtBlock = inspect(%2 : CtBlock);
+                _consume<CtBlock>(%3 : CtBlock);
+            "#
         );
 
         eliminate_aliases(&mut ir);
@@ -168,7 +168,7 @@ mod tests {
 
         let (_, inp) = ir.add_op(IopInstructionSet::LetCiphertextBlock { value: 0 }, svec![]);
         let (_, aliased) = ir.add_op(
-            IopInstructionSet::Alias {
+            IopInstructionSet::Inspect {
                 typ: IopTypeSystem::CiphertextBlock,
             },
             svec![inp[0]],
@@ -184,11 +184,11 @@ mod tests {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : CtBlock = let_ct_block<0>();
-            %1 : CtBlock = alias(%0 : CtBlock);
-            %2 : CtBlock = add_ct(%1 : CtBlock, %1 : CtBlock);
-            _consume<CtBlock>(%2 : CtBlock);
-        "#
+                %0 : CtBlock = let_ct_block<0>();
+                %1 : CtBlock = inspect(%0 : CtBlock);
+                %2 : CtBlock = add_ct(%1 : CtBlock, %1 : CtBlock);
+                _consume<CtBlock>(%2 : CtBlock);
+            "#
         );
 
         eliminate_aliases(&mut ir);
@@ -211,13 +211,13 @@ mod tests {
         let (_, inp0) = ir.add_op(IopInstructionSet::LetCiphertextBlock { value: 0 }, svec![]);
         let (_, inp1) = ir.add_op(IopInstructionSet::LetCiphertextBlock { value: 1 }, svec![]);
         let (_, a0) = ir.add_op(
-            IopInstructionSet::Alias {
+            IopInstructionSet::Inspect {
                 typ: IopTypeSystem::CiphertextBlock,
             },
             svec![inp0[0]],
         );
         let (_, a1) = ir.add_op(
-            IopInstructionSet::Alias {
+            IopInstructionSet::Inspect {
                 typ: IopTypeSystem::CiphertextBlock,
             },
             svec![inp1[0]],
@@ -233,13 +233,13 @@ mod tests {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : CtBlock = let_ct_block<0>();
-            %1 : CtBlock = let_ct_block<1>();
-            %2 : CtBlock = alias(%0 : CtBlock);
-            %3 : CtBlock = alias(%1 : CtBlock);
-            %4 : CtBlock = add_ct(%2 : CtBlock, %3 : CtBlock);
-            _consume<CtBlock>(%4 : CtBlock);
-        "#
+                %0 : CtBlock = let_ct_block<0>();
+                %1 : CtBlock = let_ct_block<1>();
+                %2 : CtBlock = inspect(%0 : CtBlock);
+                %3 : CtBlock = inspect(%1 : CtBlock);
+                %4 : CtBlock = add_ct(%2 : CtBlock, %3 : CtBlock);
+                _consume<CtBlock>(%4 : CtBlock);
+            "#
         );
 
         eliminate_aliases(&mut ir);
@@ -286,13 +286,13 @@ mod tests {
 
         let (_, inp) = ir.add_op(IopInstructionSet::LetCiphertextBlock { value: 0 }, svec![]);
         let (_, a1) = ir.add_op(
-            IopInstructionSet::Alias {
+            IopInstructionSet::Inspect {
                 typ: IopTypeSystem::CiphertextBlock,
             },
             svec![inp[0]],
         );
         let (_, a2) = ir.add_op(
-            IopInstructionSet::Alias {
+            IopInstructionSet::Inspect {
                 typ: IopTypeSystem::CiphertextBlock,
             },
             svec![inp[0]],
@@ -308,12 +308,12 @@ mod tests {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : CtBlock = let_ct_block<0>();
-            %1 : CtBlock = alias(%0 : CtBlock);
-            %2 : CtBlock = alias(%0 : CtBlock);
-            %3 : CtBlock = add_ct(%1 : CtBlock, %2 : CtBlock);
-            _consume<CtBlock>(%3 : CtBlock);
-        "#
+                %0 : CtBlock = let_ct_block<0>();
+                %1 : CtBlock = inspect(%0 : CtBlock);
+                %2 : CtBlock = inspect(%0 : CtBlock);
+                %3 : CtBlock = add_ct(%1 : CtBlock, %2 : CtBlock);
+                _consume<CtBlock>(%3 : CtBlock);
+            "#
         );
 
         eliminate_aliases(&mut ir);
@@ -337,14 +337,14 @@ mod tests {
         let (_, inp0) = ir.add_op(IopInstructionSet::LetCiphertextBlock { value: 0 }, svec![]);
         let (_, inp1) = ir.add_op(IopInstructionSet::LetCiphertextBlock { value: 1 }, svec![]);
         let (_, a0) = ir.add_op(
-            IopInstructionSet::Alias {
+            IopInstructionSet::Inspect {
                 typ: IopTypeSystem::CiphertextBlock,
             },
             svec![inp0[0]],
         );
         let (_, sum) = ir.add_op(IopInstructionSet::AddCt, svec![a0[0], inp1[0]]);
         let (_, a1) = ir.add_op(
-            IopInstructionSet::Alias {
+            IopInstructionSet::Inspect {
                 typ: IopTypeSystem::CiphertextBlock,
             },
             svec![sum[0]],
@@ -359,13 +359,13 @@ mod tests {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : CtBlock = let_ct_block<0>();
-            %1 : CtBlock = let_ct_block<1>();
-            %2 : CtBlock = alias(%0 : CtBlock);
-            %3 : CtBlock = add_ct(%2 : CtBlock, %1 : CtBlock);
-            %4 : CtBlock = alias(%3 : CtBlock);
-            _consume<CtBlock>(%4 : CtBlock);
-        "#
+                %0 : CtBlock = let_ct_block<0>();
+                %1 : CtBlock = let_ct_block<1>();
+                %2 : CtBlock = inspect(%0 : CtBlock);
+                %3 : CtBlock = add_ct(%2 : CtBlock, %1 : CtBlock);
+                %4 : CtBlock = inspect(%3 : CtBlock);
+                _consume<CtBlock>(%4 : CtBlock);
+            "#
         );
 
         eliminate_aliases(&mut ir);

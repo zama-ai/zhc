@@ -61,7 +61,7 @@ pub enum IopInstructionSet {
     /// Identity forwarding. `(typ) → (typ)`.
     /// Eliminated by [`eliminate_aliases`](super::eliminate_aliases)
     /// before downstream passes.
-    Alias { typ: IopTypeSystem },
+    Inspect { typ: IopTypeSystem },
     /// Zero-initialized composite ciphertext. `() → (Ciphertext)`
     DeclareCiphertext { int_size: u16 },
     /// Plaintext block constant. `() → (PlaintextBlock)`
@@ -141,7 +141,7 @@ impl Display for IopInstructionSet {
             }
             IopInstructionSet::OutputCiphertext { pos } => write!(f, "output<{pos}>"),
             IopInstructionSet::_Consume { typ } => write!(f, "_consume<{typ}>"),
-            IopInstructionSet::Alias { .. } => write!(f, "alias"),
+            IopInstructionSet::Inspect { .. } => write!(f, "inspect"),
             IopInstructionSet::DeclareCiphertext { int_size } => write!(f, "decl_ct<{int_size}>"),
             IopInstructionSet::LetPlaintextBlock { value } => write!(f, "let_pt_block<{value}>"),
             IopInstructionSet::LetCiphertextBlock { value } => write!(f, "let_ct_block<{value}>"),
@@ -224,7 +224,7 @@ impl DialectInstructionSet for IopInstructionSet {
             IopInstructionSet::Pbs8 { .. } => {
                 sig![(CiphertextBlock) -> (CiphertextBlock, CiphertextBlock, CiphertextBlock, CiphertextBlock, CiphertextBlock, CiphertextBlock, CiphertextBlock, CiphertextBlock)]
             }
-            IopInstructionSet::Alias { typ } => sig![(typ.clone()) -> (typ.clone())],
+            IopInstructionSet::Inspect { typ } => sig![(typ.clone()) -> (typ.clone())],
         }
     }
 }

@@ -22,7 +22,7 @@
 //! commutative addition operand order.
 //!
 //! Two dialect-specific optimization passes are provided:
-//! [`eliminate_aliases`] removes identity-forwarding [`Alias`](IopInstructionSet::Alias)
+//! [`eliminate_aliases`] removes identity-forwarding [`Inspect`](IopInstructionSet::Inspect)
 //! operations, and [`skip_store_load`] eliminates redundant
 //! store-then-extract round-trips on ciphertext blocks.
 //!

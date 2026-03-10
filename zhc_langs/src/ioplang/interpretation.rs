@@ -376,7 +376,7 @@ impl Interpretable<IopValue> for super::IopInstructionSet {
                     IopValue::CiphertextBlock(ct7)
                 ]
             }
-            Alias { .. } => arguments,
+            Inspect { .. } => arguments,
         }
     }
 }
