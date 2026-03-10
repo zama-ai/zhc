@@ -597,6 +597,26 @@ impl Builder {
         Ciphertext { valid: acc, spec }
     }
 
+    /// Creates a new IR node that aliases an existing ciphertext.
+    ///
+    /// The returned ciphertext references the same underlying value but has a distinct IR
+    /// node identity. This is useful for debugging, as the node appears separately in IR
+    /// dumps and can be annotated with the current comment stack.
+    pub fn ciphertext_inspect(&self, src: impl AsRef<Ciphertext>) -> Ciphertext {
+        let src = src.as_ref();
+        let (_node, ret) = self.inner_mut().insert_op(
+            IopInstructionSet::Inspect {
+                typ: IopTypeSystem::Ciphertext,
+            },
+            svec![src.valid],
+            self.current_comment(),
+        );
+        Ciphertext {
+            valid: ret[0],
+            spec: src.spec(),
+        }
+    }
+
     /// Declares an encrypted integer output for the circuit.
     ///
     /// Registers the ciphertext as a circuit output in the signature and emits the
@@ -1255,6 +1275,18 @@ impl Builder {
             .cloned()
             .reduce(|a, n| self.block_add(a, n))
             .unwrap()
+    }
+
+    /// Applies [`block_inspect`](Self::block_inspect) to every block in a slice.
+    ///
+    /// Each block is inspected with an index-based comment (`"0"`, `"1"`, ...) appended to
+    /// the current comment stack. This is useful for labeling block positions in IR dumps.
+    pub fn vector_inspect(&self, inp: impl AsRef<[CiphertextBlock]>) -> Vec<CiphertextBlock> {
+        inp.as_ref()
+            .iter()
+            .enumerate()
+            .map(|(i, b)| self.comment(format!("{i}")).block_inspect(b))
+            .collect()
     }
 }
 
