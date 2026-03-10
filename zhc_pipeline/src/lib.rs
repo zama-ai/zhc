@@ -83,7 +83,7 @@ fn multi_hpu_pipeline(hpu_config: &HpuConfig, spec: CiphertextSpec, iop: Iop) ->
     eliminate_dead_code(&mut ir);
     eliminate_common_subexpressions(&mut ir);
     cut_transfers(&mut ir);
-    let components = isolate_subgraphs(&ir);
+    let components = isolate_subgraphs(&ir, true);
     let mut output = Vec::new();
     for comp in components.into_iter() {
         let unscheduled = lower_iop_to_hpu(&comp);
