@@ -1,4 +1,4 @@
-use zhc_ir::{AnnIR, IR, OpId, OpIdRaw, OpMap, translation::eager_translate_ann};
+use zhc_ir::{AnnIR, IR, OpId, OpIdRaw, OpMap, dce::eliminate_dead_code, translation::eager_translate_ann};
 use zhc_utils::iter::Intermediate;
 
 use crate::ioplang::IopLang;
@@ -55,13 +55,15 @@ impl UnionFind {
     }
 }
 
-pub fn isolate_subgraphs(ir: &IR<IopLang>) -> Vec<IR<IopLang>> {
+pub fn isolate_subgraphs(ir: &IR<IopLang>, duplicate_inputs: bool) -> Vec<IR<IopLang>> {
     let mut uf = UnionFind::from_ir(ir);
 
     for valref in ir.walk_vals_linear() {
         let origin = valref.get_origin().opref;
         for user in valref.get_users_iter() {
-            uf.union(*origin, *user);
+            if !(duplicate_inputs && origin.is_input()) {
+                uf.union(*origin, *user);
+            }
         }
     }
 
@@ -69,17 +71,32 @@ pub fn isolate_subgraphs(ir: &IR<IopLang>) -> Vec<IR<IopLang>> {
     for component in uf.components_iter().intermediate() {
         let annir = AnnIR::new(
             ir,
-            ir.totally_mapped_opmap(|op| uf.find(*op) == component),
+            ir.totally_mapped_opmap(|op| {
+                if uf.find(*op) == component {
+                    true
+                } else if duplicate_inputs && op.is_input() && op.get_users_iter().any(|user| uf.find(*user) == component){
+                    true
+                } else {
+                    false
+                }
+            }),
             ir.filled_valmap(()),
         );
-        let output_ir = eager_translate_ann(&annir, |op, translator| {
+        let mut output_ir = eager_translate_ann(&annir, |op, translator| {
             if !op.get_annotation() {
                 // If the op is not in the component, we continue.
                 return;
             }
             translator.direct_translation(op.clone(), op.get_instruction());
         });
-        output.push(output_ir);
+        if duplicate_inputs {
+            eliminate_dead_code(&mut output_ir);
+            if output_ir.n_ops() > 0 {
+                output.push(output_ir);
+            }
+        } else {
+            output.push(output_ir);
+        }
     }
 
     output
@@ -121,7 +138,7 @@ mod test {
         );
 
         cut_transfers(&mut ir);
-        let components = isolate_subgraphs(&ir);
+        let components = isolate_subgraphs(&ir, true);
 
         assert_display_is!(
             components[0].format(),
@@ -140,5 +157,59 @@ mod test {
                 transfer_out<#1>(%2 : CtBlock);
             "#
         );
+    }
+
+    #[test]
+    fn test_shared_input_prevents_split() {
+        let mut ir: IR<IopLang> = IR::empty();
+
+        let (_, i1) = ir.add_op(IopInstructionSet::LetCiphertextBlock { value: 1 }, svec![]);
+        let (_, i2) = ir.add_op(IopInstructionSet::LetCiphertextBlock { value: 2 }, svec![]);
+        let (_, add1) = ir.add_op(IopInstructionSet::AddCt, svec![i1[0], i2[0]]);
+        let (_, t1) = ir.add_op(IopInstructionSet::Transfer, svec![add1[0]]);
+        let (_, add2) = ir.add_op(IopInstructionSet::AddCt, svec![t1[0], i1[0]]);
+        ir.add_op(
+            IopInstructionSet::_Consume { typ: IopTypeSystem::CiphertextBlock },
+            svec![add2[0]],
+        );
+
+        assert_display_is!(
+            ir.format().with_walker(zhc_ir::PrintWalker::Linear),
+            r#"
+                %0 : CtBlock = let_ct_block<1>();
+                %1 : CtBlock = let_ct_block<2>();
+                %2 : CtBlock = add_ct(%0 : CtBlock, %1 : CtBlock);
+                %3 : CtBlock = transfer(%2 : CtBlock);
+                %4 : CtBlock = add_ct(%3 : CtBlock, %0 : CtBlock);
+                _consume<CtBlock>(%4 : CtBlock);
+            "#
+        );
+
+        cut_transfers(&mut ir);
+        let components = isolate_subgraphs(&ir, true);
+        assert_eq!(components.len(), 2);
+
+        // Consumer 1
+        assert_display_is!(
+            components[0].format(),
+            r#"
+                %0 : CtBlock = let_ct_block<1>();
+                %1 : CtBlock = transfer_in<#1>();
+                %2 : CtBlock = add_ct(%1 : CtBlock, %0 : CtBlock);
+                _consume<CtBlock>(%2 : CtBlock);
+            "#
+        );
+
+        // Consumer 2
+        assert_display_is!(
+            components[1].format(),
+            r#"
+                %0 : CtBlock = let_ct_block<1>();
+                %1 : CtBlock = let_ct_block<2>();
+                %2 : CtBlock = add_ct(%0 : CtBlock, %1 : CtBlock);
+                transfer_out<#1>(%2 : CtBlock);
+            "#
+        );
+
     }
 }
