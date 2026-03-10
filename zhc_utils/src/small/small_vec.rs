@@ -329,6 +329,12 @@ impl<A> AsRef<[A]> for SmallVec<A> {
     }
 }
 
+impl<A> AsMut<[A]> for SmallVec<A> {
+    fn as_mut(&mut self) -> &mut [A] {
+        self.as_mut_slice()
+    }
+}
+
 impl<A, const N: usize> TryInto<[A; N]> for SmallVec<A> {
     type Error = SmallVec<A>;
 

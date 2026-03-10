@@ -198,6 +198,20 @@ pub fn translate<'ir>(ir: &AnnIR<'ir, HpuLang, Alloc, ()>) -> IR<DopLang> {
                     cst: Argument::pt_const(cst.0),
                 });
             }
+            HpuInstructionSet::CstCt { cst } => {
+                add_op(DopInstructionSet::SUB {
+                    dst: Argument::ct_reg(dsts[0].0),
+                    src1: Argument::ct_reg(dsts[0].0),
+                    src2: Argument::ct_reg(dsts[0].0),
+                });
+                if cst.0 != 0 {
+                    add_op(DopInstructionSet::ADDS {
+                        dst: Argument::ct_reg(dsts[0].0),
+                        src: Argument::ct_reg(dsts[0].0),
+                        cst: Argument::pt_const(cst.0),
+                    });
+                }
+            }
             HpuInstructionSet::Batch { block } => {
                 let batch_map = BatchMap::from_op(&op);
                 let reg_map: SmallMap<ValId, RegId> =

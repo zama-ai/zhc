@@ -49,7 +49,7 @@ impl CiphertextBlockSpec {
         1
     }
 
-    pub(crate) fn padding_mask(&self) -> EmulatedCiphertextBlockStorage {
+    pub fn padding_mask(&self) -> EmulatedCiphertextBlockStorage {
         1 << (self.carry_size() + self.message_size())
     }
 
@@ -61,7 +61,7 @@ impl CiphertextBlockSpec {
         self.0
     }
 
-    pub(crate) fn carry_mask(&self) -> EmulatedCiphertextBlockStorage {
+    pub fn carry_mask(&self) -> EmulatedCiphertextBlockStorage {
         ((1 << self.carry_size()) - 1) << self.message_size()
     }
 
@@ -74,7 +74,7 @@ impl CiphertextBlockSpec {
         self.1
     }
 
-    pub(crate) fn message_mask(&self) -> EmulatedCiphertextBlockStorage {
+    pub fn message_mask(&self) -> EmulatedCiphertextBlockStorage {
         (1 << self.message_size()) - 1
     }
 
@@ -85,7 +85,7 @@ impl CiphertextBlockSpec {
         self.padding_size() + self.carry_size() + self.message_size()
     }
 
-    pub(crate) fn complete_mask(&self) -> EmulatedCiphertextBlockStorage {
+    pub fn complete_mask(&self) -> EmulatedCiphertextBlockStorage {
         self.padding_mask() | self.data_mask()
     }
 
@@ -97,7 +97,7 @@ impl CiphertextBlockSpec {
         self.carry_size() + self.message_size()
     }
 
-    pub(crate) fn data_mask(&self) -> EmulatedCiphertextBlockStorage {
+    pub fn data_mask(&self) -> EmulatedCiphertextBlockStorage {
         self.carry_mask() | self.message_mask()
     }
 
