@@ -48,6 +48,7 @@ mod count;
 mod if_then_else;
 mod if_then_zero;
 mod lead_trail;
+mod mh_mul;
 mod mul;
 
 pub use add::*;
@@ -58,6 +59,7 @@ pub use if_then_else::*;
 pub use if_then_zero::*;
 pub use lead_trail::*;
 pub use mul::*;
+pub use mh_mul::*;
 
 // SUB
 // ADDS
