@@ -112,7 +112,7 @@ fn multi_hpu_pipeline(mut ir: IR<IopLang>, config: &HpuConfig) -> Vec<IR<DopLang
     eliminate_dead_code(&mut ir);
     eliminate_common_subexpressions(&mut ir);
     cut_transfers(&mut ir);
-    let components = isolate_subgraphs(&ir);
+    let components = isolate_subgraphs(&ir, true);
     let mut output = Vec::new();
     for comp in components.into_iter() {
         let unscheduled = translation::lower_iop_to_hpu(&comp);
