@@ -1,3 +1,22 @@
+//! Builder implementation for FHE circuit construction.
+//!
+//! This module provides [`Builder`], the primary interface for constructing FHE circuits.
+//! See the [crate-level documentation](super) for an overview of the circuit model, radix
+//! decomposition, and operation flavors.
+//!
+//! # Example
+//!
+//! ```rust,no_run
+//! # use zhc_builder::*;
+//! let builder = Builder::new(CiphertextBlockSpec(2, 2));
+//! let input = builder.ciphertext_input(8);
+//! let blocks = builder.ciphertext_split(&input);
+//! let doubled: Vec<_> = blocks.iter().map(|b| builder.block_add(b, b)).collect();
+//! let output = builder.ciphertext_join(&doubled, None);
+//! builder.ciphertext_output(&output);
+//! let ir = builder.into_ir();
+//! ```
+
 use crate::builder::{Ciphertext, CiphertextBlock, Plaintext, PlaintextBlock};
 use std::{
     cell::{Ref, RefCell, RefMut},
@@ -512,6 +531,16 @@ impl Builder {
     /// Returns one [`CiphertextBlock`] per block in the radix-decomposed
     /// representation, ordered from least-significant to most-significant digit. The
     /// length of the returned vector is `int_size / message_size`.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let ct = builder.ciphertext_input(8);
+    /// let blocks = builder.ciphertext_split(&ct);
+    /// assert_eq!(blocks.len(), 4); // 8 bits / 2-bit message = 4 blocks
+    /// ```
     pub fn ciphertext_split(&self, inp: impl AsRef<Ciphertext>) -> Vec<CiphertextBlock> {
         let inp = inp.as_ref();
         (0..inp.spec().block_count())
@@ -537,6 +566,18 @@ impl Builder {
     /// (see [Input / Output Ordering](Self#input--output-ordering)). The plaintext block
     /// spec is derived from the builder's ciphertext block spec (matching message size, no
     /// carry bits).
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let ct = builder.ciphertext_input(8);
+    /// let pt = builder.plaintext_input(8);
+    /// let ct_blocks = builder.ciphertext_split(&ct);
+    /// let pt_blocks = builder.plaintext_split(&pt);
+    /// let sum = builder.block_add_plaintext(&ct_blocks[0], &pt_blocks[0]);
+    /// ```
     pub fn plaintext_input(&self, int_size: u16) -> Plaintext {
         let spec = self
             .spec
@@ -559,6 +600,16 @@ impl Builder {
     /// Returns one [`PlaintextBlock`] per digit in the radix-decomposed
     /// representation, ordered from least-significant to most-significant digit. The
     /// length of the returned vector is `int_size / message_size`.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let pt = builder.plaintext_input(8);
+    /// let blocks = builder.plaintext_split(&pt);
+    /// assert_eq!(blocks.len(), 4); // 8 bits / 2-bit message = 4 blocks
+    /// ```
     pub fn plaintext_split(&self, inp: impl AsRef<Plaintext>) -> Vec<PlaintextBlock> {
         let inp = inp.as_ref();
         (0..inp.spec().block_count())
@@ -643,6 +694,15 @@ impl Builder {
     /// The returned ciphertext references the same underlying value but has a distinct IR
     /// node identity. This is useful for debugging, as the node appears separately in IR
     /// dumps and can be annotated with the current comment stack.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let input = builder.ciphertext_input(8);
+    /// let labeled = builder.comment("after input").ciphertext_inspect(&input);
+    /// ```
     pub fn ciphertext_inspect(&self, src: impl AsRef<Ciphertext>) -> Ciphertext {
         let src = src.as_ref();
         let (_node, ret) = self.inner_mut().insert_op(
@@ -663,6 +723,15 @@ impl Builder {
     /// Registers the ciphertext as a circuit output in the signature and emits the
     /// corresponding IR output instruction. The output is assigned the next positional
     /// index (see [Input / Output Ordering](Self#input--output-ordering)).
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let input = builder.ciphertext_input(8);
+    /// builder.ciphertext_output(&input);
+    /// ```
     pub fn ciphertext_output(&self, ct: impl AsRef<Ciphertext>) {
         let ct = ct.as_ref();
         let pos = self.inner_mut().push_ret_type(Type::Ciphertext(ct.spec()));
@@ -731,10 +800,20 @@ impl Builder {
         }
     }
 
-    /// Creates a new IR node that inspects an existing ciphertext block.
+    /// Creates a new IR node that aliases an existing ciphertext block.
     ///
     /// The returned block references the same underlying value but has a distinct IR
     /// node identity. This is useful for debugging purposes.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let ct = builder.ciphertext_input(4);
+    /// let blocks = builder.ciphertext_split(&ct);
+    /// let labeled = builder.comment("lsb").block_inspect(&blocks[0]);
+    /// ```
     pub fn block_inspect(&self, src: impl AsRef<CiphertextBlock>) -> CiphertextBlock {
         let src = src.as_ref();
         let (_node, ret) = self.inner_mut().insert_op(
@@ -754,6 +833,16 @@ impl Builder {
     ///
     /// Computes `src_a + src_b` at the block level. Uses temper semantics — see
     /// [Operation Flavors](super::super#operation-flavors).
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let ct = builder.ciphertext_input(4);
+    /// let blocks = builder.ciphertext_split(&ct);
+    /// let sum = builder.block_temper_add(&blocks[0], &blocks[1]);
+    /// ```
     pub fn block_temper_add(
         &self,
         src_a: impl AsRef<CiphertextBlock>,
@@ -775,6 +864,16 @@ impl Builder {
     ///
     /// Computes `src_a + src_b` at the block level. Uses wrapping semantics — see
     /// [Operation Flavors](super::super#operation-flavors).
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let ct = builder.ciphertext_input(4);
+    /// let blocks = builder.ciphertext_split(&ct);
+    /// let sum = builder.block_wrapping_add(&blocks[0], &blocks[1]);
+    /// ```
     pub fn block_wrapping_add(
         &self,
         src_a: impl AsRef<CiphertextBlock>,
@@ -796,6 +895,17 @@ impl Builder {
     ///
     /// Computes `src_a + src_b` where `src_a` is encrypted and `src_b` is plaintext.
     /// Uses protect semantics — see [Operation Flavors](super::super#operation-flavors).
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let ct = builder.ciphertext_input(4);
+    /// let blocks = builder.ciphertext_split(&ct);
+    /// let one = builder.block_let_plaintext(1);
+    /// let incremented = builder.block_add_plaintext(&blocks[0], &one);
+    /// ```
     pub fn block_add_plaintext(
         &self,
         src_a: impl AsRef<CiphertextBlock>,
@@ -817,6 +927,17 @@ impl Builder {
     ///
     /// Computes `src_a + src_b` where `src_a` is encrypted and `src_b` is plaintext.
     /// Uses wrapping semantics — see [Operation Flavors](super::super#operation-flavors).
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let ct = builder.ciphertext_input(4);
+    /// let blocks = builder.ciphertext_split(&ct);
+    /// let one = builder.block_let_plaintext(1);
+    /// let incremented = builder.block_wrapping_add_plaintext(&blocks[0], &one);
+    /// ```
     pub fn block_wrapping_add_plaintext(
         &self,
         src_a: impl AsRef<CiphertextBlock>,
@@ -838,6 +959,16 @@ impl Builder {
     ///
     /// Computes `src_a - src_b` at the block level. Uses protect semantics — see
     /// [Operation Flavors](super::super#operation-flavors).
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let ct = builder.ciphertext_input(4);
+    /// let blocks = builder.ciphertext_split(&ct);
+    /// let diff = builder.block_sub(&blocks[1], &blocks[0]);
+    /// ```
     pub fn block_sub(
         &self,
         src_a: impl AsRef<CiphertextBlock>,
@@ -859,6 +990,17 @@ impl Builder {
     ///
     /// Computes `src_a - src_b` where `src_a` is encrypted and `src_b` is plaintext.
     /// Uses protect semantics — see [Operation Flavors](super::super#operation-flavors).
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let ct = builder.ciphertext_input(4);
+    /// let blocks = builder.ciphertext_split(&ct);
+    /// let one = builder.block_let_plaintext(1);
+    /// let decremented = builder.block_sub_plaintext(&blocks[0], &one);
+    /// ```
     pub fn block_sub_plaintext(
         &self,
         src_a: impl AsRef<CiphertextBlock>,
@@ -882,6 +1024,17 @@ impl Builder {
     /// The result is a ciphertext block. Uses protect semantics — see
     /// [Operation Flavors](super::super#operation-flavors). Note the reversed operand order
     /// compared to [`block_sub_plaintext`](Self::block_sub_plaintext).
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let ct = builder.ciphertext_input(4);
+    /// let blocks = builder.ciphertext_split(&ct);
+    /// let three = builder.block_let_plaintext(3);
+    /// let result = builder.block_plaintext_sub(&three, &blocks[0]); // 3 - blocks[0]
+    /// ```
     pub fn block_plaintext_sub(
         &self,
         src_a: impl AsRef<PlaintextBlock>,
@@ -951,6 +1104,17 @@ impl Builder {
     /// # Panics
     ///
     /// Panics if `carry_size != message_size` (see [`block_pack`](Self::block_pack)).
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// # use zhc_langs::ioplang::Lut1Def;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let ct = builder.ciphertext_input(4);
+    /// let blocks = builder.ciphertext_split(&ct);
+    /// let result = builder.block_pack_then_lookup(&blocks[1], &blocks[0], Lut1Def::MsgOnly);
+    /// ```
     pub fn block_pack_then_lookup(
         &self,
         src_a: impl AsRef<CiphertextBlock>,
@@ -1000,6 +1164,17 @@ impl Builder {
     /// to overflow into the output padding bit. The input padding bit must still be clear
     /// (protect semantics on the input side). This is useful when a subsequent operation
     /// will consume the padding bit before the next lookup.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// # use zhc_langs::ioplang::Lut1Def;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let ct = builder.ciphertext_input(4);
+    /// let blocks = builder.ciphertext_split(&ct);
+    /// let result = builder.block_padding_lookup(&blocks[0], Lut1Def::MsgOnly);
+    /// ```
     pub fn block_padding_lookup(
         &self,
         src: impl AsRef<CiphertextBlock>,
@@ -1026,6 +1201,17 @@ impl Builder {
     /// lookup — see [Operation Flavors](super::super#operation-flavors). This is appropriate
     /// when the input block's padding bit may be set, enabling negacyclic lookup
     /// behavior.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// # use zhc_langs::ioplang::Lut1Def;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let ct = builder.ciphertext_input(4);
+    /// let blocks = builder.ciphertext_split(&ct);
+    /// let result = builder.block_wrapping_lookup(&blocks[0], Lut1Def::MsgOnly);
+    /// ```
     pub fn block_wrapping_lookup(
         &self,
         src: impl AsRef<CiphertextBlock>,
@@ -1052,6 +1238,18 @@ impl Builder {
     /// output blocks from a single input. The two lookup functions are defined by the
     /// [`Lut2Def`] variant. This amortizes the cost of a PBS when two related values
     /// need to be extracted simultaneously.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// # use zhc_langs::ioplang::Lut2Def;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let ct = builder.ciphertext_input(4);
+    /// let blocks = builder.ciphertext_split(&ct);
+    /// let packed = builder.block_pack(&blocks[1], &blocks[0]);
+    /// let (msg, carry) = builder.block_lookup2(&packed, Lut2Def::ManyCarryMsg);
+    /// ```
     pub fn block_lookup2(
         &self,
         src: impl AsRef<CiphertextBlock>,
@@ -1080,6 +1278,17 @@ impl Builder {
     /// The `value` is stored as a trivially-encrypted block (zero noise). This is useful
     /// for initializing accumulators or providing constant operands in arithmetic. The
     /// value's bit-width must fit within the block's data bits (carry + message).
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let zero = builder.block_let_ciphertext(0);
+    /// let ct = builder.ciphertext_input(4);
+    /// let blocks = builder.ciphertext_split(&ct);
+    /// let sum = builder.block_add(&zero, &blocks[0]); // 0 + blocks[0]
+    /// ```
     pub fn block_let_ciphertext(&self, value: u8) -> CiphertextBlock {
         let (_node, ret) = self.inner_mut().insert_op(
             IopInstructionSet::LetCiphertextBlock { value },
@@ -1106,6 +1315,16 @@ impl Builder {
     /// # Panics
     ///
     /// Panics if `carry_size != message_size` (see [`block_pack`](Self::block_pack)).
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let ct = builder.ciphertext_input(8);
+    /// let blocks = builder.ciphertext_split(&ct); // 4 blocks
+    /// let packed = builder.vector_pack(&blocks);  // 2 packed blocks
+    /// ```
     pub fn vector_pack(&self, blocks: impl AsRef<[CiphertextBlock]>) -> Vec<CiphertextBlock> {
         blocks
             .as_ref()
@@ -1128,6 +1347,16 @@ impl Builder {
     /// # Panics
     ///
     /// Panics if `carry_size != message_size` (see [`block_pack`](Self::block_pack)).
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let ct = builder.ciphertext_input(8);
+    /// let blocks = builder.ciphertext_split(&ct);
+    /// let cleaned = builder.vector_pack_then_clean(&blocks);
+    /// ```
     pub fn vector_pack_then_clean(
         &self,
         blocks: impl AsRef<[CiphertextBlock]>,
@@ -1147,6 +1376,17 @@ impl Builder {
     /// # Panics
     ///
     /// Panics if `carry_size != message_size` (see [`block_pack`](Self::block_pack)).
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// # use zhc_langs::ioplang::Lut1Def;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let ct = builder.ciphertext_input(8);
+    /// let blocks = builder.ciphertext_split(&ct);
+    /// let results = builder.vector_pack_then_lookup(&blocks, Lut1Def::MsgOnly);
+    /// ```
     pub fn vector_pack_then_lookup(
         &self,
         blocks: impl AsRef<[CiphertextBlock]>,
@@ -1179,6 +1419,24 @@ impl Builder {
     /// Panics if `carry_size != message_size` (see [`block_pack`](Self::block_pack)), or
     /// if the slices differ in length and `extension` is
     /// [`Panic`](ExtensionBehavior::Panic).
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// # use zhc_langs::ioplang::Lut1Def;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let a = builder.ciphertext_input(8);
+    /// let b = builder.ciphertext_input(8);
+    /// let a_blocks = builder.ciphertext_split(&a);
+    /// let b_blocks = builder.ciphertext_split(&b);
+    /// let results = builder.vector_zip_then_lookup(
+    ///     &a_blocks,
+    ///     &b_blocks,
+    ///     Lut1Def::MsgOnly,
+    ///     ExtensionBehavior::Panic,
+    /// );
+    /// ```
     pub fn vector_zip_then_lookup(
         &self,
         lhs: impl AsRef<[CiphertextBlock]>,
@@ -1210,6 +1468,17 @@ impl Builder {
     /// Maps [`block_lookup`](Self::block_lookup) over each element. Unlike
     /// [`vector_pack_then_lookup`](Self::vector_pack_then_lookup), no packing is
     /// performed — each block is bootstrapped independently.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// # use zhc_langs::ioplang::Lut1Def;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let ct = builder.ciphertext_input(8);
+    /// let blocks = builder.ciphertext_split(&ct);
+    /// let cleaned = builder.vector_lookup(&blocks, Lut1Def::MsgOnly);
+    /// ```
     pub fn vector_lookup(
         &self,
         blocks: impl AsRef<[CiphertextBlock]>,
@@ -1226,6 +1495,18 @@ impl Builder {
     ///
     /// Maps [`block_lookup2`](Self::block_lookup2) over each element, returning a pair of
     /// output blocks per input block.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// # use zhc_langs::ioplang::Lut2Def;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let ct = builder.ciphertext_input(8);
+    /// let blocks = builder.ciphertext_split(&ct);
+    /// let packed = builder.vector_pack(&blocks);
+    /// let pairs = builder.vector_lookup2(&packed, Lut2Def::ManyCarryMsg);
+    /// ```
     pub fn vector_lookup2(
         &self,
         blocks: impl AsRef<[CiphertextBlock]>,
@@ -1248,6 +1529,18 @@ impl Builder {
     ///
     /// Panics if the slices differ in length and `extension` is
     /// [`Panic`](ExtensionBehavior::Panic).
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let a = builder.ciphertext_input(8);
+    /// let b = builder.ciphertext_input(8);
+    /// let a_blocks = builder.ciphertext_split(&a);
+    /// let b_blocks = builder.ciphertext_split(&b);
+    /// let sums = builder.vector_add(&a_blocks, &b_blocks, ExtensionBehavior::Panic);
+    /// ```
     pub fn vector_add(
         &self,
         lhs: impl AsRef<[CiphertextBlock]>,
@@ -1281,6 +1574,16 @@ impl Builder {
     /// # Panics
     ///
     /// Panics if `inp.len() > size`.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let ct = builder.ciphertext_input(4);        // 2 blocks
+    /// let blocks = builder.ciphertext_split(&ct);
+    /// let extended = builder.vector_unsigned_extension(&blocks, 4); // now 4 blocks
+    /// ```
     pub fn vector_unsigned_extension(
         &self,
         inp: impl AsRef<[CiphertextBlock]>,
@@ -1306,6 +1609,16 @@ impl Builder {
     /// # Panics
     ///
     /// Panics if `inp` is empty.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let ct = builder.ciphertext_input(8);
+    /// let blocks = builder.ciphertext_split(&ct);
+    /// let total = builder.vector_add_reduce(&blocks);
+    /// ```
     pub fn vector_add_reduce(&self, inp: impl AsRef<[CiphertextBlock]>) -> CiphertextBlock {
         let inp = inp.as_ref();
         assert!(
@@ -1322,6 +1635,16 @@ impl Builder {
     ///
     /// Each block is inspected with an index-based comment (`"0"`, `"1"`, ...) appended to
     /// the current comment stack. This is useful for labeling block positions in IR dumps.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let ct = builder.ciphertext_input(8);
+    /// let blocks = builder.ciphertext_split(&ct);
+    /// let labeled = builder.comment("radix digits").vector_inspect(&blocks);
+    /// ```
     pub fn vector_inspect(&self, inp: impl AsRef<[CiphertextBlock]>) -> Vec<CiphertextBlock> {
         inp.as_ref()
             .iter()
