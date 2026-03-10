@@ -135,10 +135,10 @@ impl Builder {
                 let b3 = self.block_temper_add(&b2, &states[3]);
                 let b3 = self.block_lookup(&b3, Lut1Def::SolvePropGroupFinal2);
                 [
-                    self.comment("G0-B0").block_alias(b0),
-                    self.comment("G0-B1").block_alias(b1),
-                    self.comment("G0-B2").block_alias(b2),
-                    self.comment("G0-B3").block_alias(b3),
+                    self.comment("G0-B0").block_inspect(b0),
+                    self.comment("G0-B1").block_inspect(b1),
+                    self.comment("G0-B2").block_inspect(b2),
+                    self.comment("G0-B3").block_inspect(b3),
                 ]
             })
             .map_rest(|states| {
@@ -149,10 +149,10 @@ impl Builder {
                 let b3 = self.block_wrapping_lookup(&b3, Lut1Def::ReduceCarryPad);
                 let b3 = self.block_wrapping_add_plaintext(&b3, &self.block_let_plaintext(1));
                 [
-                    self.comment("GN-B0").block_alias(b0),
-                    self.comment("GN-B1").block_alias(b1),
-                    self.comment("GN-B2").block_alias(b2),
-                    self.comment("GN-B3").block_alias(b3),
+                    self.comment("GN-B0").block_inspect(b0),
+                    self.comment("GN-B1").block_inspect(b1),
+                    self.comment("GN-B2").block_inspect(b2),
+                    self.comment("GN-B3").block_inspect(b3),
                 ]
             })
             .cosvec();
@@ -224,10 +224,10 @@ impl Builder {
                 let b1 = self.block_lookup(&states[1], Lut1Def::SolvePropGroupFinal0);
                 let b2 = self.block_lookup(&states[2], Lut1Def::SolvePropGroupFinal1);
                 [
-                    self.comment("G0-B0").block_alias(states[0]),
-                    self.comment("G0-B1").block_alias(b1),
-                    self.comment("G0-B2").block_alias(b2),
-                    self.comment("G0-B3").block_alias(carry),
+                    self.comment("G0-B0").block_inspect(states[0]),
+                    self.comment("G0-B1").block_inspect(b1),
+                    self.comment("G0-B2").block_inspect(b2),
+                    self.comment("G0-B3").block_inspect(carry),
                 ]
             })
             .map_rest(|slider| {
@@ -239,10 +239,10 @@ impl Builder {
                 let b2 = self.block_add(&states[2], &previous_carry);
                 let b2 = self.block_lookup(&b2, Lut1Def::SolvePropGroupFinal2);
                 [
-                    self.comment("GN-B0").block_alias(b0),
-                    self.comment("GN-B1").block_alias(b1),
-                    self.comment("GN-B2").block_alias(b2),
-                    self.comment("GN-B3").block_alias(carry),
+                    self.comment("GN-B0").block_inspect(b0),
+                    self.comment("GN-B1").block_inspect(b1),
+                    self.comment("GN-B2").block_inspect(b2),
+                    self.comment("GN-B3").block_inspect(carry),
                 ]
             })
             .flatten()

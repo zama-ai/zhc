@@ -670,14 +670,14 @@ impl Builder {
         }
     }
 
-    /// Creates a new IR node that aliases an existing ciphertext block.
+    /// Creates a new IR node that inspects an existing ciphertext block.
     ///
     /// The returned block references the same underlying value but has a distinct IR
     /// node identity. This is useful for debugging purposes.
-    pub fn block_alias(&self, src: impl AsRef<CiphertextBlock>) -> CiphertextBlock {
+    pub fn block_inspect(&self, src: impl AsRef<CiphertextBlock>) -> CiphertextBlock {
         let src = src.as_ref();
         let (_node, ret) = self.inner_mut().insert_op(
-            IopInstructionSet::Alias {
+            IopInstructionSet::Inspect {
                 typ: IopTypeSystem::CiphertextBlock,
             },
             svec![src.valid],
