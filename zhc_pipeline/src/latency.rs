@@ -39,7 +39,7 @@ mod test {
         allocator::allocate_registers, batch_scheduler::batch_schedule,
         translation::lower_iop_to_hpu,
     };
-    use zhc_builder::{CiphertextSpec, add, cmp_gt, count_0, mul_lsb, overflow_mul_lsb};
+    use zhc_builder::{CiphertextSpec, add, cmp_gt, count_0, lead0, mul_lsb, overflow_mul_lsb};
     use zhc_ir::IR;
     use zhc_langs::ioplang::IopLang;
     use zhc_sim::{
@@ -107,6 +107,17 @@ mod test {
             format!("{}us", lat.as_ts(MHz(400).period())),
             r#"
                 193757.97us
+            "#
+        );
+    }
+
+    #[test]
+    fn test_latency_overflow_lead_0() {
+        let lat = pipeline(&lead0(CiphertextSpec::new(64, 2, 2)).into_ir());
+        assert_display_is!(
+            format!("{}us", lat.as_ts(MHz(400).period())),
+            r#"
+                13575.407500000001us
             "#
         );
     }

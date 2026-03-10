@@ -47,6 +47,7 @@ mod cmp;
 mod count;
 mod if_then_else;
 mod if_then_zero;
+mod lead_trail;
 mod mul;
 
 pub use add::*;
@@ -55,6 +56,7 @@ pub use cmp::*;
 pub use count::*;
 pub use if_then_else::*;
 pub use if_then_zero::*;
+pub use lead_trail::*;
 pub use mul::*;
 
 // SUB
