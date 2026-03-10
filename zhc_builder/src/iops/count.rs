@@ -1,35 +1,21 @@
 use zhc_crypto::integer_semantics::CiphertextSpec;
 use zhc_langs::ioplang::{Lut1Def, Lut2Def};
 use zhc_utils::{
-    iter::{ChunkIt, UnwrapChunks},
+    iter::{ChunkIt, CollectInVec, UnwrapChunks},
     n_bits_to_encode,
 };
 
 use crate::{
-    CiphertextBlock, NU,
+    BitType, CiphertextBlock, NU,
     builder::{Builder, Ciphertext},
 };
-
-/// Selects which bit value to count in an encrypted integer.
-///
-/// Passed to [`count_0`], [`count_1`], or [`Builder::iop_count`] to choose
-/// whether the operation counts zero bits or one bits. The semantics mirror
-/// the standard `count_zeros` / `count_ones` methods on Rust integer types,
-/// restricted to the declared `int_size` of the [`CiphertextSpec`].
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CountKind {
-    /// Counts the number of **zero** bits in the encrypted integer.
-    Zeros,
-    /// Counts the number of **one** bits in the encrypted integer.
-    Ones,
-}
 
 /// Creates an IR that counts the number of **zero** bits in an encrypted integer.
 ///
 /// The returned [`Builder`] declares one ciphertext input of `spec.int_size()`
 /// bits and one ciphertext output whose width is `⌈log₂(int_size + 1)⌉` bits
 /// — just enough to represent every possible count from 0 to `int_size`.
-/// Internally delegates to [`Builder::iop_count`] with [`CountKind::Zeros`].
+/// Internally delegates to [`Builder::iop_count`] with [`BitType::Zero`].
 ///
 /// The `spec` parameter describes the integer encoding (bit-width, message
 /// bits, carry bits) and determines the number of blocks in the
@@ -46,7 +32,7 @@ pub enum CountKind {
 pub fn count_0(spec: CiphertextSpec) -> Builder {
     let mut builder = Builder::new(spec.block_spec());
     let src_a = builder.ciphertext_input(spec.int_size());
-    let res = builder.iop_count(&src_a, CountKind::Zeros);
+    let res = builder.iop_count(&src_a, BitType::Zero);
     builder.ciphertext_output(res);
     builder
 }
@@ -56,7 +42,7 @@ pub fn count_0(spec: CiphertextSpec) -> Builder {
 /// The returned [`Builder`] declares one ciphertext input of `spec.int_size()`
 /// bits and one ciphertext output whose width is `⌈log₂(int_size + 1)⌉` bits
 /// — just enough to represent every possible count from 0 to `int_size`.
-/// Internally delegates to [`Builder::iop_count`] with [`CountKind::Ones`].
+/// Internally delegates to [`Builder::iop_count`] with [`BitType::One`].
 ///
 /// The `spec` parameter describes the integer encoding (bit-width, message
 /// bits, carry bits) and determines the number of blocks in the
@@ -73,7 +59,7 @@ pub fn count_0(spec: CiphertextSpec) -> Builder {
 pub fn count_1(spec: CiphertextSpec) -> Builder {
     let mut builder = Builder::new(spec.block_spec());
     let src_a = builder.ciphertext_input(spec.int_size());
-    let res = builder.iop_count(&src_a, CountKind::Ones);
+    let res = builder.iop_count(&src_a, BitType::One);
     builder.ciphertext_output(res);
     builder
 }
@@ -81,7 +67,52 @@ pub fn count_1(spec: CiphertextSpec) -> Builder {
 type Column = Vec<CiphertextBlock>;
 
 impl Builder {
-    fn countx_reduce_rec(&mut self, inp: impl AsRef<[Column]>, kind: CountKind) -> Vec<Column> {
+    /// Counts the number of zero or one bits in an encrypted integer.
+    ///
+    /// The operation splits `inp` into individual bits, then performs a
+    /// recursive column-based reduction that sums them with carry
+    /// propagation. When `kind` is [`BitType::Zero`], the first
+    /// reduction pass uses inverted look-up tables so that each bit
+    /// contributes 1 when it is zero. The returned [`Ciphertext`] has a
+    /// width of `⌈log₂(int_size + 1)⌉` bits, just enough to represent
+    /// every possible count from 0 to `int_size`.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::{CiphertextSpec, Builder, BitType};
+    /// # let spec = CiphertextSpec::new(16, 2, 2);
+    /// # let mut builder = Builder::new(spec.block_spec());
+    /// # let a = builder.ciphertext_input(spec.int_size());
+    /// let pop = builder.iop_count(&a, BitType::One);
+    /// ```
+    pub fn iop_count(&mut self, inp: &Ciphertext, kind: BitType) -> Ciphertext {
+        assert!(
+            inp.spec().int_size().is_multiple_of(2),
+            "Non-multiple-of-two integer size not supported."
+        );
+        self.with_comment("iop_count", || {
+            let blocks = self.ciphertext_split(inp);
+            let bits = self
+                .comment("extract bits")
+                .vector_lookup2(blocks, Lut2Def::ManyMsgSplit)
+                .into_iter()
+                .flat_map(|(l, r)| [l, r].into_iter())
+                .take(inp.spec().int_size() as usize)
+                .collect::<Vec<_>>();
+            let res = self.count_from_bits(bits, kind);
+            let output_size: u16 = n_bits_to_encode(inp.spec().int_size());
+            let n_blocks = output_size.div_ceil(self.spec().message_size() as u16) as usize;
+            self.comment("output")
+                .ciphertext_join(&res[..n_blocks], Some(output_size))
+        })
+    }
+
+    pub(crate) fn count_reduce_recursive(
+        &self,
+        inp: impl AsRef<[Column]>,
+        kind: BitType,
+    ) -> Vec<Column> {
         // The workhorse recursive reduction implementation.
         //
         // Works on columns. The last column contains only bits and as such can be added for longer
@@ -90,6 +121,8 @@ impl Builder {
         // The reduction is finished when there are only one message per column. The columns are
         // then turned to a ciphertext.
         let inp = inp.as_ref();
+
+        self.push_comment("count_reduce_recursive");
 
         if inp.iter().all(|col| col.len() <= 1) {
             // Reduction is finished, can return.
@@ -105,15 +138,15 @@ impl Builder {
                 if col.len() == 1 {
                     output[col_idx].push(col[0]);
                 } else if col_idx == inp.len() - 1 {
-                    self.push_comment(format!("Last Column {col_idx}"));
+                    self.push_comment(format!("last Column {col_idx}"));
                     col.iter()
                         .cloned()
                         .chunk(op_nb_single)
                         .unwrap_chunks()
                         .map(|chunk| {
                             let sum = self.vector_add_reduce(&chunk);
-                            if kind == CountKind::Zeros && reduction_iteration == 1 {
-                                self.with_comment("Zero and first reduction", || {
+                            if kind == BitType::Zero && reduction_iteration == 1 {
+                                self.with_comment("zero and first reduction", || {
                                     match chunk.len() {
                                         1 => self.block_lookup2(sum, Lut2Def::ManyInv1CarryMsg),
                                         2 => self.block_lookup2(sum, Lut2Def::ManyInv2CarryMsg),
@@ -126,7 +159,7 @@ impl Builder {
                                     }
                                 })
                             } else {
-                                self.with_comment("Common branch", || {
+                                self.with_comment("common branch", || {
                                     self.block_lookup2(sum, Lut2Def::ManyCarryMsg)
                                 })
                             }
@@ -137,7 +170,7 @@ impl Builder {
                         });
                     self.pop_comment();
                 } else {
-                    self.push_comment(format!("Regular Column {col_idx}"));
+                    self.push_comment(format!("regular Column {col_idx}"));
                     col.iter()
                         .cloned()
                         .chunk(op_nb)
@@ -162,47 +195,29 @@ impl Builder {
                     self.pop_comment();
                 }
             }
-            self.comment("Reduce").countx_reduce_rec(output, kind)
+            let output = self.comment("output").count_reduce_recursive(output, kind);
+            self.pop_comment();
+            output
         }
     }
 
-    /// Counts the number of zero or one bits in an encrypted integer.
-    ///
-    /// The operation splits `inp` into individual bits, then performs a
-    /// recursive column-based reduction that sums them with carry
-    /// propagation. When `kind` is [`CountKind::Zeros`], the first
-    /// reduction pass uses inverted look-up tables so that each bit
-    /// contributes 1 when it is zero. The returned [`Ciphertext`] has a
-    /// width of `⌈log₂(int_size + 1)⌉` bits, just enough to represent
-    /// every possible count from 0 to `int_size`.
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// # use zhc_builder::{CiphertextSpec, Builder, CountKind};
-    /// # let spec = CiphertextSpec::new(16, 2, 2);
-    /// # let mut builder = Builder::new(spec.block_spec());
-    /// # let a = builder.ciphertext_input(spec.int_size());
-    /// let pop = builder.iop_count(&a, CountKind::Ones);
-    /// ```
-    pub fn iop_count(&mut self, inp: &Ciphertext, kind: CountKind) -> Ciphertext {
-        let blocks = self.comment("Split").split_ciphertext(inp);
-        let bits = self
-            .comment("Split Bits")
-            .vector_lookup2(blocks, Lut2Def::ManyMsgSplit)
-            .into_iter()
-            .flat_map(|(l, r)| [l, r].into_iter())
-            .take(inp.spec().int_size() as usize)
-            .collect::<Vec<_>>();
-        let res: Vec<Column> = self.comment("Reduce").countx_reduce_rec(vec![bits], kind);
-        let res: Vec<CiphertextBlock> = res
-            .into_iter()
-            .filter(|col| !col.is_empty())
-            .map(|col| col[0])
-            .collect();
-        let output_size: u16 = n_bits_to_encode(inp.spec().int_size());
-        let n_blocks = output_size.div_ceil(self.spec().message_size() as u16) as usize;
-        self.join_ciphertext(&res[..n_blocks], Some(output_size))
+    pub(crate) fn count_from_bits(
+        &self,
+        bits: impl AsRef<[CiphertextBlock]>,
+        kind: BitType,
+    ) -> Vec<CiphertextBlock> {
+        // Count bits of the given type.
+        // The input is a set of blocks each encoding a single bit.
+        self.with_comment("count_from_bits", || {
+            let bits = bits.as_ref().to_vec();
+            let res: Vec<Column> = self.count_reduce_recursive(vec![bits], kind);
+            let output = res
+                .into_iter()
+                .filter(|col| !col.is_empty())
+                .map(|col| col[0])
+                .covec();
+            self.comment("output").vector_inspect(output)
+        })
     }
 }
 
@@ -222,59 +237,59 @@ mod test {
                 .show_comments(true)
                 .show_types(false),
             r#"
-                                                                          | %0 = ciphertext_input<0, 18>();
-                // Split                                                  | %1 = extract_ct_block<0>(%0);
-                // Split                                                  | %2 = extract_ct_block<1>(%0);
-                // Split                                                  | %3 = extract_ct_block<2>(%0);
-                // Split                                                  | %4 = extract_ct_block<3>(%0);
-                // Split                                                  | %5 = extract_ct_block<4>(%0);
-                // Split                                                  | %6 = extract_ct_block<5>(%0);
-                // Split                                                  | %7 = extract_ct_block<6>(%0);
-                // Split                                                  | %8 = extract_ct_block<7>(%0);
-                // Split                                                  | %9 = extract_ct_block<8>(%0);
-                // Split Bits                                             | %10, %11 = pbs2<ManyMsgSplit>(%1);
-                // Split Bits                                             | %12, %13 = pbs2<ManyMsgSplit>(%2);
-                // Split Bits                                             | %14, %15 = pbs2<ManyMsgSplit>(%3);
-                // Split Bits                                             | %16, %17 = pbs2<ManyMsgSplit>(%4);
-                // Split Bits                                             | %18, %19 = pbs2<ManyMsgSplit>(%5);
-                // Split Bits                                             | %20, %21 = pbs2<ManyMsgSplit>(%6);
-                // Split Bits                                             | %22, %23 = pbs2<ManyMsgSplit>(%7);
-                // Split Bits                                             | %24, %25 = pbs2<ManyMsgSplit>(%8);
-                // Split Bits                                             | %26, %27 = pbs2<ManyMsgSplit>(%9);
-                // Reduce / Last Column 0                                 | %28 = add_ct(%10, %11);
-                // Reduce / Last Column 0                                 | %29 = add_ct(%28, %12);
-                // Reduce / Last Column 0                                 | %30 = add_ct(%29, %13);
-                // Reduce / Last Column 0                                 | %31 = add_ct(%30, %14);
-                // Reduce / Last Column 0                                 | %32 = add_ct(%31, %15);
-                // Reduce / Last Column 0                                 | %33 = add_ct(%32, %16);
-                // Reduce / Last Column 0 / Zero and first reduction      | %34, %35 = pbs2<ManyInv7CarryMsg>(%33);
-                // Reduce / Last Column 0                                 | %36 = add_ct(%17, %18);
-                // Reduce / Last Column 0                                 | %37 = add_ct(%36, %19);
-                // Reduce / Last Column 0                                 | %38 = add_ct(%37, %20);
-                // Reduce / Last Column 0                                 | %39 = add_ct(%38, %21);
-                // Reduce / Last Column 0                                 | %40 = add_ct(%39, %22);
-                // Reduce / Last Column 0                                 | %41 = add_ct(%40, %23);
-                // Reduce / Last Column 0 / Zero and first reduction      | %42, %43 = pbs2<ManyInv7CarryMsg>(%41);
-                // Reduce / Last Column 0                                 | %44 = add_ct(%24, %25);
-                // Reduce / Last Column 0                                 | %45 = add_ct(%44, %26);
-                // Reduce / Last Column 0                                 | %46 = add_ct(%45, %27);
-                // Reduce / Last Column 0 / Zero and first reduction      | %47, %48 = pbs2<ManyInv4CarryMsg>(%46);
-                // Reduce / Reduce / Regular Column 0                     | %49 = add_ct(%34, %42);
-                // Reduce / Reduce / Regular Column 0                     | %50 = add_ct(%49, %47);
-                // Reduce / Reduce / Regular Column 0                     | %51 = pbs<Protect, MsgOnly>(%50);
-                // Reduce / Reduce / Regular Column 0                     | %52 = pbs<Protect, CarryInMsg>(%50);
-                // Reduce / Reduce / Last Column 1                        | %53 = add_ct(%35, %43);
-                // Reduce / Reduce / Last Column 1                        | %54 = add_ct(%53, %48);
-                // Reduce / Reduce / Last Column 1 / Common branch        | %55, %56 = pbs2<ManyCarryMsg>(%54);
-                // Reduce / Reduce / Reduce / Regular Column 1            | %57 = add_ct(%52, %55);
-                // Reduce / Reduce / Reduce / Regular Column 1            | %58, %59 = pbs2<ManyCarryMsg>(%57);
-                // Reduce / Reduce / Reduce / Reduce / Regular Column 2   | %60 = add_ct(%59, %56);
-                // Reduce / Reduce / Reduce / Reduce / Regular Column 2   | %61, %62 = pbs2<ManyCarryMsg>(%60);
-                                                                          | %63 = decl_ct<5>();
-                                                                          | %64 = store_ct_block<0>(%51, %63);
-                                                                          | %65 = store_ct_block<1>(%58, %64);
-                                                                          | %66 = store_ct_block<2>(%61, %65);
-                                                                          | output<0>(%66);
+                                                                                                                                                                                                   | %0 = input_ciphertext<0, 18>();
+                // iop_count                                                                                                                                                                       | %1 = extract_ct_block<0>(%0);
+                // iop_count                                                                                                                                                                       | %2 = extract_ct_block<1>(%0);
+                // iop_count                                                                                                                                                                       | %3 = extract_ct_block<2>(%0);
+                // iop_count                                                                                                                                                                       | %4 = extract_ct_block<3>(%0);
+                // iop_count                                                                                                                                                                       | %5 = extract_ct_block<4>(%0);
+                // iop_count                                                                                                                                                                       | %6 = extract_ct_block<5>(%0);
+                // iop_count                                                                                                                                                                       | %7 = extract_ct_block<6>(%0);
+                // iop_count                                                                                                                                                                       | %8 = extract_ct_block<7>(%0);
+                // iop_count                                                                                                                                                                       | %9 = extract_ct_block<8>(%0);
+                // iop_count / extract bits                                                                                                                                                        | %10, %11 = pbs2<ManyMsgSplit>(%1);
+                // iop_count / extract bits                                                                                                                                                        | %12, %13 = pbs2<ManyMsgSplit>(%2);
+                // iop_count / extract bits                                                                                                                                                        | %14, %15 = pbs2<ManyMsgSplit>(%3);
+                // iop_count / extract bits                                                                                                                                                        | %16, %17 = pbs2<ManyMsgSplit>(%4);
+                // iop_count / extract bits                                                                                                                                                        | %18, %19 = pbs2<ManyMsgSplit>(%5);
+                // iop_count / extract bits                                                                                                                                                        | %20, %21 = pbs2<ManyMsgSplit>(%6);
+                // iop_count / extract bits                                                                                                                                                        | %22, %23 = pbs2<ManyMsgSplit>(%7);
+                // iop_count / extract bits                                                                                                                                                        | %24, %25 = pbs2<ManyMsgSplit>(%8);
+                // iop_count / extract bits                                                                                                                                                        | %26, %27 = pbs2<ManyMsgSplit>(%9);
+                // iop_count / count_from_bits / count_reduce_recursive / last Column 0                                                                                                            | %28 = add_ct(%10, %11);
+                // iop_count / count_from_bits / count_reduce_recursive / last Column 0                                                                                                            | %29 = add_ct(%28, %12);
+                // iop_count / count_from_bits / count_reduce_recursive / last Column 0                                                                                                            | %30 = add_ct(%29, %13);
+                // iop_count / count_from_bits / count_reduce_recursive / last Column 0                                                                                                            | %31 = add_ct(%30, %14);
+                // iop_count / count_from_bits / count_reduce_recursive / last Column 0                                                                                                            | %32 = add_ct(%31, %15);
+                // iop_count / count_from_bits / count_reduce_recursive / last Column 0                                                                                                            | %33 = add_ct(%32, %16);
+                // iop_count / count_from_bits / count_reduce_recursive / last Column 0 / zero and first reduction                                                                                 | %34, %35 = pbs2<ManyInv7CarryMsg>(%33);
+                // iop_count / count_from_bits / count_reduce_recursive / last Column 0                                                                                                            | %36 = add_ct(%17, %18);
+                // iop_count / count_from_bits / count_reduce_recursive / last Column 0                                                                                                            | %37 = add_ct(%36, %19);
+                // iop_count / count_from_bits / count_reduce_recursive / last Column 0                                                                                                            | %38 = add_ct(%37, %20);
+                // iop_count / count_from_bits / count_reduce_recursive / last Column 0                                                                                                            | %39 = add_ct(%38, %21);
+                // iop_count / count_from_bits / count_reduce_recursive / last Column 0                                                                                                            | %40 = add_ct(%39, %22);
+                // iop_count / count_from_bits / count_reduce_recursive / last Column 0                                                                                                            | %41 = add_ct(%40, %23);
+                // iop_count / count_from_bits / count_reduce_recursive / last Column 0 / zero and first reduction                                                                                 | %42, %43 = pbs2<ManyInv7CarryMsg>(%41);
+                // iop_count / count_from_bits / count_reduce_recursive / last Column 0                                                                                                            | %44 = add_ct(%24, %25);
+                // iop_count / count_from_bits / count_reduce_recursive / last Column 0                                                                                                            | %45 = add_ct(%44, %26);
+                // iop_count / count_from_bits / count_reduce_recursive / last Column 0                                                                                                            | %46 = add_ct(%45, %27);
+                // iop_count / count_from_bits / count_reduce_recursive / last Column 0 / zero and first reduction                                                                                 | %47, %48 = pbs2<ManyInv4CarryMsg>(%46);
+                // iop_count / count_from_bits / count_reduce_recursive / output / count_reduce_recursive / regular Column 0                                                                       | %49 = add_ct(%34, %42);
+                // iop_count / count_from_bits / count_reduce_recursive / output / count_reduce_recursive / regular Column 0                                                                       | %50 = add_ct(%49, %47);
+                // iop_count / count_from_bits / count_reduce_recursive / output / count_reduce_recursive / regular Column 0                                                                       | %51 = pbs<Protect, MsgOnly>(%50);
+                // iop_count / count_from_bits / count_reduce_recursive / output / count_reduce_recursive / regular Column 0                                                                       | %52 = pbs<Protect, CarryInMsg>(%50);
+                // iop_count / count_from_bits / count_reduce_recursive / output / count_reduce_recursive / last Column 1                                                                          | %53 = add_ct(%35, %43);
+                // iop_count / count_from_bits / count_reduce_recursive / output / count_reduce_recursive / last Column 1                                                                          | %54 = add_ct(%53, %48);
+                // iop_count / count_from_bits / count_reduce_recursive / output / count_reduce_recursive / last Column 1 / common branch                                                          | %55, %56 = pbs2<ManyCarryMsg>(%54);
+                // iop_count / count_from_bits / count_reduce_recursive / output / count_reduce_recursive / output / count_reduce_recursive / regular Column 1                                     | %57 = add_ct(%52, %55);
+                // iop_count / count_from_bits / count_reduce_recursive / output / count_reduce_recursive / output / count_reduce_recursive / regular Column 1                                     | %58, %59 = pbs2<ManyCarryMsg>(%57);
+                // iop_count / count_from_bits / count_reduce_recursive / output / count_reduce_recursive / output / count_reduce_recursive / output / count_reduce_recursive / regular Column 2   | %60 = add_ct(%59, %56);
+                // iop_count / count_from_bits / count_reduce_recursive / output / count_reduce_recursive / output / count_reduce_recursive / output / count_reduce_recursive / regular Column 2   | %61, %62 = pbs2<ManyCarryMsg>(%60);
+                // iop_count / output                                                                                                                                                              | %67 = decl_ct<5>();
+                // iop_count / output                                                                                                                                                              | %68 = store_ct_block<0>(%51, %67);
+                // iop_count / output                                                                                                                                                              | %69 = store_ct_block<1>(%58, %68);
+                // iop_count / output                                                                                                                                                              | %70 = store_ct_block<2>(%61, %69);
+                                                                                                                                                                                                   | output<0>(%70);
             "#
         );
     }

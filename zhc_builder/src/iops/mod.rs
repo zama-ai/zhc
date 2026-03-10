@@ -26,8 +26,20 @@
 //! let b = builder.ciphertext_input(spec.int_size());
 //! let sum = builder.iop_add_hillis_steele(&a, &b);
 //! let is_gt = builder.iop_cmp(&sum, &b, CmpKind::Greater);
-//! builder.ciphertext_output(is_gt);
+//! builder.ciphertext_output(&is_gt);
 //! ```
+
+#[derive(Debug, Clone, PartialEq, Eq, Copy)]
+pub enum BitType {
+    One,
+    Zero,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Copy)]
+pub enum PropagationDirection {
+    MsbToLsb,
+    LsbToMsb,
+}
 
 mod add;
 mod bitwise;
@@ -46,23 +58,25 @@ pub use if_then_zero::*;
 pub use mul::*;
 
 // SUB
-// MUL
-// DIV
-// MOD
-//
+// ADDS
+// SUBS
+// SSUB
 // OVF_ADD
 // OVF_SUB
-// OVF_MUL
-//
+// OVF_ADDS
+// OVF_SUBS
+// OVF_SSUB
+
+// DIV
+// MOD
+
 // ROT_R
 // ROT_L
 // SHIFT_R
 // SHIFT_L
-//
-// ADDS
-// SUBS
-// SSUB
+
 // MULS
+// OVF_MULS
 // DIVS
 // MODS
 //
@@ -70,20 +84,8 @@ pub use mul::*;
 // ROTS_L
 // SHIFTS_R
 // SHIFTS_L
-//
-// OVF_ADDS
-// OVF_SUBS
-// OVF_SSUB
-// OVF_MULS
-//
+
 // ERC_20
 // MEMCPY
-//
-// ILOG2
-// LEAD0
-// LEAD1
-// TRAIL0
-// TRAIL1
-//
 // ADD_SIMD
 // ERC_20_SIMD
