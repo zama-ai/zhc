@@ -44,6 +44,7 @@ pub use cmp::*;
 pub use count::*;
 pub use if_then_else::*;
 pub use if_then_zero::*;
+pub use mh_mul::*;
 pub use mul::*;
 
 // SUB
