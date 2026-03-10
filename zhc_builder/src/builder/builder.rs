@@ -141,6 +141,7 @@ impl InnerBuilder {
 /// builder.ciphertext_output(&output);
 /// let ir = builder.into_ir();
 /// ```
+#[derive(Clone)]
 pub struct Builder {
     spec: CiphertextBlockSpec,
     inner: Rc<RefCell<InnerBuilder>>,
@@ -244,7 +245,7 @@ impl Builder {
     /// # Panics
     ///
     /// Always panics after printing.
-    pub fn dump_and_panic(&self) {
+    pub fn dump_and_panic(&self) -> ! {
         println!(
             "{:#}",
             self.ir()
@@ -266,7 +267,7 @@ impl Builder {
     /// # Panics
     ///
     /// Always panics after printing, regardless of whether interpretation succeeded.
-    pub fn dump_eval_and_panic(&self, inputs: impl AsRef<[IopValue]>) {
+    pub fn dump_eval_and_panic(&self, inputs: impl AsRef<[IopValue]>) -> ! {
         let context = IopInterepreterContext {
             spec: self.spec,
             inputs: inputs.as_ref().iter().cloned().enumerate().collect(),
@@ -356,7 +357,6 @@ impl Builder {
                 Ok(outputs) => outputs,
                 Err(_) => {
                     self.dump_eval_and_panic(&inputs);
-                    unreachable!()
                 }
             };
             if expectations != outputs {
