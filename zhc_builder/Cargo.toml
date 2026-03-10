@@ -12,3 +12,6 @@ zhc_ir.workspace = true
 zhc_utils.workspace = true
 zhc_langs.workspace = true
 zhc_crypto.workspace = true
+
+[dev-dependencies]
+rand.workspace = true

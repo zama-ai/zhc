@@ -369,6 +369,47 @@ impl Builder {
         }
     }
 
+    #[cfg(test)]
+    pub fn test_equivalence(first: &Self, second: &Self, reps: usize) {
+        Self::test_equivalence_map(first, second, reps, |a| a);
+    }
+
+    #[cfg(test)]
+    pub fn test_equivalence_map(
+        first: &Self,
+        second: &Self,
+        reps: usize,
+        mut inputs_mapper: impl FnMut(SmallVec<IopValue>) -> SmallVec<IopValue>,
+    ) {
+        use zhc_utils::iter::CollectInSmallVec;
+        assert_eq!(first.signature(), second.signature(), "Signature mismatch");
+        let sig = first.signature();
+        for _ in 0..reps {
+            use std::panic::AssertUnwindSafe;
+            let inputs = sig.get_args().iter().map(|a| a.random_value()).cosvec();
+            let inputs = inputs_mapper(inputs);
+            let fist_outputs =
+                match std::panic::catch_unwind(AssertUnwindSafe(|| first.eval(&inputs))) {
+                    Ok(outputs) => outputs,
+                    Err(_) => {
+                        first.dump_eval_and_panic(&inputs);
+                    }
+                };
+            let second_outputs =
+                match std::panic::catch_unwind(AssertUnwindSafe(|| second.eval(&inputs))) {
+                    Ok(outputs) => outputs,
+                    Err(_) => {
+                        second.dump_eval_and_panic(&inputs);
+                    }
+                };
+            if fist_outputs != second_outputs {
+                panic!(
+                    "Equivalence test failed for input {inputs:?}:\nFirst Outputs:\n{fist_outputs:?}\nSecond Outputs:\n{second_outputs:?}",
+                );
+            }
+        }
+    }
+
     /// Returns a new builder handle with the given comment appended to the annotation stack.
     ///
     /// Unlike [`push_comment`](Self::push_comment) which mutates the current builder, this
