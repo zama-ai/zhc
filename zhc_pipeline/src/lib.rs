@@ -11,6 +11,7 @@ use allocator::allocate_registers;
 use translation_table::{DOpRepr, generate_translation_table};
 use zhc_builder::if_then_else;
 use zhc_builder::if_then_zero;
+use zhc_builder::mh_mul_lsb;
 use zhc_builder::{cmp_eq, cmp_gt, cmp_gte, cmp_lt, cmp_lte, cmp_neq};
 use zhc_ir::cse::eliminate_common_subexpressions;
 use zhc_ir::dce::eliminate_dead_code;
@@ -109,3 +110,13 @@ pub fn get_translation_table(
 
 #[cfg(test)]
 mod test;
+
+#[test]
+fn mh_mul() {
+    let mut ir = mh_mul_lsb(CiphertextSpec::new(8,2,2), 2).into_ir();
+    ir.dump();
+    cut_transfers(&mut ir);
+    let components = isolate_subgraphs(&ir, true);
+    println!("{components:?}");
+    assert_eq!(components.len(), 2);
+}
