@@ -19,6 +19,8 @@ use zhc_ir::IR;
 use zhc_ir::cse::eliminate_common_subexpressions;
 use zhc_ir::dce::eliminate_dead_code;
 use zhc_langs::doplang::DopLang;
+use zhc_langs::doplang::emit_assembly;
+use zhc_langs::ioplang::IopInstructionSet;
 use zhc_langs::ioplang::IopLang;
 use zhc_langs::ioplang::cut_transfers;
 use zhc_langs::ioplang::eliminate_aliases;
@@ -38,6 +40,7 @@ pub mod translation_table;
 
 use zhc_langs::ioplang::isolate_subgraphs;
 pub use zhc_sim::hpu::HpuConfig;
+use zhc_sim::hpu::PhysicalConfig;
 pub use zhc_sim::{Cycle, MHz};
 
 /// Traces the execution of a computation graph to a perfetto file.
@@ -78,7 +81,19 @@ fn multi_hpu_pipeline(mut ir: IR<IopLang>, config: &HpuConfig) -> Vec<IR<DopLang
     eliminate_dead_code(&mut ir);
     eliminate_common_subexpressions(&mut ir);
     cut_transfers(&mut ir);
-    let components = isolate_subgraphs(&ir, true);
+    let components = isolate_subgraphs(&ir, |op| {
+        use IopInstructionSet::*;
+        match op {
+            InputCiphertext { .. }
+            | InputPlaintext { .. }
+            | ExtractCtBlock { .. }
+            | ExtractPtBlock { .. }
+            | DeclareCiphertext { .. }
+            | LetCiphertextBlock { .. }
+            | LetPlaintextBlock { .. } => true,
+            _ => false,
+        }
+    });
     let mut output = Vec::new();
     for comp in components.into_iter() {
         let unscheduled = translation::lower_iop_to_hpu(&comp);
@@ -117,10 +132,36 @@ mod test;
 
 #[test]
 fn mh_mul() {
-    let mut ir = mh_mul_lsb(CiphertextSpec::new(8, 2, 2), 2).into_ir();
-    ir.dump();
+    let hpu_config = HpuConfig::from(PhysicalConfig::tuniform_64b_pfail128_psi64());
+    let mut ir = mh_mul_lsb(CiphertextSpec::new(64, 2, 2), 2).into_ir();
+
     cut_transfers(&mut ir);
-    let components = isolate_subgraphs(&ir, true);
+    let components = isolate_subgraphs(&ir, |op| {
+        use IopInstructionSet::*;
+        match op {
+            InputCiphertext { .. }
+            | InputPlaintext { .. }
+            | ExtractCtBlock { .. }
+            | ExtractPtBlock { .. }
+            | DeclareCiphertext { .. }
+            | LetCiphertextBlock { .. }
+            | LetPlaintextBlock { .. } => true,
+            _ => false,
+        }
+    });
+
     println!("{components:?}");
     assert_eq!(components.len(), 2);
+
+    for (i, comp) in components.into_iter().enumerate() {
+        let unscheduled = lower_iop_to_hpu(&comp);
+        let batched = batch_schedule(&unscheduled, &hpu_config);
+        let allocated = allocate_registers(&batched, &hpu_config);
+        use std::fs::File;
+        use std::io::Write;
+        let filename = format!("output_{}.asm", i);
+        let mut file = File::create(&filename).expect("Failed to create .asm file");
+        file.write_all(emit_assembly(&allocated).as_bytes())
+            .expect("Failed to write to .asm file");
+    }
 }
