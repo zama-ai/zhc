@@ -89,6 +89,20 @@ pub fn mul_lsb_with_opt(spec: CiphertextSpec, gen_overflow: bool) -> Builder {
     builder
 }
 
+pub(crate) enum PartProd {
+    FromMsg(CiphertextBlock),
+    FromCarry(CiphertextBlock),
+    FromSum(CiphertextBlock),
+}
+
+impl PartProd {
+    pub(crate) fn unwrap(self) -> CiphertextBlock {
+        match self {
+            Self::FromMsg(blk) | Self::FromCarry(blk) | Self::FromSum(blk) => blk,
+        }
+    }
+}
+
 impl Builder {
     /// Multiply two ciphertext in a raw fashion.
     /// I.e. Compute all output up to cut-off point then only overflow flag status.
@@ -146,8 +160,8 @@ impl Builder {
         src_a_blocks: &Vec<CiphertextBlock>,
         src_b_blocks: &Vec<CiphertextBlock>,
         cut_off_block: u8,
-    ) -> (Vec<CiphertextBlock>, BTreeMap<usize, Vec<CiphertextBlock>>) {
-        let mut partprod_map = BTreeMap::<usize, Vec<CiphertextBlock>>::new();
+    ) -> (Vec<CiphertextBlock>, BTreeMap<usize, Vec<PartProd>>) {
+        let mut partprod_map = BTreeMap::<usize, Vec<PartProd>>::new();
         let mut overflow_v = Vec::<CiphertextBlock>::new();
 
         for (i, ai) in src_a_blocks.iter().enumerate() {
@@ -157,15 +171,21 @@ impl Builder {
                     // Pack
                     let packed = self.comment(format!("pack_{i}_{j}")).block_pack(ai, bj);
                     // Compute Lsb
-                    partprod_map.entry(i + j).or_default().push(
-                        self.comment(format!("pp_{i}_{j}_lsb"))
-                            .block_lookup(packed, Lut1Def::MultCarryMsgLsb),
-                    );
+                    partprod_map
+                        .entry(i + j)
+                        .or_default()
+                        .push(PartProd::FromMsg(
+                            self.comment(format!("pp_{i}_{j}_lsb"))
+                                .block_lookup(packed, Lut1Def::MultCarryMsgLsb),
+                        ));
                     // Compute Msb
-                    partprod_map.entry(i + j + 1).or_default().push(
-                        self.comment(format!("pp_{i}_{j}_msb"))
-                            .block_lookup(packed, Lut1Def::MultCarryMsgMsb),
-                    );
+                    partprod_map
+                        .entry(i + j + 1)
+                        .or_default()
+                        .push(PartProd::FromCarry(
+                            self.comment(format!("pp_{i}_{j}_msb"))
+                                .block_lookup(packed, Lut1Def::MultCarryMsgMsb),
+                        ));
                 } else {
                     // Only overflow extraction
                     let mul_is_some = self.comment(format!("ovf_{i}_{j}")).block_pack_then_lookup(
@@ -188,7 +208,7 @@ impl Builder {
     // Merge for initial available level then push in post_map for post-process
     pub(super) fn merge_partprod(
         &self,
-        partprod_map: BTreeMap<usize, Vec<CiphertextBlock>>,
+        partprod_map: BTreeMap<usize, Vec<PartProd>>,
         cut_off_block: u8,
     ) -> (Vec<CiphertextBlock>, BTreeMap<usize, Vec<CiphertextBlock>>) {
         let first_comp_block = partprod_map.keys().min().copied().unwrap_or_default();
@@ -203,7 +223,25 @@ impl Builder {
 
         for k in first_comp_block..=last_comp_block {
             self.push_comment(format!("reduction_{k}"));
-            let stage_sum = partprod_map.remove(&k).unwrap_or_default();
+            let partprod_sum = partprod_map.remove(&k).unwrap_or_default();
+
+            // Handle field source here
+            // Insert transfer for Blk issued from Carry used in first iteration
+            // => Those block came from a pack and also generate a MsgBlk used in another Node
+            let stage_sum = partprod_sum
+                .into_iter()
+                .map(|x| match x {
+                    PartProd::FromMsg(b) | PartProd::FromSum(b) => b,
+                    PartProd::FromCarry(b) => {
+                        if k == first_comp_block {
+                            self.block_transfer(b)
+                        } else {
+                            b
+                        }
+                    }
+                })
+                .collect::<Vec<_>>();
+
             if !stage_sum.is_empty() {
                 let mut nxt_stage = Vec::new();
                 // Fold them two by two while storing optional carry
@@ -219,14 +257,18 @@ impl Builder {
                     // Extract carry if required
                     if acc_nu == NU {
                         acc_nu = 1;
-                        nxt_stage.push(self.block_lookup(acc_ct, Lut1Def::CarryInMsg));
+                        nxt_stage.push(PartProd::FromSum(
+                            self.block_lookup(acc_ct, Lut1Def::CarryInMsg),
+                        ));
                         acc_ct = self.block_lookup(acc_ct, Lut1Def::MsgOnly);
                     }
                 }
 
                 // Current stage is completly reduce. Clear block if needed
                 if acc_nu != 1 {
-                    nxt_stage.push(self.block_lookup(acc_ct, Lut1Def::CarryInMsg));
+                    nxt_stage.push(PartProd::FromSum(
+                        self.block_lookup(acc_ct, Lut1Def::CarryInMsg),
+                    ));
                     acc_ct = self.block_lookup(acc_ct, Lut1Def::MsgOnly);
                 }
                 data_blk.push(acc_ct);
@@ -239,7 +281,10 @@ impl Builder {
                         partprod_map.entry(k + 1).or_default().extend(nxt_stage);
                     } else {
                         // Insert in remainer map for post-process
-                        post_map.entry(k + 1).or_default().extend(nxt_stage);
+                        post_map
+                            .entry(k + 1)
+                            .or_default()
+                            .extend(nxt_stage.into_iter().map(|x| x.unwrap()));
                     }
                 }
             }
@@ -248,7 +293,10 @@ impl Builder {
 
         // Move uncomputed level in post_map
         for (k, v) in partprod_map {
-            post_map.entry(k).or_default().extend(v);
+            post_map
+                .entry(k)
+                .or_default()
+                .extend(v.into_iter().map(|b| b.unwrap()));
         }
 
         (data_blk, post_map)
