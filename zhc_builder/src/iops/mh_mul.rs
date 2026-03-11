@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::{CiphertextBlock, NU, NU_BOOL, builder::Builder};
+use crate::{CiphertextBlock, NU, NU_BOOL, PartProd, builder::Builder};
 use zhc_crypto::integer_semantics::CiphertextSpec;
 use zhc_langs::ioplang::Lut1Def;
 
@@ -16,7 +16,7 @@ use zhc_langs::ioplang::Lut1Def;
 /// # Examples
 ///
 /// ```rust,no_run
-/// # use zhc_builder::{CiphertextSpec, mh_mul_lsb};
+/// # use zhc_builder::{CiphertextSpec, mul_lsb};
 /// # let spec = CiphertextSpec::new(16, 2, 2);
 /// let builder = mh_mul_lsb(spec, 2);
 /// let ir = builder.into_ir();
@@ -37,7 +37,7 @@ pub fn mh_mul_lsb(spec: CiphertextSpec, mh_factor: u8) -> Builder {
 /// # Examples
 ///
 /// ```rust,no_run
-/// # use zhc_builder::{CiphertextSpec, mh_overflow_mul_lsb};
+/// # use zhc_builder::{CiphertextSpec, overflow_mul_lsb};
 /// # let spec = CiphertextSpec::new(16, 2, 2);
 /// let builder = mh_overflow_mul_lsb(spec, 2);
 /// let ir = builder.into_ir();
@@ -60,7 +60,7 @@ pub fn mh_overflow_mul_lsb(spec: CiphertextSpec, mh_factor: u8) -> Builder {
 /// # Examples
 ///
 /// ```rust,no_run
-/// # use zhc_builder::{CiphertextSpec, mh_mul_lsb_with_opt};
+/// # use zhc_builder::{CiphertextSpec, overflow_mul_lsb};
 /// # let spec = CiphertextSpec::new(16, 2, 2);
 /// let builder = mh_mul_lsb_with_opt(spec, 2, true);
 /// let ir = builder.into_ir();
@@ -137,20 +137,20 @@ impl Builder {
         let mut prv_post_map = BTreeMap::<usize, Vec<CiphertextBlock>>::new();
         for mut partprod_map in mh_partprod_map.into_iter() {
             // fuse post_map of previous chunk
+            // Insert explicit block transfer here
             for (k, v) in prv_post_map {
-                partprod_map.entry(k).or_default().extend(v);
+                partprod_map.entry(k).or_default().extend(
+                    v.into_iter()
+                        .map(|b| PartProd::FromSum(self.block_transfer(b))),
+                );
             }
             let (data_blk, post_map) = self.merge_partprod(partprod_map, cut_off_block);
 
             // Stort data result
             mh_data_blk.push(data_blk);
 
-            // Insert explicit block transfer on post_map
-            // and store for next iter
-            prv_post_map = post_map
-                .into_iter()
-                .map(|(k, v)| (k, v.into_iter().map(|b| self.block_transfer(b)).collect()))
-                .collect();
+            // Store post_map for next iter
+            prv_post_map = post_map;
         }
 
         // Phase 3 Reduce overflow
@@ -322,47 +322,44 @@ mod test {
                 @064   // reduction_2      | %64 : CtBlock = pbs<Protect, MsgOnly>(%62 : CtBlock);
                 @065                       | %65 : CtBlock = transfer(%60 : CtBlock);
                 @066                       | %66 : CtBlock = transfer(%63 : CtBlock);
-                @067   // reduction_3      | %67 : CtBlock = add_ct(%20 : CtBlock, %18 : CtBlock);
-                @068   // reduction_3      | %68 : CtBlock = add_ct(%27 : CtBlock, %67 : CtBlock);
-                @069   // reduction_3      | %69 : CtBlock = add_ct(%29 : CtBlock, %68 : CtBlock);
-                @070   // reduction_3      | %70 : CtBlock = add_ct(%35 : CtBlock, %69 : CtBlock);
-                @071   // reduction_3      | %71 : CtBlock = pbs<Protect, CarryInMsg>(%70 : CtBlock);
-                @072   // reduction_3      | %72 : CtBlock = pbs<Protect, MsgOnly>(%70 : CtBlock);
-                @073   // reduction_3      | %73 : CtBlock = add_ct(%37 : CtBlock, %72 : CtBlock);
-                @074   // reduction_3      | %74 : CtBlock = add_ct(%44 : CtBlock, %73 : CtBlock);
-                @075   // reduction_3      | %75 : CtBlock = add_ct(%65 : CtBlock, %74 : CtBlock);
-                @076   // reduction_3      | %76 : CtBlock = add_ct(%66 : CtBlock, %75 : CtBlock);
-                @077   // reduction_3      | %77 : CtBlock = pbs<Protect, CarryInMsg>(%76 : CtBlock);
-                @078   // reduction_3      | %78 : CtBlock = pbs<Protect, MsgOnly>(%76 : CtBlock);
-                @079                       | %79 : CtBlock = transfer(%71 : CtBlock);
-                @080                       | %80 : CtBlock = transfer(%77 : CtBlock);
-                @081                       | %81 : CtBlock = transfer(%21 : CtBlock);
-                @082                       | %82 : CtBlock = transfer(%30 : CtBlock);
-                @083                       | %83 : CtBlock = transfer(%38 : CtBlock);
-                @084                       | %84 : CtBlock = transfer(%45 : CtBlock);
-                @085   // ovf / post_map   | %85 : CtBlock = add_ct(%79 : CtBlock, %80 : CtBlock);
-                @086   // ovf / post_map   | %86 : CtBlock = add_ct(%85 : CtBlock, %81 : CtBlock);
-                @087   // ovf / post_map   | %87 : CtBlock = add_ct(%86 : CtBlock, %82 : CtBlock);
-                @088   // ovf / post_map   | %88 : CtBlock = add_ct(%87 : CtBlock, %83 : CtBlock);
-                @089   // ovf / post_map   | %89 : CtBlock = pbs<Protect, IsSome>(%88 : CtBlock);
-                @090   // ovf / post_map   | %90 : CtBlock = pbs<Protect, IsSome>(%84 : CtBlock);
-                @091   // ovf / merge      | %91 : CtBlock = add_ct(%32 : CtBlock, %40 : CtBlock);
-                @092   // ovf / merge      | %92 : CtBlock = add_ct(%91 : CtBlock, %42 : CtBlock);
-                @093   // ovf / merge      | %93 : CtBlock = add_ct(%92 : CtBlock, %89 : CtBlock);
-                @094   // ovf / merge      | %94 : CtBlock = add_ct(%93 : CtBlock, %90 : CtBlock);
+                @067   // reduction_3      | %67 : CtBlock = transfer(%18 : CtBlock);
+                @068   // reduction_3      | %68 : CtBlock = transfer(%27 : CtBlock);
+                @069   // reduction_3      | %69 : CtBlock = transfer(%35 : CtBlock);
+                @070   // reduction_3      | %70 : CtBlock = add_ct(%20 : CtBlock, %67 : CtBlock);
+                @071   // reduction_3      | %71 : CtBlock = add_ct(%68 : CtBlock, %70 : CtBlock);
+                @072   // reduction_3      | %72 : CtBlock = add_ct(%29 : CtBlock, %71 : CtBlock);
+                @073   // reduction_3      | %73 : CtBlock = add_ct(%69 : CtBlock, %72 : CtBlock);
+                @074   // reduction_3      | %74 : CtBlock = pbs<Protect, CarryInMsg>(%73 : CtBlock);
+                @075   // reduction_3      | %75 : CtBlock = pbs<Protect, MsgOnly>(%73 : CtBlock);
+                @076   // reduction_3      | %76 : CtBlock = add_ct(%37 : CtBlock, %75 : CtBlock);
+                @077   // reduction_3      | %77 : CtBlock = add_ct(%44 : CtBlock, %76 : CtBlock);
+                @078   // reduction_3      | %78 : CtBlock = add_ct(%65 : CtBlock, %77 : CtBlock);
+                @079   // reduction_3      | %79 : CtBlock = add_ct(%66 : CtBlock, %78 : CtBlock);
+                @080   // reduction_3      | %80 : CtBlock = pbs<Protect, CarryInMsg>(%79 : CtBlock);
+                @081   // reduction_3      | %81 : CtBlock = pbs<Protect, MsgOnly>(%79 : CtBlock);
+                @082   // ovf / post_map   | %82 : CtBlock = add_ct(%74 : CtBlock, %80 : CtBlock);
+                @083   // ovf / post_map   | %83 : CtBlock = add_ct(%82 : CtBlock, %21 : CtBlock);
+                @084   // ovf / post_map   | %84 : CtBlock = add_ct(%83 : CtBlock, %30 : CtBlock);
+                @085   // ovf / post_map   | %85 : CtBlock = add_ct(%84 : CtBlock, %38 : CtBlock);
+                @086   // ovf / post_map   | %86 : CtBlock = pbs<Protect, IsSome>(%85 : CtBlock);
+                @087   // ovf / post_map   | %87 : CtBlock = pbs<Protect, IsSome>(%45 : CtBlock);
+                @088   // ovf / merge      | %88 : CtBlock = add_ct(%32 : CtBlock, %40 : CtBlock);
+                @089   // ovf / merge      | %89 : CtBlock = add_ct(%88 : CtBlock, %42 : CtBlock);
+                @090   // ovf / merge      | %90 : CtBlock = add_ct(%89 : CtBlock, %86 : CtBlock);
+                @091   // ovf / merge      | %91 : CtBlock = add_ct(%90 : CtBlock, %87 : CtBlock);
+                @092   // ovf / merge      | %92 : CtBlock = pbs<Protect, IsSome>(%91 : CtBlock);
+                @093   // ovf / merge      | %93 : CtBlock = add_ct(%47 : CtBlock, %49 : CtBlock);
+                @094   // ovf / merge      | %94 : CtBlock = add_ct(%93 : CtBlock, %51 : CtBlock);
                 @095   // ovf / merge      | %95 : CtBlock = pbs<Protect, IsSome>(%94 : CtBlock);
-                @096   // ovf / merge      | %96 : CtBlock = add_ct(%47 : CtBlock, %49 : CtBlock);
-                @097   // ovf / merge      | %97 : CtBlock = add_ct(%96 : CtBlock, %51 : CtBlock);
+                @096                       | %96 : CtBlock = transfer(%95 : CtBlock);
+                @097   // ovf / merge      | %97 : CtBlock = add_ct(%92 : CtBlock, %96 : CtBlock);
                 @098   // ovf / merge      | %98 : CtBlock = pbs<Protect, IsSome>(%97 : CtBlock);
-                @099                       | %99 : CtBlock = transfer(%98 : CtBlock);
-                @100   // ovf / merge      | %100 : CtBlock = add_ct(%95 : CtBlock, %99 : CtBlock);
-                @101   // ovf / merge      | %101 : CtBlock = pbs<Protect, IsSome>(%100 : CtBlock);
-                @102                       | %102 : Ct = decl_ct<8>();
-                @103                       | %103 : Ct = store_ct_block<0>(%11 : CtBlock, %102 : Ct);
-                @104                       | %104 : Ct = store_ct_block<1>(%55 : CtBlock, %103 : Ct);
-                @105                       | %105 : Ct = store_ct_block<2>(%64 : CtBlock, %104 : Ct);
-                @106                       | %106 : Ct = store_ct_block<3>(%78 : CtBlock, %105 : Ct);
-                @107                       | output<0>(%106 : Ct);
+                @099                       | %99 : Ct = decl_ct<8>();
+                @100                       | %100 : Ct = store_ct_block<0>(%11 : CtBlock, %99 : Ct);
+                @101                       | %101 : Ct = store_ct_block<1>(%55 : CtBlock, %100 : Ct);
+                @102                       | %102 : Ct = store_ct_block<2>(%64 : CtBlock, %101 : Ct);
+                @103                       | %103 : Ct = store_ct_block<3>(%81 : CtBlock, %102 : Ct);
+                @104                       | output<0>(%103 : Ct);
             "#
         );
     }
