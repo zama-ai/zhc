@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::{CiphertextBlock, NU, NU_BOOL, PartProd, builder::Builder};
+use crate::{CiphertextBlock, PartProd, builder::Builder};
 use zhc_crypto::integer_semantics::CiphertextSpec;
 
 /// Creates an IR for a multiplication of two encrypted integers split into mh_factor sub-graph.

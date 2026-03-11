@@ -29,6 +29,7 @@ pub fn translate<'ir>(ir: &AnnIR<'ir, HpuLang, Alloc, ()>) -> IR<DopLang> {
             unspills,
             srcs,
             dsts,
+            slots,
         } = op.get_annotation();
 
         for Spill { from, to } in spills.iter() {
@@ -54,6 +55,33 @@ pub fn translate<'ir>(ir: &AnnIR<'ir, HpuLang, Alloc, ()>) -> IR<DopLang> {
                         from.block_pos.try_into().unwrap(),
                     ),
                 });
+            }
+            TransferOut { tid } => {
+                add_op(DopInstructionSet::ST {
+                    dst: Argument::ct_heap(slots[0].0 as usize),
+                    src: Argument::ct_reg(srcs[0].0),
+                });
+                add_op(DopInstructionSet::NOTIFY {
+                    virt_id: Argument::VirtId { id: 0 },
+                    flag: Argument::UserFlag { flag: tid },
+                    slot: Argument::ct_heap(slots[0].0 as usize),
+                });
+            }
+            TransferIn { tid } => {
+                // Ajouter un load_b2b
+                // Ajouter le wait et voila
+                add_op(DopInstructionSet::LOAD_B2B {
+                    flag: Argument::UserFlag { flag: tid },
+                    slot: Argument::ct_heap(slots[0].0 as usize),
+                });
+                add_op(DopInstructionSet::WAIT {
+                    flag: Argument::UserFlag { flag: tid },
+                    slot: Some(Argument::ct_heap(slots[0].0 as usize)),
+                });
+                add_op(DopInstructionSet::ST {
+                    dst: Argument::ct_reg(dsts[0].0),
+                    src: Argument::ct_heap(slots[0].0 as usize),
+                })
             }
             DstSt { to } => {
                 add_op(DopInstructionSet::ST {

@@ -149,8 +149,11 @@ pub fn lower_iop_to_hpu(ir: &IR<IopLang>) -> IR<HpuLang> {
                 // Transfer should have been cut and split into different graphs at this point.
                 panic!("Unexpected Transfer op encountered.");
             }
-            IopInstructionSet::TransferIn { .. } | IopInstructionSet::TransferOut { .. } => {
-                todo!()
+            IopInstructionSet::TransferIn { uid } => {
+                translator.direct_translation(op, HpuInstructionSet::TransferIn { tid: uid });
+            }
+            IopInstructionSet::TransferOut { uid } => {
+                translator.direct_translation(op, HpuInstructionSet::TransferOut { tid: uid });
             }
             IopInstructionSet::_Consume { .. } => {
                 panic!("Tried to translate a _consume op");

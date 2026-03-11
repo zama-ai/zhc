@@ -627,6 +627,22 @@ impl<D: Dialect> IR<D> {
         panic!();
     }
 
+    pub fn dump_and_wait(&self) {
+        println!(
+            "{}",
+            self.format()
+                .with_walker(crate::PrintWalker::Linear)
+                .show_types(false)
+                .show_opid(true)
+                .show_comments(true)
+        );
+        use std::io::{self, Write};
+        print!("Type any key to continue >>> ");
+        io::stdout().flush().unwrap();
+        let mut input = String::new();
+        io::stdin().read_line(&mut input).unwrap();
+    }
+
     /// Creates an empty operation map for this IR.
     pub fn empty_opmap<V>(&self) -> OpMap<V> {
         OpMap::new_empty(self)

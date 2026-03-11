@@ -1,7 +1,9 @@
-use zhc_ir::{AnnIR, IR, OpId, OpIdRaw, OpMap, dce::eliminate_dead_code, translation::eager_translate_ann};
+use zhc_ir::{
+    AnnIR, IR, OpId, OpIdRaw, OpMap, dce::eliminate_dead_code, translation::eager_translate_ann,
+};
 use zhc_utils::iter::Intermediate;
 
-use crate::ioplang::IopLang;
+use crate::ioplang::{IopInstructionSet, IopLang};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct ComponentId(OpIdRaw);
@@ -55,13 +57,16 @@ impl UnionFind {
     }
 }
 
-pub fn isolate_subgraphs(ir: &IR<IopLang>, duplicate_inputs: bool) -> Vec<IR<IopLang>> {
+pub fn isolate_subgraphs<D: Fn(IopInstructionSet) -> bool>(
+    ir: &IR<IopLang>,
+    should_duplicate: D,
+) -> Vec<IR<IopLang>> {
     let mut uf = UnionFind::from_ir(ir);
 
     for valref in ir.walk_vals_linear() {
         let origin = valref.get_origin().opref;
         for user in valref.get_users_iter() {
-            if !(duplicate_inputs && origin.is_input()) {
+            if !(should_duplicate(origin.get_instruction())) {
                 uf.union(*origin, *user);
             }
         }
@@ -74,7 +79,7 @@ pub fn isolate_subgraphs(ir: &IR<IopLang>, duplicate_inputs: bool) -> Vec<IR<Iop
             ir.totally_mapped_opmap(|op| {
                 if uf.find(*op) == component {
                     true
-                } else if duplicate_inputs && op.is_input() && op.get_users_iter().any(|user| uf.find(*user) == component){
+                } else if should_duplicate(op.get_instruction()) {
                     true
                 } else {
                     false
@@ -89,12 +94,8 @@ pub fn isolate_subgraphs(ir: &IR<IopLang>, duplicate_inputs: bool) -> Vec<IR<Iop
             }
             translator.direct_translation(op.clone(), op.get_instruction());
         });
-        if duplicate_inputs {
-            eliminate_dead_code(&mut output_ir);
-            if output_ir.n_ops() > 0 {
-                output.push(output_ir);
-            }
-        } else {
+        eliminate_dead_code(&mut output_ir);
+        if output_ir.n_ops() > 0 {
             output.push(output_ir);
         }
     }
@@ -138,7 +139,19 @@ mod test {
         );
 
         cut_transfers(&mut ir);
-        let components = isolate_subgraphs(&ir, true);
+        let components = isolate_subgraphs(&ir, |op| {
+            use IopInstructionSet::*;
+            match op {
+                InputCiphertext { .. }
+                | InputPlaintext { .. }
+                | ExtractCtBlock { .. }
+                | ExtractPtBlock { .. }
+                | DeclareCiphertext { .. }
+                | LetCiphertextBlock { .. }
+                | LetPlaintextBlock { .. } => true,
+                _ => false
+            }
+        });
 
         assert_display_is!(
             components[0].format(),
@@ -169,7 +182,9 @@ mod test {
         let (_, t1) = ir.add_op(IopInstructionSet::Transfer, svec![add1[0]]);
         let (_, add2) = ir.add_op(IopInstructionSet::AddCt, svec![t1[0], i1[0]]);
         ir.add_op(
-            IopInstructionSet::_Consume { typ: IopTypeSystem::CiphertextBlock },
+            IopInstructionSet::_Consume {
+                typ: IopTypeSystem::CiphertextBlock,
+            },
             svec![add2[0]],
         );
 
@@ -186,7 +201,19 @@ mod test {
         );
 
         cut_transfers(&mut ir);
-        let components = isolate_subgraphs(&ir, true);
+        let components = isolate_subgraphs(&ir, |op| {
+            use IopInstructionSet::*;
+            match op {
+                InputCiphertext { .. }
+                | InputPlaintext { .. }
+                | ExtractCtBlock { .. }
+                | ExtractPtBlock { .. }
+                | DeclareCiphertext { .. }
+                | LetCiphertextBlock { .. }
+                | LetPlaintextBlock { .. } => true,
+                _ => false
+            }
+        });
         assert_eq!(components.len(), 2);
 
         // Consumer 1
@@ -210,6 +237,5 @@ mod test {
                 transfer_out<#1>(%2 : CtBlock);
             "#
         );
-
     }
 }
