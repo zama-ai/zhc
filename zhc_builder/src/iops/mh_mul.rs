@@ -83,9 +83,19 @@ fn mh_mul_lsb_with_opt(spec: CiphertextSpec, mh_factor: u8, gen_overflow: bool) 
         let flag = builder.ciphertext_join(&[flag_block], Some(1)); // NB: This is a boolean flag
         builder.ciphertext_output(flag);
     }
-    let pack_output = outputs.into_iter().flatten().collect::<Vec<_>>();
-    let output = builder.ciphertext_join(&pack_output, Some(spec.int_size()));
-    builder.ciphertext_output(output);
+    // View output as one
+    // // let pack_output = outputs.into_iter().flatten().collect::<Vec<_>>();
+    // // let output = builder.join_ciphertext(&pack_output, Some(spec.int_size()));
+    // builder.output_ciphertext(output);
+
+    // View output as mh_factor sub-part
+    for out in outputs.into_iter() {
+        let output = builder.join_ciphertext(
+            &out,
+            Some(out.len() as u16 * spec.block_spec().message_size() as u16),
+        );
+        builder.output_ciphertext(output);
+    }
 
     builder
 }
@@ -130,6 +140,7 @@ impl Builder {
         // Split in mh_factor chunk of work
         let mh_overflow_v = Self::split_vec(mh_factor as usize, overflow_v);
         let mh_partprod_map = Self::split_btmap(mh_factor as usize, partprod_map);
+        println!("mh_partprod_map {mh_partprod_map:?}");
 
         // Phase 2  Reduce data
         let mut mh_data_blk = Vec::with_capacity(mh_factor as usize);
@@ -199,7 +210,9 @@ impl Builder {
         let mut iter = map.into_iter();
 
         for i in 0..n {
-            let chunk_size = base + if i < remainder { 1 } else { 0 };
+            // Distribute the remainder across last chunks
+            let chunk_size = base + if (n - i) < remainder { 1 } else { 0 };
+            println!("@{i} => {chunk_size}");
             for (k, v) in iter.by_ref().take(chunk_size) {
                 splitted[i].insert(k, v);
             }

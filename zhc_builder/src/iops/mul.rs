@@ -89,6 +89,7 @@ pub fn mul_lsb_with_opt(spec: CiphertextSpec, gen_overflow: bool) -> Builder {
     builder
 }
 
+#[derive(Debug)]
 pub(crate) enum PartProd {
     FromMsg(CiphertextBlock),
     FromCarry(CiphertextBlock),
