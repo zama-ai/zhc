@@ -1,4 +1,4 @@
-use crate::OpRefFormatter;
+use crate::Formatted;
 use std::{hash::Hash, ops::Deref};
 use zhc_utils::FastSet;
 
@@ -229,7 +229,7 @@ impl<'ir, D: Dialect> OpRef<'ir, D> {
     }
 
     /// Creates a configurable formatter for this operation.
-    pub fn format(&self) -> OpRefFormatter<'_, 'ir, D> {
-        OpRefFormatter::new(self)
+    pub fn format(&self) -> Formatted<'_, Self> {
+        Formatted::new(self)
     }
 }

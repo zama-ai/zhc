@@ -1,5 +1,5 @@
 use super::*;
-use crate::{AnnIRFormatter, AnnOpRef, AnnValRef, Dialect, IR, OpId, OpMap, ValId, ValMap};
+use crate::{AnnOpRef, AnnValRef, Dialect, Formatted, IR, OpId, OpMap, ValId, ValMap};
 use std::ops::Deref;
 use zhc_utils::{iter::MultiZip, small::SmallVec};
 
@@ -283,8 +283,8 @@ impl<'ir, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> AnnIR<'ir, D, OpAnn
     }
 
     /// Creates a configurable formatter for the annotated IR.
-    pub fn format(&self) -> AnnIRFormatter<'_, 'ir, D, OpAnn, ValAnn> {
-        AnnIRFormatter::new(self)
+    pub fn format(&self) -> Formatted<'_, Self> {
+        Formatted::new(self)
     }
 
     /// Consumes the annotated IR and returns the operation annotations map.

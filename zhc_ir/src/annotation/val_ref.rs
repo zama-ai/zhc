@@ -1,7 +1,7 @@
 use std::{fmt::Debug, ops::Deref};
 
 use crate::{
-    AnnIR, AnnOpRef, AnnValOriginRef, AnnValRefFormatter, AnnValUseRef, Annotation, Dialect, ValRef,
+    AnnIR, AnnOpRef, AnnValOriginRef, AnnValUseRef, Annotation, Dialect, Formatted, ValRef,
 };
 
 /// Value reference with attached annotation data.
@@ -68,8 +68,8 @@ impl<'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation>
     }
 
     /// Creates a configurable formatter for this annotated value.
-    pub fn format(&self) -> AnnValRefFormatter<'_, 'ir, 'ann, D, OpAnn, ValAnn> {
-        AnnValRefFormatter::new(self)
+    pub fn format(&self) -> Formatted<'_, Self> {
+        Formatted::new(self)
     }
 }
 

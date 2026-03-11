@@ -1,6 +1,6 @@
 use std::fmt::{Debug, Display};
 
-use zhc_ir::{DialectInstructionSet, IR, Signature, sig};
+use zhc_ir::{DialectInstructionSet, Format, FormatContext, IR, Signature, sig};
 use zhc_utils::iter::CollectInSmallVec;
 
 use super::{HpuLang, type_system::HpuTypeSystem};
@@ -208,8 +208,8 @@ impl HpuInstructionSet {
     }
 }
 
-impl Display for HpuInstructionSet {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Format for HpuInstructionSet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>, ctx: &FormatContext) -> std::fmt::Result {
         match self {
             HpuInstructionSet::AddCt => write!(f, "add_ct"),
             HpuInstructionSet::SubCt => write!(f, "sub_ct"),
@@ -235,13 +235,24 @@ impl Display for HpuInstructionSet {
             HpuInstructionSet::Pbs4F { lut } => write!(f, "pbs_4f<{lut}>"),
             HpuInstructionSet::Pbs8F { lut } => write!(f, "pbs_8f<{lut}>"),
             HpuInstructionSet::Batch { block, .. } => {
-                write!(f, "batch {{\n{}\n}}", block.format().with_indent(4))
+                // Format nested IR with proper prefix propagation and unique nested prefix
+                let inner_ctx = ctx.with_prefix("    ").with_next_nested_prefix();
+                writeln!(f, "batch {{")?;
+                Format::fmt(block.as_ref(), f, &inner_ctx)?;
+                write!(f, "\n{}}}", ctx.prefix())
             }
             HpuInstructionSet::BatchArg { pos, ty } => write!(f, "batch_arg<{pos}, {ty}>"),
             HpuInstructionSet::BatchRet { pos, ty } => write!(f, "batch_ret<{pos}, {ty}>"),
         }
     }
 }
+
+impl Display for HpuInstructionSet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Format::fmt(self, f, &FormatContext::default())
+    }
+}
+
 impl DialectInstructionSet for HpuInstructionSet {
     type TypeSystem = HpuTypeSystem;
 

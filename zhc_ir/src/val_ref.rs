@@ -3,7 +3,7 @@ use std::ops::Deref;
 
 use super::{Dialect, IR, State, ValId};
 use crate::val_use::ValUse;
-use crate::{OpRef, ValOrigin, ValOriginRef, ValRefFormatter, ValUseRef};
+use crate::{Formatted, OpRef, ValOrigin, ValOriginRef, ValUseRef};
 use zhc_utils::iter::Deduped;
 
 /// Borrowed view of a value within an [`IR`].
@@ -118,7 +118,7 @@ impl<'ir, D: Dialect> ValRef<'ir, D> {
     }
 
     /// Creates a configurable formatter for this value.
-    pub fn format(&self) -> ValRefFormatter<'_, 'ir, D> {
-        ValRefFormatter::new(self)
+    pub fn format(&self) -> Formatted<'_, Self> {
+        Formatted::new(self)
     }
 }

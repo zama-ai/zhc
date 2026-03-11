@@ -304,18 +304,18 @@ mod test {
         assert_display_is!(
             ir.into_ir().format().show_comments(true).show_opid(true),
             r#"
-                @00                              | %0 : Ct = input_ciphertext<0, 16>();
-                @01                              | %1 : Ct = input_ciphertext<1, 16>();
+                @0                               | %0 : Ct = input_ciphertext<0, 16>();
+                @1                               | %1 : Ct = input_ciphertext<1, 16>();
                 @36   // Compare blocks / 0-th   | %36 : PtBlock = let_pt_block<1>();
                 @56                              | %56 : Ct = decl_ct<2>();
-                @02                              | %2 : CtBlock = extract_ct_block<0>(%0 : Ct);
-                @03                              | %3 : CtBlock = extract_ct_block<1>(%0 : Ct);
-                @04                              | %4 : CtBlock = extract_ct_block<2>(%0 : Ct);
-                @05                              | %5 : CtBlock = extract_ct_block<3>(%0 : Ct);
-                @06                              | %6 : CtBlock = extract_ct_block<4>(%0 : Ct);
-                @07                              | %7 : CtBlock = extract_ct_block<5>(%0 : Ct);
-                @08                              | %8 : CtBlock = extract_ct_block<6>(%0 : Ct);
-                @09                              | %9 : CtBlock = extract_ct_block<7>(%0 : Ct);
+                @2                               | %2 : CtBlock = extract_ct_block<0>(%0 : Ct);
+                @3                               | %3 : CtBlock = extract_ct_block<1>(%0 : Ct);
+                @4                               | %4 : CtBlock = extract_ct_block<2>(%0 : Ct);
+                @5                               | %5 : CtBlock = extract_ct_block<3>(%0 : Ct);
+                @6                               | %6 : CtBlock = extract_ct_block<4>(%0 : Ct);
+                @7                               | %7 : CtBlock = extract_ct_block<5>(%0 : Ct);
+                @8                               | %8 : CtBlock = extract_ct_block<6>(%0 : Ct);
+                @9                               | %9 : CtBlock = extract_ct_block<7>(%0 : Ct);
                 @10                              | %10 : CtBlock = extract_ct_block<0>(%1 : Ct);
                 @11                              | %11 : CtBlock = extract_ct_block<1>(%1 : Ct);
                 @12                              | %12 : CtBlock = extract_ct_block<2>(%1 : Ct);

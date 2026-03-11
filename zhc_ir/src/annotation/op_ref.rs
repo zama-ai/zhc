@@ -1,6 +1,6 @@
 use std::{fmt::Debug, ops::Deref};
 
-use crate::{AnnIR, AnnOpRefFormatter, AnnValRef, Annotation, Dialect, OpRef};
+use crate::{AnnIR, AnnValRef, Annotation, Dialect, Formatted, OpRef};
 
 /// Operation reference with attached annotation data.
 #[derive(Debug, Clone)]
@@ -110,8 +110,8 @@ impl<'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation>
     }
 
     /// Creates a configurable formatter for this annotated operation.
-    pub fn format(&self) -> AnnOpRefFormatter<'_, 'ir, 'ann, D, OpAnn, ValAnn> {
-        AnnOpRefFormatter::new(self)
+    pub fn format(&self) -> Formatted<'_, Self> {
+        Formatted::new(self)
     }
 }
 

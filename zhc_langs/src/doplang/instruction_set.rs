@@ -3,7 +3,7 @@ use crate::hpulang::LutId;
 use super::type_system::DopTypeSystem;
 use serde::Serialize;
 use std::fmt::{Debug, Display};
-use zhc_ir::{DialectInstructionSet, Signature, sig};
+use zhc_ir::{DialectInstructionSet, Format, FormatContext, Signature, sig};
 
 /// Register address mask that compares all bits (single-output PBS or
 /// plain register).
@@ -319,8 +319,8 @@ pub enum DopInstructionSet {
     SYNC,
 }
 
-impl Display for DopInstructionSet {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Format for DopInstructionSet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>, _ctx: &FormatContext) -> std::fmt::Result {
         use DopInstructionSet::*;
         match self {
             ADD { dst, src1, src2 } => write!(f, "ADD<{}, {}, {}>", dst, src1, src2),
@@ -348,6 +348,12 @@ impl Display for DopInstructionSet {
             _INIT => write!(f, "_INIT"),
             SYNC => write!(f, "SYNC"),
         }
+    }
+}
+
+impl Display for DopInstructionSet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Format::fmt(self, f, &FormatContext::default())
     }
 }
 

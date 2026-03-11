@@ -5,7 +5,10 @@
 //! selection, multi-return, and a terminal sink. Rich enough to build
 //! non-trivial dataflow graphs (diamonds, fan-out, multi-return) while
 //! remaining trivial to construct by hand.
-use crate::{Dialect, DialectInstructionSet, DialectTypeSystem, IR, signature::Signature};
+use crate::{
+    Dialect, DialectInstructionSet, DialectTypeSystem, Format, FormatContext, IR,
+    signature::Signature,
+};
 use std::fmt::Display;
 use zhc_utils::{assert_display_is, svec};
 
@@ -54,8 +57,8 @@ pub enum TestInstructionSet {
     Return,
 }
 
-impl Display for TestInstructionSet {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Format for TestInstructionSet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>, _ctx: &FormatContext) -> std::fmt::Result {
         match self {
             TestInstructionSet::IntInput { pos } => write!(f, "int_input<pos: {}>", pos),
             TestInstructionSet::BoolConstant { val } => {
@@ -67,6 +70,12 @@ impl Display for TestInstructionSet {
             TestInstructionSet::Inc => write!(f, "inc"),
             TestInstructionSet::Return => write!(f, "return"),
         }
+    }
+}
+
+impl Display for TestInstructionSet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Format::fmt(self, f, &FormatContext::default())
     }
 }
 

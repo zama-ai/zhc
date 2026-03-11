@@ -285,16 +285,16 @@ mod test {
                 .show_comments(true)
                 .show_opid(true),
             r#"
-                @00                       | %0 : Ct = input_ciphertext<0, 8>();
-                @01                       | %1 : Ct = input_ciphertext<1, 8>();
-                @02                       | %2 : CtBlock = extract_ct_block<0>(%0 : Ct);
-                @03                       | %3 : CtBlock = extract_ct_block<1>(%0 : Ct);
-                @04                       | %4 : CtBlock = extract_ct_block<2>(%0 : Ct);
-                @05                       | %5 : CtBlock = extract_ct_block<3>(%0 : Ct);
-                @06                       | %6 : CtBlock = extract_ct_block<0>(%1 : Ct);
-                @07                       | %7 : CtBlock = extract_ct_block<1>(%1 : Ct);
-                @08                       | %8 : CtBlock = extract_ct_block<2>(%1 : Ct);
-                @09                       | %9 : CtBlock = extract_ct_block<3>(%1 : Ct);
+                @0                        | %0 : Ct = input_ciphertext<0, 8>();
+                @1                        | %1 : Ct = input_ciphertext<1, 8>();
+                @2                        | %2 : CtBlock = extract_ct_block<0>(%0 : Ct);
+                @3                        | %3 : CtBlock = extract_ct_block<1>(%0 : Ct);
+                @4                        | %4 : CtBlock = extract_ct_block<2>(%0 : Ct);
+                @5                        | %5 : CtBlock = extract_ct_block<3>(%0 : Ct);
+                @6                        | %6 : CtBlock = extract_ct_block<0>(%1 : Ct);
+                @7                        | %7 : CtBlock = extract_ct_block<1>(%1 : Ct);
+                @8                        | %8 : CtBlock = extract_ct_block<2>(%1 : Ct);
+                @9                        | %9 : CtBlock = extract_ct_block<3>(%1 : Ct);
                 @10   // pack_0_0         | %10 : CtBlock = pack_ct<4>(%2 : CtBlock, %6 : CtBlock);
                 @11   // pp_0_0_lsb       | %11 : CtBlock = pbs<Protect, MultCarryMsgLsb>(%10 : CtBlock);
                 @12   // pp_0_0_msb       | %12 : CtBlock = pbs<Protect, MultCarryMsgMsb>(%10 : CtBlock);

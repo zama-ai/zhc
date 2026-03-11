@@ -1,4 +1,5 @@
 use super::signature::Signature;
+use crate::Format;
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
 
@@ -12,7 +13,7 @@ pub trait DialectTypeSystem: Clone + Debug + Display + PartialEq + Eq + Hash + '
 ///
 /// Implementors are typically enums whose variants represent the individual
 /// instructions available in the dialect.
-pub trait DialectInstructionSet: Clone + Debug + Display + PartialEq + Eq + Hash + 'static {
+pub trait DialectInstructionSet: Clone + Debug + Format + PartialEq + Eq + Hash + 'static {
     /// The type system associated with this instruction set.
     type TypeSystem: DialectTypeSystem;
 

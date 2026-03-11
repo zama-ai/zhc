@@ -1,9 +1,6 @@
-use std::{
-    fmt::{Debug, Display},
-    hash::Hash,
-};
+use std::{fmt::Debug, hash::Hash};
 use zhc_crypto::integer_semantics::lut::LookupCheck;
-use zhc_ir::{DialectInstructionSet, Signature, sig};
+use zhc_ir::{DialectInstructionSet, Format, FormatContext, Signature, sig};
 
 use crate::ioplang::{
     IopTypeSystem,
@@ -130,8 +127,8 @@ pub enum IopInstructionSet {
     Pbs8 { lut: Lut8Def },
 }
 
-impl Display for IopInstructionSet {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Format for IopInstructionSet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>, _ctx: &FormatContext) -> std::fmt::Result {
         match self {
             IopInstructionSet::InputCiphertext { pos, int_size } => {
                 write!(f, "input_ciphertext<{pos}, {int_size}>")
@@ -163,6 +160,12 @@ impl Display for IopInstructionSet {
             IopInstructionSet::Pbs4 { lut } => write!(f, "pbs4<{lut:?}>"),
             IopInstructionSet::Pbs8 { lut } => write!(f, "pbs8<{lut:?}>"),
         }
+    }
+}
+
+impl std::fmt::Display for IopInstructionSet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Format::fmt(self, f, &FormatContext::default())
     }
 }
 

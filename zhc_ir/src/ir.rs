@@ -2,7 +2,7 @@ use crate::interpretation::{
     InterpState, Interpretable, Interpretation, InterpretsTo, interpret_ir,
 };
 use crate::val_ref::ValRef;
-use crate::{Analysing, AnnIR, AnnOpRef, Annotation, IRFormatter, ValMap, ValOrigin, ValUse};
+use crate::{Analysing, AnnIR, AnnOpRef, Annotation, Formatted, ValMap, ValOrigin, ValUse};
 use std::{cmp::max, fmt::Debug};
 use zhc_utils::iter::MultiZip;
 use zhc_utils::svec;
@@ -453,7 +453,7 @@ impl<D: Dialect> IR<D> {
             .collect::<Vec<_>>();
         if sig.get_args() != actual {
             panic!(
-                "Signature Error: {op} received {actual:?} instead of {:?}",
+                "Signature Error: {op:?} received {actual:?} instead of {:?}",
                 sig.get_args()
             );
         }
@@ -824,7 +824,7 @@ impl<D: Dialect> IR<D> {
     }
 
     /// Creates a configurable formatter for the entire IR.
-    pub fn format(&self) -> IRFormatter<'_, D> {
-        IRFormatter::new(self)
+    pub fn format(&self) -> Formatted<'_, Self> {
+        Formatted::new(self)
     }
 }
