@@ -14,6 +14,7 @@ use zhc_builder::Builder;
 use zhc_builder::CiphertextSpec;
 use zhc_builder::if_then_else;
 use zhc_builder::if_then_zero;
+use zhc_builder::mh_mul_lsb;
 use zhc_builder::{cmp_eq, cmp_gt, cmp_gte, cmp_lt, cmp_lte, cmp_neq};
 use zhc_ir::IR;
 use zhc_ir::cse::eliminate_common_subexpressions;
@@ -147,4 +148,12 @@ fn test_dump_trace() {
         }
         println!("{}/{lower_bound}   {}", min, min / lower_bound)
     }
+#[test]
+fn mh_mul() {
+    let mut ir = mh_mul_lsb(CiphertextSpec::new(8,2,2), 2).into_ir();
+    ir.dump();
+    cut_transfers(&mut ir);
+    let components = isolate_subgraphs(&ir, true);
+    println!("{components:?}");
+    assert_eq!(components.len(), 2);
 }
