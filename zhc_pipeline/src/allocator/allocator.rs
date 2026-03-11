@@ -32,6 +32,7 @@ pub struct Alloc {
     pub unspills: SmallVec<Unspill>,
     pub srcs: SmallVec<RegId>,
     pub dsts: SmallVec<RegId>,
+    pub slots: SmallVec<HeapSlot>
 }
 
 pub struct Allocator<'ir> {
@@ -134,6 +135,19 @@ impl<'ir> Allocator<'ir> {
         }
     }
 
+    fn acquire_heap_slots(
+        &mut self,
+        op: OpRef<'ir, HpuLang>,
+    ) -> SmallVec<HeapSlot> {
+
+        use HpuInstructionSet::*;
+        match op.get_instruction() {
+            TransferIn { tid } | TransferOut { tid }=> svec![self.heap.get_unmapped()],
+            _ => svec![]
+        }
+    }
+
+
     fn acquire_src_registers(
         &mut self,
         op: OpRef<'ir, HpuLang>,
@@ -227,6 +241,7 @@ impl<'ir> Allocator<'ir> {
             }
 
             let (mut spills, unspills) = self.acquire_src_registers(op.clone());
+            let slots = self.acquire_heap_slots(op.clone());
             self.retire_registers();
             let more_spills = self.acquire_dst_registers(op.clone());
 
@@ -246,6 +261,7 @@ impl<'ir> Allocator<'ir> {
                         .iter()
                         .map(|v| self.map[*v].rid())
                         .collect(),
+                    slots
                 },
             );
 
@@ -283,9 +299,10 @@ fn get_ranges<'ir>(op: OpRef<'ir, HpuLang>) -> impl Iterator<Item = SmallVec<Val
         | CstSub { .. }
         | MulCst { .. }
         | CstCt { .. }
-        | SrcLd { .. } => std::iter::once(svec![op.get_return_valids()[0]]).reconcile_1_of_3(),
+        | SrcLd { .. }
+        | TransferIn { .. } => std::iter::once(svec![op.get_return_valids()[0]]).reconcile_1_of_3(),
 
-        ImmLd { .. } | DstSt { .. } => std::iter::empty().reconcile_2_of_3(),
+        ImmLd { .. } | DstSt { .. } | TransferOut { .. } => std::iter::empty().reconcile_2_of_3(),
 
         Batch { block } => {
             let batch_map = BatchMap::from_op(&op);

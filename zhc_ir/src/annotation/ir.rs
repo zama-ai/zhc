@@ -320,6 +320,20 @@ impl<'ir, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> AnnIR<'ir, D, OpAnn
         );
         panic!();
     }
+
+    pub fn dump_and_wait(&self) {
+        println!(
+            "{}",
+            self.format()
+                .with_walker(crate::PrintWalker::Linear)
+                .show_types(false)
+                .show_opid(true)
+                .show_comments(true)
+        );
+        use std::io::{self, BufRead};
+        let stdin = io::stdin();
+        let _ = stdin.lock().lines().next();
+    }
 }
 
 impl<'ir, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> Deref

@@ -186,7 +186,9 @@ pub enum HpuInstructionSet {
     /// Batch output at positional slot `pos`. Appears inside a
     /// [`Batch`](Self::Batch) block. `(ty) → ()`
     BatchRet { pos: u8, ty: HpuTypeSystem },
+
     TransferIn {tid: u8},
+
     TransferOut {tid: u8}
 }
 

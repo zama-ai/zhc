@@ -44,6 +44,11 @@ impl Heap {
         }
     }
 
+    pub fn get_unmapped(&mut self) -> HeapSlot {
+        let next = HeapSlot(self.last.0 + 1);
+        std::mem::replace(&mut self.last, next)
+    }
+
     #[allow(unused)]
     pub fn size(&self) -> usize {
         self.last.0 as usize
