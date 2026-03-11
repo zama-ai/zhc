@@ -5,7 +5,7 @@ use crate::val_ref::ValRef;
 use crate::{Analysing, AnnIR, AnnOpRef, Annotation, Formatted, ValMap, ValOrigin, ValUse};
 use std::{cmp::max, fmt::Debug};
 use zhc_utils::iter::MultiZip;
-use zhc_utils::svec;
+use zhc_utils::{Dumpable, svec};
 use zhc_utils::{Store, small::SmallVec};
 
 use super::{
@@ -634,25 +634,6 @@ impl<D: Dialect> IR<D> {
         self.op_count -= 1;
     }
 
-    /// Prints the formatted IR to stdout and panics.
-    ///
-    /// Debugging utility for inspecting the IR state at a specific point.
-    ///
-    /// # Panics
-    ///
-    /// Always.
-    pub fn dump(&self) {
-        println!(
-            "{}",
-            self.format()
-                .with_walker(crate::PrintWalker::Linear)
-                .show_types(false)
-                .show_opid(true)
-                .show_comments(true)
-        );
-        panic!();
-    }
-
     /// Creates an empty operation map for this IR.
     pub fn empty_opmap<V>(&self) -> OpMap<V> {
         OpMap::new_empty(self)
@@ -826,5 +807,18 @@ impl<D: Dialect> IR<D> {
     /// Creates a configurable formatter for the entire IR.
     pub fn format(&self) -> Formatted<'_, Self> {
         Formatted::new(self)
+    }
+}
+
+impl<D: Dialect> Dumpable for IR<D> {
+    fn dump_to_string(&self) -> String {
+        format!(
+            "{}",
+            self.format()
+                .with_walker(crate::PrintWalker::Linear)
+                .show_types(false)
+                .show_opid(true)
+                .show_comments(true)
+        )
     }
 }

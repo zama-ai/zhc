@@ -1,6 +1,9 @@
 use std::any::TypeId;
 
-use zhc_utils::iter::{ReconcilerOf2, Separate};
+use zhc_utils::{
+    Dumpable,
+    iter::{ReconcilerOf2, Separate},
+};
 
 use crate::{Annotation, val_ref::ValRef};
 
@@ -309,21 +312,17 @@ impl<'a, T: Format> Formatted<'a, T> {
     pub fn context_mut(&mut self) -> &mut FormatContext {
         &mut self.ctx
     }
-
-    /// Prints this element to stdout and panics.
-    ///
-    /// # Panics
-    ///
-    /// Always.
-    pub fn dump(&self) -> ! {
-        println!("{self}");
-        panic!("dump");
-    }
 }
 
 impl<T: Format> std::fmt::Display for Formatted<'_, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.item.fmt(f, &self.ctx)
+    }
+}
+
+impl<T: Format> Dumpable for Formatted<'_, T> {
+    fn dump_to_string(&self) -> String {
+        format!("{}", self)
     }
 }
 

@@ -1,5 +1,7 @@
 use std::{fmt::Debug, ops::Deref};
 
+use zhc_utils::Dumpable;
+
 use crate::{
     AnnIR, AnnOpRef, AnnValOriginRef, AnnValUseRef, Annotation, Dialect, Formatted, ValRef,
 };
@@ -94,4 +96,12 @@ impl<'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> PartialEq
 impl<'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> Eq
     for AnnValRef<'ir, 'ann, D, OpAnn, ValAnn>
 {
+}
+
+impl<D: Dialect, OpAnn: Annotation, ValAnn: Annotation> Dumpable
+    for AnnValRef<'_, '_, D, OpAnn, ValAnn>
+{
+    fn dump_to_string(&self) -> String {
+        self.format().dump_to_string()
+    }
 }

@@ -11,6 +11,7 @@ pub mod small;
 pub mod tracing;
 
 mod change_guard;
+mod dump;
 mod erasable;
 mod fast_hash;
 mod fifo;
@@ -19,6 +20,7 @@ mod store;
 mod type_name;
 
 pub use change_guard::*;
+pub use dump::*;
 pub use erasable::*;
 pub use fast_hash::*;
 pub use fifo::*;

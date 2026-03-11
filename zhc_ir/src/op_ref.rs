@@ -1,6 +1,6 @@
 use crate::Formatted;
 use std::{hash::Hash, ops::Deref};
-use zhc_utils::FastSet;
+use zhc_utils::{Dumpable, FastSet};
 
 use super::{Depth, Dialect, IR, OpId, Signature, State, ValId, val_ref::ValRef};
 
@@ -231,5 +231,11 @@ impl<'ir, D: Dialect> OpRef<'ir, D> {
     /// Creates a configurable formatter for this operation.
     pub fn format(&self) -> Formatted<'_, Self> {
         Formatted::new(self)
+    }
+}
+
+impl<D: Dialect> Dumpable for OpRef<'_, D> {
+    fn dump_to_string(&self) -> String {
+        self.format().dump_to_string()
     }
 }

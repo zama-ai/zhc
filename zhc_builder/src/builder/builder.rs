@@ -35,7 +35,7 @@ use zhc_langs::ioplang::{
     eliminate_aliases, skip_store_load,
 };
 use zhc_utils::{
-    FastMap,
+    Dumpable, FastMap,
     iter::{Chunk, ChunkIt},
     small::SmallVec,
     svec,
@@ -253,27 +253,6 @@ impl Builder {
     /// apply any optimization passes. Useful for debugging and inspection mid-construction.
     pub fn ir(&self) -> Ref<'_, IR<IopLang>> {
         Ref::map(self.inner(), |inner| &inner.ir)
-    }
-
-    /// Prints the current IR to stdout and panics.
-    ///
-    /// This is a debugging helper intended for use during circuit development. It dumps a
-    /// human-readable representation of the unoptimized IR graph, then unconditionally
-    /// panics to halt execution.
-    ///
-    /// # Panics
-    ///
-    /// Always panics after printing.
-    pub fn dump_and_panic(&self) -> ! {
-        println!(
-            "{:#}",
-            self.ir()
-                .format()
-                .with_walker(PrintWalker::Linear)
-                .show_comments(true)
-                .show_types(false)
-        );
-        panic!()
     }
 
     /// Interprets the current IR with the given inputs, prints the annotated result, and panics.
@@ -1666,4 +1645,14 @@ pub enum ExtensionBehavior {
     Limit,
     /// Passes surplus elements from the longer slice through unchanged.
     Passthrough,
+}
+
+impl Dumpable for Builder {
+    fn dump_to_string(&self) -> String {
+        format!(
+            "Builder {} {{\n{}\n}}",
+            self.signature(),
+            self.ir().format()
+        )
+    }
 }

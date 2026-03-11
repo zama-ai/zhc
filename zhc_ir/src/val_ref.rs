@@ -1,6 +1,8 @@
 use std::hash::Hash;
 use std::ops::Deref;
 
+use zhc_utils::Dumpable;
+
 use super::{Dialect, IR, State, ValId};
 use crate::val_use::ValUse;
 use crate::{Formatted, OpRef, ValOrigin, ValOriginRef, ValUseRef};
@@ -120,5 +122,11 @@ impl<'ir, D: Dialect> ValRef<'ir, D> {
     /// Creates a configurable formatter for this value.
     pub fn format(&self) -> Formatted<'_, Self> {
         Formatted::new(self)
+    }
+}
+
+impl<D: Dialect> Dumpable for ValRef<'_, D> {
+    fn dump_to_string(&self) -> String {
+        self.format().dump_to_string()
     }
 }

@@ -5,7 +5,7 @@ use zhc_langs::{
     hpulang::{HpuInterpreterContext, HpuLang, HpuValue, LutId, TDstId, TImmId, TSrcId},
     ioplang::{IopInstructionSet, IopInterepreterContext, IopLang, IopValue, Lut1Def, Lut2Def},
 };
-use zhc_utils::{FastMap, assert_display_is};
+use zhc_utils::{Dumpable, FastMap, assert_display_is};
 
 use crate::translation::{GIDS1, GIDS2};
 
@@ -96,7 +96,7 @@ pub fn check_iop_hpu_equivalence(
         // Interpret HPU.
         let hpu_ctx = match hpu_ir.interpret::<HpuValue>(hpu_ctx) {
             Ok((_, ctx)) => ctx,
-            Err((ann_ir, _)) => ann_ir.dump(),
+            Err((ann_ir, _)) => ann_ir.dump_and_panic(),
         };
 
         // println!("iop_outputs:{:#?}", iop_ctx.outputs);
@@ -204,7 +204,7 @@ pub fn check_iop_dop_equivalence(
         // Interpret DOP.
         let dop_ctx = match dop_ir.interpret::<DopValue>(dop_ctx) {
             Ok((_, ctx)) => ctx,
-            Err((ann_ir, _)) => ann_ir.dump(),
+            Err((ann_ir, _)) => ann_ir.dump_and_panic(),
         };
 
         // Compare: check each output block matches.
