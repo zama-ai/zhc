@@ -6,8 +6,6 @@
 //! operation scheduling, register allocation, and final code generation.
 
 use allocator::allocate_registers;
-// use batcher::batch;
-// use scheduler::schedule;
 use translation_table::{DOpRepr, generate_translation_table};
 use zhc_builder::if_then_else;
 use zhc_builder::if_then_zero;
@@ -18,10 +16,8 @@ use zhc_langs::ioplang::eliminate_aliases;
 
 pub mod allocator;
 pub mod batch_scheduler;
-// pub mod batcher;
 pub mod interpreter;
 pub mod latency;
-// pub mod scheduler;
 pub mod translation;
 pub mod translation_table;
 
