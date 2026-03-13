@@ -1,14 +1,13 @@
 use std::fmt;
-use std::ops::{Index, IndexMut};
 use std::rc::Rc;
 
 use zhc_ir::translation::lazy_translate;
 use zhc_ir::{AnnIR, AnnOpRef, AnnValRef, IR, OpId};
 use zhc_langs::hpulang::{BatchStatistics, HpuInstructionSet, HpuLang};
 use zhc_sim::hpu::HpuConfig;
-use zhc_utils::FastMap;
 use zhc_utils::iter::{CollectInSmallVec, CollectInVec, DedupedByKey, MultiZip};
 use zhc_utils::small::SmallMap;
+use zhc_utils::{Dumpable, FastMap, fsm};
 use zhc_utils::{iter::AllEq, svec};
 
 fn flush_pbs(instruction: HpuInstructionSet) -> HpuInstructionSet {
@@ -72,7 +71,6 @@ fn analyze_pbs_depth<'a>(ir: &'a IR<HpuLang>) -> DepthedIR<'a> {
 #[derive(Clone)]
 struct Batch<'a, 'b> {
     ops: Vec<DepthedOpRef<'a, 'b>>,
-    depth: PbsDepth,
 }
 
 impl fmt::Debug for Batch<'_, '_> {
@@ -90,12 +88,10 @@ impl fmt::Debug for Batch<'_, '_> {
 }
 
 impl<'a, 'b> Batch<'a, 'b> {
-    pub fn new(batch_size: usize, first: DepthedOpRef<'a, 'b>) -> Self {
-        let mut output = Batch {
+    pub fn new(batch_size: usize) -> Self {
+        let output = Batch {
             ops: Vec::with_capacity(batch_size),
-            depth: *first.get_annotation(),
         };
-        output.try_push(first).unwrap();
         output
     }
 
@@ -103,25 +99,16 @@ impl<'a, 'b> Batch<'a, 'b> {
         self.ops.len() == self.ops.capacity()
     }
 
-    pub fn try_push(&mut self, op: DepthedOpRef<'a, 'b>) -> Result<(), DepthedOpRef<'a, 'b>> {
+    pub fn push(&mut self, op: DepthedOpRef<'a, 'b>) {
+        assert!(op.get_instruction().is_pbs());
         if self.is_full() {
             panic!()
         }
-        if self.may_receive(&op) {
-            self.ops.push(op);
-            Ok(())
-        } else {
-            Err(op)
-        }
+        self.ops.push(op);
     }
 
     pub fn len(&self) -> usize {
         self.ops.len()
-    }
-
-    #[allow(unused)]
-    pub fn batch_size(&self) -> usize {
-        self.ops.capacity()
     }
 
     pub fn iter_members(&self) -> impl Iterator<Item = DepthedOpRef<'a, 'b>> {
@@ -133,20 +120,6 @@ impl<'a, 'b> Batch<'a, 'b> {
             .map(|m| *m.get_annotation())
             .all_eq()
             .unwrap_or(true)
-    }
-
-    fn may_receive(&self, candidate: &DepthedOpRef<'a, 'b>) -> bool {
-        let candidate_depth = *candidate.get_annotation();
-        if candidate_depth > self.depth {
-            // The candidate is after the batch. Not possible.
-            return false;
-        } else if candidate_depth == self.depth && self.is_iso_depth() {
-            // The candidate is at the same as all existing members. Can not interfere.
-            return true;
-        } else {
-            // The sad-path, we have to check with reachability analysis. See [1].
-            self.iter_members().all(|m| !candidate.reaches(&m))
-        }
     }
 
     pub fn gen_batch_ir(
@@ -233,50 +206,7 @@ impl<'a, 'b> Batch<'a, 'b> {
 }
 
 #[derive(Clone)]
-struct DepthBatches<'a, 'b> {
-    batches: Vec<Batch<'a, 'b>>,
-    batch_size: usize,
-}
-
-impl fmt::Debug for DepthBatches<'_, '_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // Skip empty depth levels entirely
-        if self.batches.is_empty() {
-            return write!(f, "∅");
-        }
-        f.debug_list().entries(self.batches.iter()).finish()
-    }
-}
-
-impl<'a, 'b> DepthBatches<'a, 'b> {
-    pub fn new(batch_size: usize) -> Self {
-        DepthBatches {
-            batches: vec![],
-            batch_size,
-        }
-    }
-
-    pub fn try_push(&mut self, op: DepthedOpRef<'a, 'b>) -> Result<(), DepthedOpRef<'a, 'b>> {
-        if self.batches.is_empty() || self.batches.last().unwrap().is_full() {
-            self.batches.push(Batch::new(self.batch_size, op));
-            Ok(())
-        } else {
-            self.batches.last_mut().unwrap().try_push(op)
-        }
-    }
-
-    #[allow(unused)]
-    pub fn needs_filling(&self) -> bool {
-        self.batches.last().map(|l| !l.is_full()).unwrap_or(false)
-    }
-
-    pub fn into_batch_iter(self) -> impl Iterator<Item = Batch<'a, 'b>> {
-        self.batches.into_iter()
-    }
-}
-
-#[derive(Clone)]
-struct Batches<'a, 'b>(Vec<DepthBatches<'a, 'b>>);
+struct Batches<'a, 'b>(Vec<Batch<'a, 'b>>);
 
 impl fmt::Debug for Batches<'_, '_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -288,26 +218,32 @@ impl fmt::Debug for Batches<'_, '_> {
     }
 }
 
+impl<'a, 'b> Dumpable for Batches<'a, 'b> {
+    fn dump_to_string(&self) -> String {
+        format!("{:?}", self)
+    }
+}
+
 impl<'a, 'b> Batches<'a, 'b> {
-    pub fn new(batch_size: usize, pbs_depth: usize) -> Self {
-        Batches(vec![DepthBatches::new(batch_size); pbs_depth + 1]) // +1 adds an extra depth batch but makes schedule loop simpler.
+    pub fn new() -> Self {
+        Batches(Vec::new())
+    }
+
+    pub fn push(&mut self, batch: Batch<'a, 'b>) {
+        self.0.push(batch);
     }
 
     #[allow(unused)]
     pub fn statistics(&self) -> BatchStatistics {
         let mut stats = BatchStatistics::new();
-        for db in &self.0 {
-            for batch in &db.batches {
-                stats.record(batch.ops.len() as u16);
-            }
+        for batch in &self.0 {
+            stats.record(batch.ops.len() as u16);
         }
         stats
     }
 
     fn into_batch_iter(self) -> impl Iterator<Item = Batch<'a, 'b>> {
-        self.0
-            .into_iter()
-            .flat_map(|dbatches| dbatches.into_batch_iter())
+        self.0.into_iter()
     }
 
     pub fn into_batch_map(self) -> FastMap<OpId, Rc<Batch<'a, 'b>>> {
@@ -318,36 +254,90 @@ impl<'a, 'b> Batches<'a, 'b> {
     }
 }
 
-impl<'a, 'b> Index<PbsDepth> for Batches<'a, 'b> {
-    type Output = DepthBatches<'a, 'b>;
-
-    fn index(&self, index: PbsDepth) -> &Self::Output {
-        &self.0[(index as usize).strict_sub(1)] // Depth indexing starts from 1
-    }
-}
-
-impl<'a, 'b> IndexMut<PbsDepth> for Batches<'a, 'b> {
-    fn index_mut(&mut self, index: PbsDepth) -> &mut Self::Output {
-        &mut self.0[(index as usize).strict_sub(1)] // Depth indexing starts from 1
-    }
-}
-
 fn extract_batches<'a, 'b>(dir: &'b DepthedIR<'a>, batch_size: usize) -> Batches<'a, 'b> {
-    let max_depth = dir
-        .walk_ops_linear()
-        .map(|op| op.get_annotation().clone())
-        .max()
-        .unwrap();
+    // When MH, we can:
+    //  + start by marking the transfer_in as not ready,
+    //  + schedule as much as possible until stalled,
+    //  + activate the transfer_in and
 
-    let mut batches = Batches::new(batch_size, max_depth as usize);
-    for op in dir
-        .walk_ops_topological()
-        .rev()
-        .filter(|op| op.get_instruction().is_pbs())
-    {
-        let depth = *op.get_annotation();
-        batches[depth].try_push(op).unwrap();
+    #[fsm]
+    #[derive(Debug)]
+    enum State {
+        Executed,
+        Ready,
+        Waiting(usize),
     }
+
+    impl Dumpable for State {
+        fn dump_to_string(&self) -> String {
+            format!("{:?}", self)
+        }
+    }
+
+    let mut batches = Batches::new();
+    let mut batch = Batch::new(batch_size);
+
+    let mut in_degree = dir.totally_mapped_opmap(|op| match op.get_predecessors_iter().count() {
+        0 => State::Ready,
+        n => State::Waiting(n),
+    });
+
+    let mut worklist = in_degree
+        .iter()
+        .filter_map(|(opid, state)| match state {
+            State::Ready => Some(opid),
+            _ => None,
+        })
+        .covec();
+
+    let mut ready_list = Vec::new();
+
+    loop {
+        while !worklist.is_empty() {
+            let op = dir.get_op(worklist.pop().unwrap());
+            in_degree.get_mut(&op).unwrap().transition(|old| match old {
+                State::Ready => State::Executed,
+                _ => unreachable!(),
+            });
+            for user in op.get_users_iter() {
+                in_degree
+                    .get_mut(&user)
+                    .unwrap()
+                    .transition(|old| match old {
+                        State::Waiting(0) => {
+                            unreachable!()
+                        }
+                        State::Waiting(1) => {
+                            if !user.get_instruction().is_pbs() {
+                                worklist.push(user.get_id());
+                            } else {
+                                ready_list.push(user.get_id());
+                            }
+                            State::Ready
+                        }
+                        State::Waiting(n) => State::Waiting(n - 1),
+                        _ => unreachable!(),
+                    });
+            }
+        }
+
+        if ready_list.is_empty() {
+            break;
+        }
+
+        while !batch.is_full() {
+            match ready_list.pop() {
+                Some(v) => batch.push(dir.get_op(v)),
+                None => break,
+            }
+        }
+
+        // Batch is either full or there is not enough ready to schedule.
+        worklist.extend(batch.iter_members().map(|op| op.get_id()));
+        batches.push(batch.clone());
+        batch = Batch::new(batch_size);
+    }
+
     batches
 }
 
@@ -459,30 +449,30 @@ mod test {
                     %a5 = batch_arg<5, CtRegister>();
                     %a6 = batch_arg<6, CtRegister>();
                     %a7 = batch_arg<7, CtRegister>();
-                    %a8, %a9 = pbs_2<Lut@71>(%a7);
-                    %a10, %a11 = pbs_2<Lut@71>(%a6);
-                    %a12, %a13 = pbs_2<Lut@71>(%a5);
-                    %a14, %a15 = pbs_2<Lut@71>(%a4);
-                    %a16, %a17 = pbs_2<Lut@71>(%a3);
-                    %a18, %a19 = pbs_2<Lut@71>(%a2);
-                    %a20, %a21 = pbs_2<Lut@71>(%a1);
-                    %a22, %a23 = pbs_2f<Lut@71>(%a0);
-                    batch_ret<0, CtRegister>(%a22);
-                    batch_ret<1, CtRegister>(%a23);
-                    batch_ret<2, CtRegister>(%a20);
-                    batch_ret<3, CtRegister>(%a21);
-                    batch_ret<4, CtRegister>(%a18);
-                    batch_ret<5, CtRegister>(%a19);
-                    batch_ret<6, CtRegister>(%a16);
-                    batch_ret<7, CtRegister>(%a17);
-                    batch_ret<8, CtRegister>(%a14);
-                    batch_ret<9, CtRegister>(%a15);
-                    batch_ret<10, CtRegister>(%a12);
-                    batch_ret<11, CtRegister>(%a13);
-                    batch_ret<12, CtRegister>(%a10);
-                    batch_ret<13, CtRegister>(%a11);
-                    batch_ret<14, CtRegister>(%a8);
-                    batch_ret<15, CtRegister>(%a9);
+                    %a8, %a9 = pbs_2<Lut@71>(%a0);
+                    %a10, %a11 = pbs_2<Lut@71>(%a1);
+                    %a12, %a13 = pbs_2<Lut@71>(%a2);
+                    %a14, %a15 = pbs_2<Lut@71>(%a3);
+                    %a16, %a17 = pbs_2<Lut@71>(%a4);
+                    %a18, %a19 = pbs_2<Lut@71>(%a5);
+                    %a20, %a21 = pbs_2<Lut@71>(%a6);
+                    %a22, %a23 = pbs_2f<Lut@71>(%a7);
+                    batch_ret<0, CtRegister>(%a8);
+                    batch_ret<1, CtRegister>(%a9);
+                    batch_ret<2, CtRegister>(%a10);
+                    batch_ret<3, CtRegister>(%a11);
+                    batch_ret<4, CtRegister>(%a12);
+                    batch_ret<5, CtRegister>(%a13);
+                    batch_ret<6, CtRegister>(%a14);
+                    batch_ret<7, CtRegister>(%a15);
+                    batch_ret<8, CtRegister>(%a16);
+                    batch_ret<9, CtRegister>(%a17);
+                    batch_ret<10, CtRegister>(%a18);
+                    batch_ret<11, CtRegister>(%a19);
+                    batch_ret<12, CtRegister>(%a20);
+                    batch_ret<13, CtRegister>(%a21);
+                    batch_ret<14, CtRegister>(%a22);
+                    batch_ret<15, CtRegister>(%a23);
                 }(%0, %1, %2, %3, %4, %5, %6, %7);
                 %24 = add_ct(%8, %9);
                 %30 = add_ct(%15, %16);
@@ -501,13 +491,13 @@ mod test {
                     %a0 = batch_arg<0, CtRegister>();
                     %a1 = batch_arg<1, CtRegister>();
                     %a2 = batch_arg<2, CtRegister>();
-                    %a3, %a4 = pbs_2<Lut@70>(%a1);
-                    %a5, %a6 = pbs_2<Lut@70>(%a0);
+                    %a3, %a4 = pbs_2<Lut@70>(%a0);
+                    %a5, %a6 = pbs_2<Lut@70>(%a1);
                     %a7, %a8 = pbs_2f<Lut@65>(%a2);
-                    batch_ret<0, CtRegister>(%a5);
-                    batch_ret<1, CtRegister>(%a6);
-                    batch_ret<2, CtRegister>(%a3);
-                    batch_ret<3, CtRegister>(%a4);
+                    batch_ret<0, CtRegister>(%a3);
+                    batch_ret<1, CtRegister>(%a4);
+                    batch_ret<2, CtRegister>(%a5);
+                    batch_ret<3, CtRegister>(%a6);
                     batch_ret<4, CtRegister>(%a7);
                     batch_ret<5, CtRegister>(%a8);
                 }(%29, %35, %36);
@@ -518,13 +508,13 @@ mod test {
                 %47, %48, %49, %50 = batch {
                     %a0 = batch_arg<0, CtRegister>();
                     %a1 = batch_arg<1, CtRegister>();
-                    %a2, %a3 = pbs_2<Lut@26>(%a1);
-                    %a4 = pbs<Lut@3>(%a0);
-                    %a5 = pbs_f<Lut@1>(%a0);
-                    batch_ret<0, CtRegister>(%a5);
-                    batch_ret<1, CtRegister>(%a4);
-                    batch_ret<2, CtRegister>(%a2);
-                    batch_ret<3, CtRegister>(%a3);
+                    %a2 = pbs<Lut@3>(%a0);
+                    %a3 = pbs<Lut@1>(%a0);
+                    %a4, %a5 = pbs_2f<Lut@26>(%a1);
+                    batch_ret<0, CtRegister>(%a3);
+                    batch_ret<1, CtRegister>(%a2);
+                    batch_ret<2, CtRegister>(%a4);
+                    batch_ret<3, CtRegister>(%a5);
                 }(%44, %46);
                 dst_st<0.0_tdst>(%47);
                 %51 = add_ct(%48, %49);
