@@ -17,7 +17,7 @@ use zhc_sim::{
 /// Takes an intermediate representation `ir` containing device operations and
 /// the hardware configuration `config` to simulate execution and determine
 /// the total number of cycles required for completion.
-pub fn compute_latency(ir: &IR<DopLang>, config: HpuConfig) -> Cycle {
+pub fn compute_latency(ir: &IR<DopLang>, config: &HpuConfig) -> Cycle {
     let mut simulator = Simulator::from_simulatable(config.freq, Hpu::new(&config));
     let dops = ir
         .walk_ops_linear()
@@ -53,7 +53,7 @@ mod test {
         let config = HpuConfig::from(PhysicalConfig::tuniform_64b_pfail128_psi64());
         let batched = batch_schedule(&ir, &config);
         let allocated = allocate_registers(&batched, &config);
-        compute_latency(&allocated, config)
+        compute_latency(&allocated, &config)
     }
 
     #[test]

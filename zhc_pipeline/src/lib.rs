@@ -7,11 +7,15 @@
 
 use allocator::allocate_registers;
 use translation_table::{DOpRepr, generate_translation_table};
+use zhc_builder::Builder;
 use zhc_builder::if_then_else;
 use zhc_builder::if_then_zero;
 use zhc_builder::{cmp_eq, cmp_gt, cmp_gte, cmp_lt, cmp_lte, cmp_neq};
+use zhc_ir::IR;
 use zhc_ir::cse::eliminate_common_subexpressions;
 use zhc_ir::dce::eliminate_dead_code;
+use zhc_langs::doplang::DopLang;
+use zhc_langs::ioplang::IopLang;
 use zhc_langs::ioplang::eliminate_aliases;
 
 pub mod allocator;
@@ -23,6 +27,12 @@ pub mod translation_table;
 
 pub use zhc_sim::hpu::HpuConfig;
 pub use zhc_sim::{Cycle, MHz};
+
+pub fn compute_latency(builder: &Builder, config: HpuConfig, freq: MHz) -> f64 {
+    let ir = builder.ir().to_owned();
+    let allocated = regular_pipeline(ir, &config);
+    latency::compute_latency(&allocated, &config).as_ts(freq.period())
+}
 
 /// Iops supported by the pipeline.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
@@ -42,8 +52,17 @@ pub use zhc_builder::CiphertextSpec;
 use crate::batch_scheduler::batch_schedule;
 use crate::translation::lower_iop_to_hpu;
 
+fn regular_pipeline(mut ir: IR<IopLang>, config: &HpuConfig) -> IR<DopLang> {
+    eliminate_aliases(&mut ir);
+    eliminate_dead_code(&mut ir);
+    eliminate_common_subexpressions(&mut ir);
+    let unscheduled = lower_iop_to_hpu(&ir);
+    let batched = batch_schedule(&unscheduled, config);
+    allocate_registers(&batched, config)
+}
+
 fn pipeline(hpu_config: &HpuConfig, spec: CiphertextSpec, iop: Iop) -> Vec<DOpRepr> {
-    let mut ir = match iop {
+    let ir = match iop {
         Iop::CmpGt => cmp_gt(spec).into_ir(),
         Iop::CmpGte => cmp_gte(spec).into_ir(),
         Iop::CmpLt => cmp_lt(spec).into_ir(),
@@ -53,14 +72,7 @@ fn pipeline(hpu_config: &HpuConfig, spec: CiphertextSpec, iop: Iop) -> Vec<DOpRe
         Iop::IfThenElse => if_then_else(spec).into_ir(),
         Iop::IfThenZero => if_then_zero(spec).into_ir(),
     };
-    eliminate_aliases(&mut ir);
-    eliminate_dead_code(&mut ir);
-    eliminate_common_subexpressions(&mut ir);
-    let unscheduled = lower_iop_to_hpu(&ir);
-    // let scheduled = schedule(&unscheduled, hpu_config);
-    // let batched = batch(&scheduled, hpu_config.pbs_min_batch_size);
-    let batched = batch_schedule(&unscheduled, &hpu_config);
-    let allocated = allocate_registers(&batched, &hpu_config);
+    let allocated = regular_pipeline(ir, hpu_config);
     generate_translation_table(&allocated)
 }
 
