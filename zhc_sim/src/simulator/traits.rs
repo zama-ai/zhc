@@ -69,8 +69,11 @@ pub trait Simulatable: Sized + Serialize {
     }
 
     /// Records the component's state in the `tracer` at the specified cycle.
-    fn report(&self, at: Cycle, tracer: &mut Tracer<Self::Event>) {
-        tracer.add_simulatable(at, self);
+    ///
+    /// The `tracing_level` controls which data is recorded; implementations should forward it to
+    /// tracer methods.
+    fn report(&self, at: Cycle, tracer: &mut Tracer<Self::Event>, tracing_level: TracingLevel) {
+        tracer.add_simulatable(tracing_level, at, self);
     }
 }
 
@@ -97,10 +100,10 @@ macro_rules! impl_simulatable_for_tuple {
                 )+
             }
 
-            fn report(&self, at: Cycle, tracer: &mut Tracer<Self::Event>) {
+            fn report(&self, at: Cycle, tracer: &mut Tracer<Self::Event>, tracing_level: TracingLevel) {
                 let ($($T),+) = self ;
                 $(
-                $T.report(at, tracer);
+                $T.report(at, tracer, tracing_level);
                 )+
             }
         }

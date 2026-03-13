@@ -258,13 +258,13 @@ impl Simulatable for Pipeline {
 
 #[test]
 fn test_empty_simulation() {
-    let mut sim: Simulator<Counter> = Simulator::new(FREQ);
+    let mut sim: Simulator<Counter> = Simulator::new(FREQ, TracingLevel::None);
     matches!(sim.step(), SimulationState::SimulationOver);
 }
 
 #[test]
 fn test_simple_counter() {
-    let mut sim: Simulator<Counter> = Simulator::new(FREQ);
+    let mut sim: Simulator<Counter> = Simulator::new(FREQ, TracingLevel::None);
     sim.simulatable = Counter::new(5);
 
     // Start the counter
@@ -279,7 +279,7 @@ fn test_simple_counter() {
 
 #[test]
 fn test_ping_pong() {
-    let mut sim: Simulator<PingPong> = Simulator::new(FREQ);
+    let mut sim: Simulator<PingPong> = Simulator::new(FREQ, TracingLevel::None);
     sim.simulatable = PingPong::new(3);
 
     // Start with a ping
@@ -295,7 +295,7 @@ fn test_ping_pong() {
 
 #[test]
 fn test_timer() {
-    let mut sim: Simulator<Timer> = Simulator::new(FREQ);
+    let mut sim: Simulator<Timer> = Simulator::new(FREQ, TracingLevel::None);
     sim.simulatable = Timer::new(4, Cycle(10)); // 4 ticks, every 10 cycles
 
     // Start timer
@@ -309,7 +309,7 @@ fn test_timer() {
 
 #[test]
 fn test_pipeline() {
-    let mut sim: Simulator<Pipeline> = Simulator::new(FREQ);
+    let mut sim: Simulator<Pipeline> = Simulator::new(FREQ, TracingLevel::None);
     sim.simulatable = Pipeline::new(2); // Process 2 items
 
     // Start pipeline
@@ -329,7 +329,7 @@ fn test_pipeline() {
 
 #[test]
 fn test_simultaneous_events() {
-    let mut sim: Simulator<Timer> = Simulator::new(FREQ);
+    let mut sim: Simulator<Timer> = Simulator::new(FREQ, TracingLevel::None);
     sim.simulatable = Timer::new(10, Cycle(5));
 
     // Submit multiple events at same time
@@ -346,7 +346,7 @@ fn test_simultaneous_events() {
 
 #[test]
 fn test_simulation_step_by_step() {
-    let mut sim: Simulator<Counter> = Simulator::new(FREQ);
+    let mut sim: Simulator<Counter> = Simulator::new(FREQ, TracingLevel::None);
     sim.simulatable = Counter::new(3);
 
     sim.dispatch_later(Cycle(2), CounterEvent::Increment);
@@ -426,7 +426,7 @@ fn test_power_up_scheduling() {
     }
 
     // Default constructor should call power_up and schedule initial events
-    let mut sim: Simulator<AutoStart> = Simulator::new(FREQ);
+    let mut sim: Simulator<AutoStart> = Simulator::new(FREQ, TracingLevel::None);
 
     sim.play();
 
@@ -506,7 +506,7 @@ fn test_tuple_composition() {
         }
     }
 
-    let mut sim: Simulator<(CounterA, CounterB)> = Simulator::new(FREQ);
+    let mut sim: Simulator<(CounterA, CounterB)> = Simulator::new(FREQ, TracingLevel::None);
 
     // Start the system
     sim.dispatch_later(Cycle(1), SharedEvent::CountA);
@@ -591,7 +591,7 @@ fn test_tuple_power_up() {
     }
 
     // Both components should schedule power-up events
-    let mut sim: Simulator<(EarlyStarter, LateStarter)> = Simulator::new(FREQ);
+    let mut sim: Simulator<(EarlyStarter, LateStarter)> = Simulator::new(FREQ, TracingLevel::None);
 
     sim.play();
 
@@ -665,13 +665,14 @@ fn test_triple_tuple_composition() {
         ) {
             self.count += 3;
         }
-        fn report(&self, at: Cycle, tracer: &mut Tracer<Self::Event>) {
-            tracer.add_simulatable(at, self);
-            tracer.add_counter(at, "ComponentC_count", self.count as f64);
+        fn report(&self, at: Cycle, tracer: &mut Tracer<Self::Event>, tracing_level: TracingLevel) {
+            tracer.add_simulatable(tracing_level, at, self);
+            tracer.add_counter(tracing_level, at, "ComponentC_count", self.count as f64);
         }
     }
 
-    let mut sim: Simulator<(ComponentA, ComponentB, ComponentC)> = Simulator::new(FREQ);
+    let mut sim: Simulator<(ComponentA, ComponentB, ComponentC)> =
+        Simulator::new(FREQ, TracingLevel::None);
 
     sim.dispatch_later(Cycle(1), TripleEvent::Ping);
     sim.dispatch_later(Cycle(10), TripleEvent::Ping);

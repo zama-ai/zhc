@@ -5,6 +5,8 @@
 //! pipeline consists of translation from IOP language to HPU language,
 //! operation scheduling, register allocation, and final code generation.
 
+use std::path::Path;
+
 use allocator::allocate_registers;
 use translation_table::{DOpRepr, generate_translation_table};
 use zhc_builder::Builder;
@@ -22,16 +24,58 @@ pub mod allocator;
 pub mod batch_scheduler;
 pub mod interpreter;
 pub mod latency;
+pub mod tracing;
 pub mod translation;
 pub mod translation_table;
 
+pub use zhc_builder::CiphertextSpec;
 pub use zhc_sim::hpu::HpuConfig;
 pub use zhc_sim::{Cycle, MHz};
 
+/// Traces the execution of a computation graph to a perfetto file.
+///
+/// This function runs the full compilation pipeline on the provided IR and
+/// generates an execution trace showing how operations execute on the HPU.
+/// The trace is written to the specified path and can be opened in perfetto.
+pub fn trace_execution(builder: &Builder, config: HpuConfig, path: impl AsRef<Path>) {
+    let ir = builder.ir().to_owned();
+    let allocated = regular_pipeline(ir, &config);
+    tracing::trace_execution(&allocated, &config, path);
+}
+
+/// Computes the estimated latency of a computation graph.
+///
+/// This function runs the full compilation pipeline and calculates the total
+/// execution time in seconds based on the HPU configuration and clock frequency.
+/// Returns the latency as a floating-point number of micro-seconds.
 pub fn compute_latency(builder: &Builder, config: HpuConfig, freq: MHz) -> f64 {
     let ir = builder.ir().to_owned();
     let allocated = regular_pipeline(ir, &config);
     latency::compute_latency(&allocated, &config).as_ts(freq.period())
+}
+
+/// Generates a translation table for the specified operation configuration.
+///
+/// Takes the HPU hardware configuration in `hpu_config`, integer arithmetic
+/// configuration in `integer_config`, and the desired operation `iop` to
+/// produce an hex stream.
+pub fn get_translation_table(
+    hpu_config: &HpuConfig,
+    spec: CiphertextSpec,
+    iop: Iop,
+) -> Vec<DOpRepr> {
+    let ir = match iop {
+        Iop::CmpGt => cmp_gt(spec).into_ir(),
+        Iop::CmpGte => cmp_gte(spec).into_ir(),
+        Iop::CmpLt => cmp_lt(spec).into_ir(),
+        Iop::CmpLte => cmp_lte(spec).into_ir(),
+        Iop::CmpEq => cmp_eq(spec).into_ir(),
+        Iop::CmpNeq => cmp_neq(spec).into_ir(),
+        Iop::IfThenElse => if_then_else(spec).into_ir(),
+        Iop::IfThenZero => if_then_zero(spec).into_ir(),
+    };
+    let allocated = regular_pipeline(ir, hpu_config);
+    generate_translation_table(&allocated)
 }
 
 /// Iops supported by the pipeline.
@@ -47,46 +91,13 @@ pub enum Iop {
     IfThenZero,
 }
 
-pub use zhc_builder::CiphertextSpec;
-
-use crate::batch_scheduler::batch_schedule;
-use crate::translation::lower_iop_to_hpu;
-
 fn regular_pipeline(mut ir: IR<IopLang>, config: &HpuConfig) -> IR<DopLang> {
     eliminate_aliases(&mut ir);
     eliminate_dead_code(&mut ir);
     eliminate_common_subexpressions(&mut ir);
-    let unscheduled = lower_iop_to_hpu(&ir);
-    let batched = batch_schedule(&unscheduled, config);
+    let unscheduled = translation::lower_iop_to_hpu(&ir);
+    let batched = batch_scheduler::batch_schedule(&unscheduled, config);
     allocate_registers(&batched, config)
-}
-
-fn pipeline(hpu_config: &HpuConfig, spec: CiphertextSpec, iop: Iop) -> Vec<DOpRepr> {
-    let ir = match iop {
-        Iop::CmpGt => cmp_gt(spec).into_ir(),
-        Iop::CmpGte => cmp_gte(spec).into_ir(),
-        Iop::CmpLt => cmp_lt(spec).into_ir(),
-        Iop::CmpLte => cmp_lte(spec).into_ir(),
-        Iop::CmpEq => cmp_eq(spec).into_ir(),
-        Iop::CmpNeq => cmp_neq(spec).into_ir(),
-        Iop::IfThenElse => if_then_else(spec).into_ir(),
-        Iop::IfThenZero => if_then_zero(spec).into_ir(),
-    };
-    let allocated = regular_pipeline(ir, hpu_config);
-    generate_translation_table(&allocated)
-}
-
-/// Generates a translation table for the specified operation configuration.
-///
-/// Takes the HPU hardware configuration in `hpu_config`, integer arithmetic
-/// configuration in `integer_config`, and the desired operation `iop` to
-/// produce an hex stream.
-pub fn get_translation_table(
-    hpu_config: &HpuConfig,
-    spec: CiphertextSpec,
-    iop: Iop,
-) -> Vec<DOpRepr> {
-    pipeline(hpu_config, spec, iop)
 }
 
 #[cfg(test)]

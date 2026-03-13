@@ -12,6 +12,46 @@ static EVENTS_PID: usize = 0;
 static SIMULATABLES_PID: usize = 1;
 static COUNTERS_PID: usize = 2;
 
+/// Controls the verbosity and overhead of simulation tracing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TracingLevel {
+    /// Zero tracing. Zero overhead.
+    None,
+    /// Trace load counters only. Low overhead.
+    Load,
+    /// Trace load counters, component states, and events. High overhead.
+    Events,
+}
+
+impl TracingLevel {
+    /// Returns true if component states should be recorded.
+    pub fn trace_simulatables(&self) -> bool {
+        match self {
+            TracingLevel::None => false,
+            TracingLevel::Load => false,
+            TracingLevel::Events => true,
+        }
+    }
+
+    /// Returns true if load counters should be recorded.
+    pub fn trace_counters(&self) -> bool {
+        match self {
+            TracingLevel::None => false,
+            TracingLevel::Load => true,
+            TracingLevel::Events => true,
+        }
+    }
+
+    /// Returns true if events should be recorded.
+    pub fn trace_events(&self) -> bool {
+        match self {
+            TracingLevel::None => false,
+            TracingLevel::Load => false,
+            TracingLevel::Events => true,
+        }
+    }
+}
+
 /// Tracks simulation state changes for a specific simulatable component.
 pub struct SimulatableTracker {
     tid: usize,
@@ -83,89 +123,113 @@ impl<E: Event> Tracer<E> {
     }
 
     /// Records a numeric counter `value` with the given `name` at the specified cycle.
-    pub fn add_counter<S: AsRef<str>>(&mut self, at: Cycle, name: S, value: f64) {
-        if !self.counter_trackers.contains_key(name.as_ref()) {
-            let tid = self.counter_trackers.len() + 1;
-            self.counter_trackers
-                .insert(name.as_ref().into(), CounterTracker { tid, state: None });
-            self.trace.set_thread_name(COUNTERS_PID, tid, name.as_ref());
-        }
+    ///
+    /// Recording occurs only if `tracing_level` enables counters.
+    pub fn add_counter<S: AsRef<str>>(
+        &mut self,
+        tracing_level: TracingLevel,
+        at: Cycle,
+        name: S,
+        value: f64,
+    ) {
+        if tracing_level.trace_counters() {
+            if !self.counter_trackers.contains_key(name.as_ref()) {
+                let tid = self.counter_trackers.len() + 1;
+                self.counter_trackers
+                    .insert(name.as_ref().into(), CounterTracker { tid, state: None });
+                self.trace.set_thread_name(COUNTERS_PID, tid, name.as_ref());
+            }
 
-        let tracker = self.counter_trackers.get_mut(name.as_ref()).unwrap();
+            let tracker = self.counter_trackers.get_mut(name.as_ref()).unwrap();
 
-        if tracker.state != Some(value) {
-            self.trace.new_counter(
-                at.as_ts(NS_IN_US),
-                COUNTERS_PID,
-                tracker.tid,
-                name,
-                Some(json!({"state": value})),
-            );
-            tracker.state = Some(value);
+            if tracker.state != Some(value) {
+                self.trace.new_counter(
+                    at.as_ts(NS_IN_US),
+                    COUNTERS_PID,
+                    tracker.tid,
+                    name,
+                    Some(json!({"state": value})),
+                );
+                tracker.state = Some(value);
+            }
         }
     }
 
     /// Records an event occurrence at the specified cycle.
-    pub fn add_event(&mut self, at: Cycle, event: &E) {
-        if !self
-            .event_trackers
-            .contains_key(&std::mem::discriminant(event))
-        {
-            let tid = self.event_trackers.len() + 1;
-            let name = format!("{}", event);
-            self.trace.set_thread_name(EVENTS_PID, tid, &name);
-            self.event_trackers
-                .insert(std::mem::discriminant(event), EventTracker { tid, name });
+    ///
+    /// Recording occurs only if `tracing_level` enables events.
+    pub fn add_event(&mut self, tracing_level: TracingLevel, at: Cycle, event: &E) {
+        if tracing_level.trace_events() {
+            if !self
+                .event_trackers
+                .contains_key(&std::mem::discriminant(event))
+            {
+                let tid = self.event_trackers.len() + 1;
+                let name = format!("{}", event);
+                self.trace.set_thread_name(EVENTS_PID, tid, &name);
+                self.event_trackers
+                    .insert(std::mem::discriminant(event), EventTracker { tid, name });
+            }
+            let tracker = self
+                .event_trackers
+                .get(&std::mem::discriminant(event))
+                .unwrap();
+            let state = serde_json::to_value(event).unwrap();
+            self.trace.new_instant(
+                at.as_ts(NS_IN_US),
+                EVENTS_PID,
+                tracker.tid,
+                &tracker.name,
+                Some(json!({"state": state})),
+                Scope::Thread,
+            );
         }
-        let tracker = self
-            .event_trackers
-            .get(&std::mem::discriminant(event))
-            .unwrap();
-        let state = serde_json::to_value(event).unwrap();
-        self.trace.new_instant(
-            at.as_ts(NS_IN_US),
-            EVENTS_PID,
-            tracker.tid,
-            &tracker.name,
-            Some(json!({"state": state})),
-            Scope::Thread,
-        );
     }
 
     /// Records the state of a simulatable component at the specified cycle.
-    pub fn add_simulatable<S: Simulatable>(&mut self, at: Cycle, simulatable: &S) {
-        let address = simulatable as *const S as usize;
-        if !self.simulatable_trackers.contains_key(&address) {
-            let tid = self.simulatable_trackers.len() + 1;
-            let name = simulatable.name();
-            self.trace.set_thread_name(SIMULATABLES_PID, tid, &name);
-            self.simulatable_trackers.insert(
-                address,
-                SimulatableTracker {
-                    tid,
-                    state: None,
-                    state_change: None,
-                    name,
-                },
-            );
-        }
+    ///
+    /// Recording occurs only if `tracing_level` enables simulatables.
+    pub fn add_simulatable<S: Simulatable>(
+        &mut self,
+        tracing_level: TracingLevel,
+        at: Cycle,
+        simulatable: &S,
+    ) {
+        if tracing_level.trace_simulatables() {
+            let address = simulatable as *const S as usize;
+            if !self.simulatable_trackers.contains_key(&address) {
+                let tid = self.simulatable_trackers.len() + 1;
+                let name = simulatable.name();
+                self.trace.set_thread_name(SIMULATABLES_PID, tid, &name);
+                self.simulatable_trackers.insert(
+                    address,
+                    SimulatableTracker {
+                        tid,
+                        state: None,
+                        state_change: None,
+                        name,
+                    },
+                );
+            }
 
-        let tracker = self.simulatable_trackers.get_mut(&address).unwrap();
-        let state = serde_json::to_value(simulatable).unwrap();
-        if tracker.state.is_none() {
-            tracker.state_change = Some(at);
-            tracker.state = Some(state);
-        } else if tracker.state.as_ref().unwrap() != &state {
-            self.trace.new_complete(
-                tracker.state_change.as_ref().unwrap().as_ts(NS_IN_US),
-                SIMULATABLES_PID,
-                tracker.tid,
-                &tracker.name,
-                Some(json!({"val": tracker.state.as_ref().unwrap()})),
-                (at - *tracker.state_change.as_ref().unwrap()).as_ts(NS_IN_US) - 5. * f64::EPSILON,
-            );
-            tracker.state_change = Some(at);
-            tracker.state = Some(state);
+            let tracker = self.simulatable_trackers.get_mut(&address).unwrap();
+            let state = serde_json::to_value(simulatable).unwrap();
+            if tracker.state.is_none() {
+                tracker.state_change = Some(at);
+                tracker.state = Some(state);
+            } else if tracker.state.as_ref().unwrap() != &state {
+                self.trace.new_complete(
+                    tracker.state_change.as_ref().unwrap().as_ts(NS_IN_US),
+                    SIMULATABLES_PID,
+                    tracker.tid,
+                    &tracker.name,
+                    Some(json!({"val": tracker.state.as_ref().unwrap()})),
+                    (at - *tracker.state_change.as_ref().unwrap()).as_ts(NS_IN_US)
+                        - 5. * f64::EPSILON,
+                );
+                tracker.state_change = Some(at);
+                tracker.state = Some(state);
+            }
         }
     }
 }

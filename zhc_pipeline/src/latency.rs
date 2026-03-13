@@ -18,7 +18,8 @@ use zhc_sim::{
 /// the hardware configuration `config` to simulate execution and determine
 /// the total number of cycles required for completion.
 pub fn compute_latency(ir: &IR<DopLang>, config: &HpuConfig) -> Cycle {
-    let mut simulator = Simulator::from_simulatable(config.freq, Hpu::new(&config));
+    let mut simulator =
+        Simulator::from_simulatable(config.freq, Hpu::new(&config), zhc_sim::TracingLevel::None);
     let dops = ir
         .walk_ops_linear()
         .map(|a| DOp {

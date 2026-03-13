@@ -4,7 +4,7 @@ use super::*;
 use std::path::Path;
 use zhc_utils::tracing::Microseconds;
 
-static ACTIVATE_TRACING: bool = false;
+static DUMP_TRACE_ON_PANIC: bool = false;
 static S_IN_US: f64 = 1_000_000.;
 
 /// Represents a frequency in megahertz for simulation timing.
@@ -41,12 +41,20 @@ where
     quantum: Microseconds,
     tracer: Tracer<S::Event>,
     dispatcher: Dispatcher<S::Event>,
+    tracing_level: TracingLevel,
 }
 
 impl<S: Simulatable> Simulator<S> {
     /// Creates a simulator from the given `freq` and `simulatable` component.
-    pub fn from_simulatable(freq: MHz, simulatable: S) -> Self {
-        Self::from_simulatable_and_dispatcher(freq, simulatable, Dispatcher::default())
+    ///
+    /// Uses a default dispatcher. The `tracing_level` controls simulation trace verbosity.
+    pub fn from_simulatable(freq: MHz, simulatable: S, tracing_level: TracingLevel) -> Self {
+        Self::from_simulatable_and_dispatcher(
+            freq,
+            simulatable,
+            Dispatcher::default(),
+            tracing_level,
+        )
     }
 }
 
@@ -55,23 +63,27 @@ where
     S: Simulatable,
 {
     /// Creates a new simulator at the given `freq` with a default simulatable component.
-    pub fn new(freq: MHz) -> Self
+    ///
+    /// The `tracing_level` controls simulation trace verbosity.
+    pub fn new(freq: MHz, tracing_level: TracingLevel) -> Self
     where
         S: Default,
     {
         let simulatable = S::default();
         let dispatcher = Dispatcher::default();
-        Self::from_simulatable_and_dispatcher(freq, simulatable, dispatcher)
+        Self::from_simulatable_and_dispatcher(freq, simulatable, dispatcher, tracing_level)
     }
 
     /// Creates a simulator from the given `freq`, `simulatable` component, and `dispatcher`.
     ///
-    /// This constructor allows full control over the initial dispatcher state.
-    /// The simulatable component is powered up during construction.
+    /// This constructor allows full control over the initial dispatcher state. The `tracing_level`
+    /// controls simulation trace verbosity. The simulatable component is powered up during
+    /// construction.
     pub fn from_simulatable_and_dispatcher(
         freq: MHz,
         simulatable: S,
         mut dispatcher: Dispatcher<S::Event>,
+        tracing_level: TracingLevel,
     ) -> Self {
         let quantum = freq.period();
         let tracer = Tracer::new();
@@ -81,6 +93,7 @@ where
             tracer,
             quantum,
             dispatcher,
+            tracing_level,
         }
     }
 
@@ -117,7 +130,8 @@ where
         let mut cond_encountered = false;
 
         if self.now().is_zero() {
-            self.simulatable.report(self.now(), &mut self.tracer);
+            self.simulatable
+                .report(self.now(), &mut self.tracer, self.tracing_level);
         }
 
         if self.dispatcher.is_empty() {
@@ -126,23 +140,21 @@ where
 
         while let Some(trigger) = self.dispatcher.pop_now() {
             cond_encountered |= condition(&trigger);
-            if ACTIVATE_TRACING {
-                self.tracer.add_event(self.now(), &trigger.event);
-            }
+            self.tracer
+                .add_event(self.tracing_level, self.now(), &trigger.event);
             if let Err(e) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 self.simulatable.handle(&mut self.dispatcher, trigger);
             })) {
-                if ACTIVATE_TRACING {
+                if DUMP_TRACE_ON_PANIC {
                     self.dump_trace("test.json");
-                    eprintln!("Panic caught during simulatable.handle(): {:?}", e);
-                    panic!();
                 }
+                eprintln!("Panic caught during simulatable.handle(): {:?}", e);
+                panic!();
             }
         }
 
-        if ACTIVATE_TRACING {
-            self.simulatable.report(self.now(), &mut self.tracer);
-        }
+        self.simulatable
+            .report(self.now(), &mut self.tracer, self.tracing_level);
 
         if cond_encountered {
             SimulationState::CondEncountered
@@ -166,7 +178,7 @@ where
                 SimulationState::MayContinue => {}
                 SimulationState::CondEncountered => return,
                 SimulationState::SimulationOver => {
-                    if ACTIVATE_TRACING {
+                    if DUMP_TRACE_ON_PANIC {
                         self.dump_trace("test.json");
                     }
                     panic!("Simulation finished while waiting for an event.")
@@ -183,7 +195,7 @@ where
                 SimulationState::MayContinue => {}
                 SimulationState::CondEncountered => return,
                 SimulationState::SimulationOver => {
-                    if ACTIVATE_TRACING {
+                    if DUMP_TRACE_ON_PANIC {
                         self.dump_trace("test.json");
                     }
                     panic!("Simulation finished while waiting for an event.")
