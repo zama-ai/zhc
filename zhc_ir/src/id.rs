@@ -3,7 +3,7 @@ use std::{
     ops::{Add, Sub},
 };
 
-use zhc_utils::StoreIndex;
+use zhc_utils::{Dumpable, StoreIndex};
 
 /// Generates a typed identifier with arithmetic operations and store indexing support.
 ///
@@ -90,6 +90,12 @@ impl Display for ValId {
     }
 }
 
+impl Dumpable for ValId {
+    fn dump_to_string(&self) -> String {
+        self.to_string()
+    }
+}
+
 impl Display for OpId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(width) = f.width() {
@@ -97,5 +103,11 @@ impl Display for OpId {
         } else {
             write!(f, "@{}", self.0)
         }
+    }
+}
+
+impl Dumpable for OpId {
+    fn dump_to_string(&self) -> String {
+        self.to_string()
     }
 }
