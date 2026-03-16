@@ -37,7 +37,7 @@ pub fn compute_latency(ir: &IR<DopLang>, config: &HpuConfig) -> Cycle {
 mod test {
     use super::compute_latency;
     use crate::{
-        allocator::allocate_registers, batch_scheduler::batch_schedule,
+        allocator::allocate_registers, batch_scheduler::schedule, batcher::batch,
         translation::lower_iop_to_hpu,
     };
     use zhc_builder::{CiphertextSpec, add, cmp_gt, count_0, lead0, mul_lsb, overflow_mul_lsb};
@@ -52,8 +52,9 @@ mod test {
     fn pipeline(ir: &IR<IopLang>) -> Cycle {
         let ir = lower_iop_to_hpu(&ir);
         let config = HpuConfig::from(PhysicalConfig::tuniform_64b_pfail128_psi64());
-        let batched = batch_schedule(&ir, &config);
-        let allocated = allocate_registers(&batched, &config);
+        let batched = batch(&ir, &config);
+        let scheduled = schedule(&batched, &config);
+        let allocated = allocate_registers(&scheduled, &config);
         compute_latency(&allocated, &config)
     }
 
@@ -63,7 +64,7 @@ mod test {
         assert_display_is!(
             format!("{}us", lat.as_ts(MHz(400).period())),
             r#"
-                3244.7000000000003us
+                3226.885us
             "#
         );
     }
@@ -74,7 +75,7 @@ mod test {
         assert_display_is!(
             format!("{}us", lat.as_ts(MHz(400).period())),
             r#"
-                12886.9125us
+                12101.42us
             "#
         );
     }
@@ -85,7 +86,7 @@ mod test {
         assert_display_is!(
             format!("{}us", lat.as_ts(MHz(400).period())),
             r#"
-                11439.960000000001us
+                10149.375us
             "#
         );
     }
@@ -96,7 +97,7 @@ mod test {
         assert_display_is!(
             format!("{}us", lat.as_ts(MHz(400).period())),
             r#"
-                128728.8975us
+                122022.89us
             "#
         );
     }
@@ -107,7 +108,7 @@ mod test {
         assert_display_is!(
             format!("{}us", lat.as_ts(MHz(400).period())),
             r#"
-                180263.2825us
+                167080.865us
             "#
         );
     }
@@ -118,7 +119,7 @@ mod test {
         assert_display_is!(
             format!("{}us", lat.as_ts(MHz(400).period())),
             r#"
-                13743.335000000001us
+                12755.145us
             "#
         );
     }

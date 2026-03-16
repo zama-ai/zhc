@@ -1,544 +1,444 @@
-use std::fmt;
-use std::rc::Rc;
+use std::collections::BinaryHeap;
 
-use zhc_ir::translation::lazy_translate;
-use zhc_ir::{AnnIR, AnnOpRef, AnnValRef, IR, OpId};
-use zhc_langs::hpulang::{BatchStatistics, HpuInstructionSet, HpuLang};
-use zhc_sim::hpu::HpuConfig;
-use zhc_utils::iter::{CollectInSmallVec, CollectInVec, DedupedByKey, MultiZip};
-use zhc_utils::small::SmallMap;
-use zhc_utils::{Dumpable, FastMap, fsm};
-use zhc_utils::{iter::AllEq, svec};
+use zhc_ir::{AnnIR, AnnOpRef, IR, OpId, scheduler::reschedule};
+use zhc_langs::hpulang::HpuLang;
+use zhc_sim::{
+    Cycle,
+    hpu::{ConstantLatency, FlatLinLatency, HpuConfig},
+};
+use zhc_utils::{Dumpable, fsm, iter::CollectInVec, svec};
 
-fn flush_pbs(instruction: HpuInstructionSet) -> HpuInstructionSet {
-    match instruction {
-        HpuInstructionSet::Pbs { lut } | HpuInstructionSet::PbsF { lut } => {
-            HpuInstructionSet::PbsF { lut }
-        }
-        HpuInstructionSet::Pbs2 { lut } | HpuInstructionSet::Pbs2F { lut } => {
-            HpuInstructionSet::Pbs2F { lut }
-        }
-        HpuInstructionSet::Pbs4 { lut } | HpuInstructionSet::Pbs4F { lut } => {
-            HpuInstructionSet::Pbs4F { lut }
-        }
-        HpuInstructionSet::Pbs8 { lut } | HpuInstructionSet::Pbs8F { lut } => {
-            HpuInstructionSet::Pbs8F { lut }
-        }
-        _ => unreachable!(),
-    }
-}
+type Height = u16;
+type HeightedOpRef<'a, 'b> = AnnOpRef<'a, 'b, HpuLang, Height, ()>;
+type HeightedIR<'a> = AnnIR<'a, HpuLang, Height, ()>;
 
-type PbsDepth = u16;
-type DepthedOpRef<'a, 'b> = AnnOpRef<'a, 'b, HpuLang, PbsDepth, ()>;
-type DepthedValRef<'a, 'b> = AnnValRef<'a, 'b, HpuLang, PbsDepth, ()>;
-type DepthedIR<'a> = AnnIR<'a, HpuLang, PbsDepth, ()>;
-
-fn analyze_pbs_depth<'a>(ir: &'a IR<HpuLang>) -> DepthedIR<'a> {
-    ir.forward_dataflow_analysis(|opref| {
-        use zhc_langs::hpulang::HpuInstructionSet::*;
-        match opref.get_instruction() {
-            Pbs { .. }
-            | Pbs2 { .. }
-            | Pbs4 { .. }
-            | Pbs8 { .. }
-            | PbsF { .. }
-            | Pbs2F { .. }
-            | Pbs4F { .. }
-            | Pbs8F { .. } => {
-                let depth = opref
-                    .get_predecessors_iter()
-                    .map(|p| p.get_annotation().clone().unwrap_analyzed())
-                    .max()
-                    .unwrap()
-                    + 1_u16;
-                (depth, svec![(); opref.get_return_arity()])
-            }
-            Batch { .. } | BatchArg { .. } | BatchRet { .. } => {
-                panic!()
-            }
-            _ => {
-                let depth = opref
-                    .get_predecessors_iter()
-                    .map(|p| p.get_annotation().clone().unwrap_analyzed())
-                    .max()
-                    .unwrap_or(0_u16);
-                (depth, svec![(); opref.get_return_arity()])
-            }
+fn analyze_height<'a>(ir: &'a IR<HpuLang>) -> HeightedIR<'a> {
+    use zhc_langs::hpulang::HpuInstructionSet::*;
+    ir.backward_dataflow_analysis(|opref| match opref.get_instruction() {
+        Batch { .. } => {
+            let height = opref
+                .get_users_iter()
+                .map(|p| p.get_annotation().clone().unwrap_analyzed())
+                .max()
+                .unwrap()
+                + 1_u16;
+            (height, svec![(); opref.get_return_arity()])
+        }
+        _ => {
+            let height = opref
+                .get_users_iter()
+                .map(|p| p.get_annotation().clone().unwrap_analyzed())
+                .max()
+                .unwrap_or(0_u16);
+            (height, svec![(); opref.get_return_arity()])
         }
     })
 }
 
-#[derive(Clone)]
-struct Batch<'a, 'b> {
-    ops: Vec<DepthedOpRef<'a, 'b>>,
+#[fsm]
+#[derive(Debug)]
+enum State {
+    Scheduled,
+    Ready,
+    Waiting(usize),
 }
 
-impl fmt::Debug for Batch<'_, '_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // e.g. [2/4 @3 @7]  — fill/capacity then opids
-        write!(f, "[{}/{}", self.ops.len(), self.ops.capacity())?;
-        for op in &self.ops {
-            write!(f, " {}", op.get_id())?;
-        }
-        if !self.is_iso_depth() {
-            write!(f, " ⚠")?;
-        }
-        write!(f, "]")
-    }
-}
-
-impl<'a, 'b> Batch<'a, 'b> {
-    pub fn new(batch_size: usize) -> Self {
-        let output = Batch {
-            ops: Vec::with_capacity(batch_size),
-        };
-        output
-    }
-
-    pub fn is_full(&self) -> bool {
-        self.ops.len() == self.ops.capacity()
-    }
-
-    pub fn push(&mut self, op: DepthedOpRef<'a, 'b>) {
-        assert!(op.get_instruction().is_pbs());
-        if self.is_full() {
-            panic!()
-        }
-        self.ops.push(op);
-    }
-
-    pub fn len(&self) -> usize {
-        self.ops.len()
-    }
-
-    pub fn iter_members(&self) -> impl Iterator<Item = DepthedOpRef<'a, 'b>> {
-        self.ops.iter().cloned()
-    }
-
-    pub fn is_iso_depth(&self) -> bool {
-        self.iter_members()
-            .map(|m| *m.get_annotation())
-            .all_eq()
-            .unwrap_or(true)
-    }
-
-    pub fn gen_batch_ir(
-        &self,
-    ) -> (
-        IR<HpuLang>,
-        Vec<DepthedValRef<'a, 'b>>,
-        Vec<DepthedValRef<'a, 'b>>,
-    ) {
-        // We collect the inputs and outputs of the batch.
-        let mut inputs = self
-            .ops
-            .iter()
-            .map(|op| op.get_args_iter())
-            .flatten()
-            .filter(|arg| {
-                // To be a batch input, an op arg origin must not be in the batch.
-                !self.ops.as_slice().contains(&arg.get_origin().opref)
-            })
-            .dedup_by_key(|op| op.get_id())
-            .covec();
-        inputs.sort_unstable_by_key(|a| a.get_id());
-        let mut outputs = self
-            .ops
-            .iter()
-            .map(|op| op.get_returns_iter())
-            .flatten()
-            .filter(|arg| {
-                // To be a batch ouptut, a value must be produced by an operation that has users,
-                // and which have at least one user outside of the batch.
-                arg.get_origin()
-                    .opref
-                    .get_users_iter()
-                    .any(|user| !self.ops.as_slice().contains(&user))
-            })
-            .dedup_by_key(|op| op.get_id())
-            .covec();
-        outputs.sort_unstable_by_key(|a| a.get_id());
-
-        // Now we write the batch IR
-        let mut batch = IR::empty();
-        let mut batch_map = SmallMap::new();
-        for (i, val) in inputs.iter().enumerate() {
-            let (_, batch_arg) = batch.add_op(
-                HpuInstructionSet::BatchArg {
-                    pos: i.try_into().unwrap(),
-                    ty: val.get_type(),
-                },
-                svec![],
-            );
-            batch_map.insert(val.get_id(), batch_arg[0]);
-        }
-        for (idx, op) in self.ops.iter().enumerate() {
-            let instr = if idx == self.ops.len() - 1 {
-                // Ensures the last is a flush...
-                flush_pbs(op.get_instruction())
-            } else {
-                op.get_instruction()
-            };
-            let (_, batch_op_rets) = batch.add_op(
-                instr,
-                op.get_arg_valids()
-                    .iter()
-                    .map(|k| batch_map.get(k).unwrap())
-                    .copied()
-                    .collect(),
-            );
-            for (k, v) in (op.get_return_valids().iter(), batch_op_rets.into_iter()).mzip() {
-                batch_map.insert(*k, v);
-            }
-        }
-        for (i, val) in outputs.iter().enumerate() {
-            batch.add_op(
-                HpuInstructionSet::BatchRet {
-                    pos: i.try_into().unwrap(),
-                    ty: val.get_type(),
-                },
-                svec![*batch_map.get(&val.get_id()).unwrap()],
-            );
-        }
-
-        (batch, inputs, outputs)
-    }
-}
-
-#[derive(Clone)]
-struct Batches<'a, 'b>(Vec<Batch<'a, 'b>>);
-
-impl fmt::Debug for Batches<'_, '_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // One line per non-empty depth: "d1: [2/4 @3 @7] [4/4 @1 @2 @5 @9]"
-        for (i, db) in self.0.iter().enumerate() {
-            write!(f, "d{}: {:?}\n", i + 1, db)?;
-        }
-        Ok(())
-    }
-}
-
-impl<'a, 'b> Dumpable for Batches<'a, 'b> {
+impl Dumpable for State {
     fn dump_to_string(&self) -> String {
         format!("{:?}", self)
     }
 }
 
-impl<'a, 'b> Batches<'a, 'b> {
-    pub fn new() -> Self {
-        Batches(Vec::new())
-    }
+#[derive(Debug)]
+struct RetireDop<'a, 'b> {
+    at: Cycle,
+    op: HeightedOpRef<'a, 'b>,
+}
 
-    pub fn push(&mut self, batch: Batch<'a, 'b>) {
-        self.0.push(batch);
-    }
-
-    #[allow(unused)]
-    pub fn statistics(&self) -> BatchStatistics {
-        let mut stats = BatchStatistics::new();
-        for batch in &self.0 {
-            stats.record(batch.ops.len() as u16);
-        }
-        stats
-    }
-
-    fn into_batch_iter(self) -> impl Iterator<Item = Batch<'a, 'b>> {
-        self.0.into_iter()
-    }
-
-    pub fn into_batch_map(self) -> FastMap<OpId, Rc<Batch<'a, 'b>>> {
-        self.into_batch_iter()
-            .map(Rc::new)
-            .flat_map(|batch| (0..batch.len()).map(move |i| (batch.ops[i].get_id(), batch.clone())))
-            .collect()
+impl<'a, 'b> Dumpable for RetireDop<'a, 'b> {
+    fn dump_to_string(&self) -> String {
+        format!("{:?}", self)
     }
 }
 
-fn extract_batches<'a, 'b>(dir: &'b DepthedIR<'a>, batch_size: usize) -> Batches<'a, 'b> {
-    // When MH, we can:
-    //  + start by marking the transfer_in as not ready,
-    //  + schedule as much as possible until stalled,
-    //  + activate the transfer_in and
-
-    #[fsm]
-    #[derive(Debug)]
-    enum State {
-        Executed,
-        Ready,
-        Waiting(usize),
+impl<'a, 'b> PartialEq for RetireDop<'a, 'b> {
+    fn eq(&self, other: &Self) -> bool {
+        self.at == other.at && self.op == other.op
     }
+}
 
-    impl Dumpable for State {
-        fn dump_to_string(&self) -> String {
-            format!("{:?}", self)
+impl<'a, 'b> Eq for RetireDop<'a, 'b> {}
+
+impl<'a, 'b> PartialOrd for RetireDop<'a, 'b> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        other.at.partial_cmp(&self.at)
+    }
+}
+
+impl<'a, 'b> Ord for RetireDop<'a, 'b> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.partial_cmp(other).unwrap()
+    }
+}
+
+enum Affinity {
+    Pea,
+    Pem,
+    Pep,
+    Ctl,
+}
+
+fn get_op_affinity<'a, 'b>(op: &HeightedOpRef<'a, 'b>) -> Affinity {
+    use zhc_langs::hpulang::HpuInstructionSet::*;
+    match op.get_instruction() {
+        AddCt
+        | SubCt
+        | Mac { .. }
+        | AddPt
+        | SubPt
+        | PtSub
+        | MulPt
+        | AddCst { .. }
+        | SubCst { .. }
+        | CstSub { .. }
+        | MulCst { .. } => Affinity::Pea,
+        CstCt { .. } => Affinity::Ctl,
+        ImmLd { .. } | DstSt { .. } | SrcLd { .. } => Affinity::Pem,
+        Batch { .. } => Affinity::Pep,
+        _ => unreachable!(),
+    }
+}
+
+fn get_op_latency<'a, 'b>(op: &HeightedOpRef<'a, 'b>, config: &HpuConfig) -> Cycle {
+    match get_op_affinity(op) {
+        Affinity::Pea => ConstantLatency::new(config.alu_write_latency).compute_latency(),
+        Affinity::Pem => ConstantLatency::new(config.mem_write_latency).compute_latency(),
+        Affinity::Pep => {
+            let zhc_langs::hpulang::HpuInstructionSet::Batch { block } = op.get_instruction()
+            else {
+                unreachable!()
+            };
+            let batch_size = block
+                .walk_ops_linear()
+                .filter(|op| op.get_instruction().is_pbs())
+                .count();
+            FlatLinLatency::new(
+                config.pbs_processing_latency_a,
+                config.pbs_processing_latency_b,
+                config.pbs_processing_latency_m,
+            )
+            .compute_latency(batch_size)
         }
+        Affinity::Ctl => Cycle(0),
     }
+}
 
-    let mut batches = Batches::new();
-    let mut batch = Batch::new(batch_size);
+fn forward_schedule<'a, 'b>(ir: &'b HeightedIR<'a>, config: &HpuConfig) -> Vec<OpId> {
+    let mut output = Vec::new();
 
-    let mut in_degree = dir.totally_mapped_opmap(|op| match op.get_predecessors_iter().count() {
+    let mut states = ir.totally_mapped_opmap(|op| match op.get_predecessors_iter().count() {
         0 => State::Ready,
         n => State::Waiting(n),
     });
 
-    let mut worklist = in_degree
+    let mut pep_busy = false;
+    let mut pea_busy = false;
+    let mut pem_busy = false;
+
+    let mut events = BinaryHeap::new();
+    let mut pep_ready = states
         .iter()
-        .filter_map(|(opid, state)| match state {
-            State::Ready => Some(opid),
-            _ => None,
+        .filter(|(opid, state)| {
+            matches!(
+                (state, get_op_affinity(&ir.get_op(*opid))),
+                (State::Ready, Affinity::Pep)
+            )
         })
+        .map(|(opid, _)| ir.get_op(opid))
+        .covec();
+    let mut pea_ready = states
+        .iter()
+        .filter(|(opid, state)| {
+            matches!(
+                (state, get_op_affinity(&ir.get_op(*opid))),
+                (State::Ready, Affinity::Pea)
+            )
+        })
+        .map(|(opid, _)| ir.get_op(opid))
+        .covec();
+    let mut pem_ready = states
+        .iter()
+        .filter(|(opid, state)| {
+            matches!(
+                (state, get_op_affinity(&ir.get_op(*opid))),
+                (State::Ready, Affinity::Pem)
+            )
+        })
+        .map(|(opid, _)| ir.get_op(opid))
+        .covec();
+    let mut ctl_ready = states
+        .iter()
+        .filter(|(opid, state)| {
+            matches!(
+                (state, get_op_affinity(&ir.get_op(*opid))),
+                (State::Ready, Affinity::Ctl)
+            )
+        })
+        .map(|(opid, _)| ir.get_op(opid))
         .covec();
 
-    let mut ready_list = Vec::new();
+    while !ctl_ready.is_empty() {
+        let op = ctl_ready.pop().unwrap();
+        output.push(op.get_id());
+        events.push(RetireDop { at: Cycle(0), op });
+    }
+
+    if !pep_busy && !pep_ready.is_empty() {
+        pep_busy = true;
+        pep_ready.sort_by_key(|op| *op.get_annotation());
+        let op = pep_ready.pop().unwrap();
+        let at = Cycle(0) + get_op_latency(&op, config);
+        output.push(op.get_id());
+        events.push(RetireDop { at, op });
+    }
+
+    if !pem_busy && !pem_ready.is_empty() {
+        pem_busy = true;
+        pem_ready.sort_by_key(|op| *op.get_annotation());
+        let op = pem_ready.pop().unwrap();
+        let at = Cycle(0) + get_op_latency(&op, config);
+        output.push(op.get_id());
+        events.push(RetireDop { at, op });
+    }
+
+    if !pea_busy && !pea_ready.is_empty() {
+        pea_busy = true;
+        pea_ready.sort_by_key(|op| *op.get_annotation());
+        let op = pea_ready.pop().unwrap();
+        let at = Cycle(0) + get_op_latency(&op, config);
+        output.push(op.get_id());
+        events.push(RetireDop { at, op });
+    }
 
     loop {
-        while !worklist.is_empty() {
-            let op = dir.get_op(worklist.pop().unwrap());
-            in_degree.get_mut(&op).unwrap().transition(|old| match old {
-                State::Ready => State::Executed,
-                _ => unreachable!(),
-            });
-            for user in op.get_users_iter() {
-                in_degree
-                    .get_mut(&user)
-                    .unwrap()
-                    .transition(|old| match old {
-                        State::Waiting(0) => {
-                            unreachable!()
-                        }
-                        State::Waiting(1) => {
-                            if !user.get_instruction().is_pbs() {
-                                worklist.push(user.get_id());
-                            } else {
-                                ready_list.push(user.get_id());
-                            }
-                            State::Ready
-                        }
-                        State::Waiting(n) => State::Waiting(n - 1),
-                        _ => unreachable!(),
-                    });
-            }
-        }
-
-        if ready_list.is_empty() {
+        let Some(RetireDop { at, op }) = events.pop() else {
             break;
+        };
+
+        let current_cycle = at;
+        match get_op_affinity(&op) {
+            Affinity::Pea => pea_busy = false,
+            Affinity::Pem => pem_busy = false,
+            Affinity::Pep => pep_busy = false,
+            Affinity::Ctl => {}
+        }
+        for user in op.get_users_iter() {
+            states.get_mut(&user).unwrap().transition(|old| match old {
+                State::Waiting(0) => {
+                    unreachable!()
+                }
+                State::Waiting(1) => match get_op_affinity(&user) {
+                    Affinity::Pea => {
+                        pea_ready.push(user);
+                        State::Ready
+                    }
+                    Affinity::Pem => {
+                        pem_ready.push(user);
+                        State::Ready
+                    }
+                    Affinity::Pep => {
+                        pep_ready.push(user);
+                        State::Ready
+                    }
+                    Affinity::Ctl => {
+                        ctl_ready.push(user);
+                        State::Scheduled
+                    }
+                },
+                State::Waiting(n) => State::Waiting(n - 1),
+                state => unreachable!("Found unexpected state {state:?} for op: {}", op.format()),
+            });
         }
 
-        while !batch.is_full() {
-            match ready_list.pop() {
-                Some(v) => batch.push(dir.get_op(v)),
-                None => break,
-            }
+        while !ctl_ready.is_empty() {
+            let op = ctl_ready.pop().unwrap();
+            let at = current_cycle + 1;
+            output.push(op.get_id());
+            events.push(RetireDop { at, op });
         }
 
-        // Batch is either full or there is not enough ready to schedule.
-        worklist.extend(batch.iter_members().map(|op| op.get_id()));
-        batches.push(batch.clone());
-        batch = Batch::new(batch_size);
+        if !pep_busy && !pep_ready.is_empty() {
+            pep_busy = true;
+            pep_ready.sort_by_key(|op| *op.get_annotation());
+            let op = pep_ready.pop().unwrap();
+            let at = current_cycle + get_op_latency(&op, config);
+            output.push(op.get_id());
+            events.push(RetireDop { at, op });
+        }
+
+        if !pem_busy && !pem_ready.is_empty() {
+            pem_busy = true;
+            pem_ready.sort_by_key(|op| *op.get_annotation());
+            let op = pem_ready.pop().unwrap();
+            let at = current_cycle + get_op_latency(&op, config);
+            output.push(op.get_id());
+            events.push(RetireDop { at, op });
+        }
+
+        if !pea_busy && !pea_ready.is_empty() {
+            pea_busy = true;
+            pea_ready.sort_by_key(|op| *op.get_annotation());
+            let op = pea_ready.pop().unwrap();
+            let at = current_cycle + get_op_latency(&op, config);
+            output.push(op.get_id());
+            events.push(RetireDop { at, op });
+        }
     }
 
-    batches
+    output
 }
 
-pub fn batch_schedule<'a, 'b>(ir: &'a IR<HpuLang>, config: &'b HpuConfig) -> IR<HpuLang> {
-    let dir = analyze_pbs_depth(ir);
-    let batches = extract_batches(&dir, config.pbs_max_batch_size);
-    #[cfg(debug_assertions)]
-    {
-        eprintln!("{}", batches.statistics());
-    }
-    let batchmap = batches.into_batch_map();
-    let ir = lazy_translate(ir, move |opref, engine| {
-        use zhc_langs::hpulang::HpuInstructionSet::*;
-        match opref.get_instruction() {
-            AddCt
-            | SubCt
-            | Mac { .. }
-            | AddPt
-            | SubPt
-            | PtSub
-            | MulPt
-            | AddCst { .. }
-            | SubCst { .. }
-            | CstSub { .. }
-            | MulCst { .. }
-            | CstCt { .. }
-            | ImmLd { .. }
-            | DstSt { .. }
-            | SrcLd { .. } => {
-                let new_args = opref
-                    .get_args_iter()
-                    .map(|valref| engine.translate_val(valref))
-                    .cosvec();
-                let new_rets = engine.add_op(opref.get_instruction(), new_args);
-                (opref.get_return_valids().iter(), new_rets.into_iter())
-                    .mzip()
-                    .for_each(|(old, new)| engine.register_translation(*old, new));
-            }
-            Pbs { .. }
-            | Pbs2 { .. }
-            | Pbs4 { .. }
-            | Pbs8 { .. }
-            | PbsF { .. }
-            | Pbs2F { .. }
-            | Pbs4F { .. }
-            | Pbs8F { .. } => {
-                let batch = batchmap.get(&*opref).unwrap();
-                let (batch_ir, inputs, outputs) = batch.gen_batch_ir();
-                let block = Box::new(batch_ir);
-                let new_args = inputs
-                    .into_iter()
-                    .map(|arg| engine.translate_val((*arg).clone()))
-                    .collect();
-                let new_rets = engine.add_op(Batch { block }, new_args);
-                (outputs.into_iter(), new_rets.into_iter())
-                    .mzip()
-                    .for_each(|(old, new)| engine.register_translation(old.get_id(), new));
-            }
-            Batch { .. } | BatchArg { .. } | BatchRet { .. } => {
-                panic!("Unexpected batch operations encountered.")
-            }
-        }
-    });
-    ir
+pub fn schedule<'a, 'b>(ir: &'a IR<HpuLang>, config: &HpuConfig) -> IR<HpuLang> {
+    let heighted = analyze_height(ir);
+    let schedule = forward_schedule(&heighted, config);
+    reschedule(ir, schedule.into_iter()).0
 }
 
 #[cfg(test)]
 mod test {
-    use zhc_builder::{
-        Builder, CiphertextSpec, add, bitwise_and, bitwise_or, bitwise_xor, count_0, if_then_else,
-        if_then_zero, mul_lsb,
-    };
+    use zhc_builder::{CiphertextSpec, count_0};
     use zhc_ir::IR;
     use zhc_langs::{hpulang::HpuLang, ioplang::IopLang};
     use zhc_sim::hpu::{HpuConfig, PhysicalConfig};
     use zhc_utils::assert_display_is;
 
     use crate::{
-        batch_scheduler::batch_schedule, test::check_iop_hpu_equivalence,
+        batch_scheduler::schedule, batcher::batch, test::check_iop_hpu_equivalence,
         translation::lower_iop_to_hpu,
     };
 
     fn pipeline(ir: &IR<IopLang>) -> IR<HpuLang> {
         let ir = lower_iop_to_hpu(&ir);
         let config = HpuConfig::from(PhysicalConfig::gaussian_64b());
-        batch_schedule(&ir, &config)
+        let batched = batch(&ir, &config);
+        let scheduled = schedule(&batched, &config);
+        scheduled
     }
 
     #[test]
-    fn test_batch_scheduler() {
+    fn test_scheduler() {
         let ir = pipeline(&count_0(CiphertextSpec::new(16, 2, 2)).into_ir());
         assert_display_is!(
-            ir.format().show_types(false),
+            ir.format(),
             r#"
-                %0 = src_ld<0.0_tsrc>();
-                %1 = src_ld<0.1_tsrc>();
-                %2 = src_ld<0.2_tsrc>();
-                %3 = src_ld<0.3_tsrc>();
-                %4 = src_ld<0.4_tsrc>();
-                %5 = src_ld<0.5_tsrc>();
-                %6 = src_ld<0.6_tsrc>();
-                %7 = src_ld<0.7_tsrc>();
-                %8, %9, %10, %11, %12, %13, %14, %15, %16, %17, %18, %19, %20, %21, %22, %23 = batch {
-                    %a0 = batch_arg<0, CtRegister>();
-                    %a1 = batch_arg<1, CtRegister>();
-                    %a2 = batch_arg<2, CtRegister>();
-                    %a3 = batch_arg<3, CtRegister>();
-                    %a4 = batch_arg<4, CtRegister>();
-                    %a5 = batch_arg<5, CtRegister>();
-                    %a6 = batch_arg<6, CtRegister>();
-                    %a7 = batch_arg<7, CtRegister>();
-                    %a8, %a9 = pbs_2<Lut@71>(%a0);
-                    %a10, %a11 = pbs_2<Lut@71>(%a1);
-                    %a12, %a13 = pbs_2<Lut@71>(%a2);
-                    %a14, %a15 = pbs_2<Lut@71>(%a3);
-                    %a16, %a17 = pbs_2<Lut@71>(%a4);
-                    %a18, %a19 = pbs_2<Lut@71>(%a5);
-                    %a20, %a21 = pbs_2<Lut@71>(%a6);
-                    %a22, %a23 = pbs_2f<Lut@71>(%a7);
-                    batch_ret<0, CtRegister>(%a8);
-                    batch_ret<1, CtRegister>(%a9);
-                    batch_ret<2, CtRegister>(%a10);
-                    batch_ret<3, CtRegister>(%a11);
-                    batch_ret<4, CtRegister>(%a12);
-                    batch_ret<5, CtRegister>(%a13);
-                    batch_ret<6, CtRegister>(%a14);
-                    batch_ret<7, CtRegister>(%a15);
-                    batch_ret<8, CtRegister>(%a16);
-                    batch_ret<9, CtRegister>(%a17);
-                    batch_ret<10, CtRegister>(%a18);
-                    batch_ret<11, CtRegister>(%a19);
-                    batch_ret<12, CtRegister>(%a20);
-                    batch_ret<13, CtRegister>(%a21);
-                    batch_ret<14, CtRegister>(%a22);
-                    batch_ret<15, CtRegister>(%a23);
-                }(%0, %1, %2, %3, %4, %5, %6, %7);
-                %24 = add_ct(%8, %9);
-                %30 = add_ct(%15, %16);
-                %36 = add_ct(%22, %23);
-                %25 = add_ct(%24, %10);
-                %31 = add_ct(%30, %17);
-                %26 = add_ct(%25, %11);
-                %32 = add_ct(%31, %18);
-                %27 = add_ct(%26, %12);
-                %33 = add_ct(%32, %19);
-                %28 = add_ct(%27, %13);
-                %34 = add_ct(%33, %20);
-                %29 = add_ct(%28, %14);
-                %35 = add_ct(%34, %21);
-                %37, %38, %39, %40, %41, %42 = batch {
-                    %a0 = batch_arg<0, CtRegister>();
-                    %a1 = batch_arg<1, CtRegister>();
-                    %a2 = batch_arg<2, CtRegister>();
-                    %a3, %a4 = pbs_2<Lut@70>(%a0);
-                    %a5, %a6 = pbs_2<Lut@70>(%a1);
-                    %a7, %a8 = pbs_2f<Lut@65>(%a2);
-                    batch_ret<0, CtRegister>(%a3);
-                    batch_ret<1, CtRegister>(%a4);
-                    batch_ret<2, CtRegister>(%a5);
-                    batch_ret<3, CtRegister>(%a6);
-                    batch_ret<4, CtRegister>(%a7);
-                    batch_ret<5, CtRegister>(%a8);
-                }(%29, %35, %36);
-                %43 = add_ct(%37, %39);
-                %45 = add_ct(%38, %40);
-                %44 = add_ct(%43, %41);
-                %46 = add_ct(%45, %42);
-                %47, %48, %49, %50 = batch {
-                    %a0 = batch_arg<0, CtRegister>();
-                    %a1 = batch_arg<1, CtRegister>();
-                    %a2 = pbs<Lut@3>(%a0);
-                    %a3 = pbs<Lut@1>(%a0);
-                    %a4, %a5 = pbs_2f<Lut@26>(%a1);
-                    batch_ret<0, CtRegister>(%a3);
-                    batch_ret<1, CtRegister>(%a2);
-                    batch_ret<2, CtRegister>(%a4);
-                    batch_ret<3, CtRegister>(%a5);
-                }(%44, %46);
-                dst_st<0.0_tdst>(%47);
-                %51 = add_ct(%48, %49);
-                %52, %53 = batch {
-                    %a0 = batch_arg<0, CtRegister>();
-                    %a1, %a2 = pbs_2f<Lut@26>(%a0);
-                    batch_ret<0, CtRegister>(%a1);
-                    batch_ret<1, CtRegister>(%a2);
-                }(%51);
-                dst_st<0.1_tdst>(%52);
-                %54 = add_ct(%53, %50);
-                %55, %56 = batch {
-                    %a0 = batch_arg<0, CtRegister>();
-                    %a1, %a2 = pbs_2f<Lut@26>(%a0);
-                    batch_ret<0, CtRegister>(%a1);
-                    batch_ret<1, CtRegister>(%a2);
-                }(%54);
-                dst_st<0.2_tdst>(%55);
+                %0 : CtRegister = src_ld<0.7_tsrc>();
+                %1 : CtRegister = src_ld<0.6_tsrc>();
+                %2 : CtRegister = src_ld<0.5_tsrc>();
+                %3 : CtRegister = src_ld<0.4_tsrc>();
+                %4 : CtRegister = src_ld<0.3_tsrc>();
+                %5 : CtRegister = src_ld<0.2_tsrc>();
+                %6 : CtRegister = src_ld<0.1_tsrc>();
+                %7 : CtRegister = src_ld<0.0_tsrc>();
+                %8 : CtRegister, %9 : CtRegister, %10 : CtRegister, %11 : CtRegister, %12 : CtRegister, %13 : CtRegister, %14 : CtRegister, %15 : CtRegister, %16 : CtRegister, %17 : CtRegister, %18 : CtRegister, %19 : CtRegister, %20 : CtRegister, %21 : CtRegister, %22 : CtRegister, %23 : CtRegister = batch {
+                    %a0 : CtRegister = batch_arg<0, CtRegister>();
+                    %a1 : CtRegister = batch_arg<1, CtRegister>();
+                    %a2 : CtRegister = batch_arg<2, CtRegister>();
+                    %a3 : CtRegister = batch_arg<3, CtRegister>();
+                    %a4 : CtRegister = batch_arg<4, CtRegister>();
+                    %a5 : CtRegister = batch_arg<5, CtRegister>();
+                    %a6 : CtRegister = batch_arg<6, CtRegister>();
+                    %a7 : CtRegister = batch_arg<7, CtRegister>();
+                    %a8 : CtRegister, %a9 : CtRegister = pbs_2<Lut@71>(%a0 : CtRegister);
+                    %a10 : CtRegister, %a11 : CtRegister = pbs_2<Lut@71>(%a1 : CtRegister);
+                    %a12 : CtRegister, %a13 : CtRegister = pbs_2<Lut@71>(%a2 : CtRegister);
+                    %a14 : CtRegister, %a15 : CtRegister = pbs_2<Lut@71>(%a3 : CtRegister);
+                    %a16 : CtRegister, %a17 : CtRegister = pbs_2<Lut@71>(%a4 : CtRegister);
+                    %a18 : CtRegister, %a19 : CtRegister = pbs_2<Lut@71>(%a5 : CtRegister);
+                    %a20 : CtRegister, %a21 : CtRegister = pbs_2<Lut@71>(%a6 : CtRegister);
+                    %a22 : CtRegister, %a23 : CtRegister = pbs_2f<Lut@71>(%a7 : CtRegister);
+                    batch_ret<0, CtRegister>(%a8 : CtRegister);
+                    batch_ret<1, CtRegister>(%a9 : CtRegister);
+                    batch_ret<2, CtRegister>(%a10 : CtRegister);
+                    batch_ret<3, CtRegister>(%a11 : CtRegister);
+                    batch_ret<4, CtRegister>(%a12 : CtRegister);
+                    batch_ret<5, CtRegister>(%a13 : CtRegister);
+                    batch_ret<6, CtRegister>(%a14 : CtRegister);
+                    batch_ret<7, CtRegister>(%a15 : CtRegister);
+                    batch_ret<8, CtRegister>(%a16 : CtRegister);
+                    batch_ret<9, CtRegister>(%a17 : CtRegister);
+                    batch_ret<10, CtRegister>(%a18 : CtRegister);
+                    batch_ret<11, CtRegister>(%a19 : CtRegister);
+                    batch_ret<12, CtRegister>(%a20 : CtRegister);
+                    batch_ret<13, CtRegister>(%a21 : CtRegister);
+                    batch_ret<14, CtRegister>(%a22 : CtRegister);
+                    batch_ret<15, CtRegister>(%a23 : CtRegister);
+                }(%7 : CtRegister, %6 : CtRegister, %5 : CtRegister, %4 : CtRegister, %3 : CtRegister, %2 : CtRegister, %1 : CtRegister, %0 : CtRegister);
+                %24 : CtRegister = add_ct(%22 : CtRegister, %23 : CtRegister);
+                %25 : CtRegister = add_ct(%15 : CtRegister, %16 : CtRegister);
+                %31 : CtRegister = add_ct(%8 : CtRegister, %9 : CtRegister);
+                %26 : CtRegister = add_ct(%25 : CtRegister, %17 : CtRegister);
+                %32 : CtRegister = add_ct(%31 : CtRegister, %10 : CtRegister);
+                %27 : CtRegister = add_ct(%26 : CtRegister, %18 : CtRegister);
+                %33 : CtRegister = add_ct(%32 : CtRegister, %11 : CtRegister);
+                %28 : CtRegister = add_ct(%27 : CtRegister, %19 : CtRegister);
+                %34 : CtRegister = add_ct(%33 : CtRegister, %12 : CtRegister);
+                %29 : CtRegister = add_ct(%28 : CtRegister, %20 : CtRegister);
+                %35 : CtRegister = add_ct(%34 : CtRegister, %13 : CtRegister);
+                %30 : CtRegister = add_ct(%29 : CtRegister, %21 : CtRegister);
+                %36 : CtRegister = add_ct(%35 : CtRegister, %14 : CtRegister);
+                %37 : CtRegister, %38 : CtRegister, %39 : CtRegister, %40 : CtRegister, %41 : CtRegister, %42 : CtRegister = batch {
+                    %a0 : CtRegister = batch_arg<0, CtRegister>();
+                    %a1 : CtRegister = batch_arg<1, CtRegister>();
+                    %a2 : CtRegister = batch_arg<2, CtRegister>();
+                    %a3 : CtRegister, %a4 : CtRegister = pbs_2<Lut@70>(%a0 : CtRegister);
+                    %a5 : CtRegister, %a6 : CtRegister = pbs_2<Lut@70>(%a1 : CtRegister);
+                    %a7 : CtRegister, %a8 : CtRegister = pbs_2f<Lut@65>(%a2 : CtRegister);
+                    batch_ret<0, CtRegister>(%a3 : CtRegister);
+                    batch_ret<1, CtRegister>(%a4 : CtRegister);
+                    batch_ret<2, CtRegister>(%a5 : CtRegister);
+                    batch_ret<3, CtRegister>(%a6 : CtRegister);
+                    batch_ret<4, CtRegister>(%a7 : CtRegister);
+                    batch_ret<5, CtRegister>(%a8 : CtRegister);
+                }(%36 : CtRegister, %30 : CtRegister, %24 : CtRegister);
+                %43 : CtRegister = add_ct(%38 : CtRegister, %40 : CtRegister);
+                %45 : CtRegister = add_ct(%37 : CtRegister, %39 : CtRegister);
+                %44 : CtRegister = add_ct(%43 : CtRegister, %42 : CtRegister);
+                %46 : CtRegister = add_ct(%45 : CtRegister, %41 : CtRegister);
+                %47 : CtRegister, %48 : CtRegister, %49 : CtRegister, %50 : CtRegister = batch {
+                    %a0 : CtRegister = batch_arg<0, CtRegister>();
+                    %a1 : CtRegister = batch_arg<1, CtRegister>();
+                    %a2 : CtRegister = pbs<Lut@3>(%a0 : CtRegister);
+                    %a3 : CtRegister, %a4 : CtRegister = pbs_2<Lut@26>(%a1 : CtRegister);
+                    %a5 : CtRegister = pbs_f<Lut@1>(%a0 : CtRegister);
+                    batch_ret<0, CtRegister>(%a5 : CtRegister);
+                    batch_ret<1, CtRegister>(%a2 : CtRegister);
+                    batch_ret<2, CtRegister>(%a3 : CtRegister);
+                    batch_ret<3, CtRegister>(%a4 : CtRegister);
+                }(%46 : CtRegister, %44 : CtRegister);
+                dst_st<0.0_tdst>(%47 : CtRegister);
+                %51 : CtRegister = add_ct(%48 : CtRegister, %49 : CtRegister);
+                %52 : CtRegister, %53 : CtRegister = batch {
+                    %a0 : CtRegister = batch_arg<0, CtRegister>();
+                    %a1 : CtRegister, %a2 : CtRegister = pbs_2f<Lut@26>(%a0 : CtRegister);
+                    batch_ret<0, CtRegister>(%a1 : CtRegister);
+                    batch_ret<1, CtRegister>(%a2 : CtRegister);
+                }(%51 : CtRegister);
+                dst_st<0.1_tdst>(%52 : CtRegister);
+                %54 : CtRegister = add_ct(%53 : CtRegister, %50 : CtRegister);
+                %55 : CtRegister, %56 : CtRegister = batch {
+                    %a0 : CtRegister = batch_arg<0, CtRegister>();
+                    %a1 : CtRegister, %a2 : CtRegister = pbs_2f<Lut@26>(%a0 : CtRegister);
+                    batch_ret<0, CtRegister>(%a1 : CtRegister);
+                    batch_ret<1, CtRegister>(%a2 : CtRegister);
+                }(%54 : CtRegister);
+                dst_st<0.2_tdst>(%55 : CtRegister);
             "#
         )
     }
 
     #[test]
     fn correctness() {
+        use zhc_builder::*;
         let check = |b: Builder| {
             let spec = *b.spec();
             let iop_ir = b.into_ir();
@@ -557,19 +457,3 @@ mod test {
         }
     }
 }
-
-// Notes
-// =====
-//
-// [1]: The reachability analysis is less costly than it might appear at first. Recall that the IR holds its own Depth
-// metric (largest distance to an input), which is equivalent in spirit to the PbsDepth computed
-// here but accounts for every kind of operation along the paths, while the PbsDepth analysis only
-// accounts for PBS operations. Given how these metrics are computed, we can assume that, given a
-// candidate and a batch member, if PbsDepth(candidate) <= PbsDepth(member) then Depth(candidate) <=
-// Depth(member). By default, the reachability analysis recursively exhausts the reached nodes,
-// checking for equality of the reached node's opid with the queried node's. Fortunately, a
-// depth-based cut-off is used to discard portions of the search space that we know can't contain
-// the queried node. Initially, Depth(candidate) <= Depth(member), which means the opid will be
-// checked. However, as the analysis recursively searches deeper in the IR,
-// Depth(candidate_reachable_node) eventually becomes > Depth(member), at which point the
-// search is cut off.

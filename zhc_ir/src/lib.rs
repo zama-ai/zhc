@@ -18,14 +18,14 @@
 //!
 //! Built-in passes include dead code elimination ([`dce`]), common subexpression
 //! elimination ([`cse`]), and an interpretation framework ([`interpretation`]).
-//! The [`scheduling`] module provides forward list scheduling, [`translation`]
-//! defines cross-dialect translation, and [`traversal`] offers walker verification
+//! The [`scheduler`] module provides tools for rescheduling, [`translation`]
+//! helps for cross-dialects translation, and [`traversal`] offers walker verification
 //! utilities.
 
 pub mod cse;
 pub mod dce;
 pub mod interpretation;
-pub mod scheduling;
+pub mod scheduler;
 pub mod translation;
 pub mod traversal;
 

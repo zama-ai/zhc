@@ -14,6 +14,8 @@ use zhc_utils::{
     svec,
 };
 
+static TRACE_EXECUTION: bool = false;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Spill {
     pub from: RegId,
@@ -221,8 +223,7 @@ impl<'ir> Allocator<'ir> {
         let mut output = self.input.empty_opmap();
 
         for op in self.input.walk_ops_linear().into_iter() {
-            #[cfg(debug_assertions)]
-            {
+            if TRACE_EXECUTION {
                 eprintln!("{}", op.format().show_opid(true));
             }
 
@@ -249,10 +250,9 @@ impl<'ir> Allocator<'ir> {
                 },
             );
 
-            #[cfg(debug_assertions)]
-            {
+            if TRACE_EXECUTION {
                 eprintln!("Reg file: {}", self.register_file);
-                // eprintln!("  : Heap size: {}", self.heap.size());
+                eprintln!("  : Heap size: {}", self.heap.size());
             }
 
             self.register_file

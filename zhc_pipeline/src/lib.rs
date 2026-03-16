@@ -22,8 +22,10 @@ use zhc_langs::ioplang::eliminate_aliases;
 
 pub mod allocator;
 pub mod batch_scheduler;
+pub mod batcher;
 pub mod interpreter;
 pub mod latency;
+pub mod statistics;
 pub mod tracing;
 pub mod translation;
 pub mod translation_table;
@@ -96,9 +98,20 @@ fn regular_pipeline(mut ir: IR<IopLang>, config: &HpuConfig) -> IR<DopLang> {
     eliminate_dead_code(&mut ir);
     eliminate_common_subexpressions(&mut ir);
     let unscheduled = translation::lower_iop_to_hpu(&ir);
-    let batched = batch_scheduler::batch_schedule(&unscheduled, config);
-    allocate_registers(&batched, config)
+    let batched = batcher::batch(&unscheduled, config);
+    let scheduled = batch_scheduler::schedule(&batched, config);
+    allocate_registers(&scheduled, config)
 }
 
 #[cfg(test)]
 mod test;
+
+#[test]
+fn test_dump_trace() {
+    let bd = zhc_builder::mul_lsb(CiphertextSpec::new(64, 2, 2));
+    trace_execution(
+        &bd,
+        HpuConfig::from(zhc_sim::hpu::PhysicalConfig::tuniform_64b_pfail128_psi64()),
+        "test.json",
+    );
+}

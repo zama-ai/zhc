@@ -5,6 +5,7 @@
 //! type-safe indices, and iterator extensions.
 
 pub mod assert_display;
+pub mod data_visulization;
 pub mod graphics;
 pub mod iter;
 pub mod small;

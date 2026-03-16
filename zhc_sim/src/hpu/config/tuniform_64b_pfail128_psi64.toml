@@ -46,6 +46,7 @@
 [regf_params]
     reg_nb= 64
     coef_nb= 32
+
 [isc_params]
     min_iop_size= 4
     depth= 64

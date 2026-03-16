@@ -517,17 +517,14 @@ mod test {
     use zhc_sim::hpu::{HpuConfig, PhysicalConfig};
     use zhc_utils::assert_display_is;
 
-    use crate::{
-        allocator::allocate_registers, batch_scheduler::batch_schedule,
-        translation::lower_iop_to_hpu,
-    };
+    use crate::{allocator::allocate_registers, batcher::batch, translation::lower_iop_to_hpu};
 
     use super::generate_translation_table;
 
     fn pipeline(ir: &IR<IopLang>) -> Vec<u32> {
         let ir = lower_iop_to_hpu(&ir);
         let config = HpuConfig::from(PhysicalConfig::gaussian_64b_fast());
-        let batched = batch_schedule(&ir, &config);
+        let batched = batch(&ir, &config);
         let allocated = allocate_registers(&batched, &config);
         generate_translation_table(&allocated)
     }

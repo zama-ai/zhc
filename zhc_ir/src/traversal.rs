@@ -7,9 +7,6 @@
 use crate::{Dialect, IR, OpId};
 
 /// An operation walker that can verify topological ordering properties.
-///
-/// This trait extends `OpWalker` with methods to validate that the traversal
-/// order respects dependency constraints in the IR graph.
 pub trait OpWalkerVerifier: Iterator<Item = OpId> {
     /// Checks if the walker respects topological ordering of dependencies.
     ///

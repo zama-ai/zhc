@@ -88,6 +88,10 @@ impl<K: Eq, V> StackMap<K, V> {
             inner: self.0.into_iter(),
         }
     }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
 }
 
 pub struct StackMapMutIter<'a, K: Eq, V> {

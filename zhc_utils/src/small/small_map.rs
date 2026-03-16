@@ -29,6 +29,17 @@ impl<K: Eq, V> SmallMap<K, V> {
             SmallMap::Stack(m) => m.capacity(),
         }
     }
+
+    pub fn len(&self) -> usize {
+        match self {
+            SmallMap::Heap(hash_map) => hash_map.len(),
+            SmallMap::Stack(stack_map) => stack_map.len(),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 impl<K: Eq + Hash, V> SmallMap<K, V> {
