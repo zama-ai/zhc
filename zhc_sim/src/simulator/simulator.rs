@@ -12,12 +12,12 @@ static S_IN_US: f64 = 1_000_000.;
 pub struct MHz(pub usize);
 
 impl MHz {
-    fn as_raw_hertz(&self) -> f64 {
+    const fn as_raw_hertz(&self) -> f64 {
         self.0 as f64 * 1_000_000.
     }
 
     /// Calculates the period duration in microseconds for this frequency.
-    pub fn period(&self) -> Microseconds {
+    pub const fn period(&self) -> Microseconds {
         (1. / self.as_raw_hertz()) * S_IN_US
     }
 }
@@ -142,14 +142,16 @@ where
             cond_encountered |= condition(&trigger);
             self.tracer
                 .add_event(self.tracing_level, self.now(), &trigger.event);
-            if let Err(e) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                self.simulatable.handle(&mut self.dispatcher, trigger);
-            })) {
-                if DUMP_TRACE_ON_PANIC {
+            if DUMP_TRACE_ON_PANIC {
+                if let Err(e) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    self.simulatable.handle(&mut self.dispatcher, trigger);
+                })) {
                     self.dump_trace("test.json");
+                    eprintln!("Panic caught during simulatable.handle(): {:?}", e);
+                    panic!();
                 }
-                eprintln!("Panic caught during simulatable.handle(): {:?}", e);
-                panic!();
+            } else {
+                self.simulatable.handle(&mut self.dispatcher, trigger);
             }
         }
 
@@ -207,6 +209,10 @@ where
     /// Writes simulation trace data to the specified file `path`.
     pub fn dump_trace<P: AsRef<Path>>(&self, path: P) {
         self.tracer.dump(self.now(), path);
+    }
+
+    pub fn get_tracer(&self) -> &Tracer<S::Event> {
+        &self.tracer
     }
 
     /// Returns a reference to the simulatable component.

@@ -7,7 +7,7 @@ use zhc_utils::{
     tracing::{Scope, Trace},
 };
 
-static NS_IN_US: f64 = 0.001;
+pub static PERIOD_IN_US: f64 = MHz(400).period();
 static EVENTS_PID: usize = 0;
 static SIMULATABLES_PID: usize = 1;
 static COUNTERS_PID: usize = 2;
@@ -108,12 +108,13 @@ impl<E: Event> Tracer<E> {
         let mut trace = self.trace.clone();
         for (_, tracker) in self.simulatable_trackers.iter() {
             trace.new_complete(
-                tracker.state_change.as_ref().unwrap().as_ts(NS_IN_US),
+                tracker.state_change.as_ref().unwrap().as_ts(PERIOD_IN_US),
                 SIMULATABLES_PID,
                 tracker.tid,
                 &tracker.name,
                 Some(json!({"val": tracker.state.as_ref().unwrap()})),
-                (at - *tracker.state_change.as_ref().unwrap()).as_ts(NS_IN_US) - 5. * f64::EPSILON,
+                (at - *tracker.state_change.as_ref().unwrap()).as_ts(PERIOD_IN_US)
+                    - 5. * f64::EPSILON,
             );
         }
         let json = serde_json::to_string_pretty(&trace).expect("Failed to serialize trace.");
@@ -144,7 +145,7 @@ impl<E: Event> Tracer<E> {
 
             if tracker.state != Some(value) {
                 self.trace.new_counter(
-                    at.as_ts(NS_IN_US),
+                    at.as_ts(PERIOD_IN_US),
                     COUNTERS_PID,
                     tracker.tid,
                     name,
@@ -176,7 +177,7 @@ impl<E: Event> Tracer<E> {
                 .unwrap();
             let state = serde_json::to_value(event).unwrap();
             self.trace.new_instant(
-                at.as_ts(NS_IN_US),
+                at.as_ts(PERIOD_IN_US),
                 EVENTS_PID,
                 tracker.tid,
                 &tracker.name,
@@ -184,6 +185,11 @@ impl<E: Event> Tracer<E> {
                 Scope::Thread,
             );
         }
+    }
+
+    /// Returns a reference to the underlying trace.
+    pub fn trace(&self) -> &Trace {
+        &self.trace
     }
 
     /// Records the state of a simulatable component at the specified cycle.
@@ -219,12 +225,12 @@ impl<E: Event> Tracer<E> {
                 tracker.state = Some(state);
             } else if tracker.state.as_ref().unwrap() != &state {
                 self.trace.new_complete(
-                    tracker.state_change.as_ref().unwrap().as_ts(NS_IN_US),
+                    tracker.state_change.as_ref().unwrap().as_ts(PERIOD_IN_US),
                     SIMULATABLES_PID,
                     tracker.tid,
                     &tracker.name,
                     Some(json!({"val": tracker.state.as_ref().unwrap()})),
-                    (at - *tracker.state_change.as_ref().unwrap()).as_ts(NS_IN_US)
+                    (at - *tracker.state_change.as_ref().unwrap()).as_ts(PERIOD_IN_US)
                         - 5. * f64::EPSILON,
                 );
                 tracker.state_change = Some(at);

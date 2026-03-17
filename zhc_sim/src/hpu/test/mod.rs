@@ -12,15 +12,17 @@ macro_rules! test_hpu_simulation {
         #[test]
         #[allow(unused)]
         fn $name() {
-            let config = HpuConfig::from(PhysicalConfig::gaussian_64b_fast());
+            let mut config = HpuConfig::from(PhysicalConfig::gaussian_64b_fast());
+            config.pbs_timeout = Cycle(100_000);
             let mut sim = Simulator::from_simulatable(config.freq, Hpu::new(&config), TracingLevel::None);
             let (stream, leg_lat) = legacy::$name();
             sim.dispatch(Events::IscPushDOps(stream.collect()));
             sim.play_until_event(Events::IscProcessOver);
+            // sim.dump_trace("test.json");
 
             // Check that there are no diff with previous execution
             // If small modification are made to the models those value must be updated
-            println!("{} => {},", stringify!($name), sim.now().0);
+            println!("{} => {}, (legacy: {})", stringify!($name), sim.now().0, leg_lat.0);
             assert_eq!(sim.now(), Cycle($cycles));
 
             // Uncomment if you want to have trace dump of each operations
@@ -38,8 +40,8 @@ test_hpu_simulation!(
     SUBS => 88112,
     SSUB => 88124,
     MULS => 153212,
-    DIVS => 2796038,
-    MODS => 2872224,
+    DIVS => 2805520,
+    MODS => 2752055,
     OVF_ADDS => 72215,
     OVF_SUBS => 80451,
     OVF_SSUB => 80463,
@@ -51,8 +53,8 @@ test_hpu_simulation!(
     ADD => 64481,
     SUB => 72214,
     MUL => 137594,
-    DIV => 4793256,
-    MOD => 4670180,
+    DIV => 2651019,
+    MOD => 2545099,
     OVF_ADD => 56819,
     OVF_SUB => 60453,
     OVF_MUL => 255443,
@@ -81,5 +83,5 @@ test_hpu_simulation!(
     TRAIL0 => 356220,
     TRAIL1 => 358395,
     ADD_SIMD => 192421,
-    ERC_20_SIMD => 877411
+    ERC_20_SIMD => 891826
 );

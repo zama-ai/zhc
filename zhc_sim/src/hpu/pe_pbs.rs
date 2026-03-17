@@ -346,7 +346,7 @@ impl Simulatable for PePbs {
 
                 assert!(!self.queue.is_full(), "Dispatched on a filled PE");
 
-                if !self.timeout_running {
+                if !self.timeout_running && !self.memory().has_working() {
                     // If no timeout was running (queue was empty), we arm the timeout.
                     self.timeout_running = true;
                     dispatcher.dispatch_after(self.timeout, Events::PePbsTimeout);
@@ -423,26 +423,21 @@ impl Simulatable for PePbs {
                 }
             }
             Events::PePbsTimeout => {
-                match self.memory.what_now() {
-                    Hint::CanLaunchIncompleteBatch(batch_size) => {
-                        assert!(self.timeout_running, "Timeout was not running ...");
-                        let last_in = self.memory().waitings().iter().last().unwrap().clone();
-                        dispatcher.dispatch_now(Events::NotifyStartOnTimeout { last_in });
-                        dispatcher.dispatch_now(Events::PePbsLaunchProcessing(batch_size));
-                    }
-                    Hint::NoWaitings => {
-                        // Nothing is waiting.
-                        // Timeout will be rearmed on the next push to the pe.
-                    }
-                    Hint::AlreadyWorking => {
-                        // The pe-pbs already started its work.
-                        // We don't rearm the timeout.
-                    }
-                    _ => {
-                        panic!(
-                            "Unexpected state encoutered during timeout: {:?}",
-                            self.memory.what_now()
-                        );
+                if self.timeout_running {
+                    match self.memory.what_now() {
+                        Hint::CanLaunchIncompleteBatch(batch_size) => {
+                            assert!(self.timeout_running, "Timeout was not running ...");
+                            let last_in = self.memory().waitings().iter().last().unwrap().clone();
+                            dispatcher.dispatch_now(Events::NotifyStartOnTimeout { last_in });
+                            dispatcher.dispatch_now(Events::PePbsLaunchProcessing(batch_size));
+                            self.timeout_running = false;
+                        }
+                        _ => {
+                            panic!(
+                                "Unexpected state encoutered during timeout: {:?}",
+                                self.memory.what_now()
+                            );
+                        }
                     }
                 }
             }
@@ -486,6 +481,7 @@ impl Simulatable for PePbs {
                     Hint::CanLaunchIncompleteBatch(_) => {
                         // The pe has some pending operations.
                         // We schedule a timeout.
+                        assert!(!self.timeout_running);
                         self.timeout_running = true;
                         dispatcher.dispatch_after(self.timeout, Events::PePbsTimeout);
                     }

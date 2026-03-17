@@ -13,7 +13,7 @@ fn default_isc_query_period() -> usize {
     12
 }
 fn default_pbs_timeout() -> usize {
-    100_000
+    300_000
 }
 
 /// Number Theoretic Transform parameters for cryptographic operations.
