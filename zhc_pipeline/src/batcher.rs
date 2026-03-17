@@ -50,9 +50,9 @@ fn analyze<'a>(ir: &'a IR<HpuLang>) -> CritIR<'a> {
             .max()
             .unwrap_or(0);
         if opref.get_instruction().is_pbs() {
-            (previous_depth + 1, svec![(); opref.get_return_arity()])
+            (previous_depth + 1000, svec![(); opref.get_return_arity()])
         } else {
-            (previous_depth, svec![(); opref.get_return_arity()])
+            (previous_depth + 1, svec![(); opref.get_return_arity()])
         }
     });
     let critical_path_length = a
@@ -72,7 +72,7 @@ fn analyze<'a>(ir: &'a IR<HpuLang>) -> CritIR<'a> {
             (
                 Criticallity {
                     depth,
-                    height: previous_height + 1,
+                    height: previous_height + 1000,
                     slack: critical_path_length - depth - previous_height + 1,
                 },
                 svec![(); opref.get_return_arity()],
@@ -81,7 +81,7 @@ fn analyze<'a>(ir: &'a IR<HpuLang>) -> CritIR<'a> {
             (
                 Criticallity {
                     depth,
-                    height: previous_height,
+                    height: previous_height + 1,
                     slack: critical_path_length - depth - previous_height,
                 },
                 svec![(); opref.get_return_arity()],
@@ -345,6 +345,7 @@ fn forward_extract_batches<'a, 'b>(dir: &'b CritIR<'a>, batch_size: usize) -> Ba
         }
 
         while !batch.is_full() {
+            // ready_list.shuffle(&mut rand::rng());
             ready_list.sort_by_key(|v| v.get_annotation().height);
             match ready_list.pop() {
                 Some(v) => batch.push(v),
@@ -411,6 +412,7 @@ fn backward_extract_batches<'a, 'b>(dir: &'b CritIR<'a>, batch_size: usize) -> B
         }
 
         while !batch.is_full() {
+            // ready_list.shuffle(&mut rand::rng());
             ready_list.sort_by_key(|v| v.get_annotation().depth);
             match ready_list.pop() {
                 Some(op) => batch.push(op),

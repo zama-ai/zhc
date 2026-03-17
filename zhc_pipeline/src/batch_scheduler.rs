@@ -195,6 +195,7 @@ fn forward_schedule<'a, 'b>(ir: &'b HeightedIR<'a>, config: &HpuConfig) -> Vec<O
 
     if !pep_busy && !pep_ready.is_empty() {
         pep_busy = true;
+        // pep_ready.shuffle(&mut rand::rng());
         pep_ready.sort_by_key(|op| *op.get_annotation());
         let op = pep_ready.pop().unwrap();
         let at = Cycle(0) + get_op_latency(&op, config);
@@ -204,6 +205,7 @@ fn forward_schedule<'a, 'b>(ir: &'b HeightedIR<'a>, config: &HpuConfig) -> Vec<O
 
     if !pem_busy && !pem_ready.is_empty() {
         pem_busy = true;
+        // pem_ready.shuffle(&mut rand::rng());
         pem_ready.sort_by_key(|op| *op.get_annotation());
         let op = pem_ready.pop().unwrap();
         let at = Cycle(0) + get_op_latency(&op, config);
@@ -213,6 +215,7 @@ fn forward_schedule<'a, 'b>(ir: &'b HeightedIR<'a>, config: &HpuConfig) -> Vec<O
 
     if !pea_busy && !pea_ready.is_empty() {
         pea_busy = true;
+        // pea_ready.shuffle(&mut rand::rng());
         pea_ready.sort_by_key(|op| *op.get_annotation());
         let op = pea_ready.pop().unwrap();
         let at = Cycle(0) + get_op_latency(&op, config);
@@ -269,6 +272,7 @@ fn forward_schedule<'a, 'b>(ir: &'b HeightedIR<'a>, config: &HpuConfig) -> Vec<O
 
         if !pep_busy && !pep_ready.is_empty() {
             pep_busy = true;
+            // pep_ready.shuffle(&mut rand::rng());
             pep_ready.sort_by_key(|op| *op.get_annotation());
             let op = pep_ready.pop().unwrap();
             let at = current_cycle + get_op_latency(&op, config);
@@ -278,6 +282,7 @@ fn forward_schedule<'a, 'b>(ir: &'b HeightedIR<'a>, config: &HpuConfig) -> Vec<O
 
         if !pem_busy && !pem_ready.is_empty() {
             pem_busy = true;
+            // pem_ready.shuffle(&mut rand::rng());
             pem_ready.sort_by_key(|op| *op.get_annotation());
             let op = pem_ready.pop().unwrap();
             let at = current_cycle + get_op_latency(&op, config);
@@ -287,6 +292,7 @@ fn forward_schedule<'a, 'b>(ir: &'b HeightedIR<'a>, config: &HpuConfig) -> Vec<O
 
         if !pea_busy && !pea_ready.is_empty() {
             pea_busy = true;
+            // pea_ready.shuffle(&mut rand::rng());
             pea_ready.sort_by_key(|op| *op.get_annotation());
             let op = pea_ready.pop().unwrap();
             let at = current_cycle + get_op_latency(&op, config);
@@ -349,25 +355,25 @@ mod test {
                     %a6 : CtRegister = batch_arg<6, CtRegister>();
                     %a7 : CtRegister = batch_arg<7, CtRegister>();
                     %a8 : CtRegister, %a9 : CtRegister = pbs_2<Lut@71>(%a0 : CtRegister);
-                    %a10 : CtRegister, %a11 : CtRegister = pbs_2<Lut@71>(%a1 : CtRegister);
-                    %a12 : CtRegister, %a13 : CtRegister = pbs_2<Lut@71>(%a2 : CtRegister);
-                    %a14 : CtRegister, %a15 : CtRegister = pbs_2<Lut@71>(%a3 : CtRegister);
-                    %a16 : CtRegister, %a17 : CtRegister = pbs_2<Lut@71>(%a4 : CtRegister);
-                    %a18 : CtRegister, %a19 : CtRegister = pbs_2<Lut@71>(%a5 : CtRegister);
+                    %a10 : CtRegister, %a11 : CtRegister = pbs_2<Lut@71>(%a3 : CtRegister);
+                    %a12 : CtRegister, %a13 : CtRegister = pbs_2<Lut@71>(%a4 : CtRegister);
+                    %a14 : CtRegister, %a15 : CtRegister = pbs_2<Lut@71>(%a1 : CtRegister);
+                    %a16 : CtRegister, %a17 : CtRegister = pbs_2<Lut@71>(%a5 : CtRegister);
+                    %a18 : CtRegister, %a19 : CtRegister = pbs_2<Lut@71>(%a2 : CtRegister);
                     %a20 : CtRegister, %a21 : CtRegister = pbs_2<Lut@71>(%a6 : CtRegister);
                     %a22 : CtRegister, %a23 : CtRegister = pbs_2f<Lut@71>(%a7 : CtRegister);
                     batch_ret<0, CtRegister>(%a8 : CtRegister);
                     batch_ret<1, CtRegister>(%a9 : CtRegister);
-                    batch_ret<2, CtRegister>(%a10 : CtRegister);
-                    batch_ret<3, CtRegister>(%a11 : CtRegister);
-                    batch_ret<4, CtRegister>(%a12 : CtRegister);
-                    batch_ret<5, CtRegister>(%a13 : CtRegister);
-                    batch_ret<6, CtRegister>(%a14 : CtRegister);
-                    batch_ret<7, CtRegister>(%a15 : CtRegister);
-                    batch_ret<8, CtRegister>(%a16 : CtRegister);
-                    batch_ret<9, CtRegister>(%a17 : CtRegister);
-                    batch_ret<10, CtRegister>(%a18 : CtRegister);
-                    batch_ret<11, CtRegister>(%a19 : CtRegister);
+                    batch_ret<2, CtRegister>(%a14 : CtRegister);
+                    batch_ret<3, CtRegister>(%a15 : CtRegister);
+                    batch_ret<4, CtRegister>(%a18 : CtRegister);
+                    batch_ret<5, CtRegister>(%a19 : CtRegister);
+                    batch_ret<6, CtRegister>(%a10 : CtRegister);
+                    batch_ret<7, CtRegister>(%a11 : CtRegister);
+                    batch_ret<8, CtRegister>(%a12 : CtRegister);
+                    batch_ret<9, CtRegister>(%a13 : CtRegister);
+                    batch_ret<10, CtRegister>(%a16 : CtRegister);
+                    batch_ret<11, CtRegister>(%a17 : CtRegister);
                     batch_ret<12, CtRegister>(%a20 : CtRegister);
                     batch_ret<13, CtRegister>(%a21 : CtRegister);
                     batch_ret<14, CtRegister>(%a22 : CtRegister);

@@ -5,6 +5,7 @@
 //! pipeline consists of translation from IOP language to HPU language,
 //! operation scheduling, register allocation, and final code generation.
 
+use std::f64;
 use std::path::Path;
 
 use allocator::allocate_registers;
@@ -106,12 +107,19 @@ fn regular_pipeline(mut ir: IR<IopLang>, config: &HpuConfig) -> IR<DopLang> {
 #[cfg(test)]
 mod test;
 
-#[test]
+// #[test]
+#[allow(unused)]
 fn test_dump_trace() {
-    let bd = zhc_builder::mul_lsb(CiphertextSpec::new(64, 2, 2));
-    trace_execution(
-        &bd,
-        HpuConfig::from(zhc_sim::hpu::PhysicalConfig::tuniform_64b_pfail128_psi64()),
-        "test.json",
-    );
+    let bd = zhc_builder::count_0(CiphertextSpec::new(64, 2, 2));
+    let mut min = f64::INFINITY;
+    for _ in 0..1000 {
+        let config = HpuConfig::from(zhc_sim::hpu::PhysicalConfig::tuniform_64b_pfail128_psi64());
+        let allocated = regular_pipeline(bd.ir().to_owned(), &config);
+        let new_lat = latency::compute_latency(&allocated, &config).as_ts(MHz(400).period());
+        if new_lat < min {
+            min = new_lat;
+            tracing::trace_execution(&allocated, &config, "smallest.json");
+        }
+        println!("{}", min)
+    }
 }

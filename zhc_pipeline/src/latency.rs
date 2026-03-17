@@ -86,7 +86,7 @@ mod test {
         assert_display_is!(
             format!("{}us", lat.as_ts(MHz(400).period())),
             r#"
-                10149.375us
+                10185.0175us
             "#
         );
     }
@@ -97,7 +97,7 @@ mod test {
         assert_display_is!(
             format!("{}us", lat.as_ts(MHz(400).period())),
             r#"
-                122022.89us
+                120890.12us
             "#
         );
     }
@@ -108,7 +108,7 @@ mod test {
         assert_display_is!(
             format!("{}us", lat.as_ts(MHz(400).period())),
             r#"
-                167080.865us
+                166423.82us
             "#
         );
     }
@@ -119,7 +119,7 @@ mod test {
         assert_display_is!(
             format!("{}us", lat.as_ts(MHz(400).period())),
             r#"
-                12755.145us
+                12767.1325us
             "#
         );
     }
