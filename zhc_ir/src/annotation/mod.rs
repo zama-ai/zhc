@@ -20,6 +20,7 @@ mod traits;
 mod val_origin;
 mod val_ref;
 mod val_use;
+mod view;
 
 pub use ir::*;
 pub use op_ref::*;

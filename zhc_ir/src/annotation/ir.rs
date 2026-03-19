@@ -1,5 +1,8 @@
 use super::*;
-use crate::{AnnOpRef, AnnValRef, Dialect, Formatted, IR, OpId, OpMap, ValId, ValMap};
+use crate::{
+    AnnOpRef, AnnValRef, Dialect, Formatted, IR, OpId, OpMap, ValId, ValMap,
+    annotation::view::AnnIRView,
+};
 use std::ops::Deref;
 use zhc_utils::{Dumpable, iter::MultiZip, small::SmallVec};
 
@@ -58,6 +61,14 @@ impl<'ir, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> AnnIR<'ir, D, OpAnn
         &mut self.val_annotations
     }
 
+    pub fn view(&self) -> AnnIRView<'ir, '_, D, OpAnn, ValAnn> {
+        AnnIRView {
+            ir: self.ir,
+            op_annotations: &self.op_annotations,
+            val_annotations: &self.val_annotations,
+        }
+    }
+
     /// Returns an annotated operation reference for the specified operation.
     ///
     /// # Panics
@@ -67,7 +78,7 @@ impl<'ir, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> AnnIR<'ir, D, OpAnn
         let opref = self.ir.get_op(opid);
         let ann = &self.op_annotations[opid];
         AnnOpRef {
-            ann_ir: self,
+            ir: self.view(),
             opref,
             ann,
         }
@@ -82,7 +93,7 @@ impl<'ir, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> AnnIR<'ir, D, OpAnn
         let valref = self.ir.get_val(valid);
         let ann = &self.val_annotations[valid];
         AnnValRef {
-            ann_ir: self,
+            ir: self.view(),
             valref,
             ann,
         }
@@ -95,7 +106,7 @@ impl<'ir, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> AnnIR<'ir, D, OpAnn
         self.ir.walk_ops_linear().map(|opref| {
             let ann = &self.op_annotations[*opref];
             AnnOpRef {
-                ann_ir: self,
+                ir: self.view(),
                 opref,
                 ann,
             }
@@ -109,7 +120,7 @@ impl<'ir, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> AnnIR<'ir, D, OpAnn
         self.ir.walk_ops_topological().map(|opref| {
             let ann = &self.op_annotations[*opref];
             AnnOpRef {
-                ann_ir: self,
+                ir: self.view(),
                 opref,
                 ann,
             }
@@ -124,7 +135,7 @@ impl<'ir, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> AnnIR<'ir, D, OpAnn
         self.ir.walk_ops_with(walker).map(|opref| {
             let ann = &self.op_annotations[*opref];
             AnnOpRef {
-                ann_ir: self,
+                ir: self.view(),
                 opref,
                 ann,
             }
@@ -138,7 +149,7 @@ impl<'ir, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> AnnIR<'ir, D, OpAnn
         self.ir.walk_vals_linear().map(|valref| {
             let ann = &self.val_annotations[*valref];
             AnnValRef {
-                ann_ir: self,
+                ir: self.view(),
                 valref,
                 ann,
             }
@@ -153,7 +164,7 @@ impl<'ir, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> AnnIR<'ir, D, OpAnn
         self.ir.walk_vals_with(walker).map(|valref| {
             let ann = &self.val_annotations[*valref];
             AnnValRef {
-                ann_ir: self,
+                ir: self.view(),
                 valref,
                 ann,
             }

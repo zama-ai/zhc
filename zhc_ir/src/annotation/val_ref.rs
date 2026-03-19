@@ -3,13 +3,14 @@ use std::{fmt::Debug, ops::Deref};
 use zhc_utils::Dumpable;
 
 use crate::{
-    AnnIR, AnnOpRef, AnnValOriginRef, AnnValUseRef, Annotation, Dialect, Formatted, ValRef,
+    AnnOpRef, AnnValOriginRef, AnnValUseRef, Annotation, Dialect, Formatted, ValRef,
+    annotation::view::AnnIRView,
 };
 
 /// Value reference with attached annotation data.
 #[derive(Debug, Clone)]
 pub struct AnnValRef<'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> {
-    pub(super) ann_ir: &'ann AnnIR<'ir, D, OpAnn, ValAnn>,
+    pub(super) ir: AnnIRView<'ir, 'ann, D, OpAnn, ValAnn>,
     pub(super) valref: ValRef<'ir, D>,
     pub(super) ann: &'ann ValAnn,
 }
@@ -25,10 +26,10 @@ impl<'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation>
     /// Returns the operation that produces this value with its annotation.
     pub fn get_origin(&self) -> AnnValOriginRef<'ir, 'ann, D, OpAnn, ValAnn> {
         let origin = self.valref.get_origin();
-        let ann = &self.ann_ir.op_annotations[*origin.opref];
+        let ann = &self.ir.op_annotations[*origin.opref];
         AnnValOriginRef {
             opref: AnnOpRef {
-                ann_ir: self.ann_ir,
+                ir: self.ir.clone(),
                 opref: origin.opref.clone(),
                 ann,
             },
@@ -41,11 +42,12 @@ impl<'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation>
         &self,
     ) -> impl Iterator<Item = AnnValUseRef<'ir, 'ann, D, OpAnn, ValAnn>> + use<'ir, 'ann, D, OpAnn, ValAnn>
     {
-        self.valref.get_uses_iter().map(|user| {
-            let ann = &self.ann_ir.op_annotations[*user.opref];
+        let local_ir = self.ir.clone();
+        self.valref.get_uses_iter().map(move |user| {
+            let ann = &local_ir.op_annotations[*user.opref];
             AnnValUseRef {
                 opref: AnnOpRef {
-                    ann_ir: self.ann_ir,
+                    ir: local_ir.clone(),
                     opref: user.opref,
                     ann,
                 },
@@ -59,10 +61,11 @@ impl<'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation>
         &self,
     ) -> impl Iterator<Item = AnnOpRef<'ir, 'ann, D, OpAnn, ValAnn>> + use<'ir, 'ann, D, OpAnn, ValAnn>
     {
-        self.valref.get_users_iter().map(|user| {
-            let ann = &self.ann_ir.op_annotations[*user];
+        let local_ir = self.ir.clone();
+        self.valref.get_users_iter().map(move |user| {
+            let ann = &local_ir.op_annotations[*user];
             AnnOpRef {
-                ann_ir: self.ann_ir,
+                ir: local_ir.clone(),
                 opref: user,
                 ann,
             }
