@@ -9,8 +9,24 @@ use zhc_ir::IR;
 use zhc_langs::doplang::DopLang;
 use zhc_sim::{
     Cycle, Simulator,
-    hpu::{DOp, DOpId, Events, Hpu, HpuConfig},
+    hpu::{DOp, DOpId, Events, FlatLinLatency, Hpu, HpuConfig},
 };
+
+/// Computes the lower bound on the execution latency.
+///
+/// This lower bound is computed assuming we have a perfect batching, and a hiding of every linear
+/// operations behind pbs batches..
+pub fn compute_lower_bound(pbses_count: usize, config: &HpuConfig) -> Cycle {
+    let n_full = pbses_count.div_euclid(config.pbs_max_batch_size);
+    let last_batch_length = pbses_count.rem_euclid(config.pbs_max_batch_size);
+    let model = FlatLinLatency::new(
+        config.pbs_processing_latency_a,
+        config.pbs_processing_latency_b,
+        config.pbs_processing_latency_m,
+    );
+    model.compute_latency(config.pbs_max_batch_size) * n_full
+        + model.compute_latency(last_batch_length)
+}
 
 /// Computes the execution latency for the given device operation IR.
 ///
