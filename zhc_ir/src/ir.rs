@@ -464,7 +464,7 @@ impl<D: Dialect> IR<D> {
             .map(|a| self.get_val(*a).get_origin().opref.get_depth())
             .max();
         let depth = if arg_depth.is_none() {
-            0
+            1
         } else {
             let (d, overflow) = arg_depth.unwrap().overflowing_add(1);
             if overflow {

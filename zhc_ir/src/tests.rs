@@ -51,12 +51,12 @@ fn test_construction() {
     assert_eq!(store.n_ops(), 8);
     assert_eq!(store.n_vals(), 8);
     assert!(lhs.is_active());
-    assert_eq!(lhs.get_depth(), 0);
+    assert_eq!(lhs.get_depth(), 1);
     assert_eq!(lhs.get_args_iter().covec(), []);
     assert_eq!(lhs.get_returns_iter().covec(), [p0.clone()]);
 
     assert!(rhs.is_active());
-    assert_eq!(rhs.get_depth(), 0);
+    assert_eq!(rhs.get_depth(), 1);
     assert_eq!(rhs.get_args_iter().covec(), []);
     assert_eq!(rhs.get_returns_iter().covec(), [p1.clone()]);
 
@@ -69,7 +69,7 @@ fn test_construction() {
     assert_eq!(p1.get_users_iter().covec(), [join.clone()]);
 
     assert!(join.is_active());
-    assert_eq!(join.get_depth(), 1);
+    assert_eq!(join.get_depth(), 2);
     assert_eq!(join.get_args_iter().covec(), [p0.clone(), p1.clone()]);
     assert_eq!(join.get_returns_iter().covec(), [p2.clone()]);
 
@@ -78,7 +78,7 @@ fn test_construction() {
     assert_eq!(p2.get_users_iter().covec(), [split.clone()]);
 
     assert!(split.is_active());
-    assert_eq!(split.get_depth(), 2);
+    assert_eq!(split.get_depth(), 3);
     assert_eq!(split.get_args_iter().covec(), [p2.clone(), p0.clone()]);
     assert_eq!(split.get_returns_iter().covec(), [p3.clone(), p4.clone()]);
 
@@ -91,7 +91,7 @@ fn test_construction() {
     assert_eq!(p4.get_users_iter().covec(), [urhs.clone()]);
 
     assert!(ulhs.is_active());
-    assert_eq!(ulhs.get_depth(), 3);
+    assert_eq!(ulhs.get_depth(), 4);
     assert_eq!(ulhs.get_args_iter().covec(), [p3.clone()]);
     assert_eq!(ulhs.get_returns_iter().covec(), [p5.clone()]);
 
@@ -100,7 +100,7 @@ fn test_construction() {
     assert_eq!(p5.get_users_iter().covec(), [final_add.clone()]);
 
     assert!(urhs.is_active());
-    assert_eq!(urhs.get_depth(), 3);
+    assert_eq!(urhs.get_depth(), 4);
     assert_eq!(urhs.get_args_iter().covec(), [p4.clone()]);
     assert_eq!(urhs.get_returns_iter().covec(), [p6.clone()]);
 
@@ -109,7 +109,7 @@ fn test_construction() {
     assert_eq!(p6.get_users_iter().covec(), [final_add.clone()]);
 
     assert!(final_add.is_active());
-    assert_eq!(final_add.get_depth(), 4);
+    assert_eq!(final_add.get_depth(), 5);
     assert_eq!(final_add.get_args_iter().covec(), [p5.clone(), p6.clone()]);
     assert_eq!(final_add.get_returns_iter().covec(), [p7.clone()]);
 
@@ -118,7 +118,7 @@ fn test_construction() {
     assert_eq!(p7.get_users_iter().covec(), []);
 
     assert!(effect.is_active());
-    assert_eq!(effect.get_depth(), 3);
+    assert_eq!(effect.get_depth(), 4);
     assert_eq!(effect.get_args_iter().covec(), [p3.clone()]);
     assert_eq!(effect.get_returns_iter().covec(), []);
 }
@@ -598,7 +598,7 @@ fn test_replace_val_use_make_shallower() {
     "#
     );
     let last = store.get_op(last_id);
-    assert_eq!(last.get_depth(), 4);
+    assert_eq!(last.get_depth(), 5);
     store.replace_val_use(v4[0], v0[0]);
     assert_display_is!(
         store.format(),
@@ -612,7 +612,7 @@ fn test_replace_val_use_make_shallower() {
     "#
     );
     let last = store.get_op(last_id);
-    assert_eq!(last.get_depth(), 1);
+    assert_eq!(last.get_depth(), 2);
 }
 
 /// Tests that value replacement makes operation depth deeper when appropriate
@@ -637,7 +637,7 @@ fn test_replace_val_use_make_deeper() {
     "#
     );
     let last = store.get_op(last_id);
-    assert_eq!(last.get_depth(), 2);
+    assert_eq!(last.get_depth(), 3);
     store.replace_val_use(v0[0], v3[0]);
     assert_display_is!(
         store.format(),
@@ -651,7 +651,7 @@ fn test_replace_val_use_make_deeper() {
     "#
     );
     let last = store.get_op(last_id);
-    assert_eq!(last.get_depth(), 4);
+    assert_eq!(last.get_depth(), 5);
 }
 
 /// Tests that add_op panics when argument types don't match operation signature
@@ -772,7 +772,7 @@ fn test_diamond_dependencies() {
     // A should have 2 users (B and C)
     assert_eq!(a_val.get_users_iter().count(), 2);
     // D should be at depth 3 (A:1 → B,C:2 → D:3)
-    assert_eq!(d_op.get_depth(), 2);
+    assert_eq!(d_op.get_depth(), 3);
 }
 
 /// Tests multiple independent subgraphs in same IR
@@ -915,12 +915,12 @@ fn test_replacement_deeper_chain() {
     let (_, inc1_vals) = store.add_op(TestInstructionSet::Inc, svec![inp2[0]]);
     let (inc2_id, _) = store.add_op(TestInstructionSet::Inc, svec![inp1[0]]); // Initially uses inp1
 
-    assert_eq!(store.get_op(inc2_id).get_depth(), 1);
+    assert_eq!(store.get_op(inc2_id).get_depth(), 2);
 
     // Replace inp1 with inc1's output, making inc2 deeper
     store.replace_val_use(inp1[0], inc1_vals[0]);
 
-    assert_eq!(store.get_op(inc2_id).get_depth(), 2); // Now inp2→inc1→inc2
+    assert_eq!(store.get_op(inc2_id).get_depth(), 3); // Now inp2→inc1→inc2
 }
 
 /// Tests has_opid/has_valid behavior with deleted elements
