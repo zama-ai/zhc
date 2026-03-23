@@ -102,7 +102,7 @@ fn get_op_affinity<'a, 'b>(op: &HeightedOpRef<'a, 'b>) -> Affinity {
         | SubCst { .. }
         | CstSub { .. }
         | MulCst { .. } => Affinity::Pea,
-        CstCt { .. } => Affinity::Ctl,
+        CstCt { .. } | TransferIn { .. } | TransferOut { .. } => Affinity::Ctl,
         ImmLd { .. } | DstSt { .. } | SrcLd { .. } => Affinity::Pem,
         Batch { .. } => Affinity::Pep,
         _ => unreachable!(),

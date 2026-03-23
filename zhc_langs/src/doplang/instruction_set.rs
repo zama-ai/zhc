@@ -239,7 +239,7 @@ impl Argument {
             Argument::CtDstVar { id, block } => format!("TD[{id}].{block}"),
             Argument::PtSrcVar { id, block } => format!("TI[{id}].{block}"),
             Argument::CtReg { addr, .. } => format!("R{addr}"),
-            Argument::LutId { id } => LUT_ALIASES[*id].into(),
+            Argument::LutId { id } => format!("Pbs{}", LUT_ALIASES[*id]),
             Argument::UserFlag { flag } => format!("F{flag}"),
             Argument::VirtId { id } => format!("N{id}"),
         }
@@ -477,7 +477,7 @@ pub enum DopInstructionSet {
         slot: Argument,
     },
     /// Load B2B virtual op for Multi-HPU
-    LOAD_B2B { flag: Argument, slot: Argument },
+    LD_B2B { flag: Argument, slot: Argument },
 }
 
 impl Format for DopInstructionSet {
@@ -517,7 +517,7 @@ impl Format for DopInstructionSet {
                 flag,
                 slot,
             } => write!(f, "NOTIFY<{virt_id}, {flag}, {slot}>"),
-            LOAD_B2B { flag, slot } => write!(f, "LOAD_B2B<{flag}, {slot}>"),
+            LD_B2B { flag, slot } => write!(f, "LD_B2B<{flag}, {slot}>"),
         }
     }
 }
@@ -564,7 +564,7 @@ impl DopInstructionSet {
             SYNC => Ctl,
             NOTIFY { .. } => Ctl,
             WAIT { .. } => Ctl,
-            LOAD_B2B { .. } => Ctl,
+            LD_B2B { .. } => Ctl,
         }
     }
 
@@ -594,7 +594,7 @@ impl DopInstructionSet {
             PBS_ML8_F { src, .. } => arg == src,
             _INIT => false,
             SYNC => false,
-            LOAD_B2B { .. } | WAIT { .. } | NOTIFY { .. } => panic!(),
+            LD_B2B { .. } | WAIT { .. } | NOTIFY { .. } => panic!(),
         }
     }
 
@@ -621,7 +621,7 @@ impl DopInstructionSet {
             PBS_ML8_F { dst, .. } => Some(dst),
             _INIT => None,
             SYNC => None,
-            LOAD_B2B { .. } | WAIT { .. } | NOTIFY { .. } => panic!(),
+            LD_B2B { .. } | WAIT { .. } | NOTIFY { .. } => panic!(),
         }
     }
 
@@ -649,7 +649,7 @@ impl DopInstructionSet {
             PBS_ML8_F { src, .. } => Some(src),
             _INIT => None,
             SYNC => None,
-            LOAD_B2B { .. } | WAIT { .. } | NOTIFY { .. } => panic!(),
+            LD_B2B { .. } | WAIT { .. } | NOTIFY { .. } => panic!(),
         }
     }
 
@@ -679,7 +679,7 @@ impl DopInstructionSet {
             PBS_ML8_F { .. } => None,
             _INIT => None,
             SYNC => None,
-            LOAD_B2B { .. } | WAIT { .. } | NOTIFY { .. } => panic!(),
+            LD_B2B { .. } | WAIT { .. } | NOTIFY { .. } => panic!(),
         }
     }
 }
@@ -710,7 +710,7 @@ impl DialectInstructionSet for DopInstructionSet {
             | PBS_ML8_F { .. }
             | WAIT { .. }
             | NOTIFY { .. }
-            | LOAD_B2B { .. } => sig![(Ctx(0)) -> (Ctx(0))],
+            | LD_B2B { .. } => sig![(Ctx(0)) -> (Ctx(0))],
             _INIT => sig![() -> (Ctx(0))],
             SYNC => sig![(Ctx(0)) -> ()],
         }

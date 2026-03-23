@@ -59,7 +59,7 @@ impl Pool {
         assert!(
             !matches!(
                 dop.raw,
-                RawDOp::NOTIFY { .. } | RawDOp::WAIT { .. } | RawDOp::LOAD_B2B { .. }
+                RawDOp::NOTIFY { .. } | RawDOp::WAIT { .. } | RawDOp::LD_B2B { .. }
             ),
             "Multi-HPU is not yet supported in simulation."
         );

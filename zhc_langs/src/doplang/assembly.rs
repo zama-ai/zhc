@@ -18,7 +18,6 @@ use zhc_ir::IR;
 /// Returns an empty string when the IR contains no instructions.
 pub fn emit_assembly(ir: &IR<DopLang>) -> String {
     let mut output = String::new();
-
     for op in ir.walk_ops_linear() {
         use DopInstructionSet::*;
         match op.get_instruction() {
@@ -108,7 +107,7 @@ pub fn emit_assembly(ir: &IR<DopLang>) -> String {
                 flag.asm(),
                 slot.asm()
             ),
-            LOAD_B2B { flag, slot } => writeln!(output, "LOAD_B2B {} {}", flag.asm(), slot.asm()),
+            LD_B2B { flag, slot } => writeln!(output, "LD_B2B {} {}", flag.asm(), slot.asm()),
         }
         .unwrap();
     }

@@ -163,6 +163,8 @@ fn test_dump_trace() {
         }
         println!("{}/{lower_bound}   {}", min, min / lower_bound)
     }
+}
+
 #[test]
 fn mh_mul() {
     let hpu_config = HpuConfig::from(PhysicalConfig::tuniform_64b_pfail128_psi64());
@@ -187,9 +189,10 @@ fn mh_mul() {
     assert_eq!(components.len(), 2);
 
     for (i, comp) in components.into_iter().enumerate() {
-        let unscheduled = lower_iop_to_hpu(&comp);
-        let batched = batch_schedule(&unscheduled, &hpu_config);
-        let allocated = allocate_registers(&batched, &hpu_config);
+        let unscheduled = translation::lower_iop_to_hpu(&comp);
+        let batched = batcher::batch(&unscheduled, &hpu_config);
+        let scheduled = batch_scheduler::schedule(&batched, &hpu_config);
+        let allocated = allocate_registers(&scheduled, &hpu_config);
         use std::fs::File;
         use std::io::Write;
         let filename = format!("output_{}.asm", i);
