@@ -544,7 +544,9 @@ pub fn batch<'a, 'b>(ir: &'a IR<HpuLang>, config: &'b HpuConfig) -> IR<HpuLang> 
             | CstCt { .. }
             | ImmLd { .. }
             | DstSt { .. }
-            | SrcLd { .. } => {
+            | SrcLd { .. }
+            | TransferIn { .. }
+            | TransferOut { .. } => {
                 let new_args = opref
                     .get_args_iter()
                     .map(|valref| engine.translate_val(valref))
@@ -576,9 +578,6 @@ pub fn batch<'a, 'b>(ir: &'a IR<HpuLang>, config: &'b HpuConfig) -> IR<HpuLang> 
             }
             Batch { .. } | BatchArg { .. } | BatchRet { .. } => {
                 panic!("Unexpected batch operations encountered.")
-            }
-            TransferIn { .. } | TransferOut { .. } => {
-                panic!("Unexpected.")
             }
         }
     });

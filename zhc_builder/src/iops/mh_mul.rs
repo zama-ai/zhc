@@ -90,11 +90,11 @@ fn mh_mul_lsb_with_opt(spec: CiphertextSpec, mh_factor: u8, gen_overflow: bool) 
 
     // View output as mh_factor sub-part
     for out in outputs.into_iter() {
-        let output = builder.join_ciphertext(
+        let output = builder.ciphertext_join(
             &out,
             Some(out.len() as u16 * spec.block_spec().message_size() as u16),
         );
-        builder.output_ciphertext(output);
+        builder.ciphertext_output(output);
     }
 
     builder

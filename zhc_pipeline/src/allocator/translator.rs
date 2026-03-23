@@ -70,7 +70,7 @@ pub fn translate<'ir>(ir: &AnnIR<'ir, HpuLang, Alloc, ()>) -> IR<DopLang> {
             TransferIn { tid } => {
                 // Ajouter un load_b2b
                 // Ajouter le wait et voila
-                add_op(DopInstructionSet::LOAD_B2B {
+                add_op(DopInstructionSet::LD_B2B {
                     flag: Argument::UserFlag { flag: tid },
                     slot: Argument::ct_heap(slots[0].0 as usize),
                 });
@@ -78,7 +78,7 @@ pub fn translate<'ir>(ir: &AnnIR<'ir, HpuLang, Alloc, ()>) -> IR<DopLang> {
                     flag: Argument::UserFlag { flag: tid },
                     slot: Some(Argument::ct_heap(slots[0].0 as usize)),
                 });
-                add_op(DopInstructionSet::ST {
+                add_op(DopInstructionSet::LD {
                     dst: Argument::ct_reg(dsts[0].0),
                     src: Argument::ct_heap(slots[0].0 as usize),
                 })

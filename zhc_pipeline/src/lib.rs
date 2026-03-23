@@ -108,27 +108,27 @@ fn multi_hpu_pipeline(mut ir: IR<IopLang>, config: &HpuConfig) -> Vec<IR<DopLang
 #[cfg(test)]
 mod test;
 
-// #[test]
-// #[allow(unused)]
-// fn test_dump_trace() {
-//     let bd = zhc_builder::mul_lsb(zhc_builder::CiphertextSpec::new(64, 2, 2));
-//     let config = HpuConfig::from(zhc_sim::hpu::PhysicalConfig::tuniform_64b_pfail128_psi64());
-//     let pbses_count = regular_pipeline(bd.ir().to_owned(), &config)
-//         .walk_ops_linear()
-//         .filter(|op| op.get_instruction().affinity() == zhc_langs::doplang::Affinity::Pbs)
-//         .count();
-//     let lower_bound = latency::compute_lower_bound(pbses_count,
-// &config).as_ts(MHz(400).period());     let mut min = f64::INFINITY;
-//     for _ in 0..1000 {
-//         let allocated = regular_pipeline(bd.ir().to_owned(), &config);
-//         let new_lat = latency::compute_latency(&allocated, &config).as_ts(MHz(400).period());
-//         if new_lat < min {
-//             min = new_lat;
-//             tracing::trace_execution(&allocated, &config, "smallest.json");
-//         }
-//         println!("{}/{lower_bound}   {}", min, min / lower_bound)
-//     }
-// }
+//#[test]
+#[allow(unused)]
+fn test_dump_trace() {
+    let bd = zhc_builder::mul_lsb(CiphertextSpec::new(64, 2, 2));
+    let config = HpuConfig::from(zhc_sim::hpu::PhysicalConfig::tuniform_64b_pfail128_psi64());
+    let pbses_count = regular_pipeline(bd.ir().to_owned(), &config)
+        .walk_ops_linear()
+        .filter(|op| op.get_instruction().affinity() == zhc_langs::doplang::Affinity::Pbs)
+        .count();
+    let lower_bound = latency::compute_lower_bound(pbses_count, &config).as_ts(MHz(400).period());
+    let mut min = f64::INFINITY;
+    for _ in 0..1000 {
+        let allocated = regular_pipeline(bd.ir().to_owned(), &config);
+        let new_lat = latency::compute_latency(&allocated, &config).as_ts(MHz(400).period());
+        if new_lat < min {
+            min = new_lat;
+            tracing::trace_execution(&allocated, &config, "smallest.json");
+        }
+        println!("{}/{lower_bound}   {}", min, min / lower_bound)
+    }
+}
 
 #[test]
 fn mh_mul() {
@@ -154,9 +154,10 @@ fn mh_mul() {
     assert_eq!(components.len(), 2);
 
     for (i, comp) in components.into_iter().enumerate() {
-        let unscheduled = lower_iop_to_hpu(&comp);
-        let batched = batch_schedule(&unscheduled, &hpu_config);
-        let allocated = allocate_registers(&batched, &hpu_config);
+        let unscheduled = translation::lower_iop_to_hpu(&comp);
+        let batched = batcher::batch(&unscheduled, &hpu_config);
+        let scheduled = batch_scheduler::schedule(&batched, &hpu_config);
+        let allocated = allocate_registers(&scheduled, &hpu_config);
         use std::fs::File;
         use std::io::Write;
         let filename = format!("output_{}.asm", i);
