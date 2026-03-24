@@ -6,7 +6,11 @@ use zhc_sim::{
     Cycle,
     hpu::{ConstantLatency, FlatLinLatency, HpuConfig},
 };
-use zhc_utils::{Dumpable, fsm, iter::CollectInVec, svec};
+use zhc_utils::{
+    Dumpable, FastMap, fsm,
+    iter::{CollectInSmallVec, CollectInVec},
+    svec,
+};
 
 type Height = u16;
 type HeightedOpRef<'a, 'b> = AnnOpRef<'a, 'b, HpuLang, Height, ()>;
@@ -306,7 +310,27 @@ fn forward_schedule<'a, 'b>(ir: &'b HeightedIR<'a>, config: &HpuConfig) -> Vec<O
 
 pub fn schedule<'a, 'b>(ir: &'a IR<HpuLang>, config: &HpuConfig) -> IR<HpuLang> {
     let heighted = analyze_height(ir);
-    let schedule = forward_schedule(&heighted, config);
+    let mut schedule = forward_schedule(&heighted, config);
+    // Ugly patch to push the transfers to occur as late as possible.
+    let transfer_ins: FastMap<_, _> = ir
+        .walk_ops_linear()
+        .filter(|p| p.get_instruction().is_transfer_in())
+        .map(|op| {
+            (
+                op.get_id(),
+                op.get_users_iter().map(|u| u.get_id()).cosvec(),
+            )
+        })
+        .collect();
+    for (tid, uids) in transfer_ins.into_iter() {
+        let pos = schedule.iter().position(|op| *op == tid).unwrap();
+        schedule.remove(pos);
+        let pos = schedule
+            .iter()
+            .position(|op| uids.as_slice().contains(op))
+            .unwrap();
+        schedule.insert(pos, tid);
+    }
     reschedule(ir, schedule.into_iter()).0
 }
 
