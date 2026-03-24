@@ -249,6 +249,10 @@ impl HpuInstructionSet {
     pub fn is_batch(&self) -> bool {
         matches!(self, HpuInstructionSet::Batch { .. })
     }
+
+    pub fn is_transfer_in(&self) -> bool {
+        matches!(self, HpuInstructionSet::TransferIn { .. })
+    }
 }
 
 impl Format for HpuInstructionSet {
