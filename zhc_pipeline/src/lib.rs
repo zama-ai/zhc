@@ -132,7 +132,9 @@ fn test_dump_trace() {
 
 #[test]
 fn mh_mul() {
-    let hpu_config = HpuConfig::from(PhysicalConfig::tuniform_64b_pfail128_psi64());
+    let mut hpu_config = HpuConfig::from(PhysicalConfig::tuniform_64b_pfail128_psi64());
+    hpu_config.pbs_min_batch_size = 12;
+    hpu_config.pbs_max_batch_size = 12;
     let mut ir = mh_mul_lsb(CiphertextSpec::new(64, 2, 2), 2).into_ir();
 
     cut_transfers(&mut ir);
@@ -153,7 +155,7 @@ fn mh_mul() {
     println!("{components:?}");
     assert_eq!(components.len(), 2);
 
-    for (i, comp) in components.into_iter().enumerate() {
+    for (i, comp) in components.into_iter().rev().enumerate() {
         let unscheduled = translation::lower_iop_to_hpu(&comp);
         let batched = batcher::batch(&unscheduled, &hpu_config);
         let scheduled = batch_scheduler::schedule(&batched, &hpu_config);

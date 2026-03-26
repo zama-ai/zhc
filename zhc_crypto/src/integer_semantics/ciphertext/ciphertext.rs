@@ -31,6 +31,10 @@ pub struct EmulatedCiphertext {
 }
 
 impl EmulatedCiphertext {
+    pub fn new(storage: EmulatedCiphertextStorage, spec: CiphertextSpec) -> Self {
+        Self { storage, spec }
+    }
+
     /// Returns the number of blocks in this ciphertext.
     pub fn len(&self) -> u8 {
         self.spec.block_count()

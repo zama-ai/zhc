@@ -132,8 +132,8 @@ impl Builder {
     /// ```
     pub fn iop_mul_raw(
         &self,
-        src_a_blocks: &Vec<CiphertextBlock>,
-        src_b_blocks: &Vec<CiphertextBlock>,
+        src_a_blocks: &[CiphertextBlock],
+        src_b_blocks: &[CiphertextBlock],
         cut_off_block: u8,
     ) -> (CiphertextBlock, Vec<CiphertextBlock>) {
         // Phase 1 expand:
@@ -158,8 +158,8 @@ impl Builder {
     /// flag in a vector
     pub(super) fn expand_partprod(
         &self,
-        src_a_blocks: &Vec<CiphertextBlock>,
-        src_b_blocks: &Vec<CiphertextBlock>,
+        src_a_blocks: &[CiphertextBlock],
+        src_b_blocks: &[CiphertextBlock],
         cut_off_block: u8,
     ) -> (Vec<CiphertextBlock>, BTreeMap<usize, Vec<PartProd>>) {
         let mut partprod_map = BTreeMap::<usize, Vec<PartProd>>::new();
@@ -213,10 +213,14 @@ impl Builder {
         cut_off_block: u8,
     ) -> (Vec<CiphertextBlock>, BTreeMap<usize, Vec<CiphertextBlock>>) {
         let first_comp_block = partprod_map.keys().min().copied().unwrap_or_default();
-        let last_comp_block = std::cmp::min(
-            (cut_off_block - 1) as usize,
-            partprod_map.keys().max().copied().unwrap_or_default(),
-        );
+        let last_comp_block = if cut_off_block != 0 {
+            std::cmp::min(
+                (cut_off_block - 1) as usize,
+                partprod_map.keys().max().copied().unwrap_or_default(),
+            )
+        } else {
+            0
+        };
         let mut data_blk = Vec::new();
 
         let mut partprod_map = partprod_map;
