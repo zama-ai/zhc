@@ -5,7 +5,10 @@ use zhc_utils::{
     svec,
 };
 
-use crate::builder::{Builder, Ciphertext, ExtensionBehavior};
+use crate::{
+    CiphertextBlock,
+    builder::{Builder, Ciphertext, ExtensionBehavior},
+};
 
 /// Creates an IR for the addition of two encrypted integers.
 ///
@@ -26,10 +29,21 @@ use crate::builder::{Builder, Ciphertext, ExtensionBehavior};
 /// let ir = builder.into_ir();
 /// ```
 pub fn add(spec: CiphertextSpec) -> Builder {
-    let mut builder = Builder::new(spec.block_spec());
+    let builder = Builder::new(spec.block_spec());
     let src_a = builder.ciphertext_input(spec.int_size());
     let src_b = builder.ciphertext_input(spec.int_size());
-    let res = builder.iop_add_hillis_steele(&src_a, &src_b);
+
+    // Get input as array of blk
+    let src_a_blocks = builder.ciphertext_split(&src_a);
+    let src_b_blocks = builder.ciphertext_split(&src_b);
+
+    // Call inner function
+    let res_blocks = builder.iop_add_hillis_steele(&src_a_blocks, &src_b_blocks);
+
+    // Construct result
+    let res = builder
+        .comment("Join")
+        .ciphertext_join(&res_blocks, Some(spec.int_size()));
     builder.ciphertext_output(res);
     builder
 }
@@ -58,7 +72,11 @@ impl Builder {
     /// # let b = builder.ciphertext_input(spec.int_size());
     /// let sum = builder.iop_add_hillis_steele(&a, &b);
     /// ```
-    pub fn iop_add_hillis_steele(&mut self, lhs: &Ciphertext, rhs: &Ciphertext) -> Ciphertext {
+    pub fn iop_add_hillis_steele(
+        &self,
+        lhs_blocks: &[CiphertextBlock],
+        rhs_blocks: &[CiphertextBlock],
+    ) -> Vec<CiphertextBlock> {
         // Implements the addition with carry-propagation using the hillis-steele resolution and
         // group of size 4. The encoding of propagation status is the same as the one used
         // in TFHE-RS. The carry is resolved as soon as possible.
@@ -74,9 +92,6 @@ impl Builder {
         // Hopefully, thanks to dead-code elimination happening down the pipeline, we can describe
         // the computation in a larger, more favorable case, and let DCE cut the un-necessary
         // computation. This improves code readability.
-
-        let lhs_blocks = self.ciphertext_split(lhs);
-        let rhs_blocks = self.ciphertext_split(rhs);
 
         let sums = self.comment("Raw sum").vector_add(
             &lhs_blocks,
@@ -262,11 +277,11 @@ impl Builder {
         let result = result
             .into_iter()
             .map(|ct| self.block_lookup(&ct, Lut1Def::MsgOnly))
-            .cosvec();
+            .take(output_size)
+            .collect::<Vec<_>>();
         self.pop_comment();
 
-        self.comment("Join")
-            .ciphertext_join(&result.as_slice()[..output_size], None)
+        result
     }
 }
 

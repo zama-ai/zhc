@@ -58,8 +58,8 @@ pub use count::*;
 pub use if_then_else::*;
 pub use if_then_zero::*;
 pub use lead_trail::*;
-pub use mul::*;
 pub use mh_mul::*;
+pub use mul::*;
 
 // SUB
 // ADDS
