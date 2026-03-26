@@ -203,10 +203,6 @@ impl Builder {
 
                 // Spread mh_block output
                 if !sm_res.is_empty() {
-                    // let sm_res = sm_res
-                    //     .into_iter()
-                    //     .map(|b| self.block_transfer(b))
-                    //     .collect::<Vec<_>>();
                     if sm_res.len() > mh_blocks {
                         let (lsb, msb) = sm_res.split_at(mh_blocks);
                         let sm_lsb = CiphertextLimb::new(lsb);
@@ -234,31 +230,21 @@ impl Builder {
             let sum_len = sm_res.len();
             let sum = sm_res
                 .into_iter()
+                .rev()
                 .enumerate()
-                .reduce(|(acc_id, acc), (limb_id, limb)| {
-                    let acc = if acc_id == 0 {
-                        let xfer_acc = acc
+                .reduce(|(_acc_id, acc), (limb_id, limb)| {
+                    let limb = if limb_id > sum_len / 2 {
+                        let xfer_limb = limb
                             .blocks
                             .into_iter()
                             .map(|b| self.block_transfer(b))
                             .collect::<Vec<_>>();
-                        CiphertextLimb { blocks: xfer_acc }
+                        CiphertextLimb { blocks: xfer_limb }
                     } else {
-                        acc
+                        limb
                     };
                     let raw_acc = self.iop_add_hillis_steele(acc.as_blocks(), limb.as_blocks());
                     (limb_id, CiphertextLimb { blocks: raw_acc })
-
-                    // // if limb_id <= sum_len/2 {
-                    // if limb_id == 1 {
-                    //     let xfer_acc = raw_acc
-                    //         .into_iter()
-                    //         .map(|b| self.block_transfer(b))
-                    //         .collect::<Vec<_>>();
-                    //     (limb_id, CiphertextLimb { blocks: xfer_acc })
-                    // } else {
-                    //     (limb_id, CiphertextLimb { blocks: raw_acc })
-                    // }
                 })
                 .map(|(_, limb)| limb);
             self.pop_comment();
