@@ -28,6 +28,10 @@ fn analyze_height<'a>(ir: &'a IR<HpuLang>) -> HeightedIR<'a> {
                 + 1_u16;
             (height, svec![(); opref.get_return_arity()])
         }
+        TransferOut { .. } => {
+            let max_height = 1 << 14; // whatever makes it better lol.
+            (max_height, svec![(); opref.get_return_arity()])
+        }
         _ => {
             let height = opref
                 .get_users_iter()
