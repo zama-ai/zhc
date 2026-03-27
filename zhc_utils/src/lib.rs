@@ -11,6 +11,7 @@ pub mod iter;
 pub mod small;
 pub mod tracing;
 
+mod bi_map;
 mod change_guard;
 mod dump;
 mod erasable;
@@ -20,6 +21,7 @@ mod misc;
 mod store;
 mod type_name;
 
+pub use bi_map::*;
 pub use change_guard::*;
 pub use dump::*;
 pub use erasable::*;

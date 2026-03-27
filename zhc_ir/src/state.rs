@@ -1,5 +1,5 @@
 /// Represents the operational state of an element that can be either active or inactive.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum State<T = ()> {
     /// The element is currently active and operational.
     Active(T),

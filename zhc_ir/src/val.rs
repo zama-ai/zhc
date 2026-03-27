@@ -8,7 +8,7 @@ use super::{Dialect, State};
 /// A value is produced by one operation and can be consumed by multiple operations.
 /// Values carry type information from their originating dialect and maintain
 /// references to all operations that use them for dependency tracking.
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Val<D: Dialect> {
     /// Operations that consume this value as an argument.
     pub users: SmallVec<ValUse>,

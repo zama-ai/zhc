@@ -5,7 +5,7 @@ use zhc_utils::{
     iter::{ReconcilerOf2, Separate},
 };
 
-use crate::{Annotation, val_ref::ValRef};
+use crate::{AnnIRView, Annotation, val_ref::ValRef};
 
 use super::{
     Dialect, IR, OpRef,
@@ -216,6 +216,19 @@ impl FormatContext {
 /// Trait for formatting IR elements with context.
 pub trait Format {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>, ctx: &FormatContext) -> std::fmt::Result;
+
+    fn fmt_to_string(&self, ctx: &FormatContext) -> String
+    where
+        Self: Sized,
+    {
+        format!(
+            "{}",
+            Formatted {
+                item: self,
+                ctx: ctx.clone()
+            }
+        )
+    }
 }
 
 /// Wrapper to enable Display for Format types with default context.
@@ -368,6 +381,14 @@ impl<D: Dialect> Format for IR<D> {
 }
 
 impl<D: Dialect, OpAnn: Annotation, ValAnn: Annotation> Format for AnnIR<'_, D, OpAnn, ValAnn> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>, ctx: &FormatContext) -> std::fmt::Result {
+        self.view().fmt(f, ctx)
+    }
+}
+
+impl<D: Dialect, OpAnn: Annotation, ValAnn: Annotation> Format
+    for AnnIRView<'_, '_, D, OpAnn, ValAnn>
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>, ctx: &FormatContext) -> std::fmt::Result {
         // Compute IR-level metrics
         let max_comment_len = if ctx.show_comments {

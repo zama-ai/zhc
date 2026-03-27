@@ -10,7 +10,6 @@ use std::path::Path;
 
 use allocator::allocate_registers;
 use zhc_builder::Builder;
-use zhc_builder::CiphertextSpec;
 use zhc_ir::IR;
 use zhc_ir::cse::eliminate_common_subexpressions;
 use zhc_ir::dce::eliminate_dead_code;
@@ -67,23 +66,23 @@ fn regular_pipeline(mut ir: IR<IopLang>, config: &HpuConfig) -> IR<DopLang> {
 mod test;
 
 // #[test]
-#[allow(unused)]
-fn test_dump_trace() {
-    let bd = zhc_builder::mul_lsb(CiphertextSpec::new(64, 2, 2));
-    let config = HpuConfig::from(zhc_sim::hpu::PhysicalConfig::tuniform_64b_pfail128_psi64());
-    let pbses_count = regular_pipeline(bd.ir().to_owned(), &config)
-        .walk_ops_linear()
-        .filter(|op| op.get_instruction().affinity() == zhc_langs::doplang::Affinity::Pbs)
-        .count();
-    let lower_bound = latency::compute_lower_bound(pbses_count, &config).as_ts(MHz(400).period());
-    let mut min = f64::INFINITY;
-    for _ in 0..1000 {
-        let allocated = regular_pipeline(bd.ir().to_owned(), &config);
-        let new_lat = latency::compute_latency(&allocated, &config).as_ts(MHz(400).period());
-        if new_lat < min {
-            min = new_lat;
-            tracing::trace_execution(&allocated, &config, "smallest.json");
-        }
-        println!("{}/{lower_bound}   {}", min, min / lower_bound)
-    }
-}
+// #[allow(unused)]
+// fn test_dump_trace() {
+//     let bd = zhc_builder::mul_lsb(zhc_builder::CiphertextSpec::new(64, 2, 2));
+//     let config = HpuConfig::from(zhc_sim::hpu::PhysicalConfig::tuniform_64b_pfail128_psi64());
+//     let pbses_count = regular_pipeline(bd.ir().to_owned(), &config)
+//         .walk_ops_linear()
+//         .filter(|op| op.get_instruction().affinity() == zhc_langs::doplang::Affinity::Pbs)
+//         .count();
+//     let lower_bound = latency::compute_lower_bound(pbses_count,
+// &config).as_ts(MHz(400).period());     let mut min = f64::INFINITY;
+//     for _ in 0..1000 {
+//         let allocated = regular_pipeline(bd.ir().to_owned(), &config);
+//         let new_lat = latency::compute_latency(&allocated, &config).as_ts(MHz(400).period());
+//         if new_lat < min {
+//             min = new_lat;
+//             tracing::trace_execution(&allocated, &config, "smallest.json");
+//         }
+//         println!("{}/{lower_bound}   {}", min, min / lower_bound)
+//     }
+// }

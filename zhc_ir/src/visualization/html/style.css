@@ -1,0 +1,68 @@
+/* Reset and full viewport */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #ffffff;
+}
+
+/* Viewport container - catches mouse events */
+#viewport {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    cursor: grab;
+}
+
+#viewport.grabbing {
+    cursor: grabbing;
+}
+
+/* Canvas - the transform target */
+#canvas {
+    width: 100%;
+    height: 100%;
+    transform-origin: 0 0;
+    /* Will be set by JS: transform: translate(x, y) scale(k) */
+}
+
+/* SVG fills the canvas */
+#canvas svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+/* Hover highlighting for values */
+.input-port, .output-port, .link {
+    transition: opacity 0.15s ease, stroke-width 0.15s ease;
+}
+
+/* Hitarea for links - wider invisible stroke for easier hover detection */
+.link-hitarea {
+    pointer-events: stroke;
+}
+
+.input-port.highlight, .output-port.highlight {
+    filter: drop-shadow(0 0 4px rgba(0, 100, 200, 0.8));
+}
+
+.link.highlight {
+    stroke-width: 3px !important;
+    filter: drop-shadow(0 0 3px rgba(0, 100, 200, 0.6));
+}
+
+.input-port.dimmed, .output-port.dimmed, .link.dimmed {
+    opacity: 0.15;
+}
+
+/* Pinned elements stay visible even when others are dimmed */
+.input-port.pinned, .output-port.pinned, .link.pinned {
+    opacity: 1 !important;
+}

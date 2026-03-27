@@ -4,4 +4,5 @@ target
 .zed
 **.DS_Store
 **.svg
+**.html
 **.json

@@ -1,5 +1,9 @@
+use std::ops::Deref;
+
+use zhc_utils::Dumpable;
+
 use super::*;
-use crate::{AnnOpRef, AnnValRef, Dialect, IR, OpId, OpMap, ValId, ValMap};
+use crate::{AnnOpRef, AnnValRef, Dialect, Formatted, IR, OpId, OpMap, ValId, ValMap};
 
 #[derive(Debug, Clone)]
 pub struct AnnIRView<'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> {
@@ -143,33 +147,33 @@ impl<'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation>
         })
     }
 
-    // /// Creates a configurable formatter for the annotated IR.
-    // pub fn format(&self) -> Formatted<'_, Self> {
-    //     Formatted::new(self)
-    // }
+    /// Creates a configurable formatter for the annotated IR.
+    pub fn format(&self) -> Formatted<'_, Self> {
+        Formatted::new(self)
+    }
 }
 
-// impl<'ir, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> Deref
-//     for AnnIR<'ir, D, OpAnn, ValAnn>
-// {
-//     type Target = IR<D>;
+impl<'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> Deref
+    for AnnIRView<'ir, 'ann, D, OpAnn, ValAnn>
+{
+    type Target = IR<D>;
 
-//     fn deref(&self) -> &Self::Target {
-//         self.ir
-//     }
-// }
+    fn deref(&self) -> &Self::Target {
+        self.ir
+    }
+}
 
-// impl<'ir, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> Dumpable
-//     for AnnIR<'ir, D, OpAnn, ValAnn>
-// {
-//     fn dump_to_string(&self) -> String {
-//         format!(
-//             "{}",
-//             self.format()
-//                 .with_walker(crate::PrintWalker::Linear)
-//                 .show_types(false)
-//                 .show_opid(true)
-//                 .show_comments(true)
-//         )
-//     }
-// }
+impl<'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation> Dumpable
+    for AnnIRView<'ir, 'ann, D, OpAnn, ValAnn>
+{
+    fn dump_to_string(&self) -> String {
+        format!(
+            "{}",
+            self.format()
+                .with_walker(crate::PrintWalker::Linear)
+                .show_types(false)
+                .show_opid(true)
+                .show_comments(true)
+        )
+    }
+}

@@ -13,11 +13,11 @@ use super::{Dialect, IR, OpId, State};
 /// efficient mapping of operations to analysis results or other metadata.
 /// Only active operations can store values, and the map tracks how many
 /// values are currently stored.
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct OpMap<T> {
     store: Store<OpId, State<Option<T>>>,
-    n_stored: u16,
-    n_inactive: u16,
+    pub n_stored: u16,
+    pub n_inactive: u16,
 }
 
 impl<T> OpMap<T> {

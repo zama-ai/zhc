@@ -93,6 +93,7 @@ impl Ord for Thickness {
 impl Thickness {
     /// Zero thickness constant.
     pub const ZERO: Self = Thickness(0., ());
+    pub const EPSILON: Self = Thickness(1e-10, ());
 
     /// Creates a new thickness from the given value.
     ///
@@ -266,8 +267,9 @@ impl Sub<Height> for Height {
 
     fn sub(self, rhs: Height) -> Self::Output {
         assert!(self.is_valid() && rhs.is_valid());
-        assert!(self >= rhs);
-        Height(self.0 - rhs.0)
+        const EPS: f64 = 1e-10;
+        assert!(self.0.0 + EPS >= rhs.0.0, "Failed {self:?} {rhs:?}");
+        Height(Thickness::new((self.0.0 - rhs.0.0).max(0.0)))
     }
 }
 
@@ -557,7 +559,7 @@ impl Div<usize> for Motion {
 }
 
 /// 2D position combining X and Y coordinates.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Position {
     pub x: X,
     pub y: Y,
@@ -615,7 +617,7 @@ impl Sub<Motion> for Position {
 }
 
 /// Dimensions combining width and height with padding and stacking operations.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Size {
     pub width: Width,
     pub height: Height,
@@ -713,7 +715,7 @@ impl Div<usize> for Size {
 }
 
 /// Rectangular region combining position and size with take/crop operations for layout.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Frame {
     pub position: Position,
     pub size: Size,
@@ -727,8 +729,13 @@ pub struct Remaining(pub Frame);
 
 impl Frame {
     /// Checks if the frame has zero width or height.
-    pub fn is_collapsed(&self) -> bool {
-        self.size.height.0 == Thickness::ZERO || self.size.width.0 == Thickness::ZERO
+    pub fn assert_collapsed(&self) {
+        assert!(
+            self.size.height.0 < Thickness::EPSILON || self.size.width.0 < Thickness::EPSILON,
+            "Not collapsed: {:?} x {:?}",
+            self.size.height.0,
+            self.size.width.0
+        )
     }
 
     /// Returns the top-left corner position.
@@ -747,6 +754,14 @@ impl Frame {
         }
     }
 
+    /// Returns the top-center position.
+    pub fn top_center(&self) -> Position {
+        Position {
+            x: self.position.x + self.size.width / 2,
+            y: self.position.y,
+        }
+    }
+
     /// Returns the bottom-left corner position.
     pub fn bottom_left(&self) -> Position {
         Position {
@@ -759,6 +774,14 @@ impl Frame {
     pub fn bottom_right(&self) -> Position {
         Position {
             x: self.position.x + self.size.width,
+            y: self.position.y + self.size.height,
+        }
+    }
+
+    /// Returns the bottom-center position.
+    pub fn bottom_center(&self) -> Position {
+        Position {
+            x: self.position.x + self.size.width / 2,
             y: self.position.y + self.size.height,
         }
     }
@@ -925,6 +948,14 @@ impl Frame {
         self
     }
 
+    /// Crops the frame from all sides by the specified thickness.
+    pub fn crop_around(self, thickness: Thickness) -> Frame {
+        self.crop_left(Width(thickness))
+            .crop_right(Width(thickness))
+            .crop_top(Height(thickness))
+            .crop_bottom(Height(thickness))
+    }
+
     /// Resizes the frame horizontally to the specified `width` using the given alignment.
     ///
     /// # Panics
@@ -985,6 +1016,234 @@ impl Frame {
             .resize_vertical(size.height, valign)
     }
 
+    /// Packs children horizontally with fixed spacing, aligning the block within self.
+    ///
+    /// Returns one frame per child. Each frame has the full height of `self`.
+    pub fn pack_horizontal(
+        &self,
+        widths: &[Width],
+        align: HAlign,
+        spacing: Thickness,
+    ) -> Vec<Frame> {
+        if widths.is_empty() {
+            return Vec::new();
+        }
+
+        let total_children: Width = widths.iter().copied().fold(Width::ZERO, |a, b| a + b);
+        let total_spacing = Width(spacing) * widths.len().saturating_sub(1);
+        let packed_width = total_children + total_spacing;
+
+        let block_offset = match align {
+            HAlign::Left => Width::ZERO,
+            HAlign::Center => (self.size.width - packed_width) / 2,
+            HAlign::Right => self.size.width - packed_width,
+        };
+
+        let mut x = self.position.x + block_offset;
+        widths
+            .iter()
+            .enumerate()
+            .map(|(i, &w)| {
+                if i > 0 {
+                    x = x + Width(spacing);
+                }
+                let frame = Frame {
+                    position: Position {
+                        x,
+                        y: self.position.y,
+                    },
+                    size: Size {
+                        width: w,
+                        height: self.size.height,
+                    },
+                };
+                x = x + w;
+                frame
+            })
+            .collect()
+    }
+
+    /// Spreads children horizontally with equal gaps (including edges).
+    ///
+    /// Returns one frame per child. Each frame has the full height of `self`.
+    pub fn justify_horizontal(&self, widths: &[Width]) -> Vec<Frame> {
+        if widths.is_empty() {
+            return Vec::new();
+        }
+
+        let total_children: Width = widths.iter().copied().fold(Width::ZERO, |a, b| a + b);
+        let gap = (self.size.width - total_children) / (widths.len() + 1);
+
+        let mut x = self.position.x + gap;
+        widths
+            .iter()
+            .map(|&w| {
+                let frame = Frame {
+                    position: Position {
+                        x,
+                        y: self.position.y,
+                    },
+                    size: Size {
+                        width: w,
+                        height: self.size.height,
+                    },
+                };
+                x = x + w + gap;
+                frame
+            })
+            .collect()
+    }
+
+    /// Packs children vertically with fixed spacing, aligning the block within self.
+    ///
+    /// Returns one frame per child. Each frame has the full width of `self`.
+    pub fn pack_vertical(
+        &self,
+        heights: &[Height],
+        align: VAlign,
+        spacing: Thickness,
+    ) -> Vec<Frame> {
+        if heights.is_empty() {
+            return Vec::new();
+        }
+
+        let total_children: Height = heights.iter().copied().fold(Height::ZERO, |a, b| a + b);
+        let total_spacing = Height(spacing) * heights.len().saturating_sub(1);
+        let packed_height = total_children + total_spacing;
+
+        let block_offset = match align {
+            VAlign::Top => Height::ZERO,
+            VAlign::Center => (self.size.height - packed_height) / 2,
+            VAlign::Bottom => self.size.height - packed_height,
+        };
+
+        let mut y = self.position.y + block_offset;
+        heights
+            .iter()
+            .enumerate()
+            .map(|(i, &h)| {
+                if i > 0 {
+                    y = y + Height(spacing);
+                }
+                let frame = Frame {
+                    position: Position {
+                        x: self.position.x,
+                        y,
+                    },
+                    size: Size {
+                        width: self.size.width,
+                        height: h,
+                    },
+                };
+                y = y + h;
+                frame
+            })
+            .collect()
+    }
+
+    /// Spreads children vertically with equal gaps (including edges).
+    ///
+    /// Returns one frame per child. Each frame has the full width of `self`.
+    pub fn justify_vertical(&self, heights: &[Height]) -> Vec<Frame> {
+        if heights.is_empty() {
+            return Vec::new();
+        }
+
+        let total_children: Height = heights.iter().copied().fold(Height::ZERO, |a, b| a + b);
+        let gap = (self.size.height - total_children) / (heights.len() + 1);
+
+        let mut y = self.position.y + gap;
+        heights
+            .iter()
+            .map(|&h| {
+                let frame = Frame {
+                    position: Position {
+                        x: self.position.x,
+                        y,
+                    },
+                    size: Size {
+                        width: self.size.width,
+                        height: h,
+                    },
+                };
+                y = y + h + gap;
+                frame
+            })
+            .collect()
+    }
+
+    /// Spreads children horizontally with first/last at edges, equal gaps between.
+    ///
+    /// Returns one frame per child. Each frame has the full height of `self`.
+    pub fn spread_horizontal(&self, widths: &[Width]) -> Vec<Frame> {
+        if widths.is_empty() {
+            return Vec::new();
+        }
+
+        let total_children: Width = widths.iter().copied().fold(Width::ZERO, |a, b| a + b);
+        let n = widths.len();
+        let gap = if n <= 1 {
+            Width::ZERO
+        } else {
+            (self.size.width - total_children) / (n - 1)
+        };
+
+        let mut x = self.position.x;
+        widths
+            .iter()
+            .map(|&w| {
+                let frame = Frame {
+                    position: Position {
+                        x,
+                        y: self.position.y,
+                    },
+                    size: Size {
+                        width: w,
+                        height: self.size.height,
+                    },
+                };
+                x = x + w + gap;
+                frame
+            })
+            .collect()
+    }
+
+    /// Spreads children vertically with first/last at edges, equal gaps between.
+    ///
+    /// Returns one frame per child. Each frame has the full width of `self`.
+    pub fn spread_vertical(&self, heights: &[Height]) -> Vec<Frame> {
+        if heights.is_empty() {
+            return Vec::new();
+        }
+
+        let total_children: Height = heights.iter().copied().fold(Height::ZERO, |a, b| a + b);
+        let n = heights.len();
+        let gap = if n <= 1 {
+            Height::ZERO
+        } else {
+            (self.size.height - total_children) / (n - 1)
+        };
+
+        let mut y = self.position.y;
+        heights
+            .iter()
+            .map(|&h| {
+                let frame = Frame {
+                    position: Position {
+                        x: self.position.x,
+                        y,
+                    },
+                    size: Size {
+                        width: self.size.width,
+                        height: h,
+                    },
+                };
+                y = y + h + gap;
+                frame
+            })
+            .collect()
+    }
+
     /// Consumes the frame and returns a collapsed frame at the same position.
     pub fn consume(self) -> Frame {
         Frame {
@@ -1011,6 +1270,18 @@ pub enum VAlign {
     Top,
     Center,
     Bottom,
+}
+
+/// Controls how children are distributed along an axis.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Justify {
+    /// Pack children with fixed spacing, align the block.
+    #[default]
+    Pack,
+    /// Equal gaps including edges.
+    Space,
+    /// First/last at edges, equal gaps between.
+    Spread,
 }
 
 /// RGBA color representation with standard color constants and hex formatting.

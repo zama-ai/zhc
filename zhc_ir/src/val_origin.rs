@@ -1,7 +1,7 @@
 use crate::{Dialect, OpId, OpRef};
 
 /// The producing operation and return position of a value (owned IDs).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ValOrigin {
     /// The operation that produces this value.
     pub opid: OpId,

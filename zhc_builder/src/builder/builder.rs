@@ -22,20 +22,24 @@ use std::{
     cell::{Ref, RefCell, RefMut},
     fmt::Debug,
     iter::repeat_n,
+    path::Path,
     rc::Rc,
 };
 use zhc_crypto::integer_semantics::{
     CiphertextBlockSpec, CiphertextSpec, PlaintextSpec, lut::LookupCheck,
 };
 use zhc_ir::{
-    IR, PrintWalker, Signature, cse::eliminate_common_subexpressions, dce::eliminate_dead_code,
+    IR, OpId, PrintWalker, Signature,
+    cse::eliminate_common_subexpressions,
+    dce::eliminate_dead_code,
+    visualization::{Hierarchy, draw_ir_html},
 };
 use zhc_langs::ioplang::{
     IopInstructionSet, IopInterepreterContext, IopLang, IopTypeSystem, IopValue, Lut1Def, Lut2Def,
     eliminate_aliases, skip_store_load,
 };
 use zhc_utils::{
-    Dumpable, FastMap,
+    Dumpable, FastMap, Store,
     iter::{Chunk, ChunkIt},
     small::SmallVec,
     svec,
@@ -90,6 +94,7 @@ impl Debug for Type {
 #[derive(Debug)]
 struct InnerBuilder {
     ir: IR<IopLang>,
+    hierarchies: Store<OpId, Hierarchy>,
     sig: Signature<Type>,
 }
 
@@ -98,11 +103,16 @@ impl InnerBuilder {
         &mut self,
         op: IopInstructionSet,
         args: SmallVec<zhc_ir::ValId>,
-        comment: Option<String>,
+        hierarchy: Hierarchy,
     ) -> (zhc_ir::OpId, SmallVec<zhc_ir::ValId>) {
-        match comment {
-            Some(comment) => self.ir.add_op_with_comment(op, args, comment),
-            None => self.ir.add_op(op, args),
+        if !hierarchy.is_root() {
+            let (opid, rets) = self.ir.add_op_with_comment(op, args, hierarchy.to_string());
+            self.hierarchies.push(hierarchy);
+            (opid, rets)
+        } else {
+            let (opid, rets) = self.ir.add_op(op, args);
+            self.hierarchies.push(hierarchy);
+            (opid, rets)
         }
     }
 
@@ -164,7 +174,7 @@ impl InnerBuilder {
 pub struct Builder {
     spec: CiphertextBlockSpec,
     inner: Rc<RefCell<InnerBuilder>>,
-    comment_stack: RefCell<Vec<String>>,
+    hierarchy: RefCell<Hierarchy>,
 }
 
 impl Builder {
@@ -176,13 +186,8 @@ impl Builder {
         self.inner.borrow_mut()
     }
 
-    fn current_comment(&self) -> Option<String> {
-        let stack = self.comment_stack.borrow();
-        if stack.is_empty() {
-            return None;
-        } else {
-            Some(stack.join(" / "))
-        }
+    fn current_hierarchy(&self) -> Hierarchy {
+        self.hierarchy.borrow().clone()
     }
 
     /// Creates a new builder with the given block specification.
@@ -202,9 +207,10 @@ impl Builder {
             spec: spec,
             inner: Rc::new(RefCell::new(InnerBuilder {
                 ir: IR::empty(),
+                hierarchies: Store::empty(),
                 sig: Signature::empty(),
             })),
-            comment_stack: RefCell::new(Vec::new()),
+            hierarchy: RefCell::new(Hierarchy::new()),
         }
     }
 
@@ -408,6 +414,15 @@ impl Builder {
         }
     }
 
+    pub fn draw(&self, path: impl AsRef<Path>) {
+        draw_ir_html(
+            &self.ir(),
+            self.ir()
+                .partially_mapped_opmap(|op| self.inner().hierarchies.get(*op).cloned()),
+            path,
+        );
+    }
+
     /// Returns a new builder handle with the given comment appended to the annotation stack.
     ///
     /// Unlike [`push_comment`](Self::push_comment) which mutates the current builder, this
@@ -427,12 +442,12 @@ impl Builder {
     /// // Instructions through `commented` carry the "add phase" annotation.
     /// ```
     pub fn comment(&self, comment: impl Into<String>) -> Builder {
-        let comment_stack = self.comment_stack.clone();
-        comment_stack.borrow_mut().push(comment.into());
+        let hierarchy = self.hierarchy.clone();
+        hierarchy.borrow_mut().push(comment.into());
         Builder {
             spec: self.spec,
             inner: self.inner.clone(),
-            comment_stack,
+            hierarchy,
         }
     }
 
@@ -442,12 +457,12 @@ impl Builder {
     /// with the full stack joined by ` / `. Use [`pop_comment`](Self::pop_comment) to
     /// remove it, or prefer the RAII-style [`with_comment`](Self::with_comment).
     pub fn push_comment(&self, comment: impl Into<String>) {
-        self.comment_stack.borrow_mut().push(comment.into());
+        self.hierarchy.borrow_mut().push(comment.into());
     }
 
     /// Pops the most recent comment from the annotation stack.
     pub fn pop_comment(&self) {
-        self.comment_stack.borrow_mut().pop();
+        self.hierarchy.borrow_mut().pop();
     }
 
     /// Executes a closure with a temporary comment pushed onto the annotation stack.
@@ -497,7 +512,7 @@ impl Builder {
         let (_, inp) = self.inner_mut().insert_op(
             IopInstructionSet::InputCiphertext { pos, int_size },
             svec![],
-            self.current_comment(),
+            self.current_hierarchy(),
         );
         Ciphertext {
             valid: inp[0],
@@ -527,7 +542,7 @@ impl Builder {
                 let (_, ret) = self.inner_mut().insert_op(
                     IopInstructionSet::ExtractCtBlock { index },
                     svec![inp.valid],
-                    self.current_comment(),
+                    self.current_hierarchy(),
                 );
                 CiphertextBlock {
                     valid: ret[0],
@@ -566,7 +581,7 @@ impl Builder {
         let (_, inp) = self.inner_mut().insert_op(
             IopInstructionSet::InputPlaintext { pos, int_size },
             svec![],
-            self.current_comment(),
+            self.current_hierarchy(),
         );
         Plaintext {
             valid: inp[0],
@@ -596,7 +611,7 @@ impl Builder {
                 let (_, ret) = self.inner_mut().insert_op(
                     IopInstructionSet::ExtractPtBlock { index },
                     svec![inp.valid],
-                    self.current_comment(),
+                    self.current_hierarchy(),
                 );
                 PlaintextBlock {
                     valid: ret[0],
@@ -653,7 +668,7 @@ impl Builder {
         let (_, acc) = self.inner_mut().insert_op(
             IopInstructionSet::DeclareCiphertext { int_size },
             svec![],
-            self.current_comment(),
+            self.current_hierarchy(),
         );
         let mut acc = acc[0];
         for (index, block) in blocks.iter().enumerate() {
@@ -661,7 +676,7 @@ impl Builder {
             let (_, ret) = self.inner_mut().insert_op(
                 IopInstructionSet::StoreCtBlock { index },
                 svec![block.valid, acc],
-                self.current_comment(),
+                self.current_hierarchy(),
             );
             acc = ret[0];
         }
@@ -689,7 +704,7 @@ impl Builder {
                 typ: IopTypeSystem::Ciphertext,
             },
             svec![src.valid],
-            self.current_comment(),
+            self.current_hierarchy(),
         );
         Ciphertext {
             valid: ret[0],
@@ -717,7 +732,7 @@ impl Builder {
         self.inner_mut().insert_op(
             IopInstructionSet::OutputCiphertext { pos },
             svec![ct.valid],
-            self.current_comment(),
+            self.current_hierarchy(),
         );
     }
 
@@ -740,7 +755,7 @@ impl Builder {
         let (_node, ret) = self.inner_mut().insert_op(
             IopInstructionSet::LetPlaintextBlock { value },
             svec![],
-            self.current_comment(),
+            self.current_hierarchy(),
         );
         PlaintextBlock {
             valid: ret[0],
@@ -771,7 +786,7 @@ impl Builder {
         let (_node, ret) = self.inner_mut().insert_op(
             IopInstructionSet::AddCt,
             svec![src_a.valid, src_b.valid],
-            self.current_comment(),
+            self.current_hierarchy(),
         );
         CiphertextBlock {
             valid: ret[0],
@@ -800,7 +815,7 @@ impl Builder {
                 typ: IopTypeSystem::CiphertextBlock,
             },
             svec![src.valid],
-            self.current_comment(),
+            self.current_hierarchy(),
         );
         CiphertextBlock {
             valid: ret[0],
@@ -831,7 +846,7 @@ impl Builder {
         let (_node, ret) = self.inner_mut().insert_op(
             IopInstructionSet::TemperAddCt,
             svec![src_a.valid, src_b.valid],
-            self.current_comment(),
+            self.current_hierarchy(),
         );
         CiphertextBlock {
             valid: ret[0],
@@ -862,7 +877,7 @@ impl Builder {
         let (_node, ret) = self.inner_mut().insert_op(
             IopInstructionSet::WrappingAddCt,
             svec![src_a.valid, src_b.valid],
-            self.current_comment(),
+            self.current_hierarchy(),
         );
         CiphertextBlock {
             valid: ret[0],
@@ -894,7 +909,7 @@ impl Builder {
         let (_node, ret) = self.inner_mut().insert_op(
             IopInstructionSet::AddPt,
             svec![src_a.valid, src_b.valid],
-            self.current_comment(),
+            self.current_hierarchy(),
         );
         CiphertextBlock {
             valid: ret[0],
@@ -926,7 +941,7 @@ impl Builder {
         let (_node, ret) = self.inner_mut().insert_op(
             IopInstructionSet::WrappingAddPt,
             svec![src_a.valid, src_b.valid],
-            self.current_comment(),
+            self.current_hierarchy(),
         );
         CiphertextBlock {
             valid: ret[0],
@@ -957,7 +972,7 @@ impl Builder {
         let (_node, ret) = self.inner_mut().insert_op(
             IopInstructionSet::SubCt,
             svec![src_a.valid, src_b.valid],
-            self.current_comment(),
+            self.current_hierarchy(),
         );
         CiphertextBlock {
             valid: ret[0],
@@ -989,7 +1004,7 @@ impl Builder {
         let (_node, ret) = self.inner_mut().insert_op(
             IopInstructionSet::SubPt,
             svec![src_a.valid, src_b.valid],
-            self.current_comment(),
+            self.current_hierarchy(),
         );
         CiphertextBlock {
             valid: ret[0],
@@ -1023,7 +1038,7 @@ impl Builder {
         let (_node, ret) = self.inner_mut().insert_op(
             IopInstructionSet::PtSub,
             svec![src_a.valid, src_b.valid],
-            self.current_comment(),
+            self.current_hierarchy(),
         );
         CiphertextBlock {
             valid: ret[0],
@@ -1066,7 +1081,7 @@ impl Builder {
                 mul: 2u8.pow(self.spec().message_size() as u32),
             },
             svec![src_a.valid, src_b.valid],
-            self.current_comment(),
+            self.current_hierarchy(),
         );
         CiphertextBlock {
             valid: ret[0],
@@ -1129,7 +1144,7 @@ impl Builder {
                 lut,
             },
             svec![src.valid],
-            self.current_comment(),
+            self.current_hierarchy(),
         );
         CiphertextBlock {
             valid: ret[0],
@@ -1166,7 +1181,7 @@ impl Builder {
                 lut,
             },
             svec![src.valid],
-            self.current_comment(),
+            self.current_hierarchy(),
         );
         CiphertextBlock {
             valid: ret[0],
@@ -1203,7 +1218,7 @@ impl Builder {
                 lut,
             },
             svec![src.valid],
-            self.current_comment(),
+            self.current_hierarchy(),
         );
         CiphertextBlock {
             valid: ret[0],
@@ -1238,7 +1253,7 @@ impl Builder {
         let (_node, ret) = self.inner_mut().insert_op(
             IopInstructionSet::Pbs2 { lut },
             svec![src.valid],
-            self.current_comment(),
+            self.current_hierarchy(),
         );
         (
             CiphertextBlock {
@@ -1272,7 +1287,7 @@ impl Builder {
         let (_node, ret) = self.inner_mut().insert_op(
             IopInstructionSet::LetCiphertextBlock { value },
             svec![],
-            self.current_comment(),
+            self.current_hierarchy(),
         );
         CiphertextBlock {
             valid: ret[0],

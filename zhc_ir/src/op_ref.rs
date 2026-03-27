@@ -1,6 +1,6 @@
-use crate::Formatted;
+use crate::{Formatted, Op};
 use std::{hash::Hash, ops::Deref};
-use zhc_utils::{Dumpable, FastSet};
+use zhc_utils::{Dumpable, FastSet, iter::CollectInSmallVec};
 
 use super::{Depth, Dialect, IR, OpId, Signature, State, ValId, val_ref::ValRef};
 
@@ -231,6 +231,18 @@ impl<'ir, D: Dialect> OpRef<'ir, D> {
     /// Creates a configurable formatter for this operation.
     pub fn format(&self) -> Formatted<'_, Self> {
         Formatted::new(self)
+    }
+
+    pub fn as_op(&self) -> Op<D> {
+        Op {
+            instruction: self.operation.clone(),
+            signature: self.signature.clone(),
+            args: self.args.iter().cloned().cosvec(),
+            returns: self.returns.iter().cloned().cosvec(),
+            state: *self.state,
+            depth: *self.depth,
+            comment: self.comment.clone(),
+        }
     }
 }
 

@@ -1,7 +1,6 @@
 //! Runtime support for `assert_display_is!` macro.
 
 use std::fs;
-use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -54,7 +53,7 @@ pub fn check(actual: &str, expected: &str, file: &str, line: u32, column: u32, m
     }
 
     // Record the mismatch for later update
-    record_mismatch(file, line, column, actual, expected, manifest_dir);
+    record_mismatch(file, line, column, actual, manifest_dir);
 
     panic!(
         "assert_display_is! mismatch at {}:{}:{}\n\n--- Expected ---\n{}\n\n--- Actual ---\n{}\n\nRun `cargo run --bin update-expects` to apply fixes.",
@@ -73,27 +72,14 @@ fn normalize(s: &str) -> String {
 }
 
 /// Record a mismatch to target/expect_updates/.
-fn record_mismatch(
-    file: &str,
-    line: u32,
-    column: u32,
-    actual: &str,
-    expected: &str,
-    manifest_dir: &str,
-) {
+fn record_mismatch(file: &str, line: u32, column: u32, actual: &str, manifest_dir: &str) {
     let workspace_root = find_workspace_root(manifest_dir);
     let dir = workspace_root.join("target/expect_updates");
     fs::create_dir_all(&dir).expect("Failed to create expect_updates directory");
 
-    // Use a unique filename based on file path and hash of expected content.
-    // This ensures that re-running tests after modifying the file (changing line numbers)
-    // overwrites the previous update file rather than creating a new one.
-    let mut hasher = DefaultHasher::new();
-    expected.hash(&mut hasher);
-    let hash = hasher.finish();
-
+    // Use a unique filename based on file path and position.
     let safe_name = file.replace(['/', '\\'], "_");
-    let filename = format!("{}_{:016x}.json", safe_name, hash);
+    let filename = format!("{}_L{}_C{}.json", safe_name, line, column);
     let path = dir.join(filename);
 
     // file!() returns workspace-relative path, make it absolute

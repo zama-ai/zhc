@@ -1,6 +1,7 @@
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 use std::{hash::Hash, usize};
 
+use crate::iter::CollectInVec;
 use crate::small::stack_vec::{STACK_BYTES, StackVec, StackVecIntoIter};
 
 /// Iterator that moves elements out of a `SmallVec` by value.
@@ -45,6 +46,16 @@ pub enum SmallVec<A> {
     Stack(StackVec<A>),
 }
 
+impl<A: Display> Display for SmallVec<A> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "[{}]",
+            self.iter().map(|a| a.to_string()).covec().join(", ")
+        )
+    }
+}
+
 impl<A: Debug> Debug for SmallVec<A> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -60,10 +71,13 @@ impl<A> SmallVec<A> {
         let size = std::mem::size_of::<A>();
         if size > STACK_BYTES {
             #[cfg(debug_assertions)]
-            eprintln!(
-                "Warning: Element size ({} bytes) exceeds stack_vec capacity ({} bytes), using heap_vec",
-                size, STACK_BYTES
-            );
+            {
+                eprintln!(
+                    "Warning: Element size ({} bytes) exceeds stack_vec capacity ({} bytes), using heap_vec",
+                    size, STACK_BYTES
+                );
+                eprintln!("Backtrace:\n{}", std::backtrace::Backtrace::capture());
+            }
             SmallVec::Heap(Vec::new())
         } else {
             SmallVec::Stack(StackVec::new())
@@ -83,6 +97,7 @@ impl<A> SmallVec<A> {
                 std::mem::size_of::<A>(),
                 STACK_BYTES
             );
+            eprintln!("Backtrace:\n{}", std::backtrace::Backtrace::capture());
         }
         if cap <= StackVec::<A>::static_capacity() {
             SmallVec::Stack(StackVec::new())
@@ -271,6 +286,7 @@ impl<A> std::iter::FromIterator<A> for SmallVec<A> {
                 std::mem::size_of::<A>(),
                 STACK_BYTES
             );
+            eprintln!("Backtrace:\n{}", std::backtrace::Backtrace::capture());
         }
         if let (_, Some(max)) = iter.size_hint()
             && max <= StackVec::<A>::static_capacity()

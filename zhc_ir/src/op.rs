@@ -7,6 +7,7 @@ use super::{Depth, Dialect, Signature, State, ValId};
 /// An operation combines a dialect-specific operation with its type signature,
 /// arguments, return values, execution state, and depth information. Operations
 /// are the fundamental computational units in the IR graph.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Op<D: Dialect> {
     /// The dialect-specific instruction being performed.
     pub instruction: D::InstructionSet,

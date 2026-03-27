@@ -3,7 +3,7 @@ use std::{
     ops::{Index, IndexMut},
 };
 
-use zhc_utils::Store;
+use zhc_utils::{Dumpable, Store};
 
 use crate::val_ref::ValRef;
 
@@ -15,7 +15,7 @@ use super::{Dialect, IR, State, ValId};
 /// efficient mapping of values to analysis results or other metadata.
 /// Only active values can store data, and the map tracks how many
 /// entries are currently stored.
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct ValMap<T> {
     store: Store<ValId, State<Option<T>>>,
     n_stored: u16,
@@ -278,5 +278,14 @@ impl<T> IndexMut<ValId> for ValMap<T> {
 impl<T: Debug> Debug for ValMap<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_map().entries(self.iter()).finish()
+    }
+}
+
+impl<T: Dumpable> Dumpable for ValMap<T> {
+    fn dump_to_string(&self) -> String {
+        self.iter()
+            .map(|(id, v)| format!("{:?}: {}", id, v.dump_to_string()))
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 }

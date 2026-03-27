@@ -26,7 +26,7 @@
 //! points.dump();                    // prints "[(0, 0), (1, 1)]"
 //! ```
 
-use std::path::Path;
+use std::{collections::VecDeque, path::Path};
 
 /// A type that can render itself as a human-readable string for debugging.
 ///
@@ -158,3 +158,58 @@ impl<E: Dumpable> Dumpable for [E] {
         format!("[{}]", elements.join(", "))
     }
 }
+
+impl<E: Dumpable> Dumpable for VecDeque<E> {
+    fn dump_to_string(&self) -> String {
+        let elements: Vec<String> = self.iter().map(|e| e.dump_to_string()).collect();
+        format!("[{}]", elements.join(", "))
+    }
+}
+
+impl<A: Dumpable, B: Dumpable> Dumpable for (A, B) {
+    fn dump_to_string(&self) -> String {
+        format!("({}, {})", self.0.dump_to_string(), self.1.dump_to_string())
+    }
+}
+
+macro_rules! impl_dumpable_via_display {
+    ($($t:ty),* $(,)?) => {
+        $(
+            impl $crate::Dumpable for $t {
+                fn dump_to_string(&self) -> String {
+                    format!("{}", self)
+                }
+            }
+        )*
+    };
+}
+
+macro_rules! impl_dumpable_via_debug {
+    ($($t:ty),* $(,)?) => {
+        $(
+            impl $crate::Dumpable for $t {
+                fn dump_to_string(&self) -> String {
+                    format!("{:?}", self)
+                }
+            }
+        )*
+    };
+}
+
+impl_dumpable_via_debug!(());
+
+impl_dumpable_via_display!(
+    u8,
+    u16,
+    u32,
+    u64,
+    u128,
+    usize,
+    i8,
+    i16,
+    i32,
+    i64,
+    i128,
+    isize,
+    std::backtrace::Backtrace
+);

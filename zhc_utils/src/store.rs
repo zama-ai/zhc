@@ -9,7 +9,7 @@ use std::{
 /// The `Store` provides safe, typed access to elements using custom index types
 /// that implement `StoreIndex`. This prevents mixing up indices between different
 /// stores and provides better type safety than raw `usize` indices.
-#[derive(Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Store<I: StoreIndex, V>(Vec<V>, PhantomData<I>);
 
 impl<I: StoreIndex, V> Store<I, V> {
@@ -90,6 +90,10 @@ impl<I: StoreIndex, V> Store<I, V> {
     /// Returns an iterator over mutable element references.
     pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, V> {
         self.0.iter_mut()
+    }
+
+    pub fn get(&self, id: I) -> Option<&V> {
+        self.0.get(id.as_usize())
     }
 }
 

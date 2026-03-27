@@ -302,65 +302,90 @@ mod test {
         let spec = CiphertextSpec::new(16, 2, 2);
         let ir = cmp_eq(spec);
         assert_display_is!(
-            ir.into_ir().format().show_comments(true).show_opid(true),
+            ir.into_ir()
+                .format()
+                .show_comments(false)
+                .show_types(false)
+                .show_opid(false)
+                .with_walker(zhc_ir::PrintWalker::Linear),
             r#"
-                @0                               | %0 : Ct = input_ciphertext<0, 16>();
-                @1                               | %1 : Ct = input_ciphertext<1, 16>();
-                @36   // Compare blocks / 0-th   | %36 : PtBlock = let_pt_block<1>();
-                @56                              | %56 : Ct = decl_ct<2>();
-                @2                               | %2 : CtBlock = extract_ct_block<0>(%0 : Ct);
-                @3                               | %3 : CtBlock = extract_ct_block<1>(%0 : Ct);
-                @4                               | %4 : CtBlock = extract_ct_block<2>(%0 : Ct);
-                @5                               | %5 : CtBlock = extract_ct_block<3>(%0 : Ct);
-                @6                               | %6 : CtBlock = extract_ct_block<4>(%0 : Ct);
-                @7                               | %7 : CtBlock = extract_ct_block<5>(%0 : Ct);
-                @8                               | %8 : CtBlock = extract_ct_block<6>(%0 : Ct);
-                @9                               | %9 : CtBlock = extract_ct_block<7>(%0 : Ct);
-                @10                              | %10 : CtBlock = extract_ct_block<0>(%1 : Ct);
-                @11                              | %11 : CtBlock = extract_ct_block<1>(%1 : Ct);
-                @12                              | %12 : CtBlock = extract_ct_block<2>(%1 : Ct);
-                @13                              | %13 : CtBlock = extract_ct_block<3>(%1 : Ct);
-                @14                              | %14 : CtBlock = extract_ct_block<4>(%1 : Ct);
-                @15                              | %15 : CtBlock = extract_ct_block<5>(%1 : Ct);
-                @16                              | %16 : CtBlock = extract_ct_block<6>(%1 : Ct);
-                @17                              | %17 : CtBlock = extract_ct_block<7>(%1 : Ct);
-                @18   // Pack A                  | %18 : CtBlock = pack_ct<4>(%3 : CtBlock, %2 : CtBlock);
-                @20   // Pack A                  | %20 : CtBlock = pack_ct<4>(%5 : CtBlock, %4 : CtBlock);
-                @22   // Pack A                  | %22 : CtBlock = pack_ct<4>(%7 : CtBlock, %6 : CtBlock);
-                @24   // Pack A                  | %24 : CtBlock = pack_ct<4>(%9 : CtBlock, %8 : CtBlock);
-                @26   // Pack B                  | %26 : CtBlock = pack_ct<4>(%11 : CtBlock, %10 : CtBlock);
-                @28   // Pack B                  | %28 : CtBlock = pack_ct<4>(%13 : CtBlock, %12 : CtBlock);
-                @30   // Pack B                  | %30 : CtBlock = pack_ct<4>(%15 : CtBlock, %14 : CtBlock);
-                @32   // Pack B                  | %32 : CtBlock = pack_ct<4>(%17 : CtBlock, %16 : CtBlock);
-                @19   // Pack A                  | %19 : CtBlock = pbs<Protect, None>(%18 : CtBlock);
-                @21   // Pack A                  | %21 : CtBlock = pbs<Protect, None>(%20 : CtBlock);
-                @23   // Pack A                  | %23 : CtBlock = pbs<Protect, None>(%22 : CtBlock);
-                @25   // Pack A                  | %25 : CtBlock = pbs<Protect, None>(%24 : CtBlock);
-                @27   // Pack B                  | %27 : CtBlock = pbs<Protect, None>(%26 : CtBlock);
-                @29   // Pack B                  | %29 : CtBlock = pbs<Protect, None>(%28 : CtBlock);
-                @31   // Pack B                  | %31 : CtBlock = pbs<Protect, None>(%30 : CtBlock);
-                @33   // Pack B                  | %33 : CtBlock = pbs<Protect, None>(%32 : CtBlock);
-                @34   // Compare blocks / 0-th   | %34 : CtBlock = sub_ct(%19 : CtBlock, %27 : CtBlock);
-                @38   // Compare blocks / 1-th   | %38 : CtBlock = sub_ct(%21 : CtBlock, %29 : CtBlock);
-                @42   // Compare blocks / 2-th   | %42 : CtBlock = sub_ct(%23 : CtBlock, %31 : CtBlock);
-                @46   // Compare blocks / 3-th   | %46 : CtBlock = sub_ct(%25 : CtBlock, %33 : CtBlock);
-                @35   // Compare blocks / 0-th   | %35 : CtBlock = pbs<Protect, CmpSign>(%34 : CtBlock);
-                @39   // Compare blocks / 1-th   | %39 : CtBlock = pbs<Protect, CmpSign>(%38 : CtBlock);
-                @43   // Compare blocks / 2-th   | %43 : CtBlock = pbs<Protect, CmpSign>(%42 : CtBlock);
-                @47   // Compare blocks / 3-th   | %47 : CtBlock = pbs<Protect, CmpSign>(%46 : CtBlock);
-                @37   // Compare blocks / 0-th   | %37 : CtBlock = add_pt(%35 : CtBlock, %36 : PtBlock);
-                @41   // Compare blocks / 1-th   | %41 : CtBlock = add_pt(%39 : CtBlock, %36 : PtBlock);
-                @45   // Compare blocks / 2-th   | %45 : CtBlock = add_pt(%43 : CtBlock, %36 : PtBlock);
-                @49   // Compare blocks / 3-th   | %49 : CtBlock = add_pt(%47 : CtBlock, %36 : PtBlock);
-                @50   // Reduce comparison       | %50 : CtBlock = pack_ct<4>(%41 : CtBlock, %37 : CtBlock);
-                @51   // Reduce comparison       | %51 : CtBlock = pack_ct<4>(%49 : CtBlock, %45 : CtBlock);
-                @52   // Reduce comparison       | %52 : CtBlock = pbs<Protect, CmpReduce>(%50 : CtBlock);
-                @53   // Reduce comparison       | %53 : CtBlock = pbs<Protect, CmpReduce>(%51 : CtBlock);
-                @54                              | %54 : CtBlock = pack_ct<4>(%53 : CtBlock, %52 : CtBlock);
-                @55                              | %55 : CtBlock = pbs<Protect, CmpEqMrg>(%54 : CtBlock);
-                @57                              | %57 : Ct = store_ct_block<0>(%55 : CtBlock, %56 : Ct);
-                @58                              | output<0>(%57 : Ct);
+                %0 = input_ciphertext<0, 16>();
+                %1 = input_ciphertext<1, 16>();
+                %2 = extract_ct_block<0>(%0);
+                %3 = extract_ct_block<1>(%0);
+                %4 = extract_ct_block<2>(%0);
+                %5 = extract_ct_block<3>(%0);
+                %6 = extract_ct_block<4>(%0);
+                %7 = extract_ct_block<5>(%0);
+                %8 = extract_ct_block<6>(%0);
+                %9 = extract_ct_block<7>(%0);
+                %10 = extract_ct_block<0>(%1);
+                %11 = extract_ct_block<1>(%1);
+                %12 = extract_ct_block<2>(%1);
+                %13 = extract_ct_block<3>(%1);
+                %14 = extract_ct_block<4>(%1);
+                %15 = extract_ct_block<5>(%1);
+                %16 = extract_ct_block<6>(%1);
+                %17 = extract_ct_block<7>(%1);
+                %18 = pack_ct<4>(%3, %2);
+                %19 = pbs<Protect, None>(%18);
+                %20 = pack_ct<4>(%5, %4);
+                %21 = pbs<Protect, None>(%20);
+                %22 = pack_ct<4>(%7, %6);
+                %23 = pbs<Protect, None>(%22);
+                %24 = pack_ct<4>(%9, %8);
+                %25 = pbs<Protect, None>(%24);
+                %26 = pack_ct<4>(%11, %10);
+                %27 = pbs<Protect, None>(%26);
+                %28 = pack_ct<4>(%13, %12);
+                %29 = pbs<Protect, None>(%28);
+                %30 = pack_ct<4>(%15, %14);
+                %31 = pbs<Protect, None>(%30);
+                %32 = pack_ct<4>(%17, %16);
+                %33 = pbs<Protect, None>(%32);
+                %34 = sub_ct(%19, %27);
+                %35 = pbs<Protect, CmpSign>(%34);
+                %36 = let_pt_block<1>();
+                %37 = add_pt(%35, %36);
+                %38 = sub_ct(%21, %29);
+                %39 = pbs<Protect, CmpSign>(%38);
+                %41 = add_pt(%39, %36);
+                %42 = sub_ct(%23, %31);
+                %43 = pbs<Protect, CmpSign>(%42);
+                %45 = add_pt(%43, %36);
+                %46 = sub_ct(%25, %33);
+                %47 = pbs<Protect, CmpSign>(%46);
+                %49 = add_pt(%47, %36);
+                %50 = pack_ct<4>(%41, %37);
+                %51 = pack_ct<4>(%49, %45);
+                %52 = pbs<Protect, CmpReduce>(%50);
+                %53 = pbs<Protect, CmpReduce>(%51);
+                %54 = pack_ct<4>(%53, %52);
+                %55 = pbs<Protect, CmpEqMrg>(%54);
+                %56 = decl_ct<2>();
+                %57 = store_ct_block<0>(%55, %56);
+                output<0>(%57);
             "#
         );
+    }
+
+    #[test]
+    fn bitwise_or_16() {
+        let spec = zhc_crypto::integer_semantics::CiphertextBlockSpec(2, 2);
+        let builder = crate::Builder::new(spec);
+        let lhs = builder.ciphertext_input(4);
+        let rhs = builder.ciphertext_input(4);
+        println!("{rhs:?}");
+        let lhs_blocks = builder.ciphertext_split(lhs);
+        let rhs_blocks = builder.ciphertext_split(rhs);
+        let res = builder.vector_zip_then_lookup(
+            lhs_blocks,
+            rhs_blocks,
+            zhc_langs::ioplang::Lut1Def::BwOr,
+            crate::ExtensionBehavior::Panic,
+        );
+        let res = builder.ciphertext_join(res, None);
+        builder.ciphertext_output(res);
+        builder.draw("testttttt.html");
     }
 }

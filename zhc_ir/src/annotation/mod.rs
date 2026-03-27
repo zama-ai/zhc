@@ -28,6 +28,7 @@ pub use traits::*;
 pub use val_origin::*;
 pub use val_ref::*;
 pub use val_use::*;
+pub use view::*;
 
 /// Tracks whether an annotation slot has been filled during an analysis pass.
 ///

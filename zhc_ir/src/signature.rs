@@ -6,7 +6,7 @@ use zhc_utils::small::SmallVec;
 /// The signature describes the type interface of an operation, listing the
 /// types of input arguments and output values. This information is used for
 /// type checking during IR construction and optimization.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Signature<T>(pub SmallVec<T>, pub SmallVec<T>);
 
 impl<T> Signature<T> {

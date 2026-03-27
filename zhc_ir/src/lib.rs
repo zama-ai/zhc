@@ -26,8 +26,10 @@ pub mod cse;
 pub mod dce;
 pub mod interpretation;
 pub mod scheduler;
+pub mod slack;
 pub mod translation;
 pub mod traversal;
+pub mod visualization;
 
 mod annotation;
 mod dialect;
