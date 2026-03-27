@@ -24,7 +24,6 @@ use zhc_langs::ioplang::IopInstructionSet;
 use zhc_langs::ioplang::IopLang;
 use zhc_langs::ioplang::cut_transfers;
 use zhc_langs::ioplang::eliminate_aliases;
-use zhc_sim::MHz;
 use zhc_sim::hpu::HpuConfig;
 
 pub mod allocator;
@@ -39,7 +38,6 @@ pub mod translation;
 pub mod translation_table;
 
 use zhc_langs::ioplang::isolate_subgraphs;
-pub use zhc_sim::hpu::HpuConfig;
 use zhc_sim::hpu::PhysicalConfig;
 pub use zhc_sim::{Cycle, MHz};
 
@@ -135,7 +133,9 @@ fn mh_mul() {
     let mut hpu_config = HpuConfig::from(PhysicalConfig::tuniform_64b_pfail128_psi64());
     hpu_config.pbs_min_batch_size = 12;
     hpu_config.pbs_max_batch_size = 12;
-    let mut ir = mh_mul_lsb(CiphertextSpec::new(64, 2, 2), 2).into_ir();
+    let builder = mh_mul_lsb(CiphertextSpec::new(8, 2, 2), 2);
+    builder.draw("start_ir.html");
+    let mut ir = builder.into_ir();
 
     cut_transfers(&mut ir);
     let components = isolate_subgraphs(&ir, |op| {
