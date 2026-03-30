@@ -90,9 +90,9 @@ mod tests {
         assert_display_is!(
             ir.format(),
             r#"
-                %0 : CtBlock = let_ct_block<0>();
-                %1 : CtBlock = inspect(%0 : CtBlock);
-                _consume<CtBlock>(%1 : CtBlock);
+                %0 = let_ct_block<0>();
+                %1 = inspect(%0);
+                _consume<CtBlock>(%1);
             "#
         );
 
@@ -101,9 +101,9 @@ mod tests {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : CtBlock = let_ct_block<0>();
-            _consume<CtBlock>(%0 : CtBlock);
-        "#
+                %0 = let_ct_block<0>();
+                _consume<CtBlock>(%0);
+            "#
         );
     }
 
@@ -142,11 +142,11 @@ mod tests {
         assert_display_is!(
             ir.format(),
             r#"
-                %0 : CtBlock = let_ct_block<0>();
-                %1 : CtBlock = inspect(%0 : CtBlock);
-                %2 : CtBlock = inspect(%1 : CtBlock);
-                %3 : CtBlock = inspect(%2 : CtBlock);
-                _consume<CtBlock>(%3 : CtBlock);
+                %0 = let_ct_block<0>();
+                %1 = inspect(%0);
+                %2 = inspect(%1);
+                %3 = inspect(%2);
+                _consume<CtBlock>(%3);
             "#
         );
 
@@ -155,9 +155,9 @@ mod tests {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : CtBlock = let_ct_block<0>();
-            _consume<CtBlock>(%0 : CtBlock);
-        "#
+                %0 = let_ct_block<0>();
+                _consume<CtBlock>(%0);
+            "#
         );
     }
 
@@ -184,10 +184,10 @@ mod tests {
         assert_display_is!(
             ir.format(),
             r#"
-                %0 : CtBlock = let_ct_block<0>();
-                %1 : CtBlock = inspect(%0 : CtBlock);
-                %2 : CtBlock = add_ct(%1 : CtBlock, %1 : CtBlock);
-                _consume<CtBlock>(%2 : CtBlock);
+                %0 = let_ct_block<0>();
+                %1 = inspect(%0);
+                %2 = add_ct(%1, %1);
+                _consume<CtBlock>(%2);
             "#
         );
 
@@ -196,10 +196,10 @@ mod tests {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : CtBlock = let_ct_block<0>();
-            %2 : CtBlock = add_ct(%0 : CtBlock, %0 : CtBlock);
-            _consume<CtBlock>(%2 : CtBlock);
-        "#
+                %0 = let_ct_block<0>();
+                %2 = add_ct(%0, %0);
+                _consume<CtBlock>(%2);
+            "#
         );
     }
 
@@ -233,12 +233,12 @@ mod tests {
         assert_display_is!(
             ir.format(),
             r#"
-                %0 : CtBlock = let_ct_block<0>();
-                %1 : CtBlock = let_ct_block<1>();
-                %2 : CtBlock = inspect(%0 : CtBlock);
-                %3 : CtBlock = inspect(%1 : CtBlock);
-                %4 : CtBlock = add_ct(%2 : CtBlock, %3 : CtBlock);
-                _consume<CtBlock>(%4 : CtBlock);
+                %0 = let_ct_block<0>();
+                %1 = let_ct_block<1>();
+                %2 = inspect(%0);
+                %3 = inspect(%1);
+                %4 = add_ct(%2, %3);
+                _consume<CtBlock>(%4);
             "#
         );
 
@@ -247,11 +247,11 @@ mod tests {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : CtBlock = let_ct_block<0>();
-            %1 : CtBlock = let_ct_block<1>();
-            %4 : CtBlock = add_ct(%0 : CtBlock, %1 : CtBlock);
-            _consume<CtBlock>(%4 : CtBlock);
-        "#
+                %0 = let_ct_block<0>();
+                %1 = let_ct_block<1>();
+                %4 = add_ct(%0, %1);
+                _consume<CtBlock>(%4);
+            "#
         );
     }
 
@@ -308,11 +308,11 @@ mod tests {
         assert_display_is!(
             ir.format(),
             r#"
-                %0 : CtBlock = let_ct_block<0>();
-                %1 : CtBlock = inspect(%0 : CtBlock);
-                %2 : CtBlock = inspect(%0 : CtBlock);
-                %3 : CtBlock = add_ct(%1 : CtBlock, %2 : CtBlock);
-                _consume<CtBlock>(%3 : CtBlock);
+                %0 = let_ct_block<0>();
+                %1 = inspect(%0);
+                %2 = inspect(%0);
+                %3 = add_ct(%1, %2);
+                _consume<CtBlock>(%3);
             "#
         );
 
@@ -321,10 +321,10 @@ mod tests {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : CtBlock = let_ct_block<0>();
-            %3 : CtBlock = add_ct(%0 : CtBlock, %0 : CtBlock);
-            _consume<CtBlock>(%3 : CtBlock);
-        "#
+                %0 = let_ct_block<0>();
+                %3 = add_ct(%0, %0);
+                _consume<CtBlock>(%3);
+            "#
         );
     }
 
@@ -359,12 +359,12 @@ mod tests {
         assert_display_is!(
             ir.format(),
             r#"
-                %0 : CtBlock = let_ct_block<0>();
-                %1 : CtBlock = let_ct_block<1>();
-                %2 : CtBlock = inspect(%0 : CtBlock);
-                %3 : CtBlock = add_ct(%2 : CtBlock, %1 : CtBlock);
-                %4 : CtBlock = inspect(%3 : CtBlock);
-                _consume<CtBlock>(%4 : CtBlock);
+                %0 = let_ct_block<0>();
+                %1 = let_ct_block<1>();
+                %2 = inspect(%0);
+                %3 = add_ct(%2, %1);
+                %4 = inspect(%3);
+                _consume<CtBlock>(%4);
             "#
         );
 
@@ -373,11 +373,11 @@ mod tests {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : CtBlock = let_ct_block<0>();
-            %1 : CtBlock = let_ct_block<1>();
-            %3 : CtBlock = add_ct(%0 : CtBlock, %1 : CtBlock);
-            _consume<CtBlock>(%3 : CtBlock);
-        "#
+                %0 = let_ct_block<0>();
+                %1 = let_ct_block<1>();
+                %3 = add_ct(%0, %1);
+                _consume<CtBlock>(%3);
+            "#
         );
     }
 }

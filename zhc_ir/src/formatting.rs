@@ -48,7 +48,7 @@ impl Default for FormatContext {
     fn default() -> Self {
         Self {
             show_erased_ops: false,
-            show_types: true,
+            show_types: false,
             show_opid: false,
             show_comments: false,
             show_op_ann: true,

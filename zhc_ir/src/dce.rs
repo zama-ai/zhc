@@ -111,9 +111,9 @@ mod test {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : Int = int_input<pos: 0>();
-            return(%0 : Int);
-        "#
+                %0 = int_input<pos: 0>();
+                return(%0);
+            "#
         );
 
         let analysis = DeadCodeAnalysis::from_ir(&ir);
@@ -127,9 +127,9 @@ mod test {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : Int = int_input<pos: 0>();
-            return(%0 : Int);
-        "#
+                %0 = int_input<pos: 0>();
+                return(%0);
+            "#
         );
     }
 
@@ -144,10 +144,10 @@ mod test {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : Int = int_input<pos: 0>();
-            %1 : Int = add(%0 : Int, %0 : Int);
-            return(%0 : Int);
-        "#
+                %0 = int_input<pos: 0>();
+                %1 = add(%0, %0);
+                return(%0);
+            "#
         );
 
         let analysis = DeadCodeAnalysis::from_ir(&ir);
@@ -164,9 +164,9 @@ mod test {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : Int = int_input<pos: 0>();
-            return(%0 : Int);
-        "#
+                %0 = int_input<pos: 0>();
+                return(%0);
+            "#
         );
     }
 
@@ -182,12 +182,12 @@ mod test {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : Int = int_input<pos: 0>();
-            %1 : Int = int_input<pos: 1>();
-            %2 : Int = add(%0 : Int, %1 : Int);
-            %3 : Int = inc(%2 : Int);
-            return(%3 : Int);
-        "#
+                %0 = int_input<pos: 0>();
+                %1 = int_input<pos: 1>();
+                %2 = add(%0, %1);
+                %3 = inc(%2);
+                return(%3);
+            "#
         );
 
         let analysis = DeadCodeAnalysis::from_ir(&ir);
@@ -203,12 +203,12 @@ mod test {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : Int = int_input<pos: 0>();
-            %1 : Int = int_input<pos: 1>();
-            %2 : Int = add(%0 : Int, %1 : Int);
-            %3 : Int = inc(%2 : Int);
-            return(%3 : Int);
-        "#
+                %0 = int_input<pos: 0>();
+                %1 = int_input<pos: 1>();
+                %2 = add(%0, %1);
+                %3 = inc(%2);
+                return(%3);
+            "#
         );
     }
 
@@ -224,12 +224,12 @@ mod test {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : Int = int_input<pos: 0>();
-            %1 : Int = inc(%0 : Int);
-            %2 : Int = inc(%0 : Int);
-            %3 : Int = add(%1 : Int, %2 : Int);
-            return(%1 : Int);
-        "#
+                %0 = int_input<pos: 0>();
+                %1 = inc(%0);
+                %2 = inc(%0);
+                %3 = add(%1, %2);
+                return(%1);
+            "#
         );
 
         let analysis = DeadCodeAnalysis::from_ir(&ir);
@@ -250,10 +250,10 @@ mod test {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : Int = int_input<pos: 0>();
-            %1 : Int = inc(%0 : Int);
-            return(%1 : Int);
-        "#
+                %0 = int_input<pos: 0>();
+                %1 = inc(%0);
+                return(%1);
+            "#
         );
     }
 
@@ -269,12 +269,12 @@ mod test {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : Int = int_input<pos: 0>();
-            %1 : Int = int_input<pos: 1>();
-            %2 : Int = add(%0 : Int, %1 : Int);
-            return(%0 : Int);
-            return(%1 : Int);
-        "#
+                %0 = int_input<pos: 0>();
+                %1 = int_input<pos: 1>();
+                %2 = add(%0, %1);
+                return(%0);
+                return(%1);
+            "#
         );
 
         let analysis = DeadCodeAnalysis::from_ir(&ir);
@@ -290,11 +290,11 @@ mod test {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : Int = int_input<pos: 0>();
-            %1 : Int = int_input<pos: 1>();
-            return(%0 : Int);
-            return(%1 : Int);
-        "#
+                %0 = int_input<pos: 0>();
+                %1 = int_input<pos: 1>();
+                return(%0);
+                return(%1);
+            "#
         );
     }
 
@@ -309,10 +309,10 @@ mod test {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : Int = int_input<pos: 0>();
-            %1 : Int = add(%0 : Int, %0 : Int);
-            %2 : Int = inc(%1 : Int);
-        "#
+                %0 = int_input<pos: 0>();
+                %1 = add(%0, %0);
+                %2 = inc(%1);
+            "#
         );
 
         let analysis = DeadCodeAnalysis::from_ir(&ir);
@@ -342,9 +342,9 @@ mod test {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : Int = int_input<pos: 0>();
-            return(%0 : Int);
-        "#
+                %0 = int_input<pos: 0>();
+                return(%0);
+            "#
         );
 
         let analysis = DeadCodeAnalysis::from_ir(&ir);
@@ -359,9 +359,9 @@ mod test {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : Int = int_input<pos: 0>();
-            return(%0 : Int);
-        "#
+                %0 = int_input<pos: 0>();
+                return(%0);
+            "#
         );
     }
 
@@ -379,13 +379,13 @@ mod test {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : Int = int_input<pos: 0>();
-            %1 : Int = int_input<pos: 1>();
-            %2 : Int = add(%0 : Int, %1 : Int);
-            %4 : Int = inc(%0 : Int);
-            %3 : Int = add(%2 : Int, %2 : Int);
-            return(%4 : Int);
-        "#
+                %0 = int_input<pos: 0>();
+                %1 = int_input<pos: 1>();
+                %2 = add(%0, %1);
+                %4 = inc(%0);
+                %3 = add(%2, %2);
+                return(%4);
+            "#
         );
 
         let analysis = DeadCodeAnalysis::from_ir(&ir);
@@ -407,10 +407,10 @@ mod test {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : Int = int_input<pos: 0>();
-            %4 : Int = inc(%0 : Int);
-            return(%4 : Int);
-        "#
+                %0 = int_input<pos: 0>();
+                %4 = inc(%0);
+                return(%4);
+            "#
         );
     }
 }

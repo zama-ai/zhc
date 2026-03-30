@@ -211,11 +211,11 @@ mod test {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : Int = int_input<pos: 0>();
-            %1 : Int = inc(%0 : Int);
-            %2 : Int = inc(%0 : Int);
-            return(%2 : Int);
-        "#
+                %0 = int_input<pos: 0>();
+                %1 = inc(%0);
+                %2 = inc(%0);
+                return(%2);
+            "#
         );
 
         eliminate_common_subexpressions(&mut ir);
@@ -227,10 +227,10 @@ mod test {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : Int = int_input<pos: 0>();
-            %1 : Int = inc(%0 : Int);
-            return(%1 : Int);
-        "#
+                %0 = int_input<pos: 0>();
+                %1 = inc(%0);
+                return(%1);
+            "#
         );
     }
 
@@ -247,12 +247,12 @@ mod test {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : Int = int_input<pos: 0>();
-            %1 : Int = int_input<pos: 1>();
-            %2 : Int = add(%0 : Int, %1 : Int);
-            %3 : Int = add(%1 : Int, %0 : Int);
-            return(%3 : Int);
-        "#
+                %0 = int_input<pos: 0>();
+                %1 = int_input<pos: 1>();
+                %2 = add(%0, %1);
+                %3 = add(%1, %0);
+                return(%3);
+            "#
         );
 
         eliminate_common_subexpressions(&mut ir);
@@ -263,11 +263,11 @@ mod test {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : Int = int_input<pos: 0>();
-            %1 : Int = int_input<pos: 1>();
-            %2 : Int = add(%0 : Int, %1 : Int);
-            return(%2 : Int);
-        "#
+                %0 = int_input<pos: 0>();
+                %1 = int_input<pos: 1>();
+                %2 = add(%0, %1);
+                return(%2);
+            "#
         );
     }
 
@@ -294,13 +294,13 @@ mod test {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : Int = int_input<pos: 0>();
-            %1 : Int = int_input<pos: 1>();
-            %2 : Int, %3 : Int = div_rem(%0 : Int, %1 : Int);
-            %4 : Int, %5 : Int = div_rem(%0 : Int, %1 : Int);
-            %6 : Int = add(%4 : Int, %3 : Int);
-            return(%6 : Int);
-        "#
+                %0 = int_input<pos: 0>();
+                %1 = int_input<pos: 1>();
+                %2, %3 = div_rem(%0, %1);
+                %4, %5 = div_rem(%0, %1);
+                %6 = add(%4, %3);
+                return(%6);
+            "#
         );
 
         eliminate_common_subexpressions(&mut ir);
@@ -323,12 +323,12 @@ mod test {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : Int = int_input<pos: 0>();
-            %1 : Int = int_input<pos: 1>();
-            %2 : Int, %3 : Int = div_rem(%0 : Int, %1 : Int);
-            %6 : Int = add(%2 : Int, %3 : Int);
-            return(%6 : Int);
-        "#
+                %0 = int_input<pos: 0>();
+                %1 = int_input<pos: 1>();
+                %2, %3 = div_rem(%0, %1);
+                %6 = add(%2, %3);
+                return(%6);
+            "#
         );
     }
 }

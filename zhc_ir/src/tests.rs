@@ -37,15 +37,15 @@ fn test_construction() {
     assert_display_is!(
         store.format(),
         r#"
-        %0 : Int = int_input<pos: 0>();
-        %1 : Int = int_input<pos: 1>();
-        %2 : Int = add(%0 : Int, %1 : Int);
-        %3 : Int, %4 : Int = div_rem(%2 : Int, %0 : Int);
-        %5 : Int = inc(%3 : Int);
-        %6 : Int = inc(%4 : Int);
-        return(%3 : Int);
-        %7 : Int = add(%5 : Int, %6 : Int);
-    "#
+            %0 = int_input<pos: 0>();
+            %1 = int_input<pos: 1>();
+            %2 = add(%0, %1);
+            %3, %4 = div_rem(%2, %0);
+            %5 = inc(%3);
+            %6 = inc(%4);
+            return(%3);
+            %7 = add(%5, %6);
+        "#
     );
 
     assert_eq!(store.n_ops(), 8);
@@ -132,8 +132,8 @@ fn test_reaches_self() {
     assert_display_is!(
         store.format(),
         r#"
-        %0 : Int = int_input<pos: 0>();
-    "#
+            %0 = int_input<pos: 0>();
+        "#
     );
     assert!(lhs.reaches(&lhs));
 }
@@ -149,9 +149,9 @@ fn test_reaches_base() {
     assert_display_is!(
         store.format(),
         r#"
-        %0 : Int = int_input<pos: 0>();
-        %1 : Int = inc(%0 : Int);
-    "#
+            %0 = int_input<pos: 0>();
+            %1 = inc(%0);
+        "#
     );
     assert!(lhs.reaches(&ulhs));
 }
@@ -171,13 +171,13 @@ fn test_reaches_chain() {
     assert_display_is!(
         store.format(),
         r#"
-        %0 : Int = int_input<pos: 0>();
-        %1 : Int = inc(%0 : Int);
-        %2 : Int = inc(%1 : Int);
-        %3 : Int = inc(%2 : Int);
-        %4 : Int = inc(%3 : Int);
-        %5 : Int = inc(%4 : Int);
-    "#
+            %0 = int_input<pos: 0>();
+            %1 = inc(%0);
+            %2 = inc(%1);
+            %3 = inc(%2);
+            %4 = inc(%3);
+            %5 = inc(%4);
+        "#
     );
     assert!(lhs.reaches(&ulhs));
 }
@@ -194,10 +194,10 @@ fn test_reaches_happy_path() {
     assert_display_is!(
         store.format(),
         r#"
-        %0 : Int = int_input<pos: 0>();
-        %1 : Int = int_input<pos: 1>();
-        %2 : Int = inc(%0 : Int);
-    "#
+            %0 = int_input<pos: 0>();
+            %1 = int_input<pos: 1>();
+            %2 = inc(%0);
+        "#
     );
     assert!(!lhs.reaches(&rhs));
 }
@@ -502,8 +502,8 @@ fn test_delete_op() {
     assert_display_is!(
         store.format(),
         r#"
-        %0 : Int = int_input<pos: 0>();
-    "#
+            %0 = int_input<pos: 0>();
+        "#
     );
     assert!(store.raw_get_val(v2[0]).is_inactive());
     assert!(store.raw_get_val(v1[0]).is_inactive());
@@ -521,9 +521,9 @@ fn test_replace_val_use_wrong() {
     assert_display_is!(
         store.format(),
         r#"
-        %0 : Int = int_input<pos: 0>();
-        %1 : Int = inc(%0 : Int);
-    "#
+            %0 = int_input<pos: 0>();
+            %1 = inc(%0);
+        "#
     );
     store.replace_val_use(v0[0], v1[0]);
 }
@@ -538,9 +538,9 @@ fn test_replace_val_use_wrong_longer() {
     assert_display_is!(
         store.format(),
         r#"
-        %0 : Int = int_input<pos: 0>();
-        %1 : Int = inc(%0 : Int);
-    "#
+            %0 = int_input<pos: 0>();
+            %1 = inc(%0);
+        "#
     );
     store.replace_val_use(v0[0], v1[0]);
 }
@@ -555,19 +555,19 @@ fn test_replace_val_use() {
     assert_display_is!(
         store.format(),
         r#"
-        %0 : Int = int_input<pos: 0>();
-        %1 : Int = int_input<pos: 1>();
-        %2 : Int = inc(%0 : Int);
-    "#
+            %0 = int_input<pos: 0>();
+            %1 = int_input<pos: 1>();
+            %2 = inc(%0);
+        "#
     );
     store.replace_val_use(v0[0], v1[0]);
     assert_display_is!(
         store.format(),
         r#"
-        %0 : Int = int_input<pos: 0>();
-        %1 : Int = int_input<pos: 1>();
-        %2 : Int = inc(%1 : Int);
-    "#
+            %0 = int_input<pos: 0>();
+            %1 = int_input<pos: 1>();
+            %2 = inc(%1);
+        "#
     );
     let inc = store.get_op(inc_id);
     let v0 = store.get_val(v0[0]);
@@ -589,13 +589,13 @@ fn test_replace_val_use_make_shallower() {
     assert_display_is!(
         store.format(),
         r#"
-        %0 : Int = int_input<pos: 0>();
-        %1 : Int = int_input<pos: 1>();
-        %2 : Int = inc(%1 : Int);
-        %3 : Int = inc(%2 : Int);
-        %4 : Int = inc(%3 : Int);
-        %5 : Int = inc(%4 : Int);
-    "#
+            %0 = int_input<pos: 0>();
+            %1 = int_input<pos: 1>();
+            %2 = inc(%1);
+            %3 = inc(%2);
+            %4 = inc(%3);
+            %5 = inc(%4);
+        "#
     );
     let last = store.get_op(last_id);
     assert_eq!(last.get_depth(), 5);
@@ -603,13 +603,13 @@ fn test_replace_val_use_make_shallower() {
     assert_display_is!(
         store.format(),
         r#"
-        %0 : Int = int_input<pos: 0>();
-        %1 : Int = int_input<pos: 1>();
-        %2 : Int = inc(%1 : Int);
-        %5 : Int = inc(%0 : Int);
-        %3 : Int = inc(%2 : Int);
-        %4 : Int = inc(%3 : Int);
-    "#
+            %0 = int_input<pos: 0>();
+            %1 = int_input<pos: 1>();
+            %2 = inc(%1);
+            %5 = inc(%0);
+            %3 = inc(%2);
+            %4 = inc(%3);
+        "#
     );
     let last = store.get_op(last_id);
     assert_eq!(last.get_depth(), 2);
@@ -628,13 +628,13 @@ fn test_replace_val_use_make_deeper() {
     assert_display_is!(
         store.format(),
         r#"
-        %0 : Int = int_input<pos: 0>();
-        %1 : Int = int_input<pos: 1>();
-        %2 : Int = inc(%1 : Int);
-        %4 : Int = inc(%0 : Int);
-        %3 : Int = inc(%2 : Int);
-        %5 : Int = inc(%4 : Int);
-    "#
+            %0 = int_input<pos: 0>();
+            %1 = int_input<pos: 1>();
+            %2 = inc(%1);
+            %4 = inc(%0);
+            %3 = inc(%2);
+            %5 = inc(%4);
+        "#
     );
     let last = store.get_op(last_id);
     assert_eq!(last.get_depth(), 3);
@@ -642,13 +642,13 @@ fn test_replace_val_use_make_deeper() {
     assert_display_is!(
         store.format(),
         r#"
-        %0 : Int = int_input<pos: 0>();
-        %1 : Int = int_input<pos: 1>();
-        %2 : Int = inc(%1 : Int);
-        %3 : Int = inc(%2 : Int);
-        %4 : Int = inc(%3 : Int);
-        %5 : Int = inc(%4 : Int);
-    "#
+            %0 = int_input<pos: 0>();
+            %1 = int_input<pos: 1>();
+            %2 = inc(%1);
+            %3 = inc(%2);
+            %4 = inc(%3);
+            %5 = inc(%4);
+        "#
     );
     let last = store.get_op(last_id);
     assert_eq!(last.get_depth(), 5);
@@ -730,9 +730,9 @@ fn test_replace_val_use_self() {
     assert_display_is!(
         store.format(),
         r#"
-        %0 : Int = int_input<pos: 0>();
-        %1 : Int = inc(%0 : Int);
-    "#
+            %0 = int_input<pos: 0>();
+            %1 = inc(%0);
+        "#
     );
 }
 

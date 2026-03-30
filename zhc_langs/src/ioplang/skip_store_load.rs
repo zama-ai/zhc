@@ -101,11 +101,11 @@ mod tests {
         assert_display_is!(
             ir.format(),
             r#"
-                %0 : CtBlock = let_ct_block<42>();
-                %1 : Ct = decl_ct<2>();
-                %2 : Ct = store_ct_block<0>(%0 : CtBlock, %1 : Ct);
-                %3 : CtBlock = extract_ct_block<0>(%2 : Ct);
-                _consume<CtBlock>(%3 : CtBlock);
+                %0 = let_ct_block<42>();
+                %1 = decl_ct<2>();
+                %2 = store_ct_block<0>(%0, %1);
+                %3 = extract_ct_block<0>(%2);
+                _consume<CtBlock>(%3);
             "#
         );
 
@@ -115,8 +115,8 @@ mod tests {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : CtBlock = let_ct_block<42>();
-            _consume<CtBlock>(%0 : CtBlock);
+                %0 = let_ct_block<42>();
+                _consume<CtBlock>(%0);
             "#
         );
     }
@@ -191,15 +191,15 @@ mod tests {
         assert_display_is!(
             ir.format(),
             r#"
-                %0 : CtBlock = let_ct_block<10>();
-                %1 : CtBlock = let_ct_block<20>();
-                %2 : Ct = decl_ct<4>();
-                %3 : Ct = store_ct_block<0>(%0 : CtBlock, %2 : Ct);
-                %4 : Ct = store_ct_block<1>(%1 : CtBlock, %3 : Ct);
-                %5 : CtBlock = extract_ct_block<0>(%4 : Ct);
-                %6 : CtBlock = extract_ct_block<1>(%4 : Ct);
-                %7 : CtBlock = add_ct(%5 : CtBlock, %6 : CtBlock);
-                _consume<CtBlock>(%7 : CtBlock);
+                %0 = let_ct_block<10>();
+                %1 = let_ct_block<20>();
+                %2 = decl_ct<4>();
+                %3 = store_ct_block<0>(%0, %2);
+                %4 = store_ct_block<1>(%1, %3);
+                %5 = extract_ct_block<0>(%4);
+                %6 = extract_ct_block<1>(%4);
+                %7 = add_ct(%5, %6);
+                _consume<CtBlock>(%7);
             "#
         );
 
@@ -209,10 +209,10 @@ mod tests {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : CtBlock = let_ct_block<10>();
-            %1 : CtBlock = let_ct_block<20>();
-            %7 : CtBlock = add_ct(%0 : CtBlock, %1 : CtBlock);
-            _consume<CtBlock>(%7 : CtBlock);
+                %0 = let_ct_block<10>();
+                %1 = let_ct_block<20>();
+                %7 = add_ct(%0, %1);
+                _consume<CtBlock>(%7);
             "#
         );
     }
@@ -250,13 +250,13 @@ mod tests {
         assert_display_is!(
             ir.format(),
             r#"
-                %0 : CtBlock = let_ct_block<10>();
-                %1 : CtBlock = let_ct_block<20>();
-                %2 : Ct = decl_ct<4>();
-                %3 : Ct = store_ct_block<0>(%0 : CtBlock, %2 : Ct);
-                %4 : Ct = store_ct_block<0>(%1 : CtBlock, %3 : Ct);
-                %5 : CtBlock = extract_ct_block<0>(%4 : Ct);
-                _consume<CtBlock>(%5 : CtBlock);
+                %0 = let_ct_block<10>();
+                %1 = let_ct_block<20>();
+                %2 = decl_ct<4>();
+                %3 = store_ct_block<0>(%0, %2);
+                %4 = store_ct_block<0>(%1, %3);
+                %5 = extract_ct_block<0>(%4);
+                _consume<CtBlock>(%5);
             "#
         );
 
@@ -266,8 +266,8 @@ mod tests {
         assert_display_is!(
             ir.format(),
             r#"
-            %1 : CtBlock = let_ct_block<20>();
-            _consume<CtBlock>(%1 : CtBlock);
+                %1 = let_ct_block<20>();
+                _consume<CtBlock>(%1);
             "#
         );
     }
@@ -331,11 +331,11 @@ mod tests {
         assert_display_is!(
             ir.format(),
             r#"
-                %0 : Ct = input_ciphertext<0, 2>();
-                %1 : CtBlock = let_ct_block<99>();
-                %2 : Ct = store_ct_block<0>(%1 : CtBlock, %0 : Ct);
-                %3 : CtBlock = extract_ct_block<0>(%2 : Ct);
-                _consume<CtBlock>(%3 : CtBlock);
+                %0 = input_ciphertext<0, 2>();
+                %1 = let_ct_block<99>();
+                %2 = store_ct_block<0>(%1, %0);
+                %3 = extract_ct_block<0>(%2);
+                _consume<CtBlock>(%3);
             "#
         );
 
@@ -345,8 +345,8 @@ mod tests {
         assert_display_is!(
             ir.format(),
             r#"
-            %1 : CtBlock = let_ct_block<99>();
-            _consume<CtBlock>(%1 : CtBlock);
+                %1 = let_ct_block<99>();
+                _consume<CtBlock>(%1);
             "#
         );
     }
@@ -411,15 +411,15 @@ mod tests {
         assert_display_is!(
             ir.format(),
             r#"
-                %0 : CtBlock = let_ct_block<10>();
-                %1 : CtBlock = let_ct_block<20>();
-                %2 : Ct = decl_ct<4>();
-                %3 : Ct = store_ct_block<0>(%0 : CtBlock, %2 : Ct);
-                %4 : Ct = store_ct_block<0>(%1 : CtBlock, %3 : Ct);
-                %5 : CtBlock = extract_ct_block<0>(%3 : Ct);
-                %6 : CtBlock = extract_ct_block<0>(%4 : Ct);
-                %7 : CtBlock = add_ct(%5 : CtBlock, %6 : CtBlock);
-                _consume<CtBlock>(%7 : CtBlock);
+                %0 = let_ct_block<10>();
+                %1 = let_ct_block<20>();
+                %2 = decl_ct<4>();
+                %3 = store_ct_block<0>(%0, %2);
+                %4 = store_ct_block<0>(%1, %3);
+                %5 = extract_ct_block<0>(%3);
+                %6 = extract_ct_block<0>(%4);
+                %7 = add_ct(%5, %6);
+                _consume<CtBlock>(%7);
             "#
         );
 
@@ -429,10 +429,10 @@ mod tests {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : CtBlock = let_ct_block<10>();
-            %1 : CtBlock = let_ct_block<20>();
-            %7 : CtBlock = add_ct(%0 : CtBlock, %1 : CtBlock);
-            _consume<CtBlock>(%7 : CtBlock);
+                %0 = let_ct_block<10>();
+                %1 = let_ct_block<20>();
+                %7 = add_ct(%0, %1);
+                _consume<CtBlock>(%7);
             "#
         );
     }
