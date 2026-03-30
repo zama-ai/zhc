@@ -16,9 +16,9 @@ use super::{
 #[derive(Clone, Copy, Debug, Default)]
 pub enum PrintWalker {
     /// Print operations in the order they were added to the IR.
+    #[default]
     Linear,
     /// Print operations in topological order (dependencies before users).
-    #[default]
     Topo,
 }
 

@@ -86,7 +86,6 @@ mod test {
             r#"
                 %0 = input_ciphertext<0, 16>();
                 %1 = input_ciphertext<1, 2>();
-                %27 = decl_ct<16>();
                 %2 = extract_ct_block<0>(%0);
                 %3 = extract_ct_block<1>(%0);
                 %4 = extract_ct_block<2>(%0);
@@ -97,21 +96,22 @@ mod test {
                 %9 = extract_ct_block<7>(%0);
                 %10 = extract_ct_block<0>(%1);
                 %11 = pack_ct<4>(%10, %2);
-                %13 = pack_ct<4>(%10, %3);
-                %15 = pack_ct<4>(%10, %4);
-                %17 = pack_ct<4>(%10, %5);
-                %19 = pack_ct<4>(%10, %6);
-                %21 = pack_ct<4>(%10, %7);
-                %23 = pack_ct<4>(%10, %8);
-                %25 = pack_ct<4>(%10, %9);
                 %12 = pbs<Protect, IfFalseZeroed>(%11);
+                %13 = pack_ct<4>(%10, %3);
                 %14 = pbs<Protect, IfFalseZeroed>(%13);
+                %15 = pack_ct<4>(%10, %4);
                 %16 = pbs<Protect, IfFalseZeroed>(%15);
+                %17 = pack_ct<4>(%10, %5);
                 %18 = pbs<Protect, IfFalseZeroed>(%17);
+                %19 = pack_ct<4>(%10, %6);
                 %20 = pbs<Protect, IfFalseZeroed>(%19);
+                %21 = pack_ct<4>(%10, %7);
                 %22 = pbs<Protect, IfFalseZeroed>(%21);
+                %23 = pack_ct<4>(%10, %8);
                 %24 = pbs<Protect, IfFalseZeroed>(%23);
+                %25 = pack_ct<4>(%10, %9);
                 %26 = pbs<Protect, IfFalseZeroed>(%25);
+                %27 = decl_ct<16>();
                 %28 = store_ct_block<0>(%12, %27);
                 %29 = store_ct_block<1>(%14, %28);
                 %30 = store_ct_block<2>(%16, %29);

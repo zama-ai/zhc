@@ -43,8 +43,8 @@ fn test_construction() {
             %3, %4 = div_rem(%2, %0);
             %5 = inc(%3);
             %6 = inc(%4);
-            return(%3);
             %7 = add(%5, %6);
+            return(%3);
         "#
     );
 
@@ -606,9 +606,9 @@ fn test_replace_val_use_make_shallower() {
             %0 = int_input<pos: 0>();
             %1 = int_input<pos: 1>();
             %2 = inc(%1);
-            %5 = inc(%0);
             %3 = inc(%2);
             %4 = inc(%3);
+            %5 = inc(%0);
         "#
     );
     let last = store.get_op(last_id);
@@ -631,8 +631,8 @@ fn test_replace_val_use_make_deeper() {
             %0 = int_input<pos: 0>();
             %1 = int_input<pos: 1>();
             %2 = inc(%1);
-            %4 = inc(%0);
             %3 = inc(%2);
+            %4 = inc(%0);
             %5 = inc(%4);
         "#
     );

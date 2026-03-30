@@ -382,8 +382,8 @@ mod test {
                 %0 = int_input<pos: 0>();
                 %1 = int_input<pos: 1>();
                 %2 = add(%0, %1);
-                %4 = inc(%0);
                 %3 = add(%2, %2);
+                %4 = inc(%0);
                 return(%4);
             "#
         );

@@ -609,28 +609,25 @@ mod test {
             r#"
                 %0 = src_ld<0.0_tsrc>();
                 %1 = src_ld<1.0_tsrc>();
+                %2 = add_ct(%0, %1);
                 %3 = src_ld<0.1_tsrc>();
                 %4 = src_ld<1.1_tsrc>();
+                %5 = add_ct(%3, %4);
                 %6 = src_ld<0.2_tsrc>();
                 %7 = src_ld<1.2_tsrc>();
+                %8 = add_ct(%6, %7);
                 %9 = src_ld<0.3_tsrc>();
                 %10 = src_ld<1.3_tsrc>();
+                %11 = add_ct(%9, %10);
                 %12 = src_ld<0.4_tsrc>();
                 %13 = src_ld<1.4_tsrc>();
+                %14 = add_ct(%12, %13);
                 %15 = src_ld<0.5_tsrc>();
                 %16 = src_ld<1.5_tsrc>();
+                %17 = add_ct(%15, %16);
                 %18 = src_ld<0.6_tsrc>();
                 %19 = src_ld<1.6_tsrc>();
-                %54 = src_ld<0.7_tsrc>();
-                %55 = src_ld<1.7_tsrc>();
-                %2 = add_ct(%0, %1);
-                %5 = add_ct(%3, %4);
-                %8 = add_ct(%6, %7);
-                %11 = add_ct(%9, %10);
-                %14 = add_ct(%12, %13);
-                %17 = add_ct(%15, %16);
                 %20 = add_ct(%18, %19);
-                %56 = add_ct(%54, %55);
                 %21, %22, %23, %24, %25, %26, %27, %28 = batch {
                     %a0 = batch_arg<0, CtRegister>();
                     %a1 = batch_arg<1, CtRegister>();
@@ -656,11 +653,9 @@ mod test {
                     batch_ret<7, CtRegister>(%a14);
                 }(%2, %5, %8, %11, %14, %17, %20);
                 %29 = add_ct(%22, %23);
-                %32 = add_ct(%5, %22);
-                %39 = add_ct(%26, %27);
                 %30 = add_ct(%29, %24);
-                %41 = add_ct(%39, %28);
                 %31 = add_ct(%30, %25);
+                %32 = add_ct(%5, %22);
                 %33, %34, %35, %36, %37 = batch {
                     %a0 = batch_arg<0, CtRegister>();
                     %a1 = batch_arg<1, CtRegister>();
@@ -681,7 +676,9 @@ mod test {
                 dst_st<0.0_tdst>(%36);
                 dst_st<0.1_tdst>(%37);
                 %38 = add_ct(%26, %33);
+                %39 = add_ct(%26, %27);
                 %40 = add_ct(%39, %33);
+                %41 = add_ct(%39, %28);
                 %42 = add_ct(%41, %33);
                 %43 = add_ct(%8, %34);
                 %44 = add_ct(%11, %35);
@@ -711,6 +708,9 @@ mod test {
                 dst_st<0.4_tdst>(%51);
                 %52 = add_ct(%17, %46);
                 %53 = add_ct(%20, %47);
+                %54 = src_ld<0.7_tsrc>();
+                %55 = src_ld<1.7_tsrc>();
+                %56 = add_ct(%54, %55);
                 %57 = add_ct(%56, %48);
                 %58, %59, %60 = batch {
                     %a0 = batch_arg<0, CtRegister>();
