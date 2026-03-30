@@ -127,6 +127,14 @@ pub enum IopInstructionSet {
     Pbs8 { lut: Lut8Def },
 }
 
+impl IopInstructionSet {
+    /// Returns true if this instruction is a PBS operation.
+    pub fn is_pbs(&self) -> bool {
+        use IopInstructionSet::*;
+        matches!(self, Pbs { .. } | Pbs2 { .. } | Pbs4 { .. } | Pbs8 { .. })
+    }
+}
+
 impl Format for IopInstructionSet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>, _ctx: &FormatContext) -> std::fmt::Result {
         match self {

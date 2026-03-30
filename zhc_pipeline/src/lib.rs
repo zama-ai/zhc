@@ -23,12 +23,40 @@ pub mod allocator;
 pub mod batch_scheduler;
 pub mod batcher;
 pub mod compat;
-pub mod interpreter;
+pub mod hpu_metrics;
 pub mod latency;
-pub mod statistics;
+pub mod pbs_metrics;
 pub mod tracing;
 pub mod translation;
 pub mod translation_table;
+
+/// Computes HPU-level performance metrics for a circuit.
+///
+/// Runs the full compilation pipeline and simulates execution to collect timing
+/// and batching statistics. Uses default HPU configuration.
+pub fn compute_hpu_metrics(builder: &Builder) -> hpu_metrics::HpuMetrics {
+    let mut ir = builder.ir().to_owned();
+    eliminate_aliases(&mut ir);
+    eliminate_dead_code(&mut ir);
+    eliminate_common_subexpressions(&mut ir);
+    let unscheduled = translation::lower_iop_to_hpu(&ir);
+    let batched = batcher::batch(&unscheduled, &HpuConfig::default());
+    let scheduled = batch_scheduler::schedule(&batched, &HpuConfig::default());
+    let allocated = allocate_registers(&scheduled, &HpuConfig::default());
+    hpu_metrics::compute_hpu_metrics(&allocated, &batched)
+}
+
+/// Computes PBS-level metrics for a circuit.
+///
+/// Analyzes the optimized IOP-level IR to compute PBS count, critical path length,
+/// and slack distribution.
+pub fn compute_pbs_metrics(builder: &Builder) -> pbs_metrics::PbsMetrics {
+    let mut ir = builder.ir().to_owned();
+    eliminate_aliases(&mut ir);
+    eliminate_dead_code(&mut ir);
+    eliminate_common_subexpressions(&mut ir);
+    pbs_metrics::compute_pbs_metrics(&ir)
+}
 
 /// Traces the execution of a computation graph to a perfetto file.
 ///
@@ -49,7 +77,9 @@ pub fn trace_execution(builder: &Builder, config: HpuConfig, path: impl AsRef<Pa
 pub fn compute_latency(builder: &Builder, config: HpuConfig, freq: MHz) -> f64 {
     let ir = builder.ir().to_owned();
     let allocated = regular_pipeline(ir, &config);
-    latency::compute_latency(&allocated, &config).as_ts(freq.period())
+    latency::compute_latency(&allocated, &config)
+        .0
+        .as_ts(freq.period())
 }
 
 fn regular_pipeline(mut ir: IR<IopLang>, config: &HpuConfig) -> IR<DopLang> {
@@ -64,25 +94,3 @@ fn regular_pipeline(mut ir: IR<IopLang>, config: &HpuConfig) -> IR<DopLang> {
 
 #[cfg(test)]
 mod test;
-
-// #[test]
-// #[allow(unused)]
-// fn test_dump_trace() {
-//     let bd = zhc_builder::mul_lsb(zhc_builder::CiphertextSpec::new(64, 2, 2));
-//     let config = HpuConfig::from(zhc_sim::hpu::PhysicalConfig::tuniform_64b_pfail128_psi64());
-//     let pbses_count = regular_pipeline(bd.ir().to_owned(), &config)
-//         .walk_ops_linear()
-//         .filter(|op| op.get_instruction().affinity() == zhc_langs::doplang::Affinity::Pbs)
-//         .count();
-//     let lower_bound = latency::compute_lower_bound(pbses_count,
-// &config).as_ts(MHz(400).period());     let mut min = f64::INFINITY;
-//     for _ in 0..1000 {
-//         let allocated = regular_pipeline(bd.ir().to_owned(), &config);
-//         let new_lat = latency::compute_latency(&allocated, &config).as_ts(MHz(400).period());
-//         if new_lat < min {
-//             min = new_lat;
-//             tracing::trace_execution(&allocated, &config, "smallest.json");
-//         }
-//         println!("{}/{lower_bound}   {}", min, min / lower_bound)
-//     }
-// }

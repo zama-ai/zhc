@@ -296,18 +296,18 @@ mod test {
 
     #[test]
     fn correctness_count0() {
-        fn semantic(inp: &[IopValue]) -> Vec<IopValue> {
+        fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
             let [IopValue::Ciphertext(inp)] = inp else {
                 unreachable!()
             };
             let res = inp.as_storage().count_zeros() - (u128::BITS - inp.spec().int_size() as u32);
             let output_size: u16 = n_bits_to_encode(inp.spec().int_size());
-            vec![IopValue::Ciphertext(
+            Some(vec![IopValue::Ciphertext(
                 inp.spec()
                     .block_spec()
                     .ciphertext_spec(output_size)
                     .from_int(res as u128),
-            )]
+            )])
         }
 
         for size in (2..128).step_by(2) {
@@ -317,18 +317,18 @@ mod test {
 
     #[test]
     fn correctness_count1() {
-        fn semantic(inp: &[IopValue]) -> Vec<IopValue> {
+        fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
             let [IopValue::Ciphertext(inp)] = inp else {
                 unreachable!()
             };
             let res = inp.as_storage().count_ones();
             let output_size: u16 = n_bits_to_encode(inp.spec().int_size());
-            vec![IopValue::Ciphertext(
+            Some(vec![IopValue::Ciphertext(
                 inp.spec()
                     .block_spec()
                     .ciphertext_spec(output_size)
                     .from_int(res as u128),
-            )]
+            )])
         }
 
         for size in (2..128).step_by(2) {

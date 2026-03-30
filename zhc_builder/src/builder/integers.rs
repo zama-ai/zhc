@@ -5,6 +5,7 @@ use zhc_crypto::integer_semantics::{
 };
 use zhc_ir::ValId;
 use zhc_langs::ioplang::IopValue;
+use zhc_utils::Dumpable;
 
 /// An opaque handle to a single encrypted block (radix digit) in the IR graph.
 ///
@@ -20,7 +21,7 @@ use zhc_langs::ioplang::IopValue;
 ///
 /// This type cannot be constructed directly — it is always returned by
 /// [`Builder`](`super::Builder`) methods. Use [`make_value`](Self::make_value) to create a test
-/// [`IopValue`] for [`Builder::eval`](`super::Builder::eval`).
+/// [`IopValue`] for [`Evaluator::with_inputs`](`super::Evaluator::with_inputs`).
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct CiphertextBlock {
     pub(super) valid: ValId,
@@ -36,6 +37,12 @@ impl Debug for CiphertextBlock {
 impl AsRef<CiphertextBlock> for CiphertextBlock {
     fn as_ref(&self) -> &CiphertextBlock {
         self
+    }
+}
+
+impl Dumpable for CiphertextBlock {
+    fn dump_to_string(&self) -> String {
+        format!("{:?}", self)
     }
 }
 
@@ -71,7 +78,7 @@ impl CiphertextBlock {
 ///
 /// This type cannot be constructed directly — it is always returned by
 /// [`Builder`](`super::Builder`) methods. Use [`make_value`](Self::make_value) to create a test
-/// [`IopValue`] for [`Builder::eval`](`super::Builder::eval`).
+/// [`IopValue`] for [`Evaluator::with_inputs`](`super::Evaluator::with_inputs`).
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Ciphertext {
     pub(super) valid: ValId,
@@ -87,6 +94,12 @@ impl Debug for Ciphertext {
 impl AsRef<Ciphertext> for Ciphertext {
     fn as_ref(&self) -> &Ciphertext {
         self
+    }
+}
+
+impl Dumpable for Ciphertext {
+    fn dump_to_string(&self) -> String {
+        format!("{:?}", self)
     }
 }
 
@@ -115,7 +128,7 @@ impl Ciphertext {
 ///
 /// This type cannot be constructed directly — it is always returned by
 /// [`Builder`](`super::Builder`) methods. Use [`make_value`](Self::make_value) to create a test
-/// [`IopValue`] for [`Builder::eval`](`super::Builder::eval`).
+/// [`IopValue`] for [`Evaluator::with_inputs`](`super::Evaluator::with_inputs`).
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct PlaintextBlock {
     pub(super) valid: ValId,
@@ -131,6 +144,12 @@ impl Debug for PlaintextBlock {
 impl AsRef<PlaintextBlock> for PlaintextBlock {
     fn as_ref(&self) -> &PlaintextBlock {
         self
+    }
+}
+
+impl Dumpable for PlaintextBlock {
+    fn dump_to_string(&self) -> String {
+        format!("{:?}", self)
     }
 }
 
@@ -163,7 +182,7 @@ impl PlaintextBlock {
 ///
 /// This type cannot be constructed directly — it is always returned by
 /// [`Builder`](`super::Builder`) methods. Use [`make_value`](Self::make_value) to create a test
-/// [`IopValue`] for [`Builder::eval`](`super::Builder::eval`).
+/// [`IopValue`] for [`Evaluator::with_inputs`](`super::Evaluator::with_inputs`).
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Plaintext {
     pub(super) valid: ValId,
@@ -179,6 +198,12 @@ impl Debug for Plaintext {
 impl AsRef<Plaintext> for Plaintext {
     fn as_ref(&self) -> &Plaintext {
         self
+    }
+}
+
+impl Dumpable for Plaintext {
+    fn dump_to_string(&self) -> String {
+        format!("{:?}", self)
     }
 }
 

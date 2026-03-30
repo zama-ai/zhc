@@ -204,7 +204,7 @@ fn protect_add_ct_pt_spec_mismatch_panics() {
     };
     let rhs = EmulatedPlaintextBlock {
         storage: 0b011,
-        spec: PlaintextBlockSpec(4),
+        spec: PlaintextBlockSpec(8),
     };
 
     lhs.protect_add_pt(rhs);
@@ -576,7 +576,7 @@ fn protect_sub_pt_ct_basic() {
 fn protect_sub_pt_ct_spec_mismatch_panics() {
     let lhs = EmulatedPlaintextBlock {
         storage: 0b111,
-        spec: PlaintextBlockSpec(4),
+        spec: PlaintextBlockSpec(8),
     };
     let rhs = EmulatedCiphertextBlock {
         storage: 0b0_01_010,
@@ -720,7 +720,7 @@ fn shift_operations_preserve_spec() {
 #[test]
 fn plaintext_ct_operations_return_ct_spec() {
     let ct_spec = CiphertextBlockSpec(2, 3);
-    let pt_spec = PlaintextBlockSpec(3);
+    let pt_spec = PlaintextBlockSpec(6);
     let pt = EmulatedPlaintextBlock {
         storage: 0b111,
         spec: pt_spec,

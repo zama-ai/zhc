@@ -377,11 +377,11 @@ mod test {
 
     #[test]
     fn correctness() {
-        fn semantic(inp: &[IopValue]) -> Vec<IopValue> {
+        fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
             let [IopValue::Ciphertext(lhs), IopValue::Ciphertext(rhs)] = inp else {
                 unreachable!()
             };
-            vec![IopValue::Ciphertext(lhs.add(*rhs))]
+            Some(vec![IopValue::Ciphertext(lhs.add(*rhs))])
         }
         for size in (2..128).step_by(2) {
             add(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);

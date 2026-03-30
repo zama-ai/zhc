@@ -66,6 +66,10 @@ impl EmulatedPlaintext {
     pub fn spec(&self) -> PlaintextSpec {
         self.spec
     }
+
+    pub fn as_storage(&self) -> EmulatedPlaintextStorage {
+        self.storage
+    }
 }
 
 impl Debug for EmulatedPlaintext {

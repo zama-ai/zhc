@@ -18,7 +18,7 @@ impl<Bin: Hash + Eq + Clone> Histogram<Bin> {
 
 impl<Bin: Hash + Eq + Clone + Display + Ord> Display for Histogram<Bin> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        const BAR_WIDTH: usize = 120;
+        const BAR_WIDTH: usize = 65;
 
         if self.0.is_empty() {
             return Ok(());
@@ -36,12 +36,20 @@ impl<Bin: Hash + Eq + Clone + Display + Ord> Display for Histogram<Bin> {
         let labels: Vec<_> = entries.iter().map(|(b, _)| b.to_string()).collect();
         let max_label_width = labels.iter().map(|s| s.len()).max().unwrap_or(0);
 
+        // Gradient: ░ ▒ ▓ ●
         for (i, (_, count)) in entries.iter().enumerate() {
             let bar_len = (**count as usize * BAR_WIDTH) / max_count as usize;
-            let bar: String = "█".repeat(bar_len);
+            let bar: String = (0..bar_len)
+                .map(|j| match bar_len - 1 - j {
+                    0 => '●',
+                    1 => '▓',
+                    2 => '▒',
+                    _ => '░',
+                })
+                .collect();
             writeln!(
                 f,
-                "{:>width$} │ {} ({})",
+                "{:>width$} │{} ({})",
                 labels[i],
                 bar,
                 count,

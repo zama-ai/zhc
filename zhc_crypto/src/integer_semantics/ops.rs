@@ -56,7 +56,10 @@ impl EmulatedCiphertextBlock {
 
     /// Adds a plaintext block to a ciphertext block while protecting the padding bit.
     pub fn protect_add_pt(self, rhs: EmulatedPlaintextBlock) -> Self {
-        assert_eq!(self.spec, rhs.spec, "Spec mismatch.");
+        assert!(
+            rhs.spec.message_size() <= self.spec.complete_size(),
+            "Spec mismatch."
+        );
         assert!(
             self.raw_padding_bits() == 0,
             "Tried to protect-add, but lhs has active padding bit."
@@ -74,7 +77,10 @@ impl EmulatedCiphertextBlock {
 
     /// Adds a plaintext block to a ciphertext block while preventing padding overflow.
     pub fn temper_add_pt(self, rhs: EmulatedPlaintextBlock) -> Self {
-        assert_eq!(self.spec, rhs.spec, "Spec mismatch.");
+        assert!(
+            rhs.spec.message_size() <= self.spec.complete_size(),
+            "Spec mismatch."
+        );
         let storage = self.raw_complete_bits().add(rhs.raw_message_bits());
         assert!(
             !self.spec.overflows_padding(storage),
@@ -88,7 +94,15 @@ impl EmulatedCiphertextBlock {
 
     /// Adds a plaintext block to a ciphertext block with overflow wrapping.
     pub fn wrapping_add_pt(self, rhs: EmulatedPlaintextBlock) -> Self {
-        assert_eq!(self.spec, rhs.spec, "Spec mismatch.");
+        if !(rhs.spec.message_size() <= self.spec.complete_size()) {
+            println!("toto");
+        }
+        assert!(
+            rhs.spec.message_size() <= self.spec.complete_size(),
+            "Spec mismatch. rhs: {}, lhs: {}",
+            rhs.spec.message_size(),
+            self.spec.complete_size()
+        );
         let storage = self
             .raw_complete_bits()
             .wrapping_add(rhs.raw_message_bits())
@@ -150,7 +164,10 @@ impl EmulatedCiphertextBlock {
 
     /// Subtracts a plaintext block from a ciphertext block while protecting the padding bit.
     pub fn protect_sub_pt(self, rhs: EmulatedPlaintextBlock) -> Self {
-        assert_eq!(self.spec, rhs.spec, "Spec mismatch.");
+        assert!(
+            rhs.spec.message_size() <= self.spec.complete_size(),
+            "Spec mismatch."
+        );
         assert!(
             self.raw_padding_bits() == 0,
             "Tried to protect-sub, but lhs has active padding bit."
@@ -168,7 +185,10 @@ impl EmulatedCiphertextBlock {
 
     /// Subtracts a plaintext block from a ciphertext block while preventing underflow.
     pub fn temper_sub_pt(self, rhs: EmulatedPlaintextBlock) -> Self {
-        assert_eq!(self.spec, rhs.spec, "Spec mismatch.");
+        assert!(
+            rhs.spec.message_size() <= self.spec.complete_size(),
+            "Spec mismatch."
+        );
         assert!(
             self.raw_complete_bits() >= rhs.raw_message_bits(),
             "Underflow occured while performing temper-sub."
@@ -182,7 +202,10 @@ impl EmulatedCiphertextBlock {
 
     /// Subtracts a plaintext block from a ciphertext block with underflow wrapping.
     pub fn wrapping_sub_pt(self, rhs: EmulatedPlaintextBlock) -> Self {
-        assert_eq!(self.spec, rhs.spec, "Spec mismatch.");
+        assert!(
+            rhs.spec.message_size() <= self.spec.complete_size(),
+            "Spec mismatch."
+        );
         let storage = self
             .raw_complete_bits()
             .wrapping_sub(rhs.raw_message_bits())
@@ -248,7 +271,10 @@ impl EmulatedCiphertextBlock {
     /// Multiplies a ciphertext block by a plaintext block while protecting the padding bit from
     /// writes.
     pub fn protect_mul_pt(&self, rhs: EmulatedPlaintextBlock) -> Self {
-        assert_eq!(self.spec, rhs.spec, "Spec mismatch.");
+        assert!(
+            rhs.spec.message_size() <= self.spec.complete_size(),
+            "Spec mismatch."
+        );
         assert!(
             self.raw_padding_bits() == 0,
             "Tried to protect-mul, but lhs has active padding bit."
@@ -266,7 +292,10 @@ impl EmulatedCiphertextBlock {
 
     /// Multiplies a ciphertext block by a plaintext block while preventing padding bit overflow.
     pub fn temper_mul_pt(&self, rhs: EmulatedPlaintextBlock) -> Self {
-        assert_eq!(self.spec, rhs.spec, "Spec mismatch.");
+        assert!(
+            rhs.spec.message_size() <= self.spec.complete_size(),
+            "Spec mismatch."
+        );
         let storage = self.raw_complete_bits().mul(rhs.raw_message_bits());
         assert!(
             !self.spec.overflows_padding(storage),
@@ -281,7 +310,10 @@ impl EmulatedCiphertextBlock {
     /// Multiplies a ciphertext block by a plaintext block with modular arithmetic and overflow
     /// wrapping.
     pub fn wrapping_mul(&self, rhs: EmulatedPlaintextBlock) -> Self {
-        assert_eq!(self.spec, rhs.spec, "Spec mismatch.");
+        assert!(
+            rhs.spec.message_size() <= self.spec.complete_size(),
+            "Spec mismatch."
+        );
         let storage = self
             .raw_complete_bits()
             .wrapping_mul(rhs.raw_message_bits())
@@ -296,7 +328,10 @@ impl EmulatedCiphertextBlock {
 impl EmulatedPlaintextBlock {
     /// Subtracts a ciphertext block from this plaintext block while protecting the padding bit.
     pub fn protect_sub_ct(self, rhs: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-        assert_eq!(self.spec, rhs.spec, "Spec mismatch.");
+        assert!(
+            self.spec.message_size() <= rhs.spec.complete_size(),
+            "Spec mismatch."
+        );
         assert!(
             rhs.raw_padding_bits() == 0,
             "Tried to protect-sub, but rhs has active padding bit."
@@ -314,7 +349,10 @@ impl EmulatedPlaintextBlock {
 
     /// Subtracts a ciphertext block from this plaintext block with underflow wrapping.
     pub fn wrapping_sub_ct(self, rhs: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-        assert_eq!(self.spec, rhs.spec, "Spec mismatch.");
+        assert!(
+            self.spec.message_size() <= rhs.spec.complete_size(),
+            "Spec mismatch."
+        );
         let storage = self
             .raw_message_bits()
             .wrapping_sub(rhs.raw_complete_bits())

@@ -204,3 +204,9 @@ impl From<PhysicalConfig> for HpuConfig {
         }
     }
 }
+
+impl Default for HpuConfig {
+    fn default() -> Self {
+        Self::from(PhysicalConfig::tuniform_64b_pfail128_psi64())
+    }
+}

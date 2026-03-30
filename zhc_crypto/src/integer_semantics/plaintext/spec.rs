@@ -112,7 +112,15 @@ impl PlaintextSpec {
     /// Uses a thread-local PRNG seeded deterministically. Useful for testing and fuzzing.
     pub fn random(&self) -> EmulatedPlaintext {
         super::super::PRNG.with_borrow_mut(|prng| {
-            let a = prng.random::<u128>() & self.int_mask();
+            let mut bounds = [
+                prng.random_range(1..self.int_size()),
+                prng.random_range(1..self.int_size()),
+            ];
+            bounds.sort();
+            let msb_mask = (1 << bounds[1]) - 1;
+            let lsb_mask = (1 << bounds[0]) - 1;
+            let mask = msb_mask - lsb_mask;
+            let a = prng.random::<u128>() & self.int_mask() & mask;
             self.from_int(a)
         })
     }

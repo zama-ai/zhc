@@ -6,7 +6,7 @@ use zhc_crypto::integer_semantics::{
 };
 use zhc_ir::interpretation::{Interpretable, Interpretation, InterpretsTo};
 use zhc_utils::small::SmallVec;
-use zhc_utils::{FastMap, svec};
+use zhc_utils::{Dumpable, FastMap, svec};
 
 /// Interpretation domain for IOP programs.
 ///
@@ -80,6 +80,12 @@ impl Debug for IopValue {
             Self::CiphertextBlock(a) => a.fmt(f),
             Self::PlaintextBlock(a) => a.fmt(f),
         }
+    }
+}
+
+impl Dumpable for IopValue {
+    fn dump_to_string(&self) -> String {
+        format!("{:?}", self)
     }
 }
 
@@ -179,7 +185,7 @@ impl Interpretable<IopValue> for super::IopInstructionSet {
                 svec![IopValue::PlaintextBlock(
                     context
                         .spec
-                        .matching_plaintext_block_spec()
+                        .complete_plaintext_block_spec()
                         .from_message(*value as EmulatedPlaintextBlockStorage)
                 )]
             }

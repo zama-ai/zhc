@@ -50,7 +50,7 @@ impl Default for FormatContext {
             show_erased_ops: false,
             show_types: false,
             show_opid: false,
-            show_comments: false,
+            show_comments: true,
             show_op_ann: true,
             show_op_ann_alternate: false,
             show_val_ann: true,
@@ -205,7 +205,7 @@ impl FormatContext {
         if has_comments {
             // Space for comment column + " | "
             let comment_col_width = max_comment_len + 3;
-            line_prefix.push_str(&" ".repeat(comment_col_width + 4));
+            line_prefix.push_str(&" ".repeat(comment_col_width + 3));
             line_prefix.push_str("| ");
         }
 
@@ -313,6 +313,11 @@ impl<'a, T: Format> Formatted<'a, T> {
     /// Builder method to add indentation (spaces) to the prefix.
     pub fn with_indent(mut self, indent: usize) -> Self {
         self.ctx.prefixes.push(" ".repeat(indent));
+        self
+    }
+
+    pub fn with_prefix(mut self, prefix: impl AsRef<str>) -> Self {
+        self.ctx.prefixes.push(prefix.as_ref().to_string());
         self
     }
 

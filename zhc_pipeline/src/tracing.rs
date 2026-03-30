@@ -22,12 +22,6 @@ pub fn trace_execution(ir: &IR<DopLang>, config: &HpuConfig, path: impl AsRef<Pa
     simulator.dispatch(event);
     simulator.play_until_event(Events::IscProcessOver);
     simulator.dump_trace(path.as_ref());
-    let cycle = compute_pe_pbs_idle_duration(&simulator);
-    println!("PePbs Idle for: {}us", cycle.as_ts(config.freq.period()));
-    println!(
-        "Total Duration: {}us",
-        simulator.now().as_ts(MHz(400).period())
-    );
 }
 
 pub fn compute_pe_pbs_idle_duration(simulator: &Simulator<Hpu>) -> Cycle {

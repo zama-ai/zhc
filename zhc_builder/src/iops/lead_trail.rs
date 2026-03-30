@@ -337,19 +337,19 @@ mod test {
 
     #[test]
     fn correctness_lead0() {
-        fn semantic(inp: &[IopValue]) -> Vec<IopValue> {
+        fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
             let [IopValue::Ciphertext(inp)] = inp else {
                 unreachable!()
             };
             let res =
                 inp.as_storage().leading_zeros() - (u128::BITS - inp.spec().int_size() as u32);
             let output_size: u16 = n_bits_to_encode(inp.spec().int_size());
-            vec![IopValue::Ciphertext(
+            Some(vec![IopValue::Ciphertext(
                 inp.spec()
                     .block_spec()
                     .ciphertext_spec(output_size)
                     .from_int(res as u128),
-            )]
+            )])
         }
 
         for size in (2..128).step_by(2) {
@@ -359,19 +359,19 @@ mod test {
 
     #[test]
     fn correctness_lead1() {
-        fn semantic(inp: &[IopValue]) -> Vec<IopValue> {
+        fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
             let [IopValue::Ciphertext(inp)] = inp else {
                 unreachable!()
             };
             let res =
                 (inp.as_storage() << (u128::BITS - inp.spec().int_size() as u32)).leading_ones();
             let output_size: u16 = n_bits_to_encode(inp.spec().int_size());
-            vec![IopValue::Ciphertext(
+            Some(vec![IopValue::Ciphertext(
                 inp.spec()
                     .block_spec()
                     .ciphertext_spec(output_size)
                     .from_int(res as u128),
-            )]
+            )])
         }
 
         for size in (2..128).step_by(2) {
@@ -381,7 +381,7 @@ mod test {
 
     #[test]
     fn correctness_trail0() {
-        fn semantic(inp: &[IopValue]) -> Vec<IopValue> {
+        fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
             let [IopValue::Ciphertext(inp)] = inp else {
                 unreachable!()
             };
@@ -390,14 +390,13 @@ mod test {
                 .trailing_zeros()
                 .min(inp.spec().int_size() as u32);
             let output_size: u16 = n_bits_to_encode(inp.spec().int_size());
-            vec![IopValue::Ciphertext(
+            Some(vec![IopValue::Ciphertext(
                 inp.spec()
                     .block_spec()
                     .ciphertext_spec(output_size)
                     .from_int(res as u128),
-            )]
+            )])
         }
-
         for size in (2..128).step_by(2) {
             trail0(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
         }
@@ -405,18 +404,18 @@ mod test {
 
     #[test]
     fn correctness_trail1() {
-        fn semantic(inp: &[IopValue]) -> Vec<IopValue> {
+        fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
             let [IopValue::Ciphertext(inp)] = inp else {
                 unreachable!()
             };
             let res = inp.as_storage().trailing_ones();
             let output_size: u16 = n_bits_to_encode(inp.spec().int_size());
-            vec![IopValue::Ciphertext(
+            Some(vec![IopValue::Ciphertext(
                 inp.spec()
                     .block_spec()
                     .ciphertext_spec(output_size)
                     .from_int(res as u128),
-            )]
+            )])
         }
 
         for size in (2..128).step_by(2) {
@@ -426,19 +425,19 @@ mod test {
 
     #[test]
     fn correctness_ilog2() {
-        fn semantic(inp: &[IopValue]) -> Vec<IopValue> {
+        fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
             let [IopValue::Ciphertext(inp)] = inp else {
                 unreachable!()
             };
             let res = inp.as_storage();
             let res = if res == 0 { 0 } else { res.ilog2() };
             let output_size: u16 = n_bits_to_encode(inp.spec().int_size());
-            vec![IopValue::Ciphertext(
+            Some(vec![IopValue::Ciphertext(
                 inp.spec()
                     .block_spec()
                     .ciphertext_spec(output_size)
                     .from_int(res as u128),
-            )]
+            )])
         }
 
         for size in (2..128).step_by(2) {

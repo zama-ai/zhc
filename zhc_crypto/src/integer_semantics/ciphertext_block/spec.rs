@@ -1,3 +1,5 @@
+use rand::RngExt;
+
 use crate::integer_semantics::CiphertextSpec;
 
 use super::super::PlaintextBlockSpec;
@@ -265,6 +267,25 @@ impl CiphertextBlockSpec {
         PlaintextBlockSpec(self.message_size())
     }
 
+    /// Returns a plaintext block spec matching the complete (message + carry) size.
+    ///
+    /// Unlike [`matching_plaintext_block_spec`](Self::matching_plaintext_block_spec) which
+    /// matches only the message bits, this includes carry bits for operations that need
+    /// access to the full block value.
+    pub fn complete_plaintext_block_spec(&self) -> PlaintextBlockSpec {
+        PlaintextBlockSpec(self.complete_size())
+    }
+
+    /// Generates a random ciphertext block using a thread-local PRNG.
+    ///
+    /// Useful for testing and fuzzing. The generated value spans the full complete range.
+    pub fn random(&self) -> EmulatedCiphertextBlock {
+        super::super::PRNG.with_borrow_mut(|prng| {
+            let a = prng.random::<EmulatedCiphertextBlockStorage>() & self.complete_mask();
+            self.from_complete(a)
+        })
+    }
+
     /// Creates a multi-block ciphertext specification using this block layout.
     ///
     /// The `int_size` parameter specifies the total number of message bits across all blocks
@@ -275,17 +296,5 @@ impl CiphertextBlockSpec {
     /// Panics if `int_size` is not divisible by the message size.
     pub fn ciphertext_spec(&self, int_size: u16) -> CiphertextSpec {
         CiphertextSpec::new(int_size, self.carry_size(), self.message_size())
-    }
-}
-
-impl PartialEq<PlaintextBlockSpec> for CiphertextBlockSpec {
-    fn eq(&self, other: &PlaintextBlockSpec) -> bool {
-        self.message_size() == other.message_size()
-    }
-}
-
-impl PartialEq<CiphertextBlockSpec> for PlaintextBlockSpec {
-    fn eq(&self, other: &CiphertextBlockSpec) -> bool {
-        self.message_size() == other.message_size()
     }
 }

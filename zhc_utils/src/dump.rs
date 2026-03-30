@@ -26,7 +26,7 @@
 //! points.dump();                    // prints "[(0, 0), (1, 1)]"
 //! ```
 
-use std::{collections::VecDeque, path::Path};
+use std::{collections::VecDeque, io::Write, path::Path};
 
 /// A type that can render itself as a human-readable string for debugging.
 ///
@@ -73,7 +73,10 @@ pub trait Dumpable {
     /// let cfg = Config { debug: true };
     /// cfg.dump();  // prints "debug=true" followed by a newline
     /// ```
+    #[track_caller]
     fn dump(&self) {
+        let loc = std::panic::Location::caller();
+        println!("──── dumped at {}:{} ────", loc.file(), loc.line());
         println!("{}", self.dump_to_string());
     }
 
@@ -96,10 +99,14 @@ pub trait Dumpable {
     /// let state = State { step: 42 };
     /// state.dump_and_wait();  // prints state, waits for Enter, then continues
     /// ```
+    #[track_caller]
     fn dump_and_wait(&self) {
-        self.dump();
-        println!("Hit enter to resume execution >>>");
+        let loc = std::panic::Location::caller();
+        println!("──── paused at {}:{} ────\n", loc.file(), loc.line());
+        println!("{}", self.dump_to_string());
         let mut input = String::new();
+        print!("\n» ");
+        std::io::stdout().flush().unwrap();
         std::io::stdin()
             .read_line(&mut input)
             .expect("Failed to read line");
@@ -123,8 +130,11 @@ pub trait Dumpable {
     ///     inv.dump_and_panic();  // prints state, then panics
     /// }
     /// ```
+    #[track_caller]
     fn dump_and_panic(&self) -> ! {
-        self.dump();
+        let loc = std::panic::Location::caller();
+        println!("════ ERROR at {}:{} ════\n", loc.file(), loc.line());
+        println!("{}", self.dump_to_string());
         panic!();
     }
 
@@ -156,6 +166,12 @@ impl<E: Dumpable> Dumpable for [E] {
     fn dump_to_string(&self) -> String {
         let elements: Vec<String> = self.iter().map(|e| e.dump_to_string()).collect();
         format!("[{}]", elements.join(", "))
+    }
+}
+
+impl Dumpable for str {
+    fn dump_to_string(&self) -> String {
+        self.to_string()
     }
 }
 
@@ -211,5 +227,7 @@ impl_dumpable_via_display!(
     i64,
     i128,
     isize,
+    f64,
+    f32,
     std::backtrace::Backtrace
 );

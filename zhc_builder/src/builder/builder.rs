@@ -17,7 +17,10 @@
 //! let ir = builder.into_ir();
 //! ```
 
-use crate::builder::{Ciphertext, CiphertextBlock, Plaintext, PlaintextBlock};
+use crate::{
+    Evaluator,
+    builder::{Ciphertext, CiphertextBlock, Plaintext, PlaintextBlock},
+};
 use std::{
     cell::{Ref, RefCell, RefMut},
     fmt::Debug,
@@ -26,7 +29,7 @@ use std::{
     rc::Rc,
 };
 use zhc_crypto::integer_semantics::{
-    CiphertextBlockSpec, CiphertextSpec, PlaintextSpec, lut::LookupCheck,
+    CiphertextBlockSpec, CiphertextSpec, PlaintextBlockSpec, PlaintextSpec, lut::LookupCheck,
 };
 use zhc_ir::{
     IR, OpId, PrintWalker, Signature,
@@ -35,11 +38,11 @@ use zhc_ir::{
     visualization::{Hierarchy, draw_ir_html},
 };
 use zhc_langs::ioplang::{
-    IopInstructionSet, IopInterepreterContext, IopLang, IopTypeSystem, IopValue, Lut1Def, Lut2Def,
-    eliminate_aliases, skip_store_load,
+    IopInstructionSet, IopLang, IopTypeSystem, IopValue, Lut1Def, Lut2Def, eliminate_aliases,
+    skip_store_load,
 };
 use zhc_utils::{
-    Dumpable, FastMap, Store,
+    Dumpable, Store,
     iter::{Chunk, ChunkIt},
     small::SmallVec,
     svec,
@@ -92,10 +95,10 @@ impl Debug for Type {
 }
 
 #[derive(Debug)]
-struct InnerBuilder {
-    ir: IR<IopLang>,
-    hierarchies: Store<OpId, Hierarchy>,
-    sig: Signature<Type>,
+pub(super) struct InnerBuilder {
+    pub(super) ir: IR<IopLang>,
+    pub(super) hierarchies: Store<OpId, Hierarchy>,
+    pub(super) sig: Signature<Type>,
 }
 
 impl InnerBuilder {
@@ -146,7 +149,7 @@ impl InnerBuilder {
 /// second becomes input 1, and so on — both kinds share the same index space. Likewise,
 /// the first [`ciphertext_output`](Self::ciphertext_output) becomes
 /// output 0. This ordering defines the circuit's [`signature`](Self::signature) and must
-/// match the order of values passed to [`eval`](Self::eval).
+/// match the order of values passed to [`Evaluator::with_inputs`].
 ///
 /// # Comments
 ///
@@ -261,155 +264,76 @@ impl Builder {
         Ref::map(self.inner(), |inner| &inner.ir)
     }
 
-    /// Interprets the current IR with the given inputs, prints the annotated result, and panics.
+    /// Creates an evaluator for interpreting this circuit.
     ///
-    /// Like [`dump_and_panic`](Self::dump_and_panic), but first runs the IR interpreter so
-    /// each node is annotated with its computed value. The `inputs` slice must match the
-    /// declared input signature in order and length. The ciphertext spec used for
-    /// interpretation is inferred from the maximum `int_size` among the ciphertext inputs.
+    /// Returns an [`Evaluator`] that can be configured with inputs and run to compute
+    /// outputs. The evaluator uses the unoptimized IR graph for interpretation.
     ///
-    /// # Panics
-    ///
-    /// Always panics after printing, regardless of whether interpretation succeeded.
-    pub fn dump_eval_and_panic(&self, inputs: impl AsRef<[IopValue]>) -> ! {
-        let context = IopInterepreterContext {
-            spec: self.spec,
-            inputs: inputs.as_ref().iter().cloned().enumerate().collect(),
-            outputs: FastMap::new(),
-        };
-        let ir = self.ir();
-        match ir.interpret(context) {
-            Ok((interpreted, _)) => {
-                println!(
-                    "{}",
-                    interpreted
-                        .format()
-                        .with_walker(PrintWalker::Linear)
-                        .show_comments(true)
-                        .show_types(false)
-                        .show_val_ann_alternate(true)
-                );
-                panic!("dump_eval_panic: interpretation succeeded")
-            }
-            Err((partial, _)) => {
-                println!(
-                    "{}",
-                    partial
-                        .format()
-                        .with_walker(PrintWalker::Linear)
-                        .show_comments(true)
-                        .show_types(false)
-                        .show_val_ann_alternate(true)
-                );
-                panic!("dump_eval_panic: interpretation failed")
-            }
-        }
-    }
-
-    /// Interprets the current IR with the given inputs and returns the output values.
-    ///
-    /// Runs the IR interpreter on the unoptimized graph with the provided `inputs`, which
-    /// must match the declared input signature in order and length. Returns the computed
-    /// output values in declaration order. The ciphertext spec used for interpretation is
-    /// inferred from the maximum `int_size` among the ciphertext inputs.
-    ///
-    /// This is useful for validating circuit correctness without running actual FHE
-    /// operations. Construct input values with the [`make_value`](Ciphertext::make_value)
-    /// methods on the handle types.
-    ///
-    /// # Panics
-    ///
-    /// Panics if interpretation fails (e.g. due to a malformed graph).
-    ///
-    /// # Examples
+    /// # Example
     ///
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
     /// let a = builder.ciphertext_input(8);
-    /// let b = builder.ciphertext_input(8);
-    /// // ... build circuit ...
-    /// let outputs = builder.eval(&[a.make_value(42), b.make_value(7)]);
+    /// builder.ciphertext_output(&a);
+    /// let outputs = builder.eval()
+    ///     .with_inputs(&[a.make_value(42)])
+    ///     .get_outputs();
     /// ```
-    pub fn eval(&self, inputs: impl AsRef<[IopValue]>) -> Vec<IopValue> {
-        let inputs = inputs.as_ref();
-        let context = IopInterepreterContext {
+    pub fn eval(&self) -> Evaluator {
+        Evaluator {
+            inputs: vec![],
+            inner: self.inner.clone(),
             spec: self.spec,
-            inputs: inputs.iter().cloned().enumerate().collect(),
-            outputs: FastMap::new(),
-        };
-        let (_, context) = self.ir().interpret(context).unwrap();
-        let mut output: Vec<_> = context.outputs.into_iter().collect();
-        output.sort_unstable_by_key(|a| a.0);
-        output.into_iter().map(|a| a.1).collect()
+        }
     }
 
-    #[cfg(test)]
-    pub fn test_random(&self, reps: usize, gen_expect: impl Fn(&[IopValue]) -> Vec<IopValue>) {
+    /// Runs randomized correctness tests against a reference implementation.
+    ///
+    /// Generates `reps` random inputs matching the circuit's signature and compares
+    /// the circuit's outputs against the expected values from `gen_expect`. If
+    /// `gen_expect` returns `None`, the test case is skipped (useful for filtering
+    /// invalid input combinations).
+    ///
+    /// # Panics
+    ///
+    /// Panics if any test case produces outputs that don't match expectations,
+    /// dumping the failing evaluation for debugging.
+    pub fn test_random(
+        &self,
+        reps: usize,
+        gen_expect: impl Fn(&[IopValue]) -> Option<Vec<IopValue>>,
+    ) {
         use zhc_utils::iter::CollectInSmallVec;
         for _ in 0..reps {
             use std::panic::AssertUnwindSafe;
-
             let inputs = self
                 .signature()
                 .get_args()
                 .iter()
                 .map(|a| a.random_value())
                 .cosvec();
-            let expectations = gen_expect(inputs.as_slice());
-            let outputs = match std::panic::catch_unwind(AssertUnwindSafe(|| self.eval(&inputs))) {
-                Ok(outputs) => outputs,
-                Err(_) => {
-                    self.dump_eval_and_panic(&inputs);
+            if let Some(expectations) = gen_expect(inputs.as_slice()) {
+                let outputs = match std::panic::catch_unwind(AssertUnwindSafe(|| {
+                    self.eval().with_inputs(&inputs).get_outputs()
+                })) {
+                    Ok(outputs) => outputs,
+                    Err(_) => {
+                        self.eval().with_inputs(&inputs).dump_and_panic();
+                    }
+                };
+                if false {
+                    println!(
+                        "Input {:?}:\nExpected:\n{:?}\nOutput:\n{:?}",
+                        inputs, expectations, outputs
+                    );
                 }
-            };
-            if expectations != outputs {
-                println!(
-                    "Random test failed for input {:?}:\nExpected:\n{:?}\nOutput:\n{:?}",
-                    inputs, expectations, outputs
-                );
-                self.dump_eval_and_panic(inputs);
-            }
-        }
-    }
-
-    #[cfg(test)]
-    pub fn test_equivalence(first: &Self, second: &Self, reps: usize) {
-        Self::test_equivalence_map(first, second, reps, |a| a);
-    }
-
-    #[cfg(test)]
-    pub fn test_equivalence_map(
-        first: &Self,
-        second: &Self,
-        reps: usize,
-        mut inputs_mapper: impl FnMut(SmallVec<IopValue>) -> SmallVec<IopValue>,
-    ) {
-        use zhc_utils::iter::CollectInSmallVec;
-        assert_eq!(first.signature(), second.signature(), "Signature mismatch");
-        let sig = first.signature();
-        for _ in 0..reps {
-            use std::panic::AssertUnwindSafe;
-            let inputs = sig.get_args().iter().map(|a| a.random_value()).cosvec();
-            let inputs = inputs_mapper(inputs);
-            let fist_outputs =
-                match std::panic::catch_unwind(AssertUnwindSafe(|| first.eval(&inputs))) {
-                    Ok(outputs) => outputs,
-                    Err(_) => {
-                        first.dump_eval_and_panic(&inputs);
-                    }
-                };
-            let second_outputs =
-                match std::panic::catch_unwind(AssertUnwindSafe(|| second.eval(&inputs))) {
-                    Ok(outputs) => outputs,
-                    Err(_) => {
-                        second.dump_eval_and_panic(&inputs);
-                    }
-                };
-            if fist_outputs != second_outputs {
-                panic!(
-                    "Equivalence test failed for input {inputs:?}:\nFirst Outputs:\n{fist_outputs:?}\nSecond Outputs:\n{second_outputs:?}",
-                );
+                if expectations != outputs {
+                    panic!(
+                        "Random test failed for input {:?}:\nExpected:\n{:?}\nOutput:\n{:?}",
+                        inputs, expectations, outputs
+                    );
+                }
             }
         }
     }
@@ -759,7 +683,7 @@ impl Builder {
         );
         PlaintextBlock {
             valid: ret[0],
-            spec: self.spec.matching_plaintext_block_spec(),
+            spec: PlaintextBlockSpec(self.spec.complete_size()),
         }
     }
 
@@ -1665,9 +1589,16 @@ pub enum ExtensionBehavior {
 impl Dumpable for Builder {
     fn dump_to_string(&self) -> String {
         format!(
-            "Builder {} {{\n{}\n}}",
+            "╔══════════════════════════════════════════════════════════════════════════════
+║ Sig: {}
+║──────────────────────────────────────────────────────────────────────────────
+{}
+╚══════════════════════════════════════════════════════════════════════════════",
             self.signature(),
-            self.ir().format()
+            self.ir()
+                .format()
+                .with_prefix("║ ")
+                .with_walker(PrintWalker::Linear)
         )
     }
 }

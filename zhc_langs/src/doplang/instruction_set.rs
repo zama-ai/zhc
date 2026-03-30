@@ -358,6 +358,16 @@ impl Display for DopInstructionSet {
 }
 
 impl DopInstructionSet {
+    /// Returns true if this instruction is a PBS.
+    pub fn is_pbs(&self) -> bool {
+        use DopInstructionSet::*;
+        match self {
+            PBS { .. } | PBS_ML2 { .. } | PBS_ML4 { .. } | PBS_ML8 { .. } => true,
+            PBS_F { .. } | PBS_ML2_F { .. } | PBS_ML4_F { .. } | PBS_ML8_F { .. } => true,
+            _ => false,
+        }
+    }
+
     /// Returns true if this instruction is a PBS flush variant.
     pub fn is_pbs_flush(&self) -> bool {
         use DopInstructionSet::*;

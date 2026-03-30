@@ -22,6 +22,12 @@ impl MHz {
     }
 }
 
+impl Default for MHz {
+    fn default() -> Self {
+        MHz(400)
+    }
+}
+
 /// Represents the current state of simulation execution.
 pub enum SimulationState {
     /// Simulation can continue with more cycles to process.

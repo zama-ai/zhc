@@ -208,7 +208,7 @@ impl Interpretable<HpuValue> for super::HpuInstructionSet {
                 let ct = arguments[0].clone().unwrap_ct_register();
                 let pt = context
                     .spec
-                    .matching_plaintext_block_spec()
+                    .complete_plaintext_block_spec()
                     .from_message(cst.0 as EmulatedPlaintextBlockStorage);
                 svec![HpuValue::CtRegister(ct.wrapping_add_pt(pt))]
             }
@@ -216,7 +216,7 @@ impl Interpretable<HpuValue> for super::HpuInstructionSet {
                 let ct = arguments[0].clone().unwrap_ct_register();
                 let pt = context
                     .spec
-                    .matching_plaintext_block_spec()
+                    .complete_plaintext_block_spec()
                     .from_message(cst.0 as EmulatedPlaintextBlockStorage);
                 svec![HpuValue::CtRegister(ct.wrapping_sub_pt(pt))]
             }
@@ -224,7 +224,7 @@ impl Interpretable<HpuValue> for super::HpuInstructionSet {
                 let ct = arguments[0].clone().unwrap_ct_register();
                 let pt = context
                     .spec
-                    .matching_plaintext_block_spec()
+                    .complete_plaintext_block_spec()
                     .from_message(cst.0 as EmulatedPlaintextBlockStorage);
                 svec![HpuValue::CtRegister(pt.wrapping_sub_ct(ct))]
             }
@@ -232,7 +232,7 @@ impl Interpretable<HpuValue> for super::HpuInstructionSet {
                 let ct = arguments[0].clone().unwrap_ct_register();
                 let pt = context
                     .spec
-                    .matching_plaintext_block_spec()
+                    .complete_plaintext_block_spec()
                     .from_message(cst.0 as EmulatedPlaintextBlockStorage);
                 svec![HpuValue::CtRegister(ct.wrapping_mul(pt))]
             }

@@ -1,3 +1,5 @@
+use rand::RngExt;
+
 use crate::integer_semantics::PlaintextSpec;
 
 use super::{EmulatedPlaintextBlock, EmulatedPlaintextBlockStorage};
@@ -24,10 +26,6 @@ use super::{EmulatedPlaintextBlock, EmulatedPlaintextBlockStorage};
 ///
 /// // Create a block from a message value
 /// let block = spec.from_message(0b1010);
-///
-/// // Check compatibility with a ciphertext spec
-/// let ct_spec = CiphertextBlockSpec(2, 4);
-/// assert!(spec == ct_spec); // equal because message sizes match
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PlaintextBlockSpec(
@@ -85,6 +83,16 @@ impl PlaintextBlockSpec {
     pub fn overflows_message(&self, storage: EmulatedPlaintextBlockStorage) -> bool {
         let shift = self.message_size();
         storage >= (1 << shift)
+    }
+
+    /// Generates a random plaintext block using a thread-local PRNG.
+    ///
+    /// Useful for testing and fuzzing. The generated value spans the full message range.
+    pub fn random(&self) -> EmulatedPlaintextBlock {
+        super::super::PRNG.with_borrow_mut(|prng| {
+            let a = prng.random::<EmulatedPlaintextBlockStorage>() & self.message_mask();
+            self.from_message(a)
+        })
     }
 
     /// Creates a multi-block plaintext specification using this block layout.

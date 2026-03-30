@@ -1,4 +1,5 @@
 use std::fmt::{Debug, Display};
+use std::ops::{Deref, DerefMut};
 use std::{hash::Hash, usize};
 
 use crate::iter::CollectInVec;
@@ -53,6 +54,20 @@ impl<A: Display> Display for SmallVec<A> {
             "[{}]",
             self.iter().map(|a| a.to_string()).covec().join(", ")
         )
+    }
+}
+
+impl<A> Deref for SmallVec<A> {
+    type Target = [A];
+
+    fn deref(&self) -> &Self::Target {
+        self.as_slice()
+    }
+}
+
+impl<A> DerefMut for SmallVec<A> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.as_mut_slice()
     }
 }
 

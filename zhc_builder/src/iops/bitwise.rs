@@ -323,11 +323,11 @@ mod test {
 
     #[test]
     fn correctness_and() {
-        fn semantic(inp: &[IopValue]) -> Vec<IopValue> {
+        fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
             let [IopValue::Ciphertext(lhs), IopValue::Ciphertext(rhs)] = inp else {
                 unreachable!()
             };
-            vec![IopValue::Ciphertext(lhs.bitwise_and(*rhs))]
+            Some(vec![IopValue::Ciphertext(lhs.bitwise_and(*rhs))])
         }
         for size in (2..128).step_by(2) {
             bitwise_and(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
@@ -336,11 +336,11 @@ mod test {
 
     #[test]
     fn correctness_or() {
-        fn semantic(inp: &[IopValue]) -> Vec<IopValue> {
+        fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
             let [IopValue::Ciphertext(lhs), IopValue::Ciphertext(rhs)] = inp else {
                 unreachable!()
             };
-            vec![IopValue::Ciphertext(lhs.bitwise_or(*rhs))]
+            Some(vec![IopValue::Ciphertext(lhs.bitwise_or(*rhs))])
         }
         for size in (2..128).step_by(2) {
             bitwise_or(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
@@ -349,11 +349,11 @@ mod test {
 
     #[test]
     fn correctness_xor() {
-        fn semantic(inp: &[IopValue]) -> Vec<IopValue> {
+        fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
             let [IopValue::Ciphertext(lhs), IopValue::Ciphertext(rhs)] = inp else {
                 unreachable!()
             };
-            vec![IopValue::Ciphertext(lhs.bitwise_xor(*rhs))]
+            Some(vec![IopValue::Ciphertext(lhs.bitwise_xor(*rhs))])
         }
         for size in (2..128).step_by(2) {
             bitwise_xor(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
