@@ -485,7 +485,9 @@ impl BatchingStatistics {
             min_slack_distribution: Histogram::empty(),
         };
         for batch in batches.batch_iter() {
-            output.size_distribution.count(&(batch.len().sas::<OpIdRaw>()));
+            output
+                .size_distribution
+                .count(&(batch.len().sas::<OpIdRaw>()));
             output.min_slack_distribution.count(&batch.min_slack());
         }
         output

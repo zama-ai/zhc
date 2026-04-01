@@ -42,8 +42,8 @@ struct IopDivInitStruct {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum IfThenElse0Select {
-    SelPos0Msg,       // Select bool in position 0 of carry part, output msg
-    SelPos1Msg,       // Select bool in position 1 of carry part, output msg
+    SelPos0Msg, // Select bool in position 0 of carry part, output msg
+    SelPos1Msg, // Select bool in position 1 of carry part, output msg
     #[allow(unused)]
     SelPos1MsgCarry1, // Select bool in position 1 of carry part, output msg + 1bit of carry
 }
@@ -349,10 +349,13 @@ mod test {
     fn test_div() {
         let spec = CiphertextSpec::new(64, 2, 2);
         let ir = div(spec);
-        let eval = ir.eval().with_inputs([
-            IopValue::Ciphertext(spec.from_int(20)),
-            IopValue::Ciphertext(spec.from_int(3)),
-        ]).get_outputs();
+        let eval = ir
+            .eval()
+            .with_inputs([
+                IopValue::Ciphertext(spec.from_int(20)),
+                IopValue::Ciphertext(spec.from_int(3)),
+            ])
+            .get_outputs();
         let eval = eval
             .into_iter()
             .map(|a| a.unwrap_ciphertext().as_storage())
@@ -382,6 +385,5 @@ mod test {
         for size in [16, 32, 64, 128] {
             div(CiphertextSpec::new(size, 2, 2)).test_random(1000, semantic);
         }
-
     }
 }
