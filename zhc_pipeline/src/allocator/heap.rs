@@ -24,7 +24,7 @@ impl Heap {
 
     fn push(&mut self, valid: ValId) -> HeapSlot {
         self.slots.insert(valid, self.last);
-        let next = HeapSlot(self.last.0 + 1);
+        let next = HeapSlot(self.last.0.strict_add(1));
         std::mem::replace(&mut self.last, next)
     }
 
