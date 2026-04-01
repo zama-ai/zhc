@@ -14,6 +14,7 @@ use zhc_ir::IR;
 use zhc_ir::cse::eliminate_common_subexpressions;
 use zhc_ir::dce::eliminate_dead_code;
 use zhc_langs::doplang::DopLang;
+use zhc_langs::hpulang::get_batch_statistics;
 use zhc_langs::ioplang::IopLang;
 use zhc_langs::ioplang::eliminate_aliases;
 use zhc_sim::MHz;
@@ -23,6 +24,7 @@ pub mod allocator;
 pub mod batch_scheduler;
 pub mod batcher;
 pub mod compat;
+pub mod gpu_metrics;
 pub mod hpu_metrics;
 pub mod latency;
 pub mod pbs_metrics;
@@ -44,6 +46,29 @@ pub fn compute_hpu_metrics(builder: &Builder) -> hpu_metrics::HpuMetrics {
     let scheduled = batch_scheduler::schedule(&batched, &HpuConfig::default());
     let allocated = allocate_registers(&scheduled, &HpuConfig::default());
     hpu_metrics::compute_hpu_metrics(&allocated, &batched)
+}
+
+/// Computes GPU-level performance metrics for a circuit.
+///
+/// Returns batch statistics.
+pub fn compute_gpu_metrics(
+    builder: &Builder,
+    optimal_batch_size: usize,
+) -> gpu_metrics::GpuMetrics {
+    let mut ir = builder.ir().to_owned();
+    eliminate_aliases(&mut ir);
+    eliminate_dead_code(&mut ir);
+    eliminate_common_subexpressions(&mut ir);
+    let unscheduled = translation::lower_iop_to_hpu(&ir);
+    let mut config = HpuConfig::default();
+    config.pbs_min_batch_size = optimal_batch_size;
+    config.pbs_max_batch_size = optimal_batch_size;
+    let batched = batcher::batch(&unscheduled, &config);
+    let stats = get_batch_statistics(&batched);
+    gpu_metrics::GpuMetrics {
+        batch_stats: stats,
+        ir: batched,
+    }
 }
 
 /// Computes PBS-level metrics for a circuit.

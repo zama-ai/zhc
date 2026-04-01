@@ -17,10 +17,12 @@ pub mod prelude {
     pub use zhc_crypto::integer_semantics::CiphertextBlockSpec;
     pub use zhc_langs::ioplang::IopValue;
     pub use zhc_langs::ioplang::{Lut1Def, Lut2Def, Lut4Def, Lut8Def};
+    use zhc_pipeline::gpu_metrics::GpuMetrics;
     use zhc_pipeline::hpu_metrics::HpuMetrics;
     use zhc_pipeline::pbs_metrics::PbsMetrics;
     use zhc_pipeline::{
-        compute_hpu_metrics, compute_latency, compute_pbs_metrics, trace_execution,
+        compute_gpu_metrics, compute_hpu_metrics, compute_latency, compute_pbs_metrics,
+        trace_execution,
     };
     use zhc_sim::MHz;
     use zhc_sim::hpu::HpuConfig;
@@ -41,6 +43,9 @@ pub mod prelude {
 
         /// Computes HPU-level metrics (latency, efficiency, batch statistics).
         fn compute_hpu_metrics(&self) -> HpuMetrics;
+
+        /// Computes GPU-level metrics (batch statistics).
+        fn compute_gpu_metrics(&self, optimal_batch_size: usize) -> GpuMetrics;
     }
 
     impl BuilderExt for Builder {
@@ -58,6 +63,10 @@ pub mod prelude {
 
         fn compute_hpu_metrics(&self) -> HpuMetrics {
             compute_hpu_metrics(self)
+        }
+
+        fn compute_gpu_metrics(&self, optimal_batch_size: usize) -> GpuMetrics {
+            compute_gpu_metrics(self, optimal_batch_size)
         }
     }
 }
