@@ -13,7 +13,7 @@ mod legacy {
 
     pub struct MulFactor(pub u8);
 
-    pub struct CtId(pub u16);
+    pub struct CtId(pub u32);
 
     pub struct PbsGid(pub u16);
 

@@ -2,7 +2,7 @@ use std::cmp::max;
 use std::rc::Rc;
 
 use zhc_ir::translation::lazy_translate;
-use zhc_ir::{AnnIR, AnnOpRef, AnnValRef, IR, OpId};
+use zhc_ir::{AnnIR, AnnOpRef, AnnValRef, IR, OpId, OpIdRaw};
 use zhc_langs::hpulang::{HpuInstructionSet, HpuLang};
 use zhc_sim::hpu::HpuConfig;
 use zhc_utils::data_visulization::Histogram;
@@ -33,9 +33,9 @@ fn flush_pbs(instruction: HpuInstructionSet) -> HpuInstructionSet {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Criticallity {
-    depth: u16,
-    height: u16,
-    slack: u16,
+    depth: OpIdRaw,
+    height: OpIdRaw,
+    slack: OpIdRaw,
 }
 
 type CritOpRef<'a, 'b> = AnnOpRef<'a, 'b, HpuLang, Criticallity, ()>;
@@ -135,11 +135,11 @@ impl<'a, 'b> Batch<'a, 'b> {
     }
 
     #[allow(unused)]
-    pub fn slacks(&self) -> SmallVec<u16> {
+    pub fn slacks(&self) -> SmallVec<OpIdRaw> {
         self.ops.iter().map(|a| a.get_annotation().slack).collect()
     }
 
-    pub fn min_slack(&self) -> u16 {
+    pub fn min_slack(&self) -> OpIdRaw {
         self.ops
             .iter()
             .map(|a| a.get_annotation().slack)
@@ -429,10 +429,10 @@ fn backward_extract_batches<'a, 'b>(dir: &'b CritIR<'a>, batch_size: usize) -> B
 }
 
 pub struct PbsStatistics {
-    pub depth_distribution: Histogram<u16>,
-    pub height_distribution: Histogram<u16>,
-    pub slack_distribution: Histogram<u16>,
-    pub critical_path_length: u16,
+    pub depth_distribution: Histogram<OpIdRaw>,
+    pub height_distribution: Histogram<OpIdRaw>,
+    pub slack_distribution: Histogram<OpIdRaw>,
+    pub critical_path_length: OpIdRaw,
 }
 
 impl PbsStatistics {
@@ -474,8 +474,8 @@ impl Dumpable for PbsStatistics {
 }
 
 pub struct BatchingStatistics {
-    pub size_distribution: Histogram<u16>,
-    pub min_slack_distribution: Histogram<u16>,
+    pub size_distribution: Histogram<OpIdRaw>,
+    pub min_slack_distribution: Histogram<OpIdRaw>,
 }
 
 impl BatchingStatistics {
@@ -485,7 +485,7 @@ impl BatchingStatistics {
             min_slack_distribution: Histogram::empty(),
         };
         for batch in batches.batch_iter() {
-            output.size_distribution.count(&(batch.len().sas::<u16>()));
+            output.size_distribution.count(&(batch.len().sas::<OpIdRaw>()));
             output.min_slack_distribution.count(&batch.min_slack());
         }
         output
