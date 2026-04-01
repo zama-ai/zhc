@@ -51,15 +51,6 @@
 use std::collections::VecDeque;
 use zhc_utils_macro::fsm;
 
-/// Emits a warning in debug builds when the iterator is too short.
-#[cfg(debug_assertions)]
-fn warn_short_iterator() {
-    eprintln!("[few_mapped] Warning: iterator was shorter than the number of mappers specified");
-}
-
-#[cfg(not(debug_assertions))]
-fn warn_short_iterator() {}
-
 /// Extension trait for iterators, providing [`map_first`](Self::map_first).
 ///
 /// This trait is automatically implemented for all types that implement [`Iterator`] and
@@ -383,7 +374,6 @@ enum MapMany<'a, I: Iterator, A> {
     },
     RunningOnRestWithoutLasts {
         iter: I,
-        has_run_once: bool,
         rest: Box<dyn FnMut(I::Item) -> A + 'a>,
     },
     RunningOnLasts {
@@ -407,15 +397,10 @@ impl<'a, I: Iterator, A> Iterator for MapMany<'a, I, A> {
                 let mapper = firsts.pop_front().unwrap();
                 output = iter.next().map(mapper);
                 if output.is_none() {
-                    warn_short_iterator();
                     return MapMany::Finished;
                 }
                 if firsts.is_empty() {
-                    MapMany::RunningOnRestWithoutLasts {
-                        iter,
-                        has_run_once: false,
-                        rest,
-                    }
+                    MapMany::RunningOnRestWithoutLasts { iter, rest }
                 } else {
                     MapMany::RunningOnFirstsWithoutLasts { iter, firsts, rest }
                 }
@@ -429,14 +414,12 @@ impl<'a, I: Iterator, A> Iterator for MapMany<'a, I, A> {
                 let mapper = firsts.pop_front().unwrap();
                 output = iter.next().map(mapper);
                 if output.is_none() {
-                    warn_short_iterator();
                     return MapMany::Finished;
                 }
                 if firsts.is_empty() {
                     let lookahead: VecDeque<Option<I::Item>> =
                         (0..=lasts.len()).map(|_| iter.next()).collect();
                     if !lookahead.iter().all(|l| l.is_some()) {
-                        warn_short_iterator();
                         return MapMany::Finished;
                     }
                     MapMany::RunningOnRest {
@@ -461,13 +444,11 @@ impl<'a, I: Iterator, A> Iterator for MapMany<'a, I, A> {
             } => {
                 output = iter.next().map(&mut rest);
                 if output.is_none() {
-                    warn_short_iterator();
                     return MapMany::Finished;
                 }
                 let lookahead: VecDeque<Option<I::Item>> =
                     (0..=lasts.len()).map(|_| iter.next()).collect();
                 if !lookahead.iter().all(|l| l.is_some()) {
-                    warn_short_iterator();
                     return MapMany::Finished;
                 }
                 MapMany::RunningOnRest {
@@ -485,14 +466,12 @@ impl<'a, I: Iterator, A> Iterator for MapMany<'a, I, A> {
             } => {
                 output = iter.next().map(firsts.pop_front().unwrap());
                 if output.is_none() {
-                    warn_short_iterator();
                     return MapMany::Finished;
                 }
                 if firsts.is_empty() {
                     let lookahead: VecDeque<Option<I::Item>> =
                         (0..=lasts.len()).map(|_| iter.next()).collect();
                     if !lookahead.iter().all(|l| l.is_some()) {
-                        warn_short_iterator();
                         return MapMany::Finished;
                     }
                     MapMany::RunningOnRest {
@@ -517,15 +496,10 @@ impl<'a, I: Iterator, A> Iterator for MapMany<'a, I, A> {
             } => {
                 output = iter.next().map(firsts.pop_front().unwrap());
                 if output.is_none() {
-                    warn_short_iterator();
                     return MapMany::Finished;
                 }
                 if firsts.is_empty() {
-                    MapMany::RunningOnRestWithoutLasts {
-                        iter,
-                        has_run_once: false,
-                        rest,
-                    }
+                    MapMany::RunningOnRestWithoutLasts { iter, rest }
                 } else {
                     MapMany::RunningOnFirstsWithoutLasts { iter, firsts, rest }
                 }
@@ -538,7 +512,6 @@ impl<'a, I: Iterator, A> Iterator for MapMany<'a, I, A> {
             } => {
                 output = lookahead.pop_front().unwrap().map(&mut rest);
                 if output.is_none() {
-                    warn_short_iterator();
                     return MapMany::Finished;
                 }
                 let look = iter.next();
@@ -554,20 +527,9 @@ impl<'a, I: Iterator, A> Iterator for MapMany<'a, I, A> {
                     }
                 }
             }
-            MapMany::RunningOnRestWithoutLasts {
-                mut iter,
-                has_run_once,
-                mut rest,
-            } => {
+            MapMany::RunningOnRestWithoutLasts { mut iter, mut rest } => {
                 output = iter.next().map(&mut rest);
-                if output.is_none() && !has_run_once {
-                    warn_short_iterator();
-                }
-                MapMany::RunningOnRestWithoutLasts {
-                    iter,
-                    has_run_once: true,
-                    rest,
-                }
+                MapMany::RunningOnRestWithoutLasts { iter, rest }
             }
 
             MapMany::RunningOnLasts {
@@ -580,7 +542,6 @@ impl<'a, I: Iterator, A> Iterator for MapMany<'a, I, A> {
                     .unwrap()
                     .map(lasts.pop_front().unwrap());
                 if output.is_none() {
-                    warn_short_iterator();
                     return MapMany::Finished;
                 }
                 if lasts.is_empty() {
