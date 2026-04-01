@@ -1,5 +1,4 @@
 use std::fmt::Debug;
-use std::mem::MaybeUninit;
 
 use zhc_crypto::integer_semantics::{
     CiphertextBlockSpec, EmulatedCiphertextBlock, EmulatedPlaintextBlock,
@@ -52,7 +51,7 @@ pub struct DopInterpreterContext {
     pub spec: CiphertextBlockSpec,
     /// Fixed-size register file. Slots start uninitialized; the
     /// execution order guarantees all reads follow a prior write.
-    pub registers: SmallVec<MaybeUninit<EmulatedCiphertextBlock>>,
+    pub registers: SmallVec<Option<EmulatedCiphertextBlock>>,
     /// Heap memory, keyed by heap slot address.
     pub heap: FastMap<usize, EmulatedCiphertextBlock>,
     /// I/O memory, keyed by I/O slot address.
@@ -90,7 +89,7 @@ impl DopInterpreterContext {
     pub fn new(spec: CiphertextBlockSpec, num_registers: usize) -> Self {
         Self {
             spec,
-            registers: svec![MaybeUninit::uninit(); num_registers],
+            registers: svec![Some(spec.random()); num_registers],
             heap: FastMap::default(),
             io: FastMap::default(),
             lut1_table: FastMap::default(),
@@ -107,7 +106,7 @@ impl DopInterpreterContext {
     fn read_ct(&self, arg: &Argument) -> EmulatedCiphertextBlock {
         match arg {
             // SAFETY: execution order guarantees the slot was written before read.
-            Argument::CtReg { addr, .. } => unsafe { self.registers[*addr].assume_init() },
+            Argument::CtReg { addr, .. } => self.registers[*addr].unwrap(),
             Argument::CtHeap { addr } => self
                 .heap
                 .get(addr)
@@ -130,7 +129,7 @@ impl DopInterpreterContext {
     /// Writes a ciphertext block to the machine state.
     fn write_ct(&mut self, arg: &Argument, val: EmulatedCiphertextBlock) {
         match arg {
-            Argument::CtReg { addr, .. } => self.registers[*addr] = MaybeUninit::new(val),
+            Argument::CtReg { addr, .. } => self.registers[*addr] = Some(val),
             Argument::CtHeap { addr } => {
                 self.heap.insert(*addr, val);
             }
@@ -149,7 +148,7 @@ impl DopInterpreterContext {
         match arg {
             Argument::PtConst { val } => self
                 .spec
-                .matching_plaintext_block_spec()
+                .complete_plaintext_block_spec()
                 .from_message((*val).sas::<EmulatedPlaintextBlockStorage>()),
             Argument::PtVar { id, block } => self
                 .pt_sources
@@ -268,8 +267,8 @@ impl Interpretable<DopValue> for super::DopInstructionSet {
                     panic!("PBS_ML2 dst must be CtReg, got {dst:?}");
                 };
                 let base = addr & mask;
-                context.registers[base] = MaybeUninit::new(ct0);
-                context.registers[base + 1] = MaybeUninit::new(ct1);
+                context.registers[base] = Some(ct0);
+                context.registers[base + 1] = Some(ct1);
                 svec![DopValue::Ctx]
             }
 
@@ -286,10 +285,10 @@ impl Interpretable<DopValue> for super::DopInstructionSet {
                     panic!("PBS_ML4 dst must be CtReg, got {dst:?}");
                 };
                 let base = addr & mask;
-                context.registers[base] = MaybeUninit::new(ct0);
-                context.registers[base + 1] = MaybeUninit::new(ct1);
-                context.registers[base + 2] = MaybeUninit::new(ct2);
-                context.registers[base + 3] = MaybeUninit::new(ct3);
+                context.registers[base] = Some(ct0);
+                context.registers[base + 1] = Some(ct1);
+                context.registers[base + 2] = Some(ct2);
+                context.registers[base + 3] = Some(ct3);
                 svec![DopValue::Ctx]
             }
 
@@ -306,14 +305,14 @@ impl Interpretable<DopValue> for super::DopInstructionSet {
                     panic!("PBS_ML8 dst must be CtReg, got {dst:?}");
                 };
                 let base = addr & mask;
-                context.registers[base] = MaybeUninit::new(ct0);
-                context.registers[base + 1] = MaybeUninit::new(ct1);
-                context.registers[base + 2] = MaybeUninit::new(ct2);
-                context.registers[base + 3] = MaybeUninit::new(ct3);
-                context.registers[base + 4] = MaybeUninit::new(ct4);
-                context.registers[base + 5] = MaybeUninit::new(ct5);
-                context.registers[base + 6] = MaybeUninit::new(ct6);
-                context.registers[base + 7] = MaybeUninit::new(ct7);
+                context.registers[base] = Some(ct0);
+                context.registers[base + 1] = Some(ct1);
+                context.registers[base + 2] = Some(ct2);
+                context.registers[base + 3] = Some(ct3);
+                context.registers[base + 4] = Some(ct4);
+                context.registers[base + 5] = Some(ct5);
+                context.registers[base + 6] = Some(ct6);
+                context.registers[base + 7] = Some(ct7);
                 svec![DopValue::Ctx]
             }
 
