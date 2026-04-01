@@ -3,7 +3,7 @@ use std::{
     ops::{Add, Sub},
 };
 
-use zhc_utils::{Dumpable, StoreIndex};
+use zhc_utils::{Dumpable, SafeAs, StoreIndex};
 
 /// Generates a typed identifier with arithmetic operations and store indexing support.
 ///
@@ -44,16 +44,16 @@ macro_rules! impl_index {
         impl StoreIndex for $name {
             type Raw = $raw;
             fn as_usize(&self) -> usize {
-                self.0 as usize
+                self.0.sas()
             }
             fn as_raw(&self) -> $raw {
                 self.0
             }
             fn raw_from_usize(val: usize) -> $raw {
-                val as $raw
+                val.sas()
             }
             fn from_usize(val: usize) -> $name {
-                $name(val as $raw)
+                $name(val.sas())
             }
         }
 

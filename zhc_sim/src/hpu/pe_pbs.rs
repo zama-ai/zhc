@@ -1,6 +1,6 @@
 use std::ops::Index;
 use zhc_langs::doplang::Affinity;
-use zhc_utils::Fifo;
+use zhc_utils::{Fifo, SafeAs};
 
 use crate::{Cycle, Dispatch};
 
@@ -231,7 +231,7 @@ pub struct PePbsMemoryView<'m> {
 
 impl<'m> PePbsMemoryView<'m> {
     pub fn iter(&self) -> impl Iterator<Item = &'m DOp> {
-        (self.range_bottom..self.range_top).map(|i| &self.memory.memory[i as usize])
+        (self.range_bottom..self.range_top).map(|i| &self.memory.memory[i.sas()])
     }
 
     pub fn len(&self) -> usize {
@@ -305,7 +305,7 @@ impl PePbs {
         load_unload_latency: ConstantLatency,
         processing_latency: FlatLinLatency,
     ) -> Self {
-        assert!(max_batch_size as usize <= memory_capacity);
+        assert!(max_batch_size.sas::<usize>() <= memory_capacity);
         PePbs {
             queue: Fifo::with_capacity(queue_capacity),
             memory: PePbsMemory::new(memory_capacity, max_batch_size),

@@ -42,7 +42,7 @@ use zhc_langs::ioplang::{
     skip_store_load,
 };
 use zhc_utils::{
-    Dumpable, Store,
+    Dumpable, SafeAs, Store,
     iter::{Chunk, ChunkIt},
     small::SmallVec,
     svec,
@@ -577,8 +577,8 @@ impl Builder {
         let blocks = blocks.as_ref();
         let int_size = match int_size {
             Some(int_size) => {
-                let max_blocks_count = int_size.div_ceil(self.spec().message_size() as u16);
-                if max_blocks_count < blocks.len() as u16 {
+                let max_blocks_count = int_size.div_ceil(self.spec().message_size().sas::<u16>());
+                if max_blocks_count < blocks.len().sas::<u16>() {
                     panic!(
                         "Tried to join ciphertext with specific int_size, but was given more blocks then expected. Expected {max_blocks_count}, found {}.",
                         blocks.len()
@@ -586,7 +586,7 @@ impl Builder {
                 }
                 int_size
             }
-            None => blocks.len() as u16 * self.spec.message_size() as u16,
+            None => blocks.len().sas::<u16>() * self.spec.message_size().sas::<u16>(),
         };
         let spec = self.spec.ciphertext_spec(int_size);
         let (_, acc) = self.inner_mut().insert_op(
@@ -596,7 +596,7 @@ impl Builder {
         );
         let mut acc = acc[0];
         for (index, block) in blocks.iter().enumerate() {
-            let index = index as u8;
+            let index = index.sas::<u8>();
             let (_, ret) = self.inner_mut().insert_op(
                 IopInstructionSet::StoreCtBlock { index },
                 svec![block.valid, acc],
@@ -1002,7 +1002,7 @@ impl Builder {
         let (src_a, src_b) = (src_a.as_ref(), src_b.as_ref());
         let (_node, ret) = self.inner_mut().insert_op(
             IopInstructionSet::PackCt {
-                mul: 2u8.pow(self.spec().message_size() as u32),
+                mul: 2u8.pow(self.spec().message_size().sas::<u32>()),
             },
             svec![src_a.valid, src_b.valid],
             self.current_hierarchy(),

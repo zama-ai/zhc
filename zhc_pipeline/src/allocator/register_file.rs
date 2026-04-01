@@ -2,7 +2,7 @@ use std::{
     fmt::Display,
     ops::{Index, IndexMut},
 };
-use zhc_utils::{iter::ChunkIt, small::SmallVec};
+use zhc_utils::{SafeAs, iter::ChunkIt, small::SmallVec};
 
 use crate::allocator::register_state::RegState;
 
@@ -36,7 +36,7 @@ impl RegFile {
 
     /// Returns an iterator over the registers and register states.
     pub fn iter_registers(&self) -> impl Iterator<Item = (RegId, &RegState)> {
-        self.0.iter().enumerate().map(|(i, r)| (RegId(i as u8), r))
+        self.0.iter().enumerate().map(|(i, r)| (RegId(i.sas()), r))
     }
 
     /// Returns a mutable iterator over the registers and register states.
@@ -44,7 +44,7 @@ impl RegFile {
         self.0
             .iter_mut()
             .enumerate()
-            .map(|(i, r)| (RegId(i as u8), r))
+            .map(|(i, r)| (RegId(i.sas()), r))
     }
 
     /// Returns an iterator over the register ranges and the registers states.
@@ -54,11 +54,11 @@ impl RegFile {
     ) -> impl Iterator<Item = (RegRangeId, SmallVec<&RegState>)> {
         self.0
             .iter()
-            .chunk(range_size as usize)
+            .chunk(range_size.sas())
             .enumerate()
             .map(move |(i, a)| {
                 let a = a.unwrap_complete();
-                (RegRangeId(RegId(i as u8 * range_size), range_size), a)
+                (RegRangeId(RegId(i.sas::<u8>() * range_size), range_size), a)
             })
     }
 
@@ -70,11 +70,11 @@ impl RegFile {
     ) -> impl Iterator<Item = (RegRangeId, SmallVec<&mut RegState>)> {
         self.0
             .iter_mut()
-            .chunk(range_size as usize)
+            .chunk(range_size.sas())
             .enumerate()
             .map(move |(i, a)| {
                 let a = a.unwrap_complete();
-                (RegRangeId(RegId(i as u8 * range_size), range_size), a)
+                (RegRangeId(RegId(i.sas::<u8>() * range_size), range_size), a)
             })
     }
 }
@@ -83,13 +83,13 @@ impl Index<RegId> for RegFile {
     type Output = RegState;
 
     fn index(&self, index: RegId) -> &Self::Output {
-        &self.0[index.0 as usize]
+        &self.0[index.0.sas::<usize>()]
     }
 }
 
 impl IndexMut<RegId> for RegFile {
     fn index_mut(&mut self, index: RegId) -> &mut Self::Output {
-        &mut self.0[index.0 as usize]
+        &mut self.0[index.0.sas::<usize>()]
     }
 }
 

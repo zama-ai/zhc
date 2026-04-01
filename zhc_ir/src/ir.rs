@@ -5,7 +5,7 @@ use crate::val_ref::ValRef;
 use crate::{Analysing, AnnIR, AnnOpRef, Annotation, Formatted, ValMap, ValOrigin, ValUse};
 use std::{cmp::max, fmt::Debug};
 use zhc_utils::iter::MultiZip;
-use zhc_utils::{Dumpable, svec};
+use zhc_utils::{Dumpable, SafeAs, svec};
 use zhc_utils::{Store, small::SmallVec};
 
 use super::{
@@ -158,9 +158,9 @@ impl<D: Dialect> IR<D> {
 
     pub(crate) fn raw_topological_opwalker(&self) -> impl DoubleEndedIterator<Item = OpId> {
         let max_depth = *self.op_depth.iter().max().unwrap_or(&0);
-        let mut depth_buckets = vec![svec![]; (max_depth + 1) as usize];
+        let mut depth_buckets = vec![svec![]; (max_depth + 1).sas()];
         for op in self.raw_walk_ops_linear() {
-            depth_buckets[op.get_depth() as usize].push(op.get_id());
+            depth_buckets[op.get_depth().sas::<usize>()].push(op.get_id());
         }
         depth_buckets.into_iter().flat_map(|b| b.into_iter())
     }
@@ -493,7 +493,7 @@ impl<D: Dialect> IR<D> {
             let arg = self.raw_get_val_mut(*arg);
             arg.users.push(ValUse {
                 opid,
-                position: i as u8,
+                position: i.sas(),
             });
         }
 
@@ -507,7 +507,7 @@ impl<D: Dialect> IR<D> {
                     users: svec![],
                     origin: ValOrigin {
                         opid,
-                        position: i as u8,
+                        position: i.sas(),
                     },
                     typ: ty,
                     state: State::Active(()),

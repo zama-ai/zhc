@@ -12,7 +12,7 @@ use zhc_langs::{
     hpulang::{HpuInstructionSet, HpuLang, Immediate, LutId, TDstId, TImmId, TSrcId},
     ioplang::{IopInstructionSet, IopLang, Lut1Def, Lut2Def, Lut4Def, Lut8Def},
 };
-use zhc_utils::{FastMap, svec};
+use zhc_utils::{FastMap, SafeAs, svec};
 
 pub(crate) static GIDS1: LazyLock<FastMap<Lut1Def, LutId>> = LazyLock::new(|| {
     HashMap::from([
@@ -193,7 +193,7 @@ pub fn lower_iop_to_hpu(ir: &IR<IopLang>) -> IR<HpuLang> {
                 translator.direct_translation(
                     op,
                     HpuInstructionSet::Mac {
-                        cst: Immediate(mul as u8),
+                        cst: Immediate(mul.sas()),
                     },
                 );
             }
@@ -209,7 +209,7 @@ pub fn lower_iop_to_hpu(ir: &IR<IopLang>) -> IR<HpuLang> {
                     IopInstructionSet::LetPlaintextBlock { value } => {
                         let new_rets = translator.add_op(
                             HpuInstructionSet::AddCst {
-                                cst: Immediate(value as u8),
+                                cst: Immediate(value.sas()),
                             },
                             svec![translator.translate_val(op.get_arg_valids()[0])],
                         );
@@ -232,7 +232,7 @@ pub fn lower_iop_to_hpu(ir: &IR<IopLang>) -> IR<HpuLang> {
                     IopInstructionSet::LetPlaintextBlock { value } => {
                         let new_rets = translator.add_op(
                             HpuInstructionSet::SubCst {
-                                cst: Immediate(value as u8),
+                                cst: Immediate(value.sas()),
                             },
                             svec![translator.translate_val(op.get_arg_valids()[0])],
                         );
@@ -255,7 +255,7 @@ pub fn lower_iop_to_hpu(ir: &IR<IopLang>) -> IR<HpuLang> {
                     IopInstructionSet::LetPlaintextBlock { value } => {
                         let new_rets = translator.add_op(
                             HpuInstructionSet::CstSub {
-                                cst: Immediate(value as u8),
+                                cst: Immediate(value.sas()),
                             },
                             svec![translator.translate_val(op.get_arg_valids()[1])],
                         );
@@ -278,7 +278,7 @@ pub fn lower_iop_to_hpu(ir: &IR<IopLang>) -> IR<HpuLang> {
                     IopInstructionSet::LetPlaintextBlock { value } => {
                         let new_rets = translator.add_op(
                             HpuInstructionSet::MulCst {
-                                cst: Immediate(value as u8),
+                                cst: Immediate(value.sas()),
                             },
                             svec![translator.translate_val(op.get_arg_valids()[0])],
                         );

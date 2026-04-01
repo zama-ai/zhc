@@ -5,7 +5,7 @@ use zhc_langs::{
     hpulang::{HpuInterpreterContext, HpuLang, HpuValue, LutId, TDstId, TImmId, TSrcId},
     ioplang::{IopInstructionSet, IopInterepreterContext, IopLang, IopValue, Lut1Def, Lut2Def},
 };
-use zhc_utils::{Dumpable, FastMap, assert_display_is};
+use zhc_utils::{Dumpable, FastMap, SafeAs, assert_display_is};
 
 use crate::translation::{GIDS1, GIDS2};
 
@@ -71,8 +71,8 @@ pub fn check_iop_hpu_equivalence(
                     for i in 0..ct.len() {
                         hpu_ctx.sources.insert(
                             TSrcId {
-                                src_pos: pos as u32,
-                                block_pos: i as u32,
+                                src_pos: pos.sas(),
+                                block_pos: i.sas(),
                             },
                             ct.get_block(i),
                         );
@@ -82,8 +82,8 @@ pub fn check_iop_hpu_equivalence(
                     for i in 0..pt.len() {
                         hpu_ctx.immediates.insert(
                             TImmId {
-                                imm_pos: pos as u32,
-                                block_pos: i as u32,
+                                imm_pos: pos.sas(),
+                                block_pos: i.sas(),
                             },
                             pt.get_block(i),
                         );
@@ -109,8 +109,8 @@ pub fn check_iop_hpu_equivalence(
             };
             for i in 0..expected_ct.len() {
                 let tdst = TDstId {
-                    dst_pos: *pos as u32,
-                    block_pos: i as u32,
+                    dst_pos: (*pos).sas(),
+                    block_pos: i.sas(),
                 };
                 let hpu_block = hpu_ctx
                     .destinations
@@ -187,14 +187,12 @@ pub fn check_iop_dop_equivalence(
             match val {
                 IopValue::Ciphertext(ct) => {
                     for i in 0..ct.len() {
-                        dop_ctx.sources.insert((pos, i as usize), ct.get_block(i));
+                        dop_ctx.sources.insert((pos, i.sas()), ct.get_block(i));
                     }
                 }
                 IopValue::Plaintext(pt) => {
                     for i in 0..pt.len() {
-                        dop_ctx
-                            .pt_sources
-                            .insert((pos, i as usize), pt.get_block(i));
+                        dop_ctx.pt_sources.insert((pos, i.sas()), pt.get_block(i));
                     }
                 }
                 _ => panic!("Unexpected input type"),
@@ -215,7 +213,7 @@ pub fn check_iop_dop_equivalence(
             for i in 0..expected_ct.len() {
                 let dop_block = dop_ctx
                     .destinations
-                    .get(&(*pos, i as usize))
+                    .get(&(*pos, i.sas()))
                     .unwrap_or_else(|| panic!("Missing DOP output at pos={pos}, block={i}"));
                 assert_eq!(
                     dop_block.mask_message(),

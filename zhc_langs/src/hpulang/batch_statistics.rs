@@ -1,5 +1,5 @@
 use zhc_ir::IR;
-use zhc_utils::data_visulization::Histogram;
+use zhc_utils::{SafeAs, data_visulization::Histogram};
 
 use super::{HpuInstructionSet, HpuLang};
 
@@ -14,7 +14,7 @@ pub fn get_batch_statistics(ir: &IR<HpuLang>) -> BatchStatistics {
                 .walk_ops_linear()
                 .filter(|op| op.get_instruction().is_pbs())
                 .count();
-            stats.count(&(pbs_count as u16));
+            stats.count(&(pbs_count.sas::<u16>()));
         }
     }
     stats

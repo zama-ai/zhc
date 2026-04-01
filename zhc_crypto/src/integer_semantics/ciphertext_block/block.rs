@@ -1,3 +1,5 @@
+use zhc_utils::SafeAs;
+
 use super::{CiphertextBlockSpec, EmulatedCiphertextBlockStorage};
 use std::fmt::Debug;
 
@@ -126,9 +128,9 @@ impl Debug for EmulatedCiphertextBlock {
                 self.raw_padding_bits(),
                 self.raw_carry_bits(),
                 self.raw_message_bits(),
-                padding_size = self.spec.padding_size() as usize,
-                carry_size = self.spec.carry_size() as usize,
-                message_size = self.spec.message_size() as usize
+                padding_size = self.spec.padding_size().sas(),
+                carry_size = self.spec.carry_size().sas(),
+                message_size = self.spec.message_size().sas()
             )
         } else {
             write!(

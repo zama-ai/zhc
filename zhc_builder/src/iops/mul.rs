@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use crate::{CiphertextBlock, NU, NU_BOOL, builder::Builder};
 use zhc_crypto::integer_semantics::CiphertextSpec;
 use zhc_langs::ioplang::Lut1Def;
+use zhc_utils::SafeAs;
 
 /// Creates an IR for a multiplication of two encrypted integers.
 ///
@@ -122,7 +123,7 @@ impl Builder {
 
         for (i, ai) in src_a_blocks.iter().enumerate() {
             for (j, bj) in src_b_blocks.iter().enumerate() {
-                if (i + j) < cut_off_block as usize {
+                if (i + j) < cut_off_block.sas::<usize>() {
                     // Full partial product compution
                     // Pack
                     let packed = self.comment(format!("pack_{i}_{j}")).block_pack(ai, bj);
@@ -156,7 +157,7 @@ impl Builder {
         // and injected in the next stages
         // NB: Reduce up to cut_off_block
         let mut dst_blk = Vec::new();
-        for k in 0..cut_off_block as usize {
+        for k in 0..cut_off_block.sas::<usize>() {
             self.push_comment(format!("reduction_{k}"));
             let stage_sum = partial_product_map.remove(&k).unwrap_or_default();
             if !stage_sum.is_empty() {
@@ -204,7 +205,7 @@ impl Builder {
 
         // Start by handling last carry of 2.a
         self.push_comment(format!("carry_in"));
-        if let Some(in_carry_v) = partial_product_map.remove(&(cut_off_block as usize)) {
+        if let Some(in_carry_v) = partial_product_map.remove(&(cut_off_block.sas())) {
             for chunk in in_carry_v.chunks(NU) {
                 let mut chunk_iter = chunk.iter();
                 let init = *chunk_iter.next().unwrap();

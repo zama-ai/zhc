@@ -1,5 +1,5 @@
-use zhc_utils::Dumpable;
 use zhc_utils::small::SmallVec;
+use zhc_utils::{Dumpable, SafeAs};
 
 use crate::visualization::LayoutDialect;
 use crate::{IR, OpId};
@@ -36,10 +36,10 @@ impl LayersMap {
         let mut output = LayersMap(SmallVec::new());
         for op in ir.walk_ops_linear() {
             let depth = op.get_depth();
-            while output.0.len() < depth as usize + 1 {
+            while output.0.len() < depth.sas::<usize>() + 1 {
                 output.0.push(LayerWalker(Vec::new()));
             }
-            output.0[depth as usize - 1].0.push(op.get_id());
+            output.0[depth.sas::<usize>() - 1].0.push(op.get_id());
         }
         output
     }

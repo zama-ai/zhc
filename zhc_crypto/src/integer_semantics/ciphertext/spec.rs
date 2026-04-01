@@ -1,4 +1,5 @@
 use rand::RngExt;
+use zhc_utils::SafeAs;
 
 use crate::integer_semantics::PlaintextSpec;
 
@@ -55,7 +56,7 @@ impl CiphertextSpec {
     /// - `int_size` is not divisible by `block_message_size`
     pub fn new(int_size: u16, block_carry_size: u8, block_message_size: u8) -> Self {
         assert!(
-            int_size <= EmulatedCiphertextStorage::BITS as u16,
+            int_size <= EmulatedCiphertextStorage::BITS.sas::<u16>(),
             "Tried to create malformed ciphertext spec."
         );
         assert_ne!(
@@ -93,7 +94,9 @@ impl CiphertextSpec {
     ///
     /// Computed as `ceil(int_size / block_message_size)`.
     pub fn block_count(&self) -> u8 {
-        self.int_size.div_ceil(self.block.1 as u16) as u8
+        self.int_size
+            .div_ceil(self.block.1.sas::<u16>())
+            .sas::<u8>()
     }
 
     /// Returns a bitmask selecting the message bits of the `ith` block within the integer.
@@ -109,7 +112,7 @@ impl CiphertextSpec {
             ith < self.block_count(),
             "Tried to get block mask for nonexistent block"
         );
-        (self.block.message_mask() as EmulatedCiphertextStorage)
+        (self.block.message_mask().sas::<EmulatedCiphertextStorage>())
             << (ith * self.block.message_size())
     }
 

@@ -1,3 +1,5 @@
+use zhc_utils::SafeAs;
+
 use super::{EmulatedPlaintextBlockStorage, PlaintextBlockSpec};
 use std::fmt::Debug;
 
@@ -45,7 +47,7 @@ impl Debug for EmulatedPlaintextBlock {
                 f,
                 "{:0message_size$b}_ptblock",
                 self.raw_message_bits(),
-                message_size = self.spec.message_size() as usize
+                message_size = self.spec.message_size().sas::<usize>()
             )
         } else {
             write!(f, "{}_ptblock", self.raw_message_bits())

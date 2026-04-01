@@ -1,6 +1,6 @@
 use super::*;
 use std::fmt::Debug;
-use zhc_utils::iter::Separate;
+use zhc_utils::{SafeAs, iter::Separate};
 
 use super::super::{EmulatedPlaintextBlock, EmulatedPlaintextBlockStorage};
 
@@ -46,7 +46,7 @@ impl EmulatedPlaintext {
     pub fn get_block(&self, ith: u8) -> EmulatedPlaintextBlock {
         assert!(ith < self.len(), "Tried to get nonexistent block.");
         let storage = (self.storage >> (ith * self.spec.block_spec().message_size()))
-            as EmulatedPlaintextBlockStorage
+            .sas::<EmulatedPlaintextBlockStorage>()
             & self.spec.block_spec().message_mask();
         EmulatedPlaintextBlock {
             storage,
@@ -83,7 +83,7 @@ impl Debug for EmulatedPlaintext {
                     format!(
                         "{:0width$b}",
                         block.storage,
-                        width = self.spec.block_spec().message_size() as usize
+                        width = self.spec.block_spec().message_size().sas::<usize>()
                     )
                 } else {
                     format!("{}", block.storage,)

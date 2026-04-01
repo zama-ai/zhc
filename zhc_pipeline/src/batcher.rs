@@ -8,8 +8,8 @@ use zhc_sim::hpu::HpuConfig;
 use zhc_utils::data_visulization::Histogram;
 use zhc_utils::iter::{CollectInSmallVec, CollectInVec, DedupedByKey, MultiZip};
 use zhc_utils::small::{SmallMap, SmallVec};
-use zhc_utils::svec;
 use zhc_utils::{Dumpable, FastMap, fsm};
+use zhc_utils::{SafeAs, svec};
 
 static TRACE_EXECUTION: bool = false;
 
@@ -485,7 +485,7 @@ impl BatchingStatistics {
             min_slack_distribution: Histogram::empty(),
         };
         for batch in batches.batch_iter() {
-            output.size_distribution.count(&(batch.len() as u16));
+            output.size_distribution.count(&(batch.len().sas::<u16>()));
             output.min_slack_distribution.count(&batch.min_slack());
         }
         output

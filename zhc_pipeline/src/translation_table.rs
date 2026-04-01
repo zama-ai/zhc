@@ -8,6 +8,7 @@
 use bitfield_struct::bitfield;
 use zhc_ir::IR;
 use zhc_langs::doplang::DopLang;
+use zhc_utils::SafeAs;
 
 /// Binary representation of a device operation instruction.
 pub type DOpRepr = u32;
@@ -130,7 +131,7 @@ pub struct PeSyncHex {
 /// into a vector of binary instruction representations suitable for execution
 /// on the target hardware.
 pub fn generate_translation_table(ir: &IR<DopLang>) -> Vec<DOpRepr> {
-    let mut output = Vec::with_capacity(ir.n_ops() as usize);
+    let mut output = Vec::with_capacity(ir.n_ops().sas());
     output.push(0); // reserve room for the length of the stream at the beginning of the stream.
     for op in ir.walk_ops_topological() {
         use zhc_langs::doplang::Argument::*;
@@ -143,9 +144,9 @@ pub fn generate_translation_table(ir: &IR<DopLang>) -> Vec<DOpRepr> {
             } => {
                 output.push(
                     PeArithHex::new()
-                        .with_dst_rid(dst as u8)
-                        .with_src0_rid(src1 as u8)
-                        .with_src1_rid(src2 as u8)
+                        .with_dst_rid(dst.sas())
+                        .with_src0_rid(src1.sas())
+                        .with_src1_rid(src2.sas())
                         .with_opcode(DOpCode::ADD as u8)
                         .0,
                 );
@@ -157,9 +158,9 @@ pub fn generate_translation_table(ir: &IR<DopLang>) -> Vec<DOpRepr> {
             } => {
                 output.push(
                     PeArithHex::new()
-                        .with_dst_rid(dst as u8)
-                        .with_src0_rid(src1 as u8)
-                        .with_src1_rid(src2 as u8)
+                        .with_dst_rid(dst.sas())
+                        .with_src0_rid(src1.sas())
+                        .with_src1_rid(src2.sas())
                         .with_opcode(DOpCode::SUB as u8)
                         .0,
                 );
@@ -172,10 +173,10 @@ pub fn generate_translation_table(ir: &IR<DopLang>) -> Vec<DOpRepr> {
             } => {
                 output.push(
                     PeArithHex::new()
-                        .with_dst_rid(dst as u8)
-                        .with_src0_rid(src1 as u8)
-                        .with_src1_rid(src2 as u8)
-                        .with_mul_factor(cst as u8)
+                        .with_dst_rid(dst.sas())
+                        .with_src0_rid(src1.sas())
+                        .with_src1_rid(src2.sas())
+                        .with_mul_factor(cst.sas())
                         .with_opcode(DOpCode::MAC as u8)
                         .0,
                 );
@@ -186,10 +187,10 @@ pub fn generate_translation_table(ir: &IR<DopLang>) -> Vec<DOpRepr> {
                 cst: PtConst { val: cst },
             } => output.push(
                 PeArithMsgHex::new()
-                    .with_dst_rid(dst as u8)
-                    .with_src_rid(src as u8)
+                    .with_dst_rid(dst.sas())
+                    .with_src_rid(src.sas())
                     .with_msg_mode(IMM_CST)
-                    .with_msg_cst(cst as u16)
+                    .with_msg_cst(cst.sas())
                     .with_opcode(DOpCode::ADDS as u8)
                     .0,
             ),
@@ -203,10 +204,10 @@ pub fn generate_translation_table(ir: &IR<DopLang>) -> Vec<DOpRepr> {
                     },
             } => output.push(
                 PeArithMsgHex::new()
-                    .with_dst_rid(dst as u8)
-                    .with_src_rid(src as u8)
+                    .with_dst_rid(dst.sas())
+                    .with_src_rid(src.sas())
                     .with_msg_mode(IMM_VAR)
-                    .with_msg_cst(((tid as u16) << 8) + bid as u16)
+                    .with_msg_cst(((tid.sas::<u16>()) << 8) + bid.sas::<u16>())
                     .with_opcode(DOpCode::ADDS as u8)
                     .0,
             ),
@@ -216,10 +217,10 @@ pub fn generate_translation_table(ir: &IR<DopLang>) -> Vec<DOpRepr> {
                 cst: PtConst { val: cst },
             } => output.push(
                 PeArithMsgHex::new()
-                    .with_dst_rid(dst as u8)
-                    .with_src_rid(src as u8)
+                    .with_dst_rid(dst.sas())
+                    .with_src_rid(src.sas())
                     .with_msg_mode(IMM_CST)
-                    .with_msg_cst(cst as u16)
+                    .with_msg_cst(cst.sas())
                     .with_opcode(DOpCode::SUBS as u8)
                     .0,
             ),
@@ -233,10 +234,10 @@ pub fn generate_translation_table(ir: &IR<DopLang>) -> Vec<DOpRepr> {
                     },
             } => output.push(
                 PeArithMsgHex::new()
-                    .with_dst_rid(dst as u8)
-                    .with_src_rid(src as u8)
+                    .with_dst_rid(dst.sas())
+                    .with_src_rid(src.sas())
                     .with_msg_mode(IMM_VAR)
-                    .with_msg_cst(((tid as u16) << 8) + bid as u16)
+                    .with_msg_cst(((tid.sas::<u16>()) << 8) + bid.sas::<u16>())
                     .with_opcode(DOpCode::SUBS as u8)
                     .0,
             ),
@@ -246,10 +247,10 @@ pub fn generate_translation_table(ir: &IR<DopLang>) -> Vec<DOpRepr> {
                 cst: PtConst { val: cst },
             } => output.push(
                 PeArithMsgHex::new()
-                    .with_dst_rid(dst as u8)
-                    .with_src_rid(src as u8)
+                    .with_dst_rid(dst.sas())
+                    .with_src_rid(src.sas())
                     .with_msg_mode(IMM_CST)
-                    .with_msg_cst(cst as u16)
+                    .with_msg_cst(cst.sas())
                     .with_opcode(DOpCode::SSUB as u8)
                     .0,
             ),
@@ -263,10 +264,10 @@ pub fn generate_translation_table(ir: &IR<DopLang>) -> Vec<DOpRepr> {
                     },
             } => output.push(
                 PeArithMsgHex::new()
-                    .with_dst_rid(dst as u8)
-                    .with_src_rid(src as u8)
+                    .with_dst_rid(dst.sas())
+                    .with_src_rid(src.sas())
                     .with_msg_mode(IMM_VAR)
-                    .with_msg_cst(((tid as u16) << 8) + bid as u16)
+                    .with_msg_cst(((tid.sas::<u16>()) << 8) + bid.sas::<u16>())
                     .with_opcode(DOpCode::SSUB as u8)
                     .0,
             ),
@@ -276,10 +277,10 @@ pub fn generate_translation_table(ir: &IR<DopLang>) -> Vec<DOpRepr> {
                 cst: PtConst { val: cst },
             } => output.push(
                 PeArithMsgHex::new()
-                    .with_dst_rid(dst as u8)
-                    .with_src_rid(src as u8)
+                    .with_dst_rid(dst.sas())
+                    .with_src_rid(src.sas())
                     .with_msg_mode(IMM_CST)
-                    .with_msg_cst(cst as u16)
+                    .with_msg_cst(cst.sas())
                     .with_opcode(DOpCode::MULS as u8)
                     .0,
             ),
@@ -293,10 +294,10 @@ pub fn generate_translation_table(ir: &IR<DopLang>) -> Vec<DOpRepr> {
                     },
             } => output.push(
                 PeArithMsgHex::new()
-                    .with_dst_rid(dst as u8)
-                    .with_src_rid(src as u8)
+                    .with_dst_rid(dst.sas())
+                    .with_src_rid(src.sas())
                     .with_msg_mode(IMM_VAR)
-                    .with_msg_cst(((tid as u16) << 8) + bid as u16)
+                    .with_msg_cst(((tid.sas::<u16>()) << 8) + bid.sas::<u16>())
                     .with_opcode(DOpCode::MULS as u8)
                     .0,
             ),
@@ -306,9 +307,9 @@ pub fn generate_translation_table(ir: &IR<DopLang>) -> Vec<DOpRepr> {
             } => {
                 output.push(
                     PeMemHex::new()
-                        .with_rid(dst as u8)
+                        .with_rid(dst.sas())
                         .with_mode(MEM_HEAP)
-                        .with_slot(src as u16)
+                        .with_slot(src.sas())
                         .with_opcode(DOpCode::LD as u8)
                         .0,
                 );
@@ -319,9 +320,9 @@ pub fn generate_translation_table(ir: &IR<DopLang>) -> Vec<DOpRepr> {
             } => {
                 output.push(
                     PeMemHex::new()
-                        .with_rid(dst as u8)
+                        .with_rid(dst.sas())
                         .with_mode(MEM_ADDR)
-                        .with_slot(src as u16)
+                        .with_slot(src.sas())
                         .with_opcode(DOpCode::LD as u8)
                         .0,
                 );
@@ -336,9 +337,9 @@ pub fn generate_translation_table(ir: &IR<DopLang>) -> Vec<DOpRepr> {
             } => {
                 output.push(
                     PeMemHex::new()
-                        .with_rid(dst as u8)
+                        .with_rid(dst.sas())
                         .with_mode(MEM_SRC)
-                        .with_slot(((tid as u16) << 8) + bid as u16)
+                        .with_slot(((tid.sas::<u16>()) << 8) + bid.sas::<u16>())
                         .with_opcode(DOpCode::LD as u8)
                         .0,
                 );
@@ -349,9 +350,9 @@ pub fn generate_translation_table(ir: &IR<DopLang>) -> Vec<DOpRepr> {
             } => {
                 output.push(
                     PeMemHex::new()
-                        .with_rid(src as u8)
+                        .with_rid(src.sas())
                         .with_mode(MEM_HEAP)
-                        .with_slot(dst as u16)
+                        .with_slot(dst.sas())
                         .with_opcode(DOpCode::ST as u8)
                         .0,
                 );
@@ -362,9 +363,9 @@ pub fn generate_translation_table(ir: &IR<DopLang>) -> Vec<DOpRepr> {
             } => {
                 output.push(
                     PeMemHex::new()
-                        .with_rid(src as u8)
+                        .with_rid(src.sas())
                         .with_mode(MEM_ADDR)
-                        .with_slot(dst as u16)
+                        .with_slot(dst.sas())
                         .with_opcode(DOpCode::ST as u8)
                         .0,
                 );
@@ -379,9 +380,9 @@ pub fn generate_translation_table(ir: &IR<DopLang>) -> Vec<DOpRepr> {
             } => {
                 output.push(
                     PeMemHex::new()
-                        .with_rid(src as u8)
+                        .with_rid(src.sas())
                         .with_mode(MEM_DST)
-                        .with_slot(((tid as u16) << 8) + bid as u16)
+                        .with_slot(((tid.sas::<u16>()) << 8) + bid.sas::<u16>())
                         .with_opcode(DOpCode::ST as u8)
                         .0,
                 );
@@ -393,9 +394,9 @@ pub fn generate_translation_table(ir: &IR<DopLang>) -> Vec<DOpRepr> {
             } => {
                 output.push(
                     PePbsHex::new()
-                        .with_dst_rid(dst as u8)
-                        .with_src_rid(src as u8)
-                        .with_gid(gid as u16)
+                        .with_dst_rid(dst.sas())
+                        .with_src_rid(src.sas())
+                        .with_gid(gid.sas())
                         .with_opcode(DOpCode::PBS as u8)
                         .0,
                 );
@@ -407,9 +408,9 @@ pub fn generate_translation_table(ir: &IR<DopLang>) -> Vec<DOpRepr> {
             } => {
                 output.push(
                     PePbsHex::new()
-                        .with_dst_rid(dst as u8)
-                        .with_src_rid(src as u8)
-                        .with_gid(gid as u16)
+                        .with_dst_rid(dst.sas())
+                        .with_src_rid(src.sas())
+                        .with_gid(gid.sas())
                         .with_opcode(DOpCode::PBS_ML2 as u8)
                         .0,
                 );
@@ -421,9 +422,9 @@ pub fn generate_translation_table(ir: &IR<DopLang>) -> Vec<DOpRepr> {
             } => {
                 output.push(
                     PePbsHex::new()
-                        .with_dst_rid(dst as u8)
-                        .with_src_rid(src as u8)
-                        .with_gid(gid as u16)
+                        .with_dst_rid(dst.sas())
+                        .with_src_rid(src.sas())
+                        .with_gid(gid.sas())
                         .with_opcode(DOpCode::PBS_ML4 as u8)
                         .0,
                 );
@@ -435,9 +436,9 @@ pub fn generate_translation_table(ir: &IR<DopLang>) -> Vec<DOpRepr> {
             } => {
                 output.push(
                     PePbsHex::new()
-                        .with_dst_rid(dst as u8)
-                        .with_src_rid(src as u8)
-                        .with_gid(gid as u16)
+                        .with_dst_rid(dst.sas())
+                        .with_src_rid(src.sas())
+                        .with_gid(gid.sas())
                         .with_opcode(DOpCode::PBS_ML8 as u8)
                         .0,
                 );
@@ -449,9 +450,9 @@ pub fn generate_translation_table(ir: &IR<DopLang>) -> Vec<DOpRepr> {
             } => {
                 output.push(
                     PePbsHex::new()
-                        .with_dst_rid(dst as u8)
-                        .with_src_rid(src as u8)
-                        .with_gid(gid as u16)
+                        .with_dst_rid(dst.sas())
+                        .with_src_rid(src.sas())
+                        .with_gid(gid.sas())
                         .with_opcode(DOpCode::PBS_F as u8)
                         .0,
                 );
@@ -463,9 +464,9 @@ pub fn generate_translation_table(ir: &IR<DopLang>) -> Vec<DOpRepr> {
             } => {
                 output.push(
                     PePbsHex::new()
-                        .with_dst_rid(dst as u8)
-                        .with_src_rid(src as u8)
-                        .with_gid(gid as u16)
+                        .with_dst_rid(dst.sas())
+                        .with_src_rid(src.sas())
+                        .with_gid(gid.sas())
                         .with_opcode(DOpCode::PBS_ML2_F as u8)
                         .0,
                 );
@@ -477,9 +478,9 @@ pub fn generate_translation_table(ir: &IR<DopLang>) -> Vec<DOpRepr> {
             } => {
                 output.push(
                     PePbsHex::new()
-                        .with_dst_rid(dst as u8)
-                        .with_src_rid(src as u8)
-                        .with_gid(gid as u16)
+                        .with_dst_rid(dst.sas())
+                        .with_src_rid(src.sas())
+                        .with_gid(gid.sas())
                         .with_opcode(DOpCode::PBS_ML4_F as u8)
                         .0,
                 );
@@ -491,9 +492,9 @@ pub fn generate_translation_table(ir: &IR<DopLang>) -> Vec<DOpRepr> {
             } => {
                 output.push(
                     PePbsHex::new()
-                        .with_dst_rid(dst as u8)
-                        .with_src_rid(src as u8)
-                        .with_gid(gid as u16)
+                        .with_dst_rid(dst.sas())
+                        .with_src_rid(src.sas())
+                        .with_gid(gid.sas())
                         .with_opcode(DOpCode::PBS_ML8_F as u8)
                         .0,
                 );
@@ -504,7 +505,7 @@ pub fn generate_translation_table(ir: &IR<DopLang>) -> Vec<DOpRepr> {
             }
         };
     }
-    output[0] = (output.len() - 1) as u32;
+    output[0] = (output.len() - 1).sas();
     output
 }
 

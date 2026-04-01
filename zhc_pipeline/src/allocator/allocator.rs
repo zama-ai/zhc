@@ -9,6 +9,7 @@ use crate::allocator::{
 use zhc_ir::{IR, OpMap, OpRef, ValId, ValMap};
 use zhc_langs::hpulang::{HpuInstructionSet, HpuLang};
 use zhc_utils::{
+    SafeAs,
     iter::{CollectInSmallVec, Intermediate, MultiZip, ReconcilerOf3},
     small::SmallVec,
     svec,
@@ -82,7 +83,8 @@ impl<'ir> Allocator<'ir> {
                 };
                 self.live_ranges[*valid]
                     .next_use(self.current_point)
-                    .unwrap_or(self.end_point) as usize
+                    .unwrap_or(self.end_point)
+                    .sas::<usize>()
             })
             .expect("Failed to encounter a compatible register.");
         rid
@@ -112,7 +114,8 @@ impl<'ir> Allocator<'ir> {
                     .map(|valid| {
                         self.live_ranges[*valid]
                             .next_use(self.current_point)
-                            .unwrap_or(self.end_point) as usize
+                            .unwrap_or(self.end_point)
+                            .sas::<usize>()
                     })
                     .sum::<usize>()
             })
@@ -186,7 +189,7 @@ impl<'ir> Allocator<'ir> {
         let is_batch = op.get_instruction().is_batch();
 
         for val_range in get_ranges(op) {
-            let range_size = val_range.len() as u8;
+            let range_size = val_range.len().sas();
             let maybe_avail = self
                 .register_file
                 .iter_register_ranges(range_size)

@@ -3,7 +3,7 @@ use crate::{Cycle, Dispatch};
 use serde::{Deserialize, Serialize};
 use std::{collections::VecDeque, fmt::Display};
 use zhc_langs::doplang::Affinity;
-use zhc_utils::FastSet;
+use zhc_utils::{FastSet, SafeAs};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct PredLock(FastSet<DOpId>);
@@ -271,9 +271,9 @@ impl From<&Slot> for SlotProperties {
             State::Finished => (false, false, true),
         };
         Self {
-            rd_lock: value.read_lock.len() as u32,
-            wr_lock: value.write_lock.len() as u32,
-            issue_lock: value.issue_lock.len() as u32,
+            rd_lock: value.read_lock.len().sas(),
+            wr_lock: value.write_lock.len().sas(),
+            issue_lock: value.issue_lock.len().sas(),
             state: value.state.clone(),
             pdg,
             rd_pdg,

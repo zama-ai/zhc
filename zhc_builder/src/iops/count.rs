@@ -1,6 +1,7 @@
 use zhc_crypto::integer_semantics::CiphertextSpec;
 use zhc_langs::ioplang::{Lut1Def, Lut2Def};
 use zhc_utils::{
+    SafeAs,
     iter::{ChunkIt, CollectInVec, UnwrapChunks},
     n_bits_to_encode,
 };
@@ -98,11 +99,11 @@ impl Builder {
                 .vector_lookup2(blocks, Lut2Def::ManyMsgSplit)
                 .into_iter()
                 .flat_map(|(l, r)| [l, r].into_iter())
-                .take(inp.spec().int_size() as usize)
+                .take(inp.spec().int_size().sas())
                 .collect::<Vec<_>>();
             let res = self.count_from_bits(bits, kind);
             let output_size: u16 = n_bits_to_encode(inp.spec().int_size());
-            let n_blocks = output_size.div_ceil(self.spec().message_size() as u16) as usize;
+            let n_blocks = output_size.div_ceil(self.spec().message_size().sas()).sas();
             self.comment("output")
                 .ciphertext_join(&res[..n_blocks], Some(output_size))
         })
@@ -300,13 +301,14 @@ mod test {
             let [IopValue::Ciphertext(inp)] = inp else {
                 unreachable!()
             };
-            let res = inp.as_storage().count_zeros() - (u128::BITS - inp.spec().int_size() as u32);
+            let res =
+                inp.as_storage().count_zeros() - (u128::BITS - inp.spec().int_size().sas::<u32>());
             let output_size: u16 = n_bits_to_encode(inp.spec().int_size());
             Some(vec![IopValue::Ciphertext(
                 inp.spec()
                     .block_spec()
                     .ciphertext_spec(output_size)
-                    .from_int(res as u128),
+                    .from_int(res.sas()),
             )])
         }
 
@@ -327,7 +329,7 @@ mod test {
                 inp.spec()
                     .block_spec()
                     .ciphertext_spec(output_size)
-                    .from_int(res as u128),
+                    .from_int(res.sas()),
             )])
         }
 

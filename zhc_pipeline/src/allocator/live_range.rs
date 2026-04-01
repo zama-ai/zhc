@@ -2,7 +2,7 @@ use std::ops::Index;
 
 use zhc_ir::{IR, OpIdRaw, ValId, ValMap};
 use zhc_langs::hpulang::HpuLang;
-use zhc_utils::{small::SmallVec, svec};
+use zhc_utils::{SafeAs, small::SmallVec, svec};
 
 /// A point in the execution timeline.
 pub type TimePoint = OpIdRaw;
@@ -56,10 +56,10 @@ impl LiveRangeMap {
                     .get_mut(&val.get_id())
                     .unwrap()
                     .0
-                    .push(point as TimePoint);
+                    .push(point.sas());
             }
             for val in op.get_returns_iter() {
-                live_ranges.insert(val.get_id(), LiveRange(svec![point as TimePoint]));
+                live_ranges.insert(val.get_id(), LiveRange(svec![point.sas()]));
             }
         }
         LiveRangeMap(live_ranges)

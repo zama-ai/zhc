@@ -3,7 +3,7 @@ use zhc_langs::{
     doplang::{Argument, DopInstructionSet, DopLang},
     hpulang::{HpuInstructionSet, HpuLang},
 };
-use zhc_utils::{iter::MultiZip, small::SmallMap, svec};
+use zhc_utils::{SafeAs, iter::MultiZip, small::SmallMap, svec};
 
 use crate::allocator::{
     allocator::{Alloc, Spill, Unspill},
@@ -33,7 +33,7 @@ pub fn translate<'ir>(ir: &AnnIR<'ir, HpuLang, Alloc, ()>) -> IR<DopLang> {
 
         for Spill { from, to } in spills.iter() {
             add_op(DopInstructionSet::ST {
-                dst: Argument::ct_heap(to.0 as usize),
+                dst: Argument::ct_heap(to.0.sas()),
                 src: Argument::ct_reg(from.0),
             });
         }
@@ -41,7 +41,7 @@ pub fn translate<'ir>(ir: &AnnIR<'ir, HpuLang, Alloc, ()>) -> IR<DopLang> {
         for Unspill { from, to } in unspills.iter() {
             add_op(DopInstructionSet::LD {
                 dst: Argument::ct_reg(to.0),
-                src: Argument::ct_heap(from.0 as usize),
+                src: Argument::ct_heap(from.0.sas()),
             })
         }
 

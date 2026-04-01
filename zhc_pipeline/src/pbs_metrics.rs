@@ -5,7 +5,7 @@
 
 use zhc_ir::{AnnIR, IR};
 use zhc_langs::ioplang::IopLang;
-use zhc_utils::{Dumpable, data_visulization::Histogram, svec};
+use zhc_utils::{Dumpable, SafeAs, data_visulization::Histogram, svec};
 
 /// PBS operation metrics computed from IOP-level IR.
 ///
@@ -97,7 +97,8 @@ pub fn compute_pbs_metrics(ir: &IR<IopLang>) -> PbsMetrics {
         .walk_ops_linear()
         .map(|op| op.get_annotation().depth)
         .max()
-        .unwrap() as usize;
+        .unwrap()
+        .sas::<usize>();
     let mut slack_stats = Histogram::empty();
     let mut level_stats = Histogram::empty();
     for op in analyzed

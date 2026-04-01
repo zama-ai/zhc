@@ -18,6 +18,7 @@ mod erasable;
 mod fast_hash;
 mod fifo;
 mod misc;
+mod safe_as;
 mod store;
 mod type_name;
 
@@ -28,6 +29,7 @@ pub use erasable::*;
 pub use fast_hash::*;
 pub use fifo::*;
 pub use misc::*;
+pub use safe_as::*;
 pub use store::*;
 pub use type_name::*;
 

@@ -7,7 +7,7 @@ use zhc_crypto::integer_semantics::{
 use zhc_ir::interpretation::{Interpretable, Interpretation, InterpretsTo, interpret_ir};
 use zhc_utils::iter::CollectInSmallVec;
 use zhc_utils::small::SmallVec;
-use zhc_utils::{FastMap, svec};
+use zhc_utils::{FastMap, SafeAs, svec};
 
 use crate::hpulang::{HpuTypeSystem, LutId, TDstId, TImmId, TSrcId};
 use crate::ioplang::{Lut1Def, Lut2Def};
@@ -174,7 +174,7 @@ impl Interpretable<HpuValue> for super::HpuInstructionSet {
                 // src1 * cst + src2
                 let left = arguments[0].clone().unwrap_ct_register();
                 let right = arguments[1].clone().unwrap_ct_register();
-                assert_eq!(cst.0, 2u8.pow(left.spec().message_size() as u32));
+                assert_eq!(cst.0, 2u8.pow(left.spec().message_size().sas()));
                 svec![HpuValue::CtRegister(
                     left.wrapping_shl(left.spec().message_size())
                         .wrapping_add(right)
@@ -209,7 +209,7 @@ impl Interpretable<HpuValue> for super::HpuInstructionSet {
                 let pt = context
                     .spec
                     .complete_plaintext_block_spec()
-                    .from_message(cst.0 as EmulatedPlaintextBlockStorage);
+                    .from_message(cst.0.sas());
                 svec![HpuValue::CtRegister(ct.wrapping_add_pt(pt))]
             }
             SubCst { cst } => {

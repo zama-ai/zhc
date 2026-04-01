@@ -2,7 +2,7 @@ use zhc_ir::{
     Dialect, DialectInstructionSet,
     cse::{AllowCse, Expr},
 };
-use zhc_utils::iter::CollectInSmallVec;
+use zhc_utils::{SafeAs, iter::CollectInSmallVec};
 
 /// Dialect tag for the Intermediate Operation language.
 ///
@@ -38,7 +38,7 @@ impl AllowCse for IopLang {
         (0..arity).map(move |i| Expr {
             op: op.clone(),
             args: args.clone(),
-            ret_pos: i as u8,
+            ret_pos: i.sas(),
         })
     }
 }

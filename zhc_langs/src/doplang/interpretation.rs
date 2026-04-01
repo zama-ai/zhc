@@ -7,7 +7,7 @@ use zhc_crypto::integer_semantics::{
 };
 use zhc_ir::interpretation::{Interpretable, Interpretation, InterpretsTo};
 use zhc_utils::small::SmallVec;
-use zhc_utils::{FastMap, svec};
+use zhc_utils::{FastMap, SafeAs, svec};
 
 use crate::hpulang::LutId;
 use crate::ioplang::{Lut1Def, Lut2Def, Lut4Def, Lut8Def};
@@ -150,7 +150,7 @@ impl DopInterpreterContext {
             Argument::PtConst { val } => self
                 .spec
                 .matching_plaintext_block_spec()
-                .from_message(*val as EmulatedPlaintextBlockStorage),
+                .from_message((*val).sas::<EmulatedPlaintextBlockStorage>()),
             Argument::PtVar { id, block } => self
                 .pt_sources
                 .get(&(*id, *block))

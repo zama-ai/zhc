@@ -2,6 +2,7 @@ use super::super::{EmulatedCiphertextBlock, EmulatedCiphertextBlockStorage};
 use super::*;
 use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
+use zhc_utils::SafeAs;
 use zhc_utils::iter::Separate;
 
 /// An emulated TFHE radix ciphertext representing a large integer.
@@ -71,7 +72,7 @@ impl EmulatedCiphertext {
         assert!(block.is_message_only(), "Tried to set a dirty block.");
         let clearing = self.storage & self.spec.block_mask(ith);
         self.storage -= clearing;
-        self.storage += (block.storage as EmulatedCiphertextStorage)
+        self.storage += (block.storage.sas::<EmulatedCiphertextStorage>())
             << (ith * self.spec.block_spec().message_size());
     }
 
@@ -108,7 +109,7 @@ impl Debug for EmulatedCiphertext {
                     format!(
                         "{:0width$b}",
                         block.storage,
-                        width = self.spec.block_spec().message_size() as usize
+                        width = self.spec.block_spec().message_size().sas::<usize>()
                     )
                 } else {
                     format!("{}", block.storage,)

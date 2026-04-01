@@ -1,6 +1,6 @@
 use zhc_crypto::integer_semantics::CiphertextSpec;
 use zhc_langs::ioplang::{Lut1Def, Lut2Def};
-use zhc_utils::n_bits_to_encode;
+use zhc_utils::{SafeAs, n_bits_to_encode};
 
 use crate::{
     BitType, Ciphertext, CiphertextBlock, NU, NU_BOOL, PropagationDirection, builder::Builder,
@@ -56,9 +56,11 @@ impl Builder {
         let blocks = self.ciphertext_split(src);
         let bits = self.propagate_bits(blocks, BitType::One, PropagationDirection::MsbToLsb);
         let output_blocks =
-            self.count_from_bits(&bits[1..src.spec().int_size() as usize], BitType::One);
+            self.count_from_bits(&bits[1..src.spec().int_size().sas()], BitType::One);
         let output_size: u16 = n_bits_to_encode(src.spec().int_size());
-        let n_blocks = output_size.div_ceil(src.spec().block_spec().message_size() as u16) as usize;
+        let n_blocks = output_size
+            .div_ceil(src.spec().block_spec().message_size().sas())
+            .sas();
         self.ciphertext_join(&output_blocks[..n_blocks], Some(output_size))
     }
 
@@ -71,9 +73,11 @@ impl Builder {
         let blocks = self.ciphertext_split(src);
         let bits = self.propagate_bits(blocks, BitType::One, PropagationDirection::LsbToMsb);
         let output_blocks =
-            self.count_from_bits(&bits[0..src.spec().int_size() as usize], BitType::Zero);
+            self.count_from_bits(&bits[0..src.spec().int_size().sas()], BitType::Zero);
         let output_size: u16 = n_bits_to_encode(src.spec().int_size());
-        let n_blocks = output_size.div_ceil(src.spec().block_spec().message_size() as u16) as usize;
+        let n_blocks = output_size
+            .div_ceil(src.spec().block_spec().message_size().sas())
+            .sas();
         self.ciphertext_join(&output_blocks[..n_blocks], Some(output_size))
     }
 
@@ -86,9 +90,11 @@ impl Builder {
         let blocks = self.ciphertext_split(src);
         let bits = self.propagate_bits(blocks, BitType::Zero, PropagationDirection::LsbToMsb);
         let output_blocks =
-            self.count_from_bits(&bits[0..src.spec().int_size() as usize], BitType::One);
+            self.count_from_bits(&bits[0..src.spec().int_size().sas()], BitType::One);
         let output_size: u16 = n_bits_to_encode(src.spec().int_size());
-        let n_blocks = output_size.div_ceil(src.spec().block_spec().message_size() as u16) as usize;
+        let n_blocks = output_size
+            .div_ceil(src.spec().block_spec().message_size().sas())
+            .sas();
         self.ciphertext_join(&output_blocks[..n_blocks], Some(output_size))
     }
 
@@ -101,9 +107,11 @@ impl Builder {
         let blocks = self.ciphertext_split(src);
         let bits = self.propagate_bits(blocks, BitType::One, PropagationDirection::MsbToLsb);
         let output_blocks =
-            self.count_from_bits(&bits[0..src.spec().int_size() as usize], BitType::Zero);
+            self.count_from_bits(&bits[0..src.spec().int_size().sas()], BitType::Zero);
         let output_size: u16 = n_bits_to_encode(src.spec().int_size());
-        let n_blocks = output_size.div_ceil(src.spec().block_spec().message_size() as u16) as usize;
+        let n_blocks = output_size
+            .div_ceil(src.spec().block_spec().message_size().sas())
+            .sas();
         self.ciphertext_join(&output_blocks[..n_blocks], Some(output_size))
     }
 
@@ -116,9 +124,11 @@ impl Builder {
         let blocks = self.ciphertext_split(src);
         let bits = self.propagate_bits(blocks, BitType::Zero, PropagationDirection::MsbToLsb);
         let output_blocks =
-            self.count_from_bits(&bits[0..src.spec().int_size() as usize], BitType::One);
+            self.count_from_bits(&bits[0..src.spec().int_size().sas()], BitType::One);
         let output_size: u16 = n_bits_to_encode(src.spec().int_size());
-        let n_blocks = output_size.div_ceil(src.spec().block_spec().message_size() as u16) as usize;
+        let n_blocks = output_size
+            .div_ceil(src.spec().block_spec().message_size().sas())
+            .sas();
         self.ciphertext_join(&output_blocks[..n_blocks], Some(output_size))
     }
 
@@ -198,7 +208,7 @@ impl Builder {
             // Do not clean the ct, but reduce the nb of sequential operations
             // in next step (reducing proc_nb).
             proc_nb -= 1;
-            let cst_msg_max = self.block_let_plaintext(self.spec().message_mask() as u8);
+            let cst_msg_max = self.block_let_plaintext(self.spec().message_mask().sas());
             src_a
                 .iter()
                 .map(|ct| self.block_plaintext_sub(cst_msg_max, ct))
@@ -302,7 +312,7 @@ impl Builder {
 
                 // Update neighbors for next iteration
                 let mut do_update_neigh = false;
-                for i in 1..(level_nb as u32) {
+                for i in 1..(level_nb.sas()) {
                     if (chk_idx % op_nb_bool.pow(i)) == 0 {
                         // Update the corresponding neigh value
                         neigh_a[(i - 1) as usize] = keep_v0.clone();
@@ -341,14 +351,14 @@ mod test {
             let [IopValue::Ciphertext(inp)] = inp else {
                 unreachable!()
             };
-            let res =
-                inp.as_storage().leading_zeros() - (u128::BITS - inp.spec().int_size() as u32);
+            let res = inp.as_storage().leading_zeros()
+                - (u128::BITS - inp.spec().int_size().sas::<u32>());
             let output_size: u16 = n_bits_to_encode(inp.spec().int_size());
             Some(vec![IopValue::Ciphertext(
                 inp.spec()
                     .block_spec()
                     .ciphertext_spec(output_size)
-                    .from_int(res as u128),
+                    .from_int(res.sas()),
             )])
         }
 
@@ -363,14 +373,14 @@ mod test {
             let [IopValue::Ciphertext(inp)] = inp else {
                 unreachable!()
             };
-            let res =
-                (inp.as_storage() << (u128::BITS - inp.spec().int_size() as u32)).leading_ones();
+            let res = (inp.as_storage() << (u128::BITS - inp.spec().int_size().sas::<u32>()))
+                .leading_ones();
             let output_size: u16 = n_bits_to_encode(inp.spec().int_size());
             Some(vec![IopValue::Ciphertext(
                 inp.spec()
                     .block_spec()
                     .ciphertext_spec(output_size)
-                    .from_int(res as u128),
+                    .from_int(res.sas()),
             )])
         }
 
@@ -388,13 +398,13 @@ mod test {
             let res = inp
                 .as_storage()
                 .trailing_zeros()
-                .min(inp.spec().int_size() as u32);
+                .min(inp.spec().int_size().sas());
             let output_size: u16 = n_bits_to_encode(inp.spec().int_size());
             Some(vec![IopValue::Ciphertext(
                 inp.spec()
                     .block_spec()
                     .ciphertext_spec(output_size)
-                    .from_int(res as u128),
+                    .from_int(res.sas()),
             )])
         }
         for size in (2..128).step_by(2) {
@@ -414,7 +424,7 @@ mod test {
                 inp.spec()
                     .block_spec()
                     .ciphertext_spec(output_size)
-                    .from_int(res as u128),
+                    .from_int(res.sas()),
             )])
         }
 
@@ -436,7 +446,7 @@ mod test {
                 inp.spec()
                     .block_spec()
                     .ciphertext_spec(output_size)
-                    .from_int(res as u128),
+                    .from_int(res.sas()),
             )])
         }
 

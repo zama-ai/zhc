@@ -1,4 +1,4 @@
-use zhc_utils::iter::CollectInVec;
+use zhc_utils::{SafeAs, iter::CollectInVec};
 
 use crate::{Dialect, IR, OpId, OpIdRaw, OpMap, ValId, ValMap, traversal::OpWalkerVerifier};
 
@@ -10,7 +10,7 @@ pub fn reschedule<'a, D: Dialect>(
     let mut valmap = ir.empty_valmap();
     let walker = walker.covec();
     assert_eq!(
-        walker.len() as OpIdRaw,
+        walker.len().sas::<OpIdRaw>(),
         ir.n_ops(),
         "Tried to schedule with a walker that does not visit all operations."
     );

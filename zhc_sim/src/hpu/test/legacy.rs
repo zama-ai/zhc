@@ -1,4 +1,5 @@
 use zhc_langs::doplang::{Argument, MASK_NONE, MASK_PBS2, MASK_PBS4, MASK_PBS8};
+use zhc_utils::SafeAs;
 
 use crate::{
     Cycle,
@@ -6,6 +7,8 @@ use crate::{
 };
 
 mod legacy {
+    use zhc_utils::SafeAs;
+
     pub struct RegId(pub u8);
 
     pub struct MulFactor(pub u8);
@@ -40,7 +43,7 @@ mod legacy {
     impl MemId {
         pub fn unwrap_addr(&self) -> usize {
             match self {
-                MemId::Addr(ct_id) => ct_id.0 as usize,
+                MemId::Addr(ct_id) => ct_id.0.sas(),
                 _ => panic!(),
             }
         }
@@ -139,43 +142,43 @@ impl From<legacy::DOp> for RawDOp {
             legacy::DOp::ADD(dop) => RawDOp::ADD {
                 dst: Argument::CtReg {
                     mask: MASK_NONE,
-                    addr: dop.0.dst_rid.0 as usize,
+                    addr: dop.0.dst_rid.0.sas(),
                 },
                 src1: Argument::CtReg {
                     mask: MASK_NONE,
-                    addr: dop.0.src0_rid.0 as usize,
+                    addr: dop.0.src0_rid.0.sas(),
                 },
                 src2: Argument::CtReg {
                     mask: MASK_NONE,
-                    addr: dop.0.src1_rid.0 as usize,
+                    addr: dop.0.src1_rid.0.sas(),
                 },
             },
             legacy::DOp::SUB(dop) => RawDOp::SUB {
                 dst: Argument::CtReg {
                     mask: MASK_NONE,
-                    addr: dop.0.dst_rid.0 as usize,
+                    addr: dop.0.dst_rid.0.sas(),
                 },
                 src1: Argument::CtReg {
                     mask: MASK_NONE,
-                    addr: dop.0.src0_rid.0 as usize,
+                    addr: dop.0.src0_rid.0.sas(),
                 },
                 src2: Argument::CtReg {
                     mask: MASK_NONE,
-                    addr: dop.0.src1_rid.0 as usize,
+                    addr: dop.0.src1_rid.0.sas(),
                 },
             },
             legacy::DOp::MAC(dop) => RawDOp::MAC {
                 dst: Argument::CtReg {
                     mask: MASK_NONE,
-                    addr: dop.0.dst_rid.0 as usize,
+                    addr: dop.0.dst_rid.0.sas(),
                 },
                 src1: Argument::CtReg {
                     mask: MASK_NONE,
-                    addr: dop.0.src0_rid.0 as usize,
+                    addr: dop.0.src0_rid.0.sas(),
                 },
                 src2: Argument::CtReg {
                     mask: MASK_NONE,
-                    addr: dop.0.src1_rid.0 as usize,
+                    addr: dop.0.src1_rid.0.sas(),
                 },
                 cst: Argument::PtConst {
                     val: dop.0.mul_factor.0,
@@ -184,11 +187,11 @@ impl From<legacy::DOp> for RawDOp {
             legacy::DOp::ADDS(dop) => RawDOp::ADDS {
                 dst: Argument::CtReg {
                     mask: MASK_NONE,
-                    addr: dop.0.dst_rid.0 as usize,
+                    addr: dop.0.dst_rid.0.sas(),
                 },
                 src: Argument::CtReg {
                     mask: MASK_NONE,
-                    addr: dop.0.src_rid.0 as usize,
+                    addr: dop.0.src_rid.0.sas(),
                 },
                 cst: Argument::PtConst {
                     val: dop.0.msg_cst.unwrap_cst(),
@@ -197,11 +200,11 @@ impl From<legacy::DOp> for RawDOp {
             legacy::DOp::SUBS(dop) => RawDOp::SUBS {
                 dst: Argument::CtReg {
                     mask: MASK_NONE,
-                    addr: dop.0.dst_rid.0 as usize,
+                    addr: dop.0.dst_rid.0.sas(),
                 },
                 src: Argument::CtReg {
                     mask: MASK_NONE,
-                    addr: dop.0.src_rid.0 as usize,
+                    addr: dop.0.src_rid.0.sas(),
                 },
                 cst: Argument::PtConst {
                     val: dop.0.msg_cst.unwrap_cst(),
@@ -210,11 +213,11 @@ impl From<legacy::DOp> for RawDOp {
             legacy::DOp::SSUB(dop) => RawDOp::SSUB {
                 dst: Argument::CtReg {
                     mask: MASK_NONE,
-                    addr: dop.0.dst_rid.0 as usize,
+                    addr: dop.0.dst_rid.0.sas(),
                 },
                 src: Argument::CtReg {
                     mask: MASK_NONE,
-                    addr: dop.0.src_rid.0 as usize,
+                    addr: dop.0.src_rid.0.sas(),
                 },
                 cst: Argument::PtConst {
                     val: dop.0.msg_cst.unwrap_cst(),
@@ -223,11 +226,11 @@ impl From<legacy::DOp> for RawDOp {
             legacy::DOp::MULS(dop) => RawDOp::MULS {
                 dst: Argument::CtReg {
                     mask: MASK_NONE,
-                    addr: dop.0.dst_rid.0 as usize,
+                    addr: dop.0.dst_rid.0.sas(),
                 },
                 src: Argument::CtReg {
                     mask: MASK_NONE,
-                    addr: dop.0.src_rid.0 as usize,
+                    addr: dop.0.src_rid.0.sas(),
                 },
                 cst: Argument::PtConst {
                     val: dop.0.msg_cst.unwrap_cst(),
@@ -236,7 +239,7 @@ impl From<legacy::DOp> for RawDOp {
             legacy::DOp::LD(dop) => RawDOp::LD {
                 dst: Argument::CtReg {
                     mask: MASK_NONE,
-                    addr: dop.0.rid.0 as usize,
+                    addr: dop.0.rid.0.sas(),
                 },
                 src: Argument::CtIo {
                     addr: dop.0.slot.unwrap_addr(),
@@ -248,111 +251,111 @@ impl From<legacy::DOp> for RawDOp {
                 },
                 src: Argument::CtReg {
                     mask: MASK_NONE,
-                    addr: dop.0.rid.0 as usize,
+                    addr: dop.0.rid.0.sas(),
                 },
             },
             legacy::DOp::PBS(dop) => RawDOp::PBS {
                 dst: Argument::CtReg {
                     mask: MASK_NONE,
-                    addr: dop.0.dst_rid.0 as usize,
+                    addr: dop.0.dst_rid.0.sas(),
                 },
                 src: Argument::CtReg {
                     mask: MASK_NONE,
-                    addr: dop.0.src_rid.0 as usize,
+                    addr: dop.0.src_rid.0.sas(),
                 },
                 lut: Argument::LutId {
-                    id: dop.0.gid.0 as usize,
+                    id: dop.0.gid.0.sas(),
                 },
             },
             legacy::DOp::PBS_ML2(dop) => RawDOp::PBS_ML2 {
                 dst: Argument::CtReg {
                     mask: MASK_PBS2,
-                    addr: dop.0.dst_rid.0 as usize,
+                    addr: dop.0.dst_rid.0.sas(),
                 },
                 src: Argument::CtReg {
                     mask: MASK_NONE,
-                    addr: dop.0.src_rid.0 as usize,
+                    addr: dop.0.src_rid.0.sas(),
                 },
                 lut: Argument::LutId {
-                    id: dop.0.gid.0 as usize,
+                    id: dop.0.gid.0.sas(),
                 },
             },
             legacy::DOp::PBS_ML4(dop) => RawDOp::PBS_ML4 {
                 dst: Argument::CtReg {
                     mask: MASK_PBS4,
-                    addr: dop.0.dst_rid.0 as usize,
+                    addr: dop.0.dst_rid.0.sas(),
                 },
                 src: Argument::CtReg {
                     mask: MASK_NONE,
-                    addr: dop.0.src_rid.0 as usize,
+                    addr: dop.0.src_rid.0.sas(),
                 },
                 lut: Argument::LutId {
-                    id: dop.0.gid.0 as usize,
+                    id: dop.0.gid.0.sas(),
                 },
             },
             legacy::DOp::PBS_ML8(dop) => RawDOp::PBS_ML8 {
                 dst: Argument::CtReg {
                     mask: MASK_PBS8,
-                    addr: dop.0.dst_rid.0 as usize,
+                    addr: dop.0.dst_rid.0.sas(),
                 },
                 src: Argument::CtReg {
                     mask: MASK_NONE,
-                    addr: dop.0.src_rid.0 as usize,
+                    addr: dop.0.src_rid.0.sas(),
                 },
                 lut: Argument::LutId {
-                    id: dop.0.gid.0 as usize,
+                    id: dop.0.gid.0.sas(),
                 },
             },
             legacy::DOp::PBS_F(dop) => RawDOp::PBS_F {
                 dst: Argument::CtReg {
                     mask: MASK_NONE,
-                    addr: dop.0.dst_rid.0 as usize,
+                    addr: dop.0.dst_rid.0.sas(),
                 },
                 src: Argument::CtReg {
                     mask: MASK_NONE,
-                    addr: dop.0.src_rid.0 as usize,
+                    addr: dop.0.src_rid.0.sas(),
                 },
                 lut: Argument::LutId {
-                    id: dop.0.gid.0 as usize,
+                    id: dop.0.gid.0.sas(),
                 },
             },
             legacy::DOp::PBS_ML2_F(dop) => RawDOp::PBS_ML2_F {
                 dst: Argument::CtReg {
                     mask: MASK_PBS2,
-                    addr: dop.0.dst_rid.0 as usize,
+                    addr: dop.0.dst_rid.0.sas(),
                 },
                 src: Argument::CtReg {
                     mask: MASK_NONE,
-                    addr: dop.0.src_rid.0 as usize,
+                    addr: dop.0.src_rid.0.sas(),
                 },
                 lut: Argument::LutId {
-                    id: dop.0.gid.0 as usize,
+                    id: dop.0.gid.0.sas(),
                 },
             },
             legacy::DOp::PBS_ML4_F(dop) => RawDOp::PBS_ML4_F {
                 dst: Argument::CtReg {
                     mask: MASK_PBS4,
-                    addr: dop.0.dst_rid.0 as usize,
+                    addr: dop.0.dst_rid.0.sas(),
                 },
                 src: Argument::CtReg {
                     mask: MASK_NONE,
-                    addr: dop.0.src_rid.0 as usize,
+                    addr: dop.0.src_rid.0.sas(),
                 },
                 lut: Argument::LutId {
-                    id: dop.0.gid.0 as usize,
+                    id: dop.0.gid.0.sas(),
                 },
             },
             legacy::DOp::PBS_ML8_F(dop) => RawDOp::PBS_ML8_F {
                 dst: Argument::CtReg {
                     mask: MASK_PBS8,
-                    addr: dop.0.dst_rid.0 as usize,
+                    addr: dop.0.dst_rid.0.sas(),
                 },
                 src: Argument::CtReg {
                     mask: MASK_NONE,
-                    addr: dop.0.src_rid.0 as usize,
+                    addr: dop.0.src_rid.0.sas(),
                 },
                 lut: Argument::LutId {
-                    id: dop.0.gid.0 as usize,
+                    id: dop.0.gid.0.sas(),
                 },
             },
             legacy::DOp::SYNC(_) => RawDOp::SYNC,

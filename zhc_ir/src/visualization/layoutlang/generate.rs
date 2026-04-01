@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 
 use zhc_utils::{
-    BiMap, Dumpable,
+    BiMap, Dumpable, SafeAs,
     iter::{CollectInSmallVec, MultiZip},
     small::SmallVec,
     svec,
@@ -101,7 +101,7 @@ impl StackFrame {
         assert!(!self.input_map.has_dom(&original));
         let (opid, rets) = self.ir.add_op(
             LayoutInstructionSet::GroupInput {
-                pos: self.args.len() as u16,
+                pos: self.args.len().sas(),
                 valid: original.0,
             },
             svec![],
@@ -196,7 +196,7 @@ impl StackFrame {
             let local = self.level_to(local_out, self.depth);
             self.ir.add_op(
                 LayoutInstructionSet::GroupOutput {
-                    pos: pos as u16,
+                    pos: pos.sas(),
                     valid: original.0,
                 },
                 svec![local.0],

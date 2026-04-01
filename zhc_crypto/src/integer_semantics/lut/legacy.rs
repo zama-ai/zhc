@@ -1,5 +1,7 @@
 #![allow(non_snake_case)]
 
+use zhc_utils::SafeAs;
+
 const CMP_INFERIOR: usize = 0;
 const CMP_EQUAL: usize = 1;
 const CMP_SUPERIOR: usize = 2;
@@ -216,7 +218,7 @@ pbs!(
     @0 =>{
         |params: &DigitParameters, val| {
                ((val & params.carry_mask()) >> (params.msg_w)) << 1|       // Generate
-               (((val & params.msg_mask()) == params.msg_mask()) as usize) // Propagate
+               (((val & params.msg_mask()) == params.msg_mask()).sas::<usize>()) // Propagate
            };
         |_params: &DigitParameters, _deg| 3;
     },
@@ -230,7 +232,7 @@ pbs!(
     @0 =>{
         |_params: &DigitParameters, val | {
             let carry = val >> 2;
-            let prop = (val & 3 == 3) as usize;
+            let prop = (val & 3 == 3).sas::<usize>();
             (carry << 1) | prop
        };
         |_params: &DigitParameters, _deg| 3;
@@ -241,7 +243,7 @@ pbs!(
     @0 =>{
         |_params: &DigitParameters, val | {
             let carry = val >> 3;
-            let prop = (val & 7 == 7) as usize;
+            let prop = (val & 7 == 7).sas::<usize>();
             (carry << 1) | prop
        };
         |_params: &DigitParameters, _deg| 3;

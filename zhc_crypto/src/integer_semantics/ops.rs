@@ -1,5 +1,7 @@
 use std::ops::{Add, Mul, Shl, Shr, Sub};
 
+use zhc_utils::SafeAs;
+
 use crate::integer_semantics::EmulatedCiphertext;
 
 use super::{EmulatedCiphertextBlock, EmulatedPlaintextBlock};
@@ -418,7 +420,7 @@ impl EmulatedCiphertext {
         let overflow_flag = (raw_mul >> self.spec.int_mask()) != 0;
         (
             EmulatedCiphertext {
-                storage: overflow_flag as u128,
+                storage: overflow_flag.sas(),
                 spec: self.spec,
             },
             EmulatedCiphertext {

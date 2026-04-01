@@ -1,6 +1,6 @@
 use std::fmt::Display;
 use zhc_ir::ValId;
-use zhc_utils::{StoreIndex, small::SmallMap};
+use zhc_utils::{SafeAs, StoreIndex, small::SmallMap};
 
 /// A unique identifier to a slot on the heap.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -46,7 +46,7 @@ impl Heap {
 
     #[allow(unused)]
     pub fn size(&self) -> usize {
-        self.last.0 as usize
+        self.last.0.sas()
     }
 }
 

@@ -1,3 +1,5 @@
+use zhc_utils::SafeAs;
+
 use super::super::{
     CiphertextBlockSpec, EmulatedCiphertextBlock, EmulatedCiphertextBlockStorage,
     lut::{
@@ -20,11 +22,11 @@ where
             let params = {
                 let spec = block.spec;
                 DigitParameters {
-                    msg_w: spec.message_size() as usize,
-                    carry_w: spec.carry_size() as usize,
+                    msg_w: spec.message_size().sas::<usize>(),
+                    carry_w: spec.carry_size().sas::<usize>(),
                 }
             };
-            (params, block.storage as usize)
+            (params, block.storage.sas::<usize>())
         };
 
         // Call legacy function
@@ -32,7 +34,7 @@ where
         let legacy_result = {
             let spec = block.spec;
             EmulatedCiphertextBlock {
-                storage: legacy_output as EmulatedCiphertextBlockStorage,
+                storage: legacy_output.sas::<EmulatedCiphertextBlockStorage>(),
                 spec,
             }
         };

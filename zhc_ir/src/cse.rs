@@ -7,7 +7,7 @@
 //! for normalizing commutative argument orderings so that permuted operands
 //! are recognized as equivalent.
 
-use zhc_utils::{FastMap, Store, small::SmallVec};
+use zhc_utils::{FastMap, SafeAs, Store, small::SmallVec};
 
 use super::{Dialect, DialectInstructionSet, IR, ValId, ValueNumber, dce::eliminate_dead_code};
 
@@ -45,7 +45,7 @@ pub trait AllowCse: Dialect {
         (0..op.get_signature().get_returns_arity()).map(move |i| Expr {
             op: op.clone(),
             args: args.clone(),
-            ret_pos: i as u8,
+            ret_pos: i.sas(),
         })
     }
 }
@@ -185,7 +185,7 @@ mod test {
                 .map(move |i| Expr {
                     op: op.clone(),
                     args: args_norm.clone(),
-                    ret_pos: i as u8,
+                    ret_pos: i.sas(),
                 })
                 .collect::<Vec<_>>();
             exprs.into_iter()

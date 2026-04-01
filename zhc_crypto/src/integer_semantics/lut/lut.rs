@@ -1,4 +1,6 @@
 #![allow(non_snake_case)]
+use zhc_utils::SafeAs;
+
 use super::super::{EmulatedCiphertextBlock, EmulatedCiphertextBlockStorage};
 
 const CMP_INFERIOR: EmulatedCiphertextBlockStorage = 0;
@@ -152,7 +154,7 @@ pub fn ManyGenProp_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock 
     let carry_val = block.move_carry_to_message().raw_mask_message();
     let msg_val = block.raw_mask_message();
     let result = (carry_val << 1) |                                   // Generate
-                 ((msg_val == block.spec.message_mask()) as EmulatedCiphertextBlockStorage); // Propagate
+                 ((msg_val == block.spec.message_mask()).sas::<EmulatedCiphertextBlockStorage>()); // Propagate
     block.spec.from_data(result)
 }
 
@@ -162,13 +164,13 @@ pub fn ManyGenProp_1(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock 
 
 pub fn ReduceCarry2_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let carry = block.storage >> 2;
-    let prop = (block.storage & 3 == 3) as EmulatedCiphertextBlockStorage;
+    let prop = (block.storage & 3 == 3).sas::<EmulatedCiphertextBlockStorage>();
     block.spec.from_data((carry << 1) | prop)
 }
 
 pub fn ReduceCarry3_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let carry = block.storage >> 3;
-    let prop = (block.storage & 7 == 7) as EmulatedCiphertextBlockStorage;
+    let prop = (block.storage & 7 == 7).sas::<EmulatedCiphertextBlockStorage>();
     block.spec.from_data((carry << 1) | prop)
 }
 
@@ -340,7 +342,7 @@ pub fn IsNull_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let carry_field = block.move_carry_to_message().raw_mask_message();
     let msg_field = block.raw_mask_message();
 
-    let result = match (carry_field as usize, msg_field as usize) {
+    let result = match (carry_field.sas::<usize>(), msg_field.sas::<usize>()) {
         (0, 0) => 1,
         _ => 0,
     };
@@ -587,7 +589,7 @@ pub fn SolveQuotient_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBloc
     // 'b1110 => 0 (sum = 3)
     let v = block.raw_mask_data();
 
-    let result = match v as usize {
+    let result = match v.sas::<usize>() {
         0 => 3,
         1 => 2,
         2 => 1,
@@ -992,7 +994,7 @@ pub fn Manym2lPropBit1MsgSplit_0(block: EmulatedCiphertextBlock) -> EmulatedCiph
     let lsb_size = block.spec.message_size().div_ceil(2);
 
     EmulatedCiphertextBlock {
-        storage: exp & ((1 << lsb_size) - 1) as EmulatedCiphertextBlockStorage, // msg_lsb
+        storage: exp & ((1 << lsb_size) - 1).sas::<EmulatedCiphertextBlockStorage>(), // msg_lsb
         spec: block.spec,
     }
 }
@@ -1122,7 +1124,7 @@ pub fn Manyl2mPropBit1MsgSplit_1(block: EmulatedCiphertextBlock) -> EmulatedCiph
     let lsb_size = block.spec.message_size().div_ceil(2);
 
     EmulatedCiphertextBlock {
-        storage: (exp & block.spec.message_mask()) >> (lsb_size as u8), // msg_msb
+        storage: (exp & block.spec.message_mask()) >> (lsb_size.sas::<u8>()), // msg_msb
         spec: block.spec,
     }
 }
@@ -1175,7 +1177,7 @@ pub fn Manyl2mPropBit0MsgSplit_1(block: EmulatedCiphertextBlock) -> EmulatedCiph
     let lsb_size = block.spec.message_size().div_ceil(2);
 
     EmulatedCiphertextBlock {
-        storage: (exp & block.spec.message_mask()) >> (lsb_size as u8), // msg_msb
+        storage: (exp & block.spec.message_mask()) >> (lsb_size.sas::<u8>()), // msg_msb
         spec: block.spec,
     }
 }

@@ -1,3 +1,4 @@
+use zhc_utils::SafeAs;
 use zhc_utils::iter::{CollectInSmallVec, Median, MultiZip};
 
 use crate::visualization::placement::Place;
@@ -23,9 +24,10 @@ fn place_once_top_down<'ir, 'ann>(ir: AnnIRView<'ir, 'ann, LayoutDialect, Placem
                     .get_args_iter()
                     .map(|a| {
                         let orig = a.get_origin();
-                        orig.opref.get_annotation().get_ret_positions()[orig.position as usize]
-                            .get_val()
-                            .0
+                        orig.opref.get_annotation().get_ret_positions()
+                            [orig.position.sas::<usize>()]
+                        .get_val()
+                        .0
                     })
                     .median()
                     .map(Place)
@@ -43,8 +45,9 @@ fn place_once_top_down<'ir, 'ann>(ir: AnnIRView<'ir, 'ann, LayoutDialect, Placem
                 for (arg, input) in (op.get_args_iter(), inputs.iter()).mzip() {
                     let orig = arg.get_origin();
                     input.set_val(
-                        orig.opref.get_annotation().get_ret_positions()[orig.position as usize]
-                            .get_val(),
+                        orig.opref.get_annotation().get_ret_positions()
+                            [orig.position.sas::<usize>()]
+                        .get_val(),
                     );
                 }
                 let mut inputs_ordered = inputs.clone();

@@ -1,12 +1,11 @@
 use std::fmt::Debug;
 use zhc_crypto::integer_semantics::{
-    CiphertextBlockSpec, EmulatedCiphertext, EmulatedCiphertextBlock,
-    EmulatedCiphertextBlockStorage, EmulatedPlaintext, EmulatedPlaintextBlock,
-    EmulatedPlaintextBlockStorage,
+    CiphertextBlockSpec, EmulatedCiphertext, EmulatedCiphertextBlock, EmulatedPlaintext,
+    EmulatedPlaintextBlock, EmulatedPlaintextBlockStorage,
 };
 use zhc_ir::interpretation::{Interpretable, Interpretation, InterpretsTo};
 use zhc_utils::small::SmallVec;
-use zhc_utils::{Dumpable, FastMap, svec};
+use zhc_utils::{Dumpable, FastMap, SafeAs, svec};
 
 /// Interpretation domain for IOP programs.
 ///
@@ -186,14 +185,12 @@ impl Interpretable<IopValue> for super::IopInstructionSet {
                     context
                         .spec
                         .complete_plaintext_block_spec()
-                        .from_message(*value as EmulatedPlaintextBlockStorage)
+                        .from_message((*value).sas())
                 )]
             }
             LetCiphertextBlock { value } => {
                 svec![IopValue::CiphertextBlock(
-                    context
-                        .spec
-                        .from_message(*value as EmulatedCiphertextBlockStorage)
+                    context.spec.from_message((*value).sas())
                 )]
             }
             AddCt => {
@@ -242,8 +239,9 @@ impl Interpretable<IopValue> for super::IopInstructionSet {
             }
             PackCt { mul } => {
                 assert_eq!(
-                    *mul as EmulatedPlaintextBlockStorage,
-                    (2 as EmulatedPlaintextBlockStorage).pow(context.spec.message_size() as u32)
+                    (*mul).sas::<EmulatedPlaintextBlockStorage>(),
+                    (2.sas::<EmulatedPlaintextBlockStorage>())
+                        .pow(context.spec.message_size().sas::<u32>())
                 );
                 let (IopValue::CiphertextBlock(left), IopValue::CiphertextBlock(right)) =
                     (arguments[0].clone(), arguments[1].clone())

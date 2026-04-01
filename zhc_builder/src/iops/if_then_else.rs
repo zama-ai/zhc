@@ -1,6 +1,9 @@
 use zhc_crypto::integer_semantics::CiphertextSpec;
 use zhc_langs::ioplang::Lut1Def;
-use zhc_utils::iter::{CollectInSmallVec, MultiZip};
+use zhc_utils::{
+    SafeAs,
+    iter::{CollectInSmallVec, MultiZip},
+};
 
 use crate::{Ciphertext, builder::Builder};
 
@@ -29,7 +32,7 @@ pub fn if_then_else(spec: CiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
     let src_a = builder.ciphertext_input(spec.int_size());
     let src_b = builder.ciphertext_input(spec.int_size());
-    let cond = builder.ciphertext_input(spec.block_spec().message_size() as u16);
+    let cond = builder.ciphertext_input(spec.block_spec().message_size().sas());
     let output = builder.iop_if_then_else(&src_a, &src_b, &cond);
     builder.ciphertext_output(output);
     builder

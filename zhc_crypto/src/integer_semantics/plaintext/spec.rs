@@ -1,4 +1,5 @@
 use rand::RngExt;
+use zhc_utils::SafeAs;
 
 use super::super::{EmulatedPlaintext, EmulatedPlaintextStorage, PlaintextBlockSpec};
 
@@ -50,7 +51,7 @@ impl PlaintextSpec {
     /// - `int_size` is not divisible by `block_message_size`
     pub fn new(int_size: u16, block_message_size: u8) -> Self {
         assert!(
-            int_size <= EmulatedPlaintextStorage::BITS as u16,
+            int_size <= EmulatedPlaintextStorage::BITS.sas::<u16>(),
             "Tried to create malformed plaintext spec."
         );
         assert_ne!(
@@ -58,7 +59,7 @@ impl PlaintextSpec {
             "Tried to create malformed plaintext spec."
         );
         assert_eq!(
-            int_size.rem_euclid(block_message_size as u16),
+            int_size.rem_euclid(block_message_size.sas::<u16>()),
             0,
             "Tried to create malformed plaintext spec."
         );
@@ -97,14 +98,17 @@ impl PlaintextSpec {
             ith < self.block_count(),
             "Tried to get block mask for nonexistent block"
         );
-        (self.block.message_mask() as EmulatedPlaintextStorage) << (ith * self.block.message_size())
+        (self.block.message_mask().sas::<EmulatedPlaintextStorage>())
+            << (ith * self.block.message_size())
     }
 
     /// Returns the number of blocks in this integer.
     ///
     /// Computed as `int_size / block_message_size`.
     pub fn block_count(&self) -> u8 {
-        self.int_size.div_euclid(self.block.0 as u16) as u8
+        self.int_size
+            .div_euclid(self.block.0.sas::<u16>())
+            .sas::<u8>()
     }
 
     /// Generates a random plaintext with uniformly distributed bits.
