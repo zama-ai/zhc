@@ -1,11 +1,11 @@
 use std::ops::Index;
 
-use zhc_ir::{IR, ValId, ValMap};
+use zhc_ir::{IR, OpIdRaw, ValId, ValMap};
 use zhc_langs::hpulang::HpuLang;
 use zhc_utils::{small::SmallVec, svec};
 
 /// A point in the execution timeline.
-pub type TimePoint = u16;
+pub type TimePoint = OpIdRaw;
 
 /// All the time points a value is used at.
 #[derive(Clone, Debug, PartialEq, Eq)]

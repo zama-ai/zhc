@@ -16,7 +16,7 @@ use super::{
 /// Operation depth relative to the IR inputs, used for topological ordering.
 ///
 /// The depth is the length of the longest path between an input of the IR and the op.
-pub type Depth = u16;
+pub type Depth = OpIdRaw;
 
 fn val_active<'a, D: Dialect>(val: &ValRef<'a, D>) -> bool {
     val.is_active()

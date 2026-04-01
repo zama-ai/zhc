@@ -3,7 +3,7 @@ use std::ops::Index;
 
 use zhc_utils::{Dumpable, Store};
 
-use crate::OpRef;
+use crate::{OpIdRaw, OpRef};
 
 use super::{Dialect, IR, OpId, State};
 
@@ -16,8 +16,8 @@ use super::{Dialect, IR, OpId, State};
 #[derive(Clone, PartialEq, Eq)]
 pub struct OpMap<T> {
     store: Store<OpId, State<Option<T>>>,
-    pub n_stored: u16,
-    pub n_inactive: u16,
+    pub n_stored: OpIdRaw,
+    pub n_inactive: OpIdRaw,
 }
 
 impl<T> OpMap<T> {
@@ -113,7 +113,7 @@ impl<T> OpMap<T> {
     }
 
     /// Returns the number of operations that have stored values.
-    pub fn len(&self) -> u16 {
+    pub fn len(&self) -> OpIdRaw {
         self.n_stored
     }
 

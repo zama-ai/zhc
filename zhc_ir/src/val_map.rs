@@ -5,7 +5,7 @@ use std::{
 
 use zhc_utils::{Dumpable, Store};
 
-use crate::val_ref::ValRef;
+use crate::{ValIdRaw, val_ref::ValRef};
 
 use super::{Dialect, IR, State, ValId};
 
@@ -18,8 +18,8 @@ use super::{Dialect, IR, State, ValId};
 #[derive(Clone, PartialEq, Eq)]
 pub struct ValMap<T> {
     store: Store<ValId, State<Option<T>>>,
-    n_stored: u16,
-    n_inactive: u16,
+    n_stored: ValIdRaw,
+    n_inactive: ValIdRaw,
 }
 
 impl<T> ValMap<T> {
@@ -115,7 +115,7 @@ impl<T> ValMap<T> {
     }
 
     /// Returns the number of values that have stored data.
-    pub fn len(&self) -> u16 {
+    pub fn len(&self) -> ValIdRaw {
         self.n_stored
     }
 
