@@ -57,7 +57,7 @@ impl CiphertextSpec {
     pub fn new(int_size: u16, block_carry_size: u8, block_message_size: u8) -> Self {
         assert!(
             int_size <= EmulatedCiphertextStorage::BITS.sas::<u16>(),
-            "Tried to create malformed ciphertext spec."
+            "Tried to create malformed ciphertext spec. Int size: {int_size}."
         );
         assert_ne!(
             block_carry_size, 0,

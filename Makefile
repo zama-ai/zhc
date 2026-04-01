@@ -1,7 +1,7 @@
 .PHONY: test update-expects fmt fmt-check check
 
 test:
-	cargo test --release
+	cargo test --release $(if $(F),-- $(F))
 
 update-expects:
 	cargo run --bin update-expects

@@ -329,10 +329,11 @@ impl Builder {
                     );
                 }
                 if expectations != outputs {
-                    panic!(
+                    println!(
                         "Random test failed for input {:?}:\nExpected:\n{:?}\nOutput:\n{:?}",
                         inputs, expectations, outputs
                     );
+                    self.eval().with_inputs(inputs).dump_and_panic();
                 }
             }
         }
