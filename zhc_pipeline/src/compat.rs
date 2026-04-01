@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use zhc_builder::{
-    CiphertextSpec, add, cmp_eq, cmp_gt, cmp_gte, cmp_lt, cmp_lte, cmp_neq, count_0, count_1,
+    CiphertextSpec, add, cmp_eq, cmp_gt, cmp_gte, cmp_lt, cmp_lte, cmp_neq, count_0, count_1, div,
     if_then_else, if_then_zero, ilog2, lead0, lead1, mul_lsb, trail0, trail1,
 };
 use zhc_sim::hpu::HpuConfig;
@@ -31,6 +31,7 @@ pub enum Iop {
     LeadingOnes,
     TrailingZeros,
     TrailingOnes,
+    Div,
     // Sub,
     // AddPt,
     // SubPt,
@@ -46,7 +47,6 @@ pub enum Iop {
     // LeftShiftPt,
     // RightRotPt,
     // LeftRotPt,
-    // Div,
     // Mod,
     // OvfAdd,
     // OvfSub,
@@ -86,6 +86,7 @@ impl FromStr for Iop {
             "LEAD1" => Ok(Iop::LeadingOnes),
             "TRAIL0" => Ok(Iop::TrailingZeros),
             "TRAIL1" => Ok(Iop::TrailingOnes),
+            "DIV" => Ok(Iop::Div),
             // "ADDS" => Ok(Iop::AddPt),
             // "SUBS" => Ok(Iop::SubPt),
             // "SSUB" => Ok(Iop::PtSub),
@@ -101,7 +102,6 @@ impl FromStr for Iop {
             // "ROTS_R" => Ok(Iop::RightRotPt),
             // "ROTS_L" => Ok(Iop::LeftRotPt),
             // "SUB" => Ok(Iop::Sub),
-            // "DIV" => Ok(Iop::Div),
             // "MOD" => Ok(Iop::Mod),
             // "OVF_ADD" => Ok(Iop::OvfAdd),
             // "OVF_SUB" => Ok(Iop::OvfSub),
@@ -150,6 +150,7 @@ impl Iop {
             Iop::LeadingOnes => lead1(spec).into_ir(),
             Iop::TrailingZeros => trail0(spec).into_ir(),
             Iop::TrailingOnes => trail1(spec).into_ir(),
+            Iop::Div => div(spec).into_ir(),
             // Iop::Sub => todo!(),
             // Iop::AddPt => todo!(),
             // Iop::SubPt => todo!(),
@@ -165,7 +166,6 @@ impl Iop {
             // Iop::LeftShiftPt => todo!(),
             // Iop::RightRotPt => todo!(),
             // Iop::LeftRotPt => todo!(),
-            // Iop::Div => todo!(),
             // Iop::Mod => todo!(),
             // Iop::OvfAdd => todo!(),
             // Iop::OvfSub => todo!(),

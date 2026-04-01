@@ -460,6 +460,7 @@ mod test {
             check(if_then_else(spec));
             check(if_then_zero(spec));
             check(mul_lsb(spec));
+            check(div(spec));
         }
     }
 }

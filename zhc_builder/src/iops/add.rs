@@ -5,7 +5,10 @@ use zhc_utils::{
     svec,
 };
 
-use crate::builder::{Builder, Ciphertext, ExtensionBehavior};
+use crate::{
+    CiphertextBlock,
+    builder::{Builder, Ciphertext, ExtensionBehavior},
+};
 
 /// Creates an IR for the addition of two encrypted integers.
 ///
@@ -26,7 +29,7 @@ use crate::builder::{Builder, Ciphertext, ExtensionBehavior};
 /// let ir = builder.into_ir();
 /// ```
 pub fn add(spec: CiphertextSpec) -> Builder {
-    let mut builder = Builder::new(spec.block_spec());
+    let builder = Builder::new(spec.block_spec());
     let src_a = builder.ciphertext_input(spec.int_size());
     let src_b = builder.ciphertext_input(spec.int_size());
     let res = builder.iop_add_hillis_steele(&src_a, &src_b);
@@ -35,30 +38,21 @@ pub fn add(spec: CiphertextSpec) -> Builder {
 }
 
 impl Builder {
-    /// Adds two encrypted integers with Hillis-Steele carry propagation.
-    ///
-    /// The operation computes `lhs + rhs` (wrapping) using a parallel-prefix
-    /// carry-propagation scheme with 4-block grouping. Both operands must
-    /// share the same block decomposition as determined by the
-    /// [`CiphertextSpec`] used to create the builder. The result is a fresh
-    /// [`Ciphertext`] whose message bits have been cleaned of any residual
-    /// carry via a final programmable bootstrapping pass.
-    ///
-    /// Non-power-of-two and non-multiple-of-four block counts are handled
-    /// transparently: the computation is extended to a favourable size and
-    /// dead-code elimination trims the unused portion downstream.
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// # use zhc_builder::{CiphertextSpec, Builder};
-    /// # let spec = CiphertextSpec::new(16, 2, 2);
-    /// # let mut builder = Builder::new(spec.block_spec());
-    /// # let a = builder.ciphertext_input(spec.int_size());
-    /// # let b = builder.ciphertext_input(spec.int_size());
-    /// let sum = builder.iop_add_hillis_steele(&a, &b);
-    /// ```
-    pub fn iop_add_hillis_steele(&mut self, lhs: &Ciphertext, rhs: &Ciphertext) -> Ciphertext {
+    pub fn iop_add_hillis_steele(&self, lhs: &Ciphertext, rhs: &Ciphertext) -> Ciphertext {
+        let lhs_blocks = self.ciphertext_split(lhs);
+        let rhs_blocks = self.ciphertext_split(rhs);
+
+        let output_blocks = self.iop_add_hillis_steele_raw(lhs_blocks, rhs_blocks, true);
+
+        self.comment("Join").ciphertext_join(output_blocks, None)
+    }
+
+    pub(super) fn iop_add_hillis_steele_raw(
+        &self,
+        lhs_blocks: impl AsRef<[CiphertextBlock]>,
+        rhs_blocks: impl AsRef<[CiphertextBlock]>,
+        clean: bool,
+    ) -> Vec<CiphertextBlock> {
         // Implements the addition with carry-propagation using the hillis-steele resolution and
         // group of size 4. The encoding of propagation status is the same as the one used
         // in TFHE-RS. The carry is resolved as soon as possible.
@@ -74,9 +68,6 @@ impl Builder {
         // Hopefully, thanks to dead-code elimination happening down the pipeline, we can describe
         // the computation in a larger, more favorable case, and let DCE cut the un-necessary
         // computation. This improves code readability.
-
-        let lhs_blocks = self.ciphertext_split(lhs);
-        let rhs_blocks = self.ciphertext_split(rhs);
 
         let sums = self.comment("Raw sum").vector_add(
             &lhs_blocks,
@@ -258,15 +249,16 @@ impl Builder {
         );
         self.pop_comment();
 
-        self.push_comment("Cleanup");
-        let result = result
-            .into_iter()
-            .map(|ct| self.block_lookup(&ct, Lut1Def::MsgOnly))
-            .cosvec();
-        self.pop_comment();
+        if clean {
+            self.push_comment("Cleanup");
+            result = result
+                .into_iter()
+                .map(|ct| self.block_lookup(&ct, Lut1Def::MsgOnly))
+                .cosvec();
+            self.pop_comment();
+        }
 
-        self.comment("Join")
-            .ciphertext_join(&result.as_slice()[..output_size], None)
+        result.as_slice()[..output_size].into()
     }
 }
 

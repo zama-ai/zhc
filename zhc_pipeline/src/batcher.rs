@@ -585,7 +585,7 @@ pub fn batch<'a, 'b>(ir: &'a IR<HpuLang>, config: &'b HpuConfig) -> IR<HpuLang> 
 #[cfg(test)]
 mod test {
     use zhc_builder::{
-        Builder, CiphertextSpec, add, bitwise_and, bitwise_or, bitwise_xor, if_then_else,
+        Builder, CiphertextSpec, add, bitwise_and, bitwise_or, bitwise_xor, div, if_then_else,
         if_then_zero, mul_lsb,
     };
     use zhc_ir::IR;
@@ -747,6 +747,7 @@ mod test {
             check(if_then_else(spec));
             check(if_then_zero(spec));
             check(mul_lsb(spec));
+            check(div(spec));
         }
     }
 }

@@ -26,8 +26,8 @@ pub fn allocate_registers(ir: &IR<HpuLang>, config: &HpuConfig) -> IR<DopLang> {
 #[cfg(test)]
 mod test {
     use zhc_builder::{
-        Builder, CiphertextSpec, add, bitwise_and, bitwise_or, bitwise_xor, cmp_gt, if_then_else,
-        if_then_zero, mul_lsb,
+        Builder, CiphertextSpec, add, bitwise_and, bitwise_or, bitwise_xor, cmp_gt, div,
+        if_then_else, if_then_zero, mul_lsb,
     };
     use zhc_ir::{IR, PrintWalker};
     use zhc_langs::{doplang::DopLang, ioplang::IopLang};
@@ -205,6 +205,7 @@ mod test {
             check(if_then_else(spec));
             check(if_then_zero(spec));
             check(mul_lsb(spec));
+            check(div(spec));
         }
     }
 }
