@@ -31,7 +31,7 @@ use crate::{
 /// let ir = builder.into_ir();
 /// ```
 pub fn count_0(spec: CiphertextSpec) -> Builder {
-    let mut builder = Builder::new(spec.block_spec());
+    let builder = Builder::new(spec.block_spec());
     let src_a = builder.ciphertext_input(spec.int_size());
     let res = builder.iop_count(&src_a, BitType::Zero);
     builder.ciphertext_output(res);
@@ -58,7 +58,7 @@ pub fn count_0(spec: CiphertextSpec) -> Builder {
 /// let ir = builder.into_ir();
 /// ```
 pub fn count_1(spec: CiphertextSpec) -> Builder {
-    let mut builder = Builder::new(spec.block_spec());
+    let builder = Builder::new(spec.block_spec());
     let src_a = builder.ciphertext_input(spec.int_size());
     let res = builder.iop_count(&src_a, BitType::One);
     builder.ciphertext_output(res);
@@ -83,11 +83,11 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::{CiphertextSpec, Builder, BitType};
     /// # let spec = CiphertextSpec::new(16, 2, 2);
-    /// # let mut builder = Builder::new(spec.block_spec());
+    /// # let builder = Builder::new(spec.block_spec());
     /// # let a = builder.ciphertext_input(spec.int_size());
     /// let pop = builder.iop_count(&a, BitType::One);
     /// ```
-    pub fn iop_count(&mut self, inp: &Ciphertext, kind: BitType) -> Ciphertext {
+    pub fn iop_count(&self, inp: &Ciphertext, kind: BitType) -> Ciphertext {
         assert!(
             inp.spec().int_size().is_multiple_of(2),
             "Non-multiple-of-two integer size not supported."

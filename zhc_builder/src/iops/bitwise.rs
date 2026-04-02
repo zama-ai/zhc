@@ -23,7 +23,7 @@ use crate::builder::{Builder, Ciphertext};
 /// let ir = builder.into_ir();
 /// ```
 pub fn bitwise_and(spec: CiphertextSpec) -> Builder {
-    let mut builder = Builder::new(spec.block_spec());
+    let builder = Builder::new(spec.block_spec());
     let src_a = builder.ciphertext_input(spec.int_size());
     let src_b = builder.ciphertext_input(spec.int_size());
     let res = builder.iop_bitwise(&src_a, &src_b, BwKind::And);
@@ -51,7 +51,7 @@ pub fn bitwise_and(spec: CiphertextSpec) -> Builder {
 /// let ir = builder.into_ir();
 /// ```
 pub fn bitwise_or(spec: CiphertextSpec) -> Builder {
-    let mut builder = Builder::new(spec.block_spec());
+    let builder = Builder::new(spec.block_spec());
     let src_a = builder.ciphertext_input(spec.int_size());
     let src_b = builder.ciphertext_input(spec.int_size());
     let res = builder.iop_bitwise(&src_a, &src_b, BwKind::Or);
@@ -79,7 +79,7 @@ pub fn bitwise_or(spec: CiphertextSpec) -> Builder {
 /// let ir = builder.into_ir();
 /// ```
 pub fn bitwise_xor(spec: CiphertextSpec) -> Builder {
-    let mut builder = Builder::new(spec.block_spec());
+    let builder = Builder::new(spec.block_spec());
     let src_a = builder.ciphertext_input(spec.int_size());
     let src_b = builder.ciphertext_input(spec.int_size());
     let res = builder.iop_bitwise(&src_a, &src_b, BwKind::Xor);
@@ -122,12 +122,12 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::{CiphertextSpec, Builder, BwKind};
     /// # let spec = CiphertextSpec::new(16, 2, 2);
-    /// # let mut builder = Builder::new(spec.block_spec());
+    /// # let builder = Builder::new(spec.block_spec());
     /// # let a = builder.ciphertext_input(spec.int_size());
     /// # let b = builder.ciphertext_input(spec.int_size());
     /// let result = builder.iop_bitwise(&a, &b, BwKind::Xor);
     /// ```
-    pub fn iop_bitwise(&mut self, lhs: &Ciphertext, rhs: &Ciphertext, kind: BwKind) -> Ciphertext {
+    pub fn iop_bitwise(&self, lhs: &Ciphertext, rhs: &Ciphertext, kind: BwKind) -> Ciphertext {
         let lhs_blocks = self.ciphertext_split(lhs);
         let rhs_blocks = self.ciphertext_split(rhs);
         let res = self.vector_zip_then_lookup(
