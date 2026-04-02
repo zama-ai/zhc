@@ -199,6 +199,17 @@ impl PlacementSolution {
     }
 }
 
+/// Convert raw layer positions to ranks (0..n-1) based on sorted order.
+fn positions_to_ranks(positions: SmallVec<Place>) -> SmallVec<Place> {
+    let mut indexed = positions.iter().enumerate().map(|(i, p)| (i, *p)).covec();
+    indexed.sort_by_key(|(_, pos)| *pos);
+    let mut ranks = vec![Place(0.0); positions.len()];
+    for (rank, (orig_idx, _)) in indexed.iter().enumerate() {
+        ranks[*orig_idx] = Place(rank as f64);
+    }
+    ranks.into_iter().collect()
+}
+
 fn resolve(input: OpMap<PlacementVariable>) -> OpMap<PlacementSolution> {
     input.map(|v| match v {
         PlacementVariable::NonGroup { op, .. } => PlacementSolution::NonGroup { op: op.get_val() },
@@ -208,12 +219,18 @@ fn resolve(input: OpMap<PlacementVariable>) -> OpMap<PlacementSolution> {
             inputs,
             outputs,
             ..
-        } => PlacementSolution::Group {
-            op: op.get_val(),
-            inputs: inputs.into_iter().map(|a| a.get_val()).collect(),
-            outputs: outputs.into_iter().map(|a| a.get_val()).collect(),
-            maps: (resolve(maps.0), maps.1.map(|_| ())),
-        },
+        } => {
+            // Convert raw layer positions to ranks, since other ops on the same
+            // layer can create gaps in the position sequence.
+            let input_positions = inputs.into_iter().map(|a| a.get_val()).cosvec();
+            let output_positions = outputs.into_iter().map(|a| a.get_val()).cosvec();
+            PlacementSolution::Group {
+                op: op.get_val(),
+                inputs: positions_to_ranks(input_positions),
+                outputs: positions_to_ranks(output_positions),
+                maps: (resolve(maps.0), maps.1.map(|_| ())),
+            }
+        }
     })
 }
 

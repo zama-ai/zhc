@@ -94,12 +94,25 @@ fn place_once_top_down<'ir, 'ann>(ir: AnnIRView<'ir, 'ann, LayoutDialect, Placem
 
         // Last, for the group operations of the layer, we reconcile the rets positions with the
         // constraints coming from inside of the group. That is, we reorder the rets
-        // position following the order of the group outputs
+        // position following the order of the group outputs.
+        // Note: we use ranks (relative order among outputs) rather than raw layer positions,
+        // since other ops on the same layer can create gaps in the position sequence.
         for op in layer_ops.iter_mut() {
             if let PlacementVariable::Group { outputs, rets, .. } = op.get_annotation() {
                 let rets_original_places = rets.iter().map(|r| r.get_val()).cosvec();
-                for (ret, val) in (rets.iter(), outputs.iter()).mzip() {
-                    ret.set_val(rets_original_places[val.get_val().0 as usize]);
+                // Compute rank of each output based on sorted position order
+                let mut indexed = outputs
+                    .iter()
+                    .enumerate()
+                    .map(|(i, o)| (i, o.get_val()))
+                    .cosvec();
+                indexed.sort_by_key(|(_, pos)| *pos);
+                let mut ranks = vec![0usize; outputs.len()];
+                for (rank, (orig_idx, _)) in indexed.iter().enumerate() {
+                    ranks[*orig_idx] = rank;
+                }
+                for (ret, rank) in (rets.iter(), ranks.iter()).mzip() {
+                    ret.set_val(rets_original_places[*rank]);
                 }
             }
         }
@@ -198,11 +211,24 @@ fn place_once_bottom_up<'ir, 'ann>(ir: AnnIRView<'ir, 'ann, LayoutDialect, Place
         // Last, for the group operations of the layer, we reconcile the args positions with the
         // constraints coming from inside of the group. That is, we reorder the args
         // position following the order of the group inputs.
+        // Note: we use ranks (relative order among inputs) rather than raw layer positions,
+        // since other ops on the same layer can create gaps in the position sequence.
         for op in layer_ops.iter_mut() {
             if let PlacementVariable::Group { inputs, args, .. } = op.get_annotation() {
                 let args_original_places = args.iter().map(|r| r.get_val()).cosvec();
-                for (arg, val) in (args.iter(), inputs.iter()).mzip() {
-                    arg.set_val(args_original_places[val.get_val().0 as usize]);
+                // Compute rank of each input based on sorted position order
+                let mut indexed = inputs
+                    .iter()
+                    .enumerate()
+                    .map(|(i, o)| (i, o.get_val()))
+                    .cosvec();
+                indexed.sort_by_key(|(_, pos)| *pos);
+                let mut ranks = vec![0usize; inputs.len()];
+                for (rank, (orig_idx, _)) in indexed.iter().enumerate() {
+                    ranks[*orig_idx] = rank;
+                }
+                for (arg, rank) in (args.iter(), ranks.iter()).mzip() {
+                    arg.set_val(args_original_places[*rank]);
                 }
             }
         }

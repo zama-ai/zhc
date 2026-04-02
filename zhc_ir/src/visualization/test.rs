@@ -1076,3 +1076,80 @@ fn test_cross_group_reorder() {
     op_annotations.insert(r, root.clone());
     draw_ir_html(&ir, op_annotations, "test33.html");
 }
+
+/// Bug reproducer: GroupInput shares layer 1 with an IntInput inside the group.
+/// This triggers the indexing bug in place_once_bottom_up (line 203) where
+/// the layer position is used as an index into args_original_places.
+///
+/// Forces crossing: two external inputs A, B go into the group. An internal source C
+/// also exists on layer 1. The median heuristic will reorder based on downstream users,
+/// potentially placing C between the GroupInputs.
+#[test]
+fn test_mixed_first_layer_in_group() {
+    // Structure:
+    //   A, B (root) -> [group: gi_A, gi_B, internal_C (all layer 1) -> use them -> outputs] -> ret
+    // With careful wiring, reordering can place internal_C at position 1, pushing gi_B to position
+    // 2. args_original_places has 2 elements, so index 2 is out of bounds.
+    let mut ir: IR<TestLang> = IR::empty();
+    let (op_a, a) = ir.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![]);
+    let (op_b, b) = ir.add_op(TestInstructionSet::IntInput { pos: 1 }, svec![]);
+    // Inside group_a:
+    let (op_c, c) = ir.add_op(TestInstructionSet::IntInput { pos: 2 }, svec![]); // internal source
+    // Wire so that C is used first (lower position), then B, then A - forces reorder
+    let (op_add1, add1) = ir.add_op(TestInstructionSet::Add, svec![c[0], b[0]]); // uses C and B
+    let (op_add2, add2) = ir.add_op(TestInstructionSet::Add, svec![add1[0], a[0]]); // uses result and A
+    // Back at root:
+    let (op_ret, _) = ir.add_op(TestInstructionSet::Return, svec![add2[0]]);
+
+    let root = Hierarchy::new();
+    let mut group_a = root.clone();
+    group_a.push("group_a");
+
+    let mut op_annotations = ir.empty_opmap();
+    op_annotations.insert(op_a, root.clone());
+    op_annotations.insert(op_b, root.clone());
+    op_annotations.insert(op_c, group_a.clone()); // internal source, layer 1
+    op_annotations.insert(op_add1, group_a.clone());
+    op_annotations.insert(op_add2, group_a.clone());
+    op_annotations.insert(op_ret, root.clone());
+    draw_ir_html(&ir, op_annotations, "test34.html");
+}
+
+/// Bug reproducer: GroupOutput shares last layer with a Return inside the group.
+/// This triggers the indexing bug in place_once_top_down (line 100) where
+/// the layer position is used as an index into rets_original_places.
+///
+/// Strategy: Single GroupOutput + Return on last layer. If Return ends up at
+/// position 0 and GroupOutput at position 1, indexing with 1 into a 1-element
+/// rets_original_places array causes out of bounds.
+/// We use two inputs where the one feeding the internal Return has lower position.
+#[test]
+fn test_mixed_last_layer_in_group() {
+    let mut ir: IR<TestLang> = IR::empty();
+    // inp0 at position 0, inp1 at position 1
+    let (op_inp0, inp0) = ir.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![]);
+    let (op_inp1, inp1) = ir.add_op(TestInstructionSet::IntInput { pos: 1 }, svec![]);
+    // Inside group_a:
+    // inc1 from inp0 (position 0) -> feeds internal Return (will want position 0 on last layer)
+    let (op_inc1, inc1) = ir.add_op(TestInstructionSet::Inc, svec![inp0[0]]);
+    // inc2 from inp1 (position 1) -> exits group (will want position 1 on last layer)
+    let (op_inc2, inc2) = ir.add_op(TestInstructionSet::Inc, svec![inp1[0]]);
+    // Internal Return fed by inc1 - should get position 0 on last layer
+    let (op_internal_ret, _) = ir.add_op(TestInstructionSet::Return, svec![inc1[0]]);
+    // inc2 exits the group - GroupOutput should get position 1 on last layer
+    // But rets_original_places has only 1 element!
+    let (op_ret, _) = ir.add_op(TestInstructionSet::Return, svec![inc2[0]]);
+
+    let root = Hierarchy::new();
+    let mut group_a = root.clone();
+    group_a.push("group_a");
+
+    let mut op_annotations = ir.empty_opmap();
+    op_annotations.insert(op_inp0, root.clone());
+    op_annotations.insert(op_inp1, root.clone());
+    op_annotations.insert(op_inc1, group_a.clone());
+    op_annotations.insert(op_inc2, group_a.clone());
+    op_annotations.insert(op_internal_ret, group_a.clone());
+    op_annotations.insert(op_ret, root.clone());
+    draw_ir_html(&ir, op_annotations, "test35.html");
+}
