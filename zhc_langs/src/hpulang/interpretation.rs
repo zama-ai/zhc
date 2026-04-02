@@ -1,5 +1,6 @@
 use std::fmt::Debug;
 
+use zhc_crypto::integer_semantics::lut::{Lut1, Lut2};
 use zhc_crypto::integer_semantics::{
     CiphertextBlockSpec, EmulatedCiphertextBlock, EmulatedCiphertextBlockStorage,
     EmulatedPlaintextBlock, EmulatedPlaintextBlockStorage, lut::LookupCheck,
@@ -10,7 +11,6 @@ use zhc_utils::small::SmallVec;
 use zhc_utils::{FastMap, SafeAs, svec};
 
 use crate::hpulang::{HpuTypeSystem, LutId, TDstId, TImmId, TSrcId};
-use crate::ioplang::{Lut1Def, Lut2Def};
 
 /// Interpretation domain for HPU programs.
 ///
@@ -87,10 +87,10 @@ pub struct HpuInterpreterContext {
     pub destinations: FastMap<TDstId, EmulatedCiphertextBlock>,
     /// Plaintext block inputs, keyed by immediate identifier.
     pub immediates: FastMap<TImmId, EmulatedPlaintextBlock>,
-    /// Reverse LUT table: LutId → Lut1Def (for Pbs/PbsF).
-    pub lut1_table: FastMap<LutId, Lut1Def>,
-    /// Reverse LUT table: LutId → Lut2Def (for Pbs2/Pbs2F).
-    pub lut2_table: FastMap<LutId, Lut2Def>,
+    /// Reverse LUT table: LutId → Lut1 (for Pbs/PbsF).
+    pub lut1_table: FastMap<LutId, Lut1>,
+    /// Reverse LUT table: LutId → Lut2 (for Pbs2/Pbs2F).
+    pub lut2_table: FastMap<LutId, Lut2>,
     // Lut4/Lut8 tables omitted: the corresponding enums are uninhabited.
     /// Batch argument state for nested `Batch` interpretation.
     batch_args: FastMap<u8, HpuValue>,
@@ -254,14 +254,14 @@ impl Interpretable<HpuValue> for super::HpuInstructionSet {
                     .lut2_table
                     .get(lut)
                     .unwrap_or_else(|| panic!("Lut2 {lut} missing from context"));
-                let (ct0, ct1) = lut_def.lookup(ct);
+                let (ct0, ct1) = lut_def.lookup(ct, LookupCheck::AllowOutputPadding);
                 svec![HpuValue::CtRegister(ct0), HpuValue::CtRegister(ct1)]
             }
             Pbs4 { .. } | Pbs4F { .. } => {
-                panic!("Pbs4 interpretation not yet supported (Lut4Def is uninhabited)")
+                panic!("Pbs4 interpretation not implementd.")
             }
             Pbs8 { .. } | Pbs8F { .. } => {
-                panic!("Pbs8 interpretation not yet supported (Lut8Def is uninhabited)")
+                panic!("Pbs8 interpretation not implemented.")
             }
 
             // ── Batching ─────────────────────────────────────────────

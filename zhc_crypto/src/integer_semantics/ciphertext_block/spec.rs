@@ -51,6 +51,9 @@ impl CiphertextBlockSpec {
         1
     }
 
+    /// Returns the bitmask isolating the padding bit.
+    ///
+    /// Applying this mask with bitwise AND extracts the padding bit in its original position.
     pub fn padding_mask(&self) -> EmulatedCiphertextBlockStorage {
         1 << (self.carry_size() + self.message_size())
     }
@@ -63,6 +66,10 @@ impl CiphertextBlockSpec {
         self.0
     }
 
+    /// Returns the bitmask isolating the carry bits.
+    ///
+    /// Applying this mask with bitwise AND extracts the carry bits in their original position,
+    /// shifted above the message region.
     pub fn carry_mask(&self) -> EmulatedCiphertextBlockStorage {
         ((1 << self.carry_size()) - 1) << self.message_size()
     }
@@ -76,6 +83,9 @@ impl CiphertextBlockSpec {
         self.1
     }
 
+    /// Returns the bitmask isolating the message bits.
+    ///
+    /// Applying this mask with bitwise AND extracts the message bits in the lowest position.
     pub fn message_mask(&self) -> EmulatedCiphertextBlockStorage {
         (1 << self.message_size()) - 1
     }
@@ -87,6 +97,9 @@ impl CiphertextBlockSpec {
         self.padding_size() + self.carry_size() + self.message_size()
     }
 
+    /// Returns the bitmask covering all bits in the block.
+    ///
+    /// Applying this mask with bitwise AND extracts the full block value including padding.
     pub fn complete_mask(&self) -> EmulatedCiphertextBlockStorage {
         self.padding_mask() | self.data_mask()
     }
@@ -99,6 +112,9 @@ impl CiphertextBlockSpec {
         self.carry_size() + self.message_size()
     }
 
+    /// Returns the bitmask covering carry and message bits (excluding padding).
+    ///
+    /// Applying this mask with bitwise AND extracts the data portion of a block.
     pub fn data_mask(&self) -> EmulatedCiphertextBlockStorage {
         self.carry_mask() | self.message_mask()
     }
@@ -296,5 +312,56 @@ impl CiphertextBlockSpec {
     /// Panics if `int_size` is not divisible by the message size.
     pub fn ciphertext_spec(&self, int_size: u16) -> CiphertextSpec {
         CiphertextSpec::new(int_size, self.carry_size(), self.message_size())
+    }
+
+    /// Iterates over all blocks in the data space.
+    ///
+    /// Yields `2^data_size()` blocks, each with a unique data value (carry | message) and the
+    /// padding bit clear. The blocks are yielded in ascending order of their data value.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_crypto::integer_semantics::CiphertextBlockSpec;
+    /// let spec = CiphertextBlockSpec(1, 2); // 1 carry bit, 2 message bits
+    /// let blocks: Vec<_> = spec.iter_data_space().collect();
+    /// assert_eq!(blocks.len(), 8); // 2^(1+2) = 8
+    /// ```
+    pub fn iter_data_space(&self) -> impl Iterator<Item = EmulatedCiphertextBlock> {
+        (0..=self.data_mask()).map(|a| self.from_data(a))
+    }
+
+    /// Iterates over all blocks in the message space.
+    ///
+    /// Yields `2^message_size()` blocks, each with a unique message value and both carry and
+    /// padding bits clear. The blocks are yielded in ascending order of their message value.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_crypto::integer_semantics::CiphertextBlockSpec;
+    /// let spec = CiphertextBlockSpec(2, 3); // 2 carry bits, 3 message bits
+    /// let blocks: Vec<_> = spec.iter_message_space().collect();
+    /// assert_eq!(blocks.len(), 8); // 2^3 = 8
+    /// ```
+    pub fn iter_message_space(&self) -> impl Iterator<Item = EmulatedCiphertextBlock> {
+        (0..=self.message_mask()).map(|a| self.from_message(a))
+    }
+
+    /// Iterates over all blocks in the complete space.
+    ///
+    /// Yields `2^complete_size()` blocks covering every possible bit pattern including the
+    /// padding bit. The blocks are yielded in ascending order of their complete value.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_crypto::integer_semantics::CiphertextBlockSpec;
+    /// let spec = CiphertextBlockSpec(1, 2); // 1 carry bit, 2 message bits, 1 padding bit
+    /// let blocks: Vec<_> = spec.iter_complete_space().collect();
+    /// assert_eq!(blocks.len(), 16); // 2^(1+2+1) = 16
+    /// ```
+    pub fn iter_complete_space(&self) -> impl Iterator<Item = EmulatedCiphertextBlock> {
+        (0..=self.complete_mask()).map(|a| self.from_complete(a))
     }
 }

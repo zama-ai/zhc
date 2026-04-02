@@ -1,1183 +1,631 @@
-#![allow(non_snake_case)]
-use zhc_utils::SafeAs;
-
-use super::super::{EmulatedCiphertextBlock, EmulatedCiphertextBlockStorage};
-
-const CMP_INFERIOR: EmulatedCiphertextBlockStorage = 0;
-const CMP_EQUAL: EmulatedCiphertextBlockStorage = 1;
-const CMP_SUPERIOR: EmulatedCiphertextBlockStorage = 2;
-
-pub fn None_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    block
-}
-
-pub fn MsgOnly_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    block.mask_message()
-}
-
-pub fn CarryOnly_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    block.mask_carry()
-}
-
-pub fn CarryInMsg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    block.move_carry_to_message()
-}
-
-pub fn MultCarryMsg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let carry_val = block.move_carry_to_message().raw_mask_message();
-    let msg_val = block.raw_mask_message();
-    block
-        .spec
-        .from_data((carry_val * msg_val) & block.spec.data_mask())
-}
-
-pub fn MultCarryMsgLsb_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let carry_val = block.move_carry_to_message().raw_mask_message();
-    let msg_val = block.raw_mask_message();
-    block
-        .spec
-        .from_message((carry_val * msg_val) & block.spec.message_mask())
-}
-
-pub fn MultCarryMsgMsb_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let carry_val = block.move_carry_to_message().raw_mask_message();
-    let msg_val = block.raw_mask_message();
-    let result = ((carry_val * msg_val) >> block.spec.message_size()) & block.spec.message_mask();
-    block.spec.from_message(result)
-}
-
-pub fn BwAnd_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let carry_val = block.move_carry_to_message().raw_mask_message();
-    let msg_val = block.raw_mask_message();
-    block
-        .spec
-        .from_message((carry_val & msg_val) & block.spec.message_mask())
-}
-
-pub fn BwOr_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let carry_val = block.move_carry_to_message().raw_mask_message();
-    let msg_val = block.raw_mask_message();
-    block
-        .spec
-        .from_message((carry_val | msg_val) & block.spec.message_mask())
-}
-
-pub fn BwXor_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let carry_val = block.move_carry_to_message().raw_mask_message();
-    let msg_val = block.raw_mask_message();
-    block
-        .spec
-        .from_message((carry_val ^ msg_val) & block.spec.message_mask())
-}
-
-pub fn CmpSign_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    // Signed comparison with 0. Based on behavior of negacyclic function.
-    // Example for Padding| 4bit digits (i.e 2msg2Carry)
-    // 1|xxxx -> SignLut -> -1 -> 0|1111
-    // x|0000 -> SignLut ->  0 -> 0|0000
-    // 0|xxxx -> SignLut ->  1 -> 0|0001
-    let result = if block.storage != 0 { 1 } else { 0 };
-    block.spec.from_message(result)
-    // WARN: in practice return value with padding that could encode -1, 0, 1
-    //       But should always be follow by an add to reach back range 0, 1, 2
-    //       To ease degree handling considered an output degree of 1 to obtain
-    //       degree 2 after add
-    // Not a perfect solution but the easiest to prevent degree error
-}
-
-pub fn CmpReduce_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    // Carry contain MSB cmp result, msg LSB cmp result
-    // Reduction is made from lsb to msb as follow
-    // MSB      | LSB | Out
-    // Inferior | x   | Inferior
-    // Equal    | x   | x
-    // Superior | x   | Superior
-    let carry_field = (block.storage & block.spec.carry_mask()) >> block.spec.message_size();
-    let msg_field = block.storage & block.spec.message_mask();
-    let result = match (carry_field, msg_field) {
-        (CMP_EQUAL, lsb_cmp) => lsb_cmp,
-        _ => carry_field,
-    };
-    block.spec.from_message(result)
-}
-
-pub fn CmpGt_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let result = match block.raw_mask_message() {
-        CMP_SUPERIOR => 1,
-        _ => 0,
-    };
-    block.spec.from_message(result)
-}
-
-pub fn CmpGte_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let result = match block.raw_mask_message() {
-        CMP_SUPERIOR | CMP_EQUAL => 1,
-        _ => 0,
-    };
-    block.spec.from_message(result)
-}
-
-// Could be merge with Gt/Gte
-pub fn CmpLt_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let result = match block.raw_mask_message() {
-        CMP_INFERIOR => 1,
-        _ => 0,
-    };
-    block.spec.from_message(result)
-}
-
-pub fn CmpLte_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let result = match block.raw_mask_message() {
-        CMP_INFERIOR | CMP_EQUAL => 1,
-        _ => 0,
-    };
-    block.spec.from_message(result)
-}
-
-pub fn CmpEq_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let result = match block.raw_mask_message() {
-        CMP_EQUAL => 1,
-        _ => 0,
-    };
-    block.spec.from_message(result)
-}
-
-pub fn CmpNeq_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let result = match block.raw_mask_message() {
-        CMP_EQUAL => 0,
-        _ => 1,
-    };
-    block.spec.from_message(result)
-}
-
-pub fn ManyGenProp_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let carry_val = block.move_carry_to_message().raw_mask_message();
-    let msg_val = block.raw_mask_message();
-    let result = (carry_val << 1) |                                   // Generate
-                 ((msg_val == block.spec.message_mask()).sas::<EmulatedCiphertextBlockStorage>()); // Propagate
-    block.spec.from_data(result)
-}
-
-pub fn ManyGenProp_1(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    block.mask_message()
-}
-
-pub fn ReduceCarry2_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let carry = block.storage >> 2;
-    let prop = (block.storage & 3 == 3).sas::<EmulatedCiphertextBlockStorage>();
-    block.spec.from_data((carry << 1) | prop)
-}
-
-pub fn ReduceCarry3_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let carry = block.storage >> 3;
-    let prop = (block.storage & 7 == 7).sas::<EmulatedCiphertextBlockStorage>();
-    block.spec.from_data((carry << 1) | prop)
-}
-
-pub fn ReduceCarryPad_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    // This corresponds to the accumulated propagation status
-    // of 4 consecutive blocks.
-    // !! The padding bit is used.
-    // +1 must be done after this PBS to retrieve the propagation status value.
-    // 0_1111 => 0_0000 + 1 => 1 Propagate
-    // 0_xxxx -> 1_1111 + 1 => 0 No carry
-    // 1_xxxx -> 0_0001 + 1 => 2 Generate
-    let result = if block.storage == block.spec.data_mask() {
-        0
-    } else {
-        block.spec.complete_mask()
-    };
-
-    block.spec.from_complete(result)
-}
-
-pub fn GenPropAdd_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let lhs = block.raw_mask_message();
-    let rhs = block.move_carry_to_message().raw_mask_message();
-    let rhs_gen = rhs >> 1;
-
-    block
-        .spec
-        .from_message((lhs + rhs_gen) & block.spec.message_mask())
-}
-
-pub fn IfTrueZeroed_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let value = block.raw_mask_message();
-    let cond = block.move_carry_to_message().raw_mask_message();
-
-    let result = if cond != 0 { 0 } else { value };
-    block.spec.from_message(result)
-}
-
-pub fn IfFalseZeroed_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let value = block.raw_mask_message();
-    let cond = block.move_carry_to_message().raw_mask_message();
-
-    let result = if cond != 0 { value } else { 0 };
-    block.spec.from_message(result)
-}
-
-pub fn Ripple2GenProp_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let result = block.raw_mask_message() * 2;
-    block.spec.from_data(result)
-}
-
-pub fn ManyCarryMsg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    block.spec.from_message(block.raw_mask_message())
-}
-
-pub fn ManyCarryMsg_1(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let result = block.storage >> block.spec.message_size();
-    block.spec.from_data(result)
-}
-
-pub fn CmpGtMrg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let carry_field = block.move_carry_to_message().raw_mask_message();
-    let msg_field = block.raw_mask_message();
-
-    let result = match (carry_field, msg_field) {
-        (CMP_SUPERIOR, _) | (CMP_EQUAL, CMP_SUPERIOR) => 1,
-        _ => 0,
-    };
-
-    block.spec.from_message(result)
-}
-
-pub fn CmpGteMrg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let carry_field = block.move_carry_to_message().raw_mask_message();
-    let msg_field = block.raw_mask_message();
-
-    let result = match (carry_field, msg_field) {
-        (CMP_SUPERIOR, _) | (CMP_EQUAL, CMP_SUPERIOR) | (CMP_EQUAL, CMP_EQUAL) => 1,
-        _ => 0,
-    };
-
-    block.spec.from_message(result)
-}
-
-pub fn CmpLtMrg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let carry_field = block.move_carry_to_message().raw_mask_message();
-    let msg_field = block.raw_mask_message();
-
-    let result = match (carry_field, msg_field) {
-        (CMP_INFERIOR, _) | (CMP_EQUAL, CMP_INFERIOR) => 1,
-        _ => 0,
-    };
-
-    block.spec.from_message(result)
-}
-
-pub fn CmpLteMrg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let carry_field = block.move_carry_to_message().raw_mask_message();
-    let msg_field = block.raw_mask_message();
-
-    let result = match (carry_field, msg_field) {
-        (CMP_INFERIOR, _) | (CMP_EQUAL, CMP_INFERIOR) | (CMP_EQUAL, CMP_EQUAL) => 1,
-        _ => 0,
-    };
-
-    block.spec.from_message(result)
-}
-
-pub fn CmpEqMrg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let carry_field = block.move_carry_to_message().raw_mask_message();
-    let msg_field = block.raw_mask_message();
-
-    let result = match (carry_field, msg_field) {
-        (CMP_EQUAL, CMP_EQUAL) => 1,
-        _ => 0,
-    };
-
-    block.spec.from_message(result)
-}
-
-pub fn CmpNeqMrg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let carry_field = block.move_carry_to_message().raw_mask_message();
-    let msg_field = block.raw_mask_message();
-
-    let result = match (carry_field, msg_field) {
-        (CMP_EQUAL, CMP_EQUAL) => 0,
-        _ => 1,
-    };
-
-    block.spec.from_message(result)
-}
-
-pub fn IsSome_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let result = if block.storage != 0 { 1 } else { 0 };
-    block.spec.from_message(result)
-}
-
-pub fn CarryIsSome_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let carry_field = block.move_carry_to_message().raw_mask_message();
-    let result = if carry_field != 0 { 1 } else { 0 };
-    block.spec.from_message(result)
-}
-
-pub fn CarryIsNone_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let carry_field = block.move_carry_to_message().raw_mask_message();
-    let result = if carry_field != 0 { 0 } else { 1 };
-    block.spec.from_message(result)
-}
-
-pub fn MultCarryMsgIsSome_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let carry_val = block.move_carry_to_message().raw_mask_message();
-    let msg_val = block.raw_mask_message();
-    let carry_x_msg = (carry_val * msg_val) & block.spec.data_mask();
-
-    let result = if carry_x_msg != 0 { 1 } else { 0 };
-    block.spec.from_message(result)
-}
-
-pub fn MultCarryMsgMsbIsSome_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let carry_val = block.move_carry_to_message().raw_mask_message();
-    let msg_val = block.raw_mask_message();
-    let mul_msb = ((carry_val * msg_val) >> block.spec.message_size()) & block.spec.message_mask();
-
-    let result = if mul_msb != 0 { 1 } else { 0 };
-    block.spec.from_message(result)
-}
-
-pub fn IsNull_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let carry_field = block.move_carry_to_message().raw_mask_message();
-    let msg_field = block.raw_mask_message();
-
-    let result = match (carry_field.sas::<usize>(), msg_field.sas::<usize>()) {
-        (0, 0) => 1,
-        _ => 0,
-    };
-
-    block.spec.from_message(result)
-}
-
-pub fn IsNullPos1_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    // Output boolean at bit position 1 instead of 0
-    let carry_field = block.move_carry_to_message().raw_mask_message();
-    let msg_field = block.raw_mask_message();
-
-    let result = match (carry_field, msg_field) {
-        (0, 0) => 1 << 1,
-        _ => 0,
-    };
-
-    block.spec.from_message(result)
-}
-
-pub fn NotNull_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let carry_field = block.move_carry_to_message().raw_mask_message();
-    let msg_field = block.raw_mask_message();
-
-    let result = match (carry_field, msg_field) {
-        (0, 0) => 0,
-        _ => 1,
-    };
-
-    block.spec.from_message(result)
-}
-
-pub fn MsgNotNull_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let msg_field = block.raw_mask_message();
-
-    let result = match msg_field {
-        0 => 0,
-        _ => 1,
-    };
-
-    block.spec.from_message(result)
-}
-
-pub fn MsgNotNullPos1_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    // Return the null (0) or not null (1)
-    // status of the msg part.
-    // Put the result at position 1.
-    let msg_field = block.raw_mask_message();
-
-    let result = match msg_field {
-        0 => 0,
-        _ => 1 << 1,
-    };
-
-    block.spec.from_message(result)
-}
-
-pub fn ManyMsgSplitShift1_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    // Use manyLUT : split msg in halves, inverse their position
-    // in the message, and  output them separately.
-    let lsb_size = (block.spec.message_size()).div_ceil(2);
-    let msg_lsb = block.raw_mask_message() & ((1 << lsb_size) - 1);
-
-    block.spec.from_message(msg_lsb << lsb_size)
-}
-
-pub fn ManyMsgSplitShift1_1(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let lsb_size = block.spec.message_size().div_ceil(2);
-    let result = block.raw_mask_message() >> lsb_size; // msg_msb
-
-    block.spec.from_message(result)
-}
-
-pub fn SolvePropGroupFinal0_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    // Solve the propagation status of
-    // of 4 blocks.
-    // The input contains the sum of the propagate status
-    // of (position + 1) blocks + the carry of previous group.
-    // The result depends on the position to solve. Here we solve position 0.
-    // The output value is then directly the carry.
-    // 1/0 + [0]
-    // 0x => NO_CARRY(0)
-    // 1x => GENERATE(1)
-    let position = 0;
-    let pos_w = position + 2;
-    let result = (block.storage >> (pos_w - 1)) & 1; // msb
-    block.spec.from_message(result)
-}
-
-pub fn SolvePropGroupFinal1_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    // Solve the propagation status of
-    // of 4 blocks.
-    // The input contains the sum of the propagate status
-    // of (position + 1) blocks + the carry of previous group.
-    // The result depends on the position to solve. Here we solve position 1.
-    // The output value is then directly the carry.
-    // 1/0 + + [0] + [1] << 1
-    // 0xx => NO_CARRY(0)
-    // 1xx => GENERATE(1)
-    let position = 1;
-    let pos_w = position + 2;
-    let result = (block.storage >> (pos_w - 1)) & 1; // msb
-    block.spec.from_message(result)
-}
-
-pub fn SolvePropGroupFinal2_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    // Solve the propagation status of
-    // of 4 blocks.
-    // The input contains the sum of the propagate status
-    // of (position + 1) blocks + the carry of previous group.
-    // The result depends on the position to solve. Here we solve position 2.
-    // The output value is then directly the carry.
-    // 1/0 + [0] + [1] << 1 + [2] << 2
-    // 0xxx => NO_CARRY(0)
-    // 1xxx => GENERATE(1)
-    let position = 2;
-    let pos_w = position + 2;
-    let result = (block.storage >> (pos_w - 1)) & 1; // msb
-    block.spec.from_message(result)
-}
-
-pub fn ExtractPropGroup0_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    // Extract propagation status and
-    // set the value at the correct position location.
-    // Here the position is 0.
-    let position = 0;
-    let msg = block.raw_mask_message();
-    let carry = block.move_carry_to_message().raw_mask_message() & 1;
-
-    let result = if carry == 1 {
-        2 << position // Generate
-    } else if msg == block.spec.message_mask() {
-        1 << position // Propagate
-    } else {
-        0 << position // No carry
-    };
-
-    block.spec.from_message(result)
-}
-
-pub fn ExtractPropGroup1_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    // Extract propagation status and
-    // set the value at the correct position location.
-    // Here the position is 1.
-    let position = 1;
-    let msg = block.raw_mask_message();
-    let carry = block.move_carry_to_message().raw_mask_message() & 1;
-
-    let result = if carry == 1 {
-        2 << position // Generate
-    } else if msg == block.spec.message_mask() {
-        1 << position // Propagate
-    } else {
-        0 << position // No carry
-    };
-
-    block.spec.from_data(result)
-}
-
-pub fn ExtractPropGroup2_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    // Extract propagation status and
-    // set the value at the correct position location.
-    // Here the position is 2.
-    let position = 2;
-    let msg = block.raw_mask_message();
-    let carry = block.move_carry_to_message().raw_mask_message() & 1;
-
-    let result = if carry == 1 {
-        2 << position // Generate
-    } else if msg == block.spec.message_mask() {
-        1 << position // Propagate
-    } else {
-        0 << position // No carry
-    };
-
-    block.spec.from_data(result)
-}
-
-pub fn ExtractPropGroup3_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    // Extract propagation status and
-    // set the value at the correct position location.
-    // Here the position is 3.
-    let position = 3;
-    let msg = block.raw_mask_message();
-    let carry = block.move_carry_to_message().raw_mask_message() & 1;
-
-    let result = if carry == 1 {
-        2 << position // Generate
-    } else if msg == block.spec.message_mask() {
-        1 << position // Propagate
-    } else {
-        0 << position // No carry
-    };
-
-    block.spec.from_complete(result)
-}
-
-pub fn SolveProp_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    // Solve the propagation status.
-    // 2 propagation status are stored in the input:
-    // MSB : propagation to solved
-    // LSB : neighbor's propagation
-    let msb = block.move_carry_to_message().raw_mask_message();
-    let lsb = block.raw_mask_message();
-
-    let result = if msb == 1 {
-        // Propagate
-        lsb
-    } else {
-        msb
-    };
-
-    block.spec.from_message(result)
-}
-
-pub fn SolvePropCarry_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    // Solve the propagation status.
-    // A propagation status and a carry are stored in the input:
-    // Output a carry value.
-    // MSB : propagation to solved
-    // LSB : neighbor's carry bit
-    let msb = block.move_carry_to_message().raw_mask_message();
-    let lsb = block.raw_mask_message();
-
-    let result = if msb == 1 {
-        // Propagate
-        lsb
-    } else {
-        msb >> 1 // Since generate equals 2. Here we want a carry output
-    };
-
-    block.spec.from_message(result)
-}
-
-pub fn SolveQuotient_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    // Solve the quotient of a division.
-    // The input contains the sum of 4 bits, representing the comparison of current remaining
-    // and the different multiples of the divider.
-    // Note that the values form a multi-hot. Therefore, their sum
-    // gives the value of the divider quotient, that corresponds to the remaining.
-    // 'b0000 => 3 (sum = 0)
-    // 'b1000 => 2 (sum = 1)
-    // 'b1100 => 1 (sum = 2)
-    // 'b1110 => 0 (sum = 3)
-    let v = block.raw_mask_data();
-
-    let result = match v.sas::<usize>() {
-        0 => 3,
-        1 => 2,
-        2 => 1,
-        3 => 0,
-        _ => 0,
-        //_  => panic!("Unknown quotient value {}!",v) // should not end here
-    };
-
-    block.spec.from_message(result)
-}
-
-pub fn SolveQuotientPos1_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    // Solve the quotient of a division.
-    // The input contains the sum of 4 bits, representing the comparison of current remaining
-    // and the different multiples of the divider.
-    // Note that the comparison stored in position 1 instead of 0.
-    // Therefore the sum value is doubled.
-    // Note that the values form a multi-hot. Therefore, their sum
-    // gives the value of the divider quotient, that corresponds to the remaining.
-    // 'b0000 => 3 (sum = 0*2)
-    // 'b1000 => 2 (sum = 1*2)
-    // 'b1100 => 1 (sum = 2*2)
-    // 'b1110 => 0 (sum = 3*2)
-    let v = block.raw_mask_data();
-
-    let result = match v {
-        0 => 3,
-        2 => 2,
-        4 => 1,
-        6 => 0,
-        _ => 0,
-        //_  => panic!("Unknown quotient value {}!",v) // should not end here
-    };
-
-    block.spec.from_message(result)
-}
-
-pub fn IfPos1FalseZeroed_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    // Ct must contain CondCt in Carry bit 1 and ValueCt in Msg. If condition it's *FALSE*, value ct
-    // is forced to 0
-    let value = block.raw_mask_message();
-    let cond = (block.storage >> (block.spec.message_size() + 1)) & 1;
-
-    let result = if cond != 0 { value } else { 0 };
-    block.spec.from_message(result)
-}
-
-pub fn IfPos1FalseZeroedMsgCarry1_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    // Ct must contain CondCt in Carry bit 1
-    // and ValueCt in Msg + 1 carry bit. If condition it's *FALSE*, value ct is forced to 0
-    let value = block.storage & (block.spec.message_mask() * 2 + 1);
-    let cond = (block.storage >> (block.spec.message_size() + 1)) & 1;
-
-    let result = if cond != 0 { value } else { 0 };
-    block.spec.from_data(result)
-}
-
-// Shift related Pbs
-pub fn ShiftLeftByCarryPos0Msg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    // Ct must contain shift amount only bit 1 considered
-    let value = block.raw_mask_message();
-    let shift = block.move_carry_to_message().raw_mask_message() & 0x1;
-
-    let result = (value << shift) & block.spec.message_mask();
-    block.spec.from_message(result)
-}
-
-pub fn ShiftLeftByCarryPos0MsgNext_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    // Ct must contain shift amount only bit 1 considered
-    let value = block.raw_mask_message();
-    let shift = block.move_carry_to_message().raw_mask_message() & 0x1;
-
-    let result = ((value << shift) & block.spec.carry_mask()) >> block.spec.message_size();
-    block.spec.from_message(result)
-}
-
-pub fn ShiftRightByCarryPos0Msg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    // Ct must contain shift amount only bit 1 considered
-    let value = block.raw_mask_message();
-    let shift = block.move_carry_to_message().raw_mask_message() & 0x1;
-
-    let result = (value >> shift) & block.spec.message_mask();
-    block.spec.from_message(result)
-}
-
-pub fn ShiftRightByCarryPos0MsgNext_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    // Ct must contain shift amount only bit 1 considered
-    // NB: MsgNext with right shift is the content of blk at the right position (i.e. LSB side)
-    let value = block.raw_mask_message();
-    let shift = block.move_carry_to_message().raw_mask_message() & 0x1;
-
-    let result = ((value << block.spec.message_size()) >> shift) & block.spec.message_mask();
-    block.spec.from_message(result)
-}
-
-pub fn IfPos0TrueZeroed_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    // Ct must contain CondCt in Carry[0] and ValueCt in Msg. If condition it's *TRUE*, value ct is
-    // forced to 0
-    let value = block.raw_mask_message();
-    let cond = block.move_carry_to_message().raw_mask_message() & 0x1;
-
-    let result = if cond != 0 { 0 } else { value };
-    block.spec.from_message(result)
-}
-
-pub fn IfPos0FalseZeroed_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    // Ct must contain CondCt in Carry[0] and ValueCt in Msg. If condition it's *FALSE*, value ct is
-    // forced to 0
-    let value = block.raw_mask_message();
-    let cond = block.move_carry_to_message().raw_mask_message() & 0x1;
-
-    let result = if cond != 0 { value } else { 0 };
-    block.spec.from_message(result)
-}
-
-// If then zero with condition in Carry0 or Carry1
-pub fn IfPos1TrueZeroed_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    // Ct must contain CondCt in Carry[1] and ValueCt in Msg. If condition it's *TRUE*, value ct is
-    // forced to 0
-    let value = block.raw_mask_message();
-    let cond = (block.move_carry_to_message().raw_mask_message() >> 1) & 0x1;
-
-    let result = if cond != 0 { 0 } else { value };
-    block.spec.from_message(result)
-}
-
-// NB: Lut IfPos1FalseZeroed already defined earlier
-pub fn ManyInv1CarryMsg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    // Proceed Inv - ct
-    // Extract message and carry using many LUT.
-    let inv = 1;
-    let mut value = block.storage & block.spec.data_mask();
-    let result = if value > inv {
-        0
-    } else {
-        value = inv - value;
-        value & block.spec.message_mask()
-    };
-
-    EmulatedCiphertextBlock {
-        storage: result,
-        spec: block.spec,
+use crate::integer_semantics::{CiphertextBlockSpec, EmulatedCiphertextBlock};
+use std::fmt::Debug;
+use std::hash::Hash;
+use zhc_utils::iter::CollectInVec;
+use zhc_utils::{Dumpable, SafeAs};
+
+/// Padding-bit assertion policy for LUT lookups.
+///
+/// In TFHE, the padding bit guards against negacyclic wraparound during a PBS. Depending
+/// on the operation being emulated, you may need to relax that guard on the input side,
+/// the output side, or both.
+///
+/// Each variant selectively relaxes the input and/or output padding-bit check.
+/// [`Protect`](Self::Protect) is the strictest mode (both ends checked);
+/// [`AllowBothPadding`](Self::AllowBothPadding) disables all assertions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum LookupCheck {
+    /// Assert both input and output padding bits are zero.
+    Protect,
+    /// Skip the input check; still assert the output padding bit is zero.
+    AllowInputPadding,
+    /// Skip the output check; still assert the input padding bit is zero.
+    AllowOutputPadding,
+    /// Skip both checks.
+    AllowBothPadding,
+}
+
+impl LookupCheck {
+    /// Returns `true` when the input padding bit must be zero.
+    pub fn should_check_input_padding(&self) -> bool {
+        matches!(self, LookupCheck::Protect | LookupCheck::AllowOutputPadding)
+    }
+
+    /// Returns `true` when the output padding bit must be zero.
+    pub fn should_check_output_padding(&self) -> bool {
+        matches!(self, LookupCheck::Protect | LookupCheck::AllowInputPadding)
     }
 }
 
-pub fn ManyInv1CarryMsg_1(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let inv = 1;
-    let mut value = block.storage & block.spec.data_mask();
-    let result = if value > inv {
-        0
-    } else {
-        value = inv - value;
-        value >> block.spec.message_size()
-    };
+/// A single-output lookup table for PBS emulation.
+///
+/// Encapsulates a precomputed lookup table that maps each possible data-space input to a single
+/// output block. The table is built from a closure at construction time and stored for efficient
+/// repeated evaluation.
+///
+/// When the input padding bit is set, the output undergoes negacyclic negation to emulate the
+/// behavior of real TFHE bootstrapping.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, lut::{Lut1, LookupCheck}};
+/// let spec = CiphertextBlockSpec(2, 4);
+///
+/// // Build a LUT that doubles the message value (mod 2^message_size)
+/// let double = Lut1::from_fn("double", spec, |b| {
+///     spec.from_message((b.raw_message_bits() * 2) & spec.message_mask())
+/// });
+///
+/// let input = spec.from_message(5);
+/// let output = double.lookup(input, LookupCheck::Protect);
+/// assert_eq!(output.raw_message_bits(), 10);
+/// ```
+#[derive(Clone)]
+pub struct Lut1 {
+    lut: Vec<EmulatedCiphertextBlock>,
+    name: String,
+    spec: CiphertextBlockSpec,
+}
 
-    EmulatedCiphertextBlock {
-        storage: result,
-        spec: block.spec,
+impl Lut1 {
+    /// Returns the name assigned to this LUT at construction.
+    pub fn name(&self) -> &str {
+        &self.name
     }
-}
 
-pub fn ManyInv2CarryMsg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    // Proceed Inv - ct
-    // Extract message and carry using many LUT.
-    let inv = 2;
-    let mut value = block.storage & block.spec.data_mask();
-    let result = if value > inv {
-        0
-    } else {
-        value = inv - value;
-        value & block.spec.message_mask()
-    };
-
-    EmulatedCiphertextBlock {
-        storage: result,
-        spec: block.spec,
+    /// Returns the block specification this LUT operates on.
+    pub fn spec(&self) -> &CiphertextBlockSpec {
+        &self.spec
     }
-}
 
-pub fn ManyInv2CarryMsg_1(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let inv = 2;
-    let mut value = block.storage & block.spec.data_mask();
-    let result = if value > inv {
-        0
-    } else {
-        value = inv - value;
-        value >> block.spec.message_size()
-    };
-
-    EmulatedCiphertextBlock {
-        storage: result,
-        spec: block.spec,
+    /// Constructs a LUT by evaluating a function over the entire data space.
+    ///
+    /// The function `f` is called once for each of the `2^data_size()` possible input values
+    /// (with padding bit clear). The results are stored for later lookup.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, lut::Lut1};
+    /// let spec = CiphertextBlockSpec(2, 4);
+    /// let identity = Lut1::from_fn("identity", spec, |b| b);
+    /// ```
+    pub fn from_fn(
+        name: impl AsRef<str>,
+        spec: CiphertextBlockSpec,
+        f: impl Fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
+    ) -> Self {
+        let name = name.as_ref().to_string();
+        let lut = spec.iter_data_space().map(f).covec();
+        assert_eq!(lut.len(), 2_usize.pow(spec.data_size().sas()));
+        Self { name, lut, spec }
     }
-}
 
-pub fn ManyInv3CarryMsg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    // Proceed Inv - ct
-    // Extract message and carry using many LUT.
-    let inv = 3;
-    let mut value = block.storage & block.spec.data_mask();
-    let result = if value > inv {
-        0
-    } else {
-        value = inv - value;
-        value & block.spec.message_mask()
-    };
-
-    EmulatedCiphertextBlock {
-        storage: result,
-        spec: block.spec,
-    }
-}
-
-pub fn ManyInv3CarryMsg_1(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let inv = 3;
-    let mut value = block.storage & block.spec.data_mask();
-    let result = if value > inv {
-        0
-    } else {
-        value = inv - value;
-        value >> block.spec.message_size()
-    };
-
-    EmulatedCiphertextBlock {
-        storage: result,
-        spec: block.spec,
-    }
-}
-
-pub fn ManyInv4CarryMsg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    // Proceed Inv - ct
-    // Extract message and carry using many LUT.
-    let inv = 4;
-    let mut value = block.storage & block.spec.data_mask();
-    let result = if value > inv {
-        0
-    } else {
-        value = inv - value;
-        value & block.spec.message_mask()
-    };
-
-    EmulatedCiphertextBlock {
-        storage: result,
-        spec: block.spec,
-    }
-}
-
-pub fn ManyInv4CarryMsg_1(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let inv = 4;
-    let mut value = block.storage & block.spec.data_mask();
-    let result = if value > inv {
-        0
-    } else {
-        value = inv - value;
-        value >> block.spec.message_size()
-    };
-
-    EmulatedCiphertextBlock {
-        storage: result,
-        spec: block.spec,
-    }
-}
-
-pub fn ManyInv5CarryMsg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    // Proceed Inv - ct
-    // Extract message and carry using many LUT.
-    let inv = 5;
-    let mut value = block.storage & block.spec.data_mask();
-    let result = if value > inv {
-        0
-    } else {
-        value = inv - value;
-        value & block.spec.message_mask()
-    };
-
-    EmulatedCiphertextBlock {
-        storage: result,
-        spec: block.spec,
-    }
-}
-
-pub fn ManyInv5CarryMsg_1(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let inv = 5;
-    let mut value = block.storage & block.spec.data_mask();
-    let result = if value > inv {
-        0
-    } else {
-        value = inv - value;
-        value >> block.spec.message_size()
-    };
-
-    EmulatedCiphertextBlock {
-        storage: result,
-        spec: block.spec,
-    }
-}
-
-pub fn ManyInv6CarryMsg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    // Proceed Inv - ct
-    // Extract message and carry using many LUT.
-    let inv = 6;
-    let mut value = block.storage & block.spec.data_mask();
-    let result = if value > inv {
-        0
-    } else {
-        value = inv - value;
-        value & block.spec.message_mask()
-    };
-
-    EmulatedCiphertextBlock {
-        storage: result,
-        spec: block.spec,
-    }
-}
-
-pub fn ManyInv6CarryMsg_1(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let inv = 6;
-    let mut value = block.storage & block.spec.data_mask();
-    let result = if value > inv {
-        0
-    } else {
-        value = inv - value;
-        value >> block.spec.message_size()
-    };
-
-    EmulatedCiphertextBlock {
-        storage: result,
-        spec: block.spec,
-    }
-}
-
-pub fn ManyInv7CarryMsg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    // Proceed Inv - ct
-    // Extract message and carry using many LUT.
-    let inv = 7;
-    let mut value = block.storage & block.spec.data_mask();
-    let result = if value > inv {
-        0
-    } else {
-        value = inv - value;
-        value & block.spec.message_mask()
-    };
-
-    EmulatedCiphertextBlock {
-        storage: result,
-        spec: block.spec,
-    }
-}
-
-pub fn ManyInv7CarryMsg_1(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let inv = 7;
-    let mut value = block.storage & block.spec.data_mask();
-    let result = if value > inv {
-        0
-    } else {
-        value = inv - value;
-        value >> block.spec.message_size()
-    };
-
-    EmulatedCiphertextBlock {
-        storage: result,
-        spec: block.spec,
-    }
-}
-
-pub fn ManyMsgSplit_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    // Use manyLUT : split msg in halves
-    let lsb_size = block.spec.message_size().div_ceil(2);
-
-    let result = block.raw_mask_message() & ((1 << lsb_size) - 1); // msg_lsb
-    block.spec.from_message(result)
-}
-
-pub fn ManyMsgSplit_1(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let lsb_size = block.spec.message_size().div_ceil(2);
-
-    let result = block.raw_mask_message() >> lsb_size; // msg_msb
-    block.spec.from_message(result)
-}
-
-pub fn Manym2lPropBit1MsgSplit_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    // Use ManyLut
-    // In carry part, contains the info if neighbor has a bit=1 (not null)
-    // or not (null).
-    // Propagate bits equal to 1 from msb to lsb.
-    // Split resulting message part into 2. Put both in lsb.
-    let mut c = block.storage & block.spec.carry_mask();
-    let mut m = block.storage & block.spec.message_mask();
-    let mut exp = 0;
-    // Expand from msb to lsb
-    for idx in (0..block.spec.message_size()).rev() {
-        let mut b = (m >> idx) & 1;
-        m &= (1 << idx) - 1;
-        if c > 0 {
-            b = 1;
-        } // propagate to lsb
-        if b == 1 {
-            c = 1;
+    /// Applies the LUT to an input block with the specified padding-bit policy.
+    ///
+    /// The input's data bits index into the precomputed table. If the input padding bit is set,
+    /// the raw table output is negacyclically negated to emulate TFHE's negacyclic polynomial
+    /// evaluation.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the input spec does not match this LUT's spec, if the input padding bit is set
+    /// and `check` requires it to be clear, or if the output padding bit is set and `check`
+    /// requires it to be clear.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, lut::{Lut1, LookupCheck}};
+    /// let spec = CiphertextBlockSpec(2, 4);
+    /// let lut = Lut1::from_fn("clear_carry", spec, |b| b.mask_message());
+    /// let result = lut.lookup(spec.from_data(0b11_0101), LookupCheck::Protect);
+    /// assert_eq!(result.raw_message_bits(), 0b0101);
+    /// ```
+    pub fn lookup(
+        &self,
+        inp: EmulatedCiphertextBlock,
+        check: LookupCheck,
+    ) -> EmulatedCiphertextBlock {
+        assert_eq!(inp.spec(), self.spec, "Spec mismatch.");
+        if check.should_check_input_padding() {
+            assert!(
+                !inp.has_active_padding_bit(),
+                "Encountered active padding bit in input when executing lookup with check {check:?}."
+            );
         }
-        exp += b << idx;
-    }
-    let lsb_size = block.spec.message_size().div_ceil(2);
-
-    EmulatedCiphertextBlock {
-        storage: exp & ((1 << lsb_size) - 1).sas::<EmulatedCiphertextBlockStorage>(), // msg_lsb
-        spec: block.spec,
+        let wop_inp = inp.raw_data_bits();
+        let mut output = self.lut[wop_inp.sas::<usize>()];
+        assert!(
+            output.storage >> inp.spec().complete_size() == 0,
+            "Lookup output is invalid."
+        );
+        if inp.has_active_padding_bit() {
+            output = output.neg();
+        }
+        if check.should_check_output_padding() {
+            assert!(
+                !output.has_active_padding_bit(),
+                "Encountered active padding bit in output when executing lookup with check {check:?}."
+            );
+        }
+        output
     }
 }
 
-pub fn Manym2lPropBit1MsgSplit_1(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let mut c = block.storage & block.spec.carry_mask();
-    let mut m = block.storage & block.spec.message_mask();
-    let mut exp = 0;
-    // Expand from msb to lsb
-    for idx in (0..block.spec.message_size()).rev() {
-        let mut b = (m >> idx) & 1;
-        m &= (1 << idx) - 1;
-        if c > 0 {
-            b = 1;
-        } // propagate to lsb
-        if b == 1 {
-            c = 1;
-        }
-        exp += b << idx;
-    }
-    let lsb_size = block.spec.message_size().div_ceil(2);
-
-    EmulatedCiphertextBlock {
-        storage: (exp & block.spec.message_mask()) >> lsb_size, // msg_msb
-        spec: block.spec,
+impl PartialEq for Lut1 {
+    fn eq(&self, other: &Self) -> bool {
+        self.lut == other.lut
     }
 }
 
-pub fn Manym2lPropBit0MsgSplit_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    // Use ManyLut
-    // In carry part, contains the info if neighbor has a bit=0 (not null)
-    // or not (null).
-    // Propagate bits equal to 0 from msb to lsb.
-    // Split resulting message part into 2. Put both in lsb.
-    let mut c = block.storage & block.spec.carry_mask();
-    let mut m = block.storage & block.spec.message_mask();
-    let mut exp = 0;
-    // Expand from msb to lsb
-    for idx in (0..block.spec.message_size()).rev() {
-        let mut b = (m >> idx) & 1;
-        m &= (1 << idx) - 1;
-        if c > 0 {
-            b = 0;
-        } // propagate to lsb
-        if b == 0 {
-            c = 1;
-        }
-        exp += b << idx;
-    }
-    let lsb_size = block.spec.message_size().div_ceil(2);
+impl Eq for Lut1 {}
 
-    EmulatedCiphertextBlock {
-        storage: exp & ((1 << lsb_size) - 1), // msg_lsb
-        spec: block.spec,
+impl Debug for Lut1 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Lut1({:?})", self.name)
     }
 }
 
-pub fn Manym2lPropBit0MsgSplit_1(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let mut c = block.storage & block.spec.carry_mask();
-    let mut m = block.storage & block.spec.message_mask();
-    let mut exp = 0;
-    // Expand from msb to lsb
-    for idx in (0..block.spec.message_size()).rev() {
-        let mut b = (m >> idx) & 1;
-        m &= (1 << idx) - 1;
-        if c > 0 {
-            b = 0;
-        } // propagate to lsb
-        if b == 0 {
-            c = 1;
-        }
-        exp += b << idx;
-    }
-    let lsb_size = block.spec.message_size().div_ceil(2);
-
-    EmulatedCiphertextBlock {
-        storage: (exp & block.spec.message_mask()) >> lsb_size, // msg_msb
-        spec: block.spec,
+impl Hash for Lut1 {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.lut.hash(state);
     }
 }
 
-pub fn Manyl2mPropBit1MsgSplit_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    // Use ManyLut
-    // In carry part, contains the info if neighbor has a bit=1 (not null)
-    // or not (null).
-    // Propagate bits equal to 1 from lsb to msb.
-    // Split resulting message part into 2. Put both in lsb.
-    let mut c = block.storage & block.spec.carry_mask();
-    let mut m = block.storage & block.spec.message_mask();
-    let mut exp = 0;
-    // Expand from lsb to msb
-    for idx in 0..block.spec.message_size() {
-        let mut b = m & 1;
-        m >>= 1;
-        if c > 0 {
-            b = 1;
-        } // propagate to msb
-        if b == 1 {
-            c = 1;
+impl Dumpable for Lut1 {
+    fn dump_to_string(&self) -> String {
+        // Column width based on ctblock format: "p_cc_mmmm_ctblock"
+        let min_col_w = self.spec.complete_size() as usize + 4 + 8; // bits + separators + "_ctblock"
+        let title = format!("Lut1({:?}) @ {:?}", self.name, self.spec);
+        // For 2 columns: total = 2*(col_w+2) + 1 = 2*col_w + 5
+        // Ensure title fits: title.len() + 2 <= 2*col_w + 5
+        let col_w = min_col_w.max((title.len() + 2).saturating_sub(5).div_ceil(2));
+        let sep = "═".repeat(col_w + 2);
+        let total_w = 2 * col_w + 5;
+        let top = "═".repeat(total_w);
+        let mut result = format!("╔{top}╗\n║ {title}");
+        result.push_str(&" ".repeat(total_w - title.len() - 1));
+        result.push_str(&format!(
+            "║
+╠{sep}╦{sep}╣
+║ {:^col_w$} ║ {:^col_w$} ║
+╠{sep}╬{sep}╣",
+            "Input", "Output"
+        ));
+        for (i, out) in self.lut.iter().enumerate() {
+            let inp = self.spec.from_data(i.sas());
+            result.push_str(&format!(
+                "\n║ {:^col_w$} ║ {:^col_w$} ║",
+                inp.dump_to_string(),
+                out.dump_to_string()
+            ));
         }
-        exp += b << idx;
-    }
-    let lsb_size = block.spec.message_size().div_ceil(2);
-
-    EmulatedCiphertextBlock {
-        storage: exp & ((1 << lsb_size) - 1), // msg_lsb
-        spec: block.spec,
+        result.push_str(&format!("\n╚{sep}╩{sep}╝"));
+        result
     }
 }
 
-pub fn Manyl2mPropBit1MsgSplit_1(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let mut c = block.storage & block.spec.carry_mask();
-    let mut m = block.storage & block.spec.message_mask();
-    let mut exp = 0;
-    // Expand from lsb to msb
-    for idx in 0..block.spec.message_size() {
-        let mut b = m & 1;
-        m >>= 1;
-        if c > 0 {
-            b = 1;
-        } // propagate to msb
-        if b == 1 {
-            c = 1;
-        }
-        exp += b << idx;
-    }
-    let lsb_size = block.spec.message_size().div_ceil(2);
+/// A two-output lookup table for many-LUT PBS emulation.
+///
+/// Encapsulates a precomputed lookup table that evaluates two functions simultaneously on the
+/// same input, returning both results. This emulates the TFHE "many-LUT" optimization where
+/// multiple outputs can be extracted from a single PBS operation by packing sub-tables into
+/// different regions of the polynomial.
+///
+/// The input must have its padding bit clear **and** its second-to-last data bit (the "many-LUT
+/// index bit") clear. These bits are reserved for the many-LUT encoding.
+///
+/// Unlike [`Lut1`], this type does not support `AllowInputPadding` or `AllowBothPadding` modes
+/// because the many-LUT encoding requires strict control over the input bit layout.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, lut::{Lut2, LookupCheck}};
+/// let spec = CiphertextBlockSpec(2, 4);
+///
+/// // Build a LUT that returns message and carry separately
+/// let split = Lut2::from_fn(
+///     "split_msg_carry",
+///     spec,
+///     |b| spec.from_message(b.raw_message_bits()),  // first output: message
+///     |b| spec.from_message(b.raw_carry_bits()),    // second output: carry
+/// );
+///
+/// let input = spec.from_data(0b01_0101); // carry=1, message=5
+/// let (msg, carry) = split.lookup(input, LookupCheck::Protect);
+/// assert_eq!(msg.raw_message_bits(), 5);
+/// assert_eq!(carry.raw_message_bits(), 1);
+/// ```
+#[derive(Clone)]
+pub struct Lut2 {
+    lut: Vec<EmulatedCiphertextBlock>,
+    name: String,
+    spec: CiphertextBlockSpec,
+}
 
-    EmulatedCiphertextBlock {
-        storage: (exp & block.spec.message_mask()) >> (lsb_size.sas::<u8>()), // msg_msb
-        spec: block.spec,
+impl Lut2 {
+    /// Returns the name assigned to this LUT at construction.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Returns the block specification this LUT operates on.
+    pub fn spec(&self) -> &CiphertextBlockSpec {
+        &self.spec
+    }
+
+    /// Constructs a two-output LUT by evaluating two functions over valid inputs.
+    ///
+    /// Both functions are called for each valid input (those with the many-LUT index bit clear).
+    /// The results are interleaved in the internal table to enable simultaneous lookup.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, lut::Lut2};
+    /// let spec = CiphertextBlockSpec(2, 4);
+    /// let lut = Lut2::from_fn("dual_identity", spec, |b| b, |b| b);
+    /// ```
+    pub fn from_fn(
+        name: impl AsRef<str>,
+        spec: CiphertextBlockSpec,
+        f1: impl Fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
+        f2: impl Fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
+    ) -> Self {
+        let name = name.as_ref().to_string();
+        let lut = spec
+            .iter_data_space()
+            .filter(|c| !c.has_active_last_ith_bit(1))
+            .map(|c| f1(c))
+            .chain(
+                spec.iter_data_space()
+                    .filter(|c| !c.has_active_last_ith_bit(1))
+                    .map(|c| f2(c)),
+            )
+            .covec();
+        assert_eq!(lut.len(), 2_usize.pow(spec.data_size().sas()));
+        Self { name, lut, spec }
+    }
+
+    /// Applies the LUT to an input block, returning both output values.
+    ///
+    /// The input must have both the padding bit and the many-LUT index bit (second-to-last data
+    /// bit) clear. The first output comes from `f1`, the second from `f2`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the input spec does not match, if the padding bit is set, if the many-LUT index
+    /// bit is set, if `check` is `AllowInputPadding` or `AllowBothPadding` (not supported), or if
+    /// any output padding bit is set and `check` requires it to be clear.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, lut::{Lut2, LookupCheck}};
+    /// let spec = CiphertextBlockSpec(2, 4);
+    /// let lut = Lut2::from_fn("add_sub", spec,
+    ///     |b| spec.from_message((b.raw_message_bits() + 1) & spec.message_mask()),
+    ///     |b| spec.from_message(b.raw_message_bits().wrapping_sub(1) & spec.message_mask()),
+    /// );
+    /// let (plus, minus) = lut.lookup(spec.from_message(5), LookupCheck::Protect);
+    /// assert_eq!(plus.raw_message_bits(), 6);
+    /// assert_eq!(minus.raw_message_bits(), 4);
+    /// ```
+    pub fn lookup(
+        &self,
+        inp: EmulatedCiphertextBlock,
+        check: LookupCheck,
+    ) -> (EmulatedCiphertextBlock, EmulatedCiphertextBlock) {
+        assert_eq!(inp.spec(), self.spec, "Spec mismatch.");
+        assert!(
+            matches!(
+                check,
+                LookupCheck::Protect | LookupCheck::AllowOutputPadding
+            ),
+            "Encountered incompatible check for many-lut lookup"
+        );
+        assert!(
+            !inp.has_active_padding_bit(),
+            "Encountered active padding bit in input when executing lookup2."
+        );
+        assert!(
+            !inp.has_active_last_ith_bit(1),
+            "Encountered active many lut bit in input when executing lookup2."
+        );
+
+        let wop_inp = inp.raw_data_bits();
+        let output1 = self.lut[wop_inp.sas::<usize>()];
+        assert!(
+            output1.storage >> inp.spec().complete_size() == 0,
+            "Lookup output is invalid."
+        );
+        let output2 = self.lut[wop_inp.sas::<usize>() + self.lut.len() / 2];
+        assert!(
+            output2.storage >> inp.spec().complete_size() == 0,
+            "Lookup output is invalid."
+        );
+        if check.should_check_output_padding() {
+            assert!(
+                !output1.has_active_padding_bit(),
+                "Encountered active padding bit in output when executing lookup2."
+            );
+            assert!(
+                !output2.has_active_padding_bit(),
+                "Encountered active padding bit in output when executing lookup2."
+            );
+        }
+        (output1, output2)
     }
 }
 
-pub fn Manyl2mPropBit0MsgSplit_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    // Use ManyLut
-    // In carry part, contains the info if neighbor has a bit=0 (not null)
-    // or not (null).
-    // Propagate bits equal to 0 from lsb to msb.
-    // Split resulting message part into 2. Put both in lsb.
-    let mut c = block.storage & block.spec.carry_mask();
-    let mut m = block.storage & block.spec.message_mask();
-    let mut exp = 0;
-    // Expand from lsb to msb
-    for idx in 0..block.spec.message_size() {
-        let mut b = m & 1;
-        m >>= 1;
-        if c > 0 {
-            b = 0;
-        } // propagate to msb
-        if b == 0 {
-            c = 1;
-        }
-        exp += b << idx;
-    }
-    let lsb_size = block.spec.message_size().div_ceil(2);
-
-    EmulatedCiphertextBlock {
-        storage: exp & ((1 << lsb_size) - 1), // msg_lsb
-        spec: block.spec,
+impl PartialEq for Lut2 {
+    fn eq(&self, other: &Self) -> bool {
+        self.lut == other.lut
     }
 }
 
-pub fn Manyl2mPropBit0MsgSplit_1(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let mut c = block.storage & block.spec.carry_mask();
-    let mut m = block.storage & block.spec.message_mask();
-    let mut exp = 0;
-    // Expand from lsb to msb
-    for idx in 0..block.spec.message_size() {
-        let mut b = m & 1;
-        m >>= 1;
-        if c > 0 {
-            b = 0;
-        } // propagate to msb
-        if b == 0 {
-            c = 1;
-        }
-        exp += b << idx;
-    }
-    let lsb_size = block.spec.message_size().div_ceil(2);
+impl Eq for Lut2 {}
 
-    EmulatedCiphertextBlock {
-        storage: (exp & block.spec.message_mask()) >> (lsb_size.sas::<u8>()), // msg_msb
-        spec: block.spec,
+impl Debug for Lut2 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Lut2({:?})", self.name)
+    }
+}
+
+impl Hash for Lut2 {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.lut.hash(state);
+    }
+}
+
+impl Dumpable for Lut2 {
+    fn dump_to_string(&self) -> String {
+        let half = self.lut.len() / 2;
+        let min_col_w = self.spec.complete_size() as usize + 4 + 8;
+        let title = format!("Lut2({:?}) @ {:?}", self.name, self.spec);
+        // For 3 columns: total = 3*(col_w+2) + 2 = 3*col_w + 8
+        // Ensure title fits: title.len() + 2 <= 3*col_w + 8
+        let col_w = min_col_w.max((title.len() + 2).saturating_sub(8).div_ceil(3));
+        let sep = "═".repeat(col_w + 2);
+        let total_w = 3 * col_w + 8;
+        let top = "═".repeat(total_w);
+        let mut result = format!("╔{top}╗\n║ {title}");
+        result.push_str(&" ".repeat(total_w - title.len() - 1));
+        result.push_str(&format!(
+            "║
+╠{sep}╦{sep}╦{sep}╣
+║ {:^col_w$} ║ {:^col_w$} ║ {:^col_w$} ║
+╠{sep}╬{sep}╬{sep}╣",
+            "Input", "Out₁", "Out₂"
+        ));
+        for i in 0..half {
+            let inp = self.spec.from_data(i.sas());
+            let out1 = &self.lut[i];
+            let out2 = &self.lut[i + half];
+            result.push_str(&format!(
+                "\n║ {:^col_w$} ║ {:^col_w$} ║ {:^col_w$} ║",
+                inp.dump_to_string(),
+                out1.dump_to_string(),
+                out2.dump_to_string()
+            ));
+        }
+        result.push_str(&format!("\n╚{sep}╩{sep}╩{sep}╝"));
+        result
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::integer_semantics::CiphertextBlockSpec;
+
+    #[test]
+    fn test_lookup_identity_with_clean_padding() {
+        let spec = CiphertextBlockSpec(2, 4);
+        let lut = Lut1::from_fn("test", spec, |x| x);
+        for c in spec.iter_data_space() {
+            let result = lut.lookup(c, LookupCheck::AllowBothPadding);
+            if c.raw_padding_bits() == 1 {
+                assert_eq!(result, c.neg());
+            } else {
+                assert_eq!(result, c);
+            }
+        }
+    }
+
+    #[test]
+    fn test_lookup_applies_lut_function() {
+        let spec = CiphertextBlockSpec(2, 4);
+        let lut = Lut1::from_fn("test", spec, |x| x.spec().from_message(7));
+        for c in spec.iter_data_space() {
+            let result = lut.lookup(c, LookupCheck::Protect);
+            assert_eq!(result, spec.from_message(7));
+        }
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Encountered active padding bit in input when executing lookup with check Protect."
+    )]
+    fn test_lookup_protect_panics_on_input_padding_set() {
+        let spec = CiphertextBlockSpec(2, 4);
+        let inp = spec.from_complete(1 << spec.data_size()); // padding bit set
+        let lut = Lut1::from_fn("test", spec, |x| x);
+        let _ = lut.lookup(inp, LookupCheck::Protect);
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Encountered active padding bit in output when executing lookup with check Protect."
+    )]
+    fn test_lookup_protect_panics_on_output_padding_set() {
+        let spec = CiphertextBlockSpec(2, 4);
+        let inp = spec.from_message(0);
+        let lut = Lut1::from_fn("test", spec, |x| {
+            x.spec().from_complete(1 << spec.data_size())
+        });
+        let _ = lut.lookup(inp, LookupCheck::Protect);
+    }
+
+    #[test]
+    fn test_lookup_allow_input_padding_does_not_panic_on_input_padding() {
+        let spec = CiphertextBlockSpec(2, 4);
+        // Should not panic; negacyclic wraparound may apply
+        let lut = Lut1::from_fn("test", spec, |_| spec.from_message(0));
+        for c in spec.iter_complete_space() {
+            let _ = lut.lookup(c, LookupCheck::AllowInputPadding);
+        }
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Encountered active padding bit in output when executing lookup with check AllowInputPadding."
+    )]
+    fn test_lookup_allow_input_padding_still_panics_on_output_padding() {
+        let spec = CiphertextBlockSpec(2, 4);
+        let inp = spec.from_message(0);
+        let lut = Lut1::from_fn("test", spec, |x| {
+            x.spec().from_complete(1 << spec.data_size())
+        });
+        lut.lookup(inp, LookupCheck::AllowInputPadding);
+    }
+
+    #[test]
+    fn test_lookup_allow_output_padding_does_not_panic_on_output_padding() {
+        let spec = CiphertextBlockSpec(2, 4);
+        let lut = Lut1::from_fn("test", spec, |x| {
+            x.spec().from_complete(1 << spec.data_size())
+        });
+        for c in spec.iter_data_space() {
+            let _ = lut.lookup(c, LookupCheck::AllowOutputPadding);
+        }
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Encountered active padding bit in input when executing lookup with check AllowOutputPadding."
+    )]
+    fn test_lookup_allow_output_padding_still_panics_on_input_padding() {
+        let spec = CiphertextBlockSpec(2, 4);
+        let inp = spec.from_complete(1 << spec.data_size());
+        let lut = Lut1::from_fn("test", spec, |x| x);
+        lut.lookup(inp, LookupCheck::AllowOutputPadding);
+    }
+
+    #[test]
+    fn test_lut2_lookup_returns_both_function_results() {
+        let spec = CiphertextBlockSpec(2, 4);
+        // f1 returns constant 15, f2 returns constant 7
+        let lut = Lut2::from_fn(
+            "test",
+            spec,
+            |_| spec.from_message(15),
+            |_| spec.from_message(7),
+        );
+        let inp = spec.from_message(3);
+        let (out1, out2) = lut.lookup(inp, LookupCheck::Protect);
+        // out1 is from f1 (upper half), out2 is from f2 (lower half)
+        assert_eq!(out1, spec.from_message(15));
+        assert_eq!(out2, spec.from_message(7));
+    }
+
+    #[test]
+    fn test_lut2_lookup_identity_functions() {
+        let spec = CiphertextBlockSpec(2, 4);
+        // f1 doubles the message, f2 is identity
+        let lut = Lut2::from_fn(
+            "test",
+            spec,
+            |x| spec.from_message((x.raw_message_bits() * 2) & spec.message_mask()),
+            |x| spec.from_message(x.raw_message_bits()),
+        );
+        let inp = spec.from_message(5);
+        let (out1, out2) = lut.lookup(inp, LookupCheck::Protect);
+        assert_eq!(out1.raw_message_bits(), 10); // f1: doubled
+        assert_eq!(out2.raw_message_bits(), 5); // f2: identity
+    }
+
+    #[test]
+    #[should_panic(expected = "Encountered active padding bit in input when executing lookup2.")]
+    fn test_lut2_panics_on_input_padding_set() {
+        let spec = CiphertextBlockSpec(2, 4);
+        let lut = Lut2::from_fn("test", spec, |x| x, |x| x);
+        let inp = spec.from_complete(1 << spec.data_size()); // padding bit set
+        let _ = lut.lookup(inp, LookupCheck::Protect);
+    }
+
+    #[test]
+    #[should_panic(expected = "Encountered active many lut bit in input when executing lookup2.")]
+    fn test_lut2_panics_on_many_lut_bit_set() {
+        let spec = CiphertextBlockSpec(2, 4);
+        let lut = Lut2::from_fn("test", spec, |x| x, |x| x);
+        let inp = spec.from_data(0b0_10_0010); // bit 1 set
+        let _ = lut.lookup(inp, LookupCheck::Protect);
+    }
+
+    #[test]
+    #[should_panic(expected = "Encountered active padding bit in output when executing lookup2.")]
+    fn test_lut2_protect_panics_on_output_padding() {
+        let spec = CiphertextBlockSpec(2, 4);
+        let lut = Lut2::from_fn(
+            "test",
+            spec,
+            |_| spec.from_complete(1 << spec.data_size()), // padding set
+            |_| spec.from_message(0),
+        );
+        let inp = spec.from_message(0);
+        let _ = lut.lookup(inp, LookupCheck::Protect);
+    }
+
+    #[test]
+    fn test_lut2_allow_output_padding_does_not_panic() {
+        let spec = CiphertextBlockSpec(2, 4);
+        let lut = Lut2::from_fn(
+            "test",
+            spec,
+            |_| spec.from_complete(1 << spec.data_size()), // padding set
+            |_| spec.from_complete(1 << spec.data_size()), // padding set
+        );
+        let inp = spec.from_message(0);
+        let _ = lut.lookup(inp, LookupCheck::AllowOutputPadding); // should not panic
+    }
+
+    #[test]
+    #[should_panic(expected = "Encountered incompatible check for many-lut lookup")]
+    fn test_lut2_rejects_allow_input_padding_check() {
+        let spec = CiphertextBlockSpec(2, 4);
+        let lut = Lut2::from_fn("test", spec, |x| x, |x| x);
+        let inp = spec.from_message(0);
+        let _ = lut.lookup(inp, LookupCheck::AllowInputPadding);
+    }
+
+    #[test]
+    #[should_panic(expected = "Encountered incompatible check for many-lut lookup")]
+    fn test_lut2_rejects_allow_both_padding_check() {
+        let spec = CiphertextBlockSpec(2, 4);
+        let lut = Lut2::from_fn("test", spec, |x| x, |x| x);
+        let inp = spec.from_message(0);
+        let _ = lut.lookup(inp, LookupCheck::AllowBothPadding);
+    }
+
+    #[test]
+    fn test_lut2_iterates_all_valid_inputs() {
+        let spec = CiphertextBlockSpec(2, 4);
+        let lut = Lut2::from_fn(
+            "test",
+            spec,
+            |_| spec.from_message(1),
+            |_| spec.from_message(2),
+        );
+        // Valid inputs: no padding, no bit 1 set
+        for msg in (0..16u16).filter(|m| m & 0b10 == 0) {
+            let inp = spec.from_message(msg);
+            let (out1, out2) = lut.lookup(inp, LookupCheck::Protect);
+            assert_eq!(out1, spec.from_message(1)); // f1
+            assert_eq!(out2, spec.from_message(2)); // f2
+        }
     }
 }

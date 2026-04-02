@@ -1,4 +1,4 @@
-use zhc_utils::SafeAs;
+use zhc_utils::{Dumpable, SafeAs};
 
 use super::{EmulatedPlaintextBlockStorage, PlaintextBlockSpec};
 use std::fmt::Debug;
@@ -77,5 +77,11 @@ impl std::hash::Hash for EmulatedPlaintextBlock {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.raw_message_bits().hash(state);
         self.spec.hash(state);
+    }
+}
+
+impl Dumpable for EmulatedPlaintextBlock {
+    fn dump_to_string(&self) -> String {
+        format!("{:#?}", self)
     }
 }

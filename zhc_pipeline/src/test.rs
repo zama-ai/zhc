@@ -1,9 +1,10 @@
 use zhc_builder::{CiphertextBlockSpec, CiphertextSpec, add, cmp_gt};
+use zhc_crypto::integer_semantics::lut::{Lut1, Lut2};
 use zhc_ir::IR;
 use zhc_langs::{
     doplang::{DopInterpreterContext, DopLang, DopValue},
     hpulang::{HpuInterpreterContext, HpuLang, HpuValue, LutId, TDstId, TImmId, TSrcId},
-    ioplang::{IopInstructionSet, IopInterepreterContext, IopLang, IopValue, Lut1Def, Lut2Def},
+    ioplang::{IopInstructionSet, IopInterepreterContext, IopLang, IopValue},
 };
 use zhc_utils::{Dumpable, FastMap, SafeAs, assert_display_is};
 
@@ -16,8 +17,8 @@ pub fn check_iop_hpu_equivalence(
     nreps: usize,
 ) {
     // Build reverse LUT tables.
-    let lut1: FastMap<LutId, Lut1Def> = GIDS1.iter().map(|(k, v)| (*v, *k)).collect();
-    let lut2: FastMap<LutId, Lut2Def> = GIDS2.iter().map(|(k, v)| (*v, *k)).collect();
+    let lut1: FastMap<LutId, Lut1> = GIDS1.iter().map(|(k, v)| (*v, k.clone())).collect();
+    let lut2: FastMap<LutId, Lut2> = GIDS2.iter().map(|(k, v)| (*v, k.clone())).collect();
 
     // Discover input slots from the IOP IR.
     let mut input_slots: Vec<(usize, bool, u16)> = Vec::new(); // (pos, is_ct, int_size)
@@ -134,8 +135,8 @@ pub fn check_iop_dop_equivalence(
     nreps: usize,
 ) {
     // Build reverse LUT tables.
-    let lut1: FastMap<LutId, Lut1Def> = GIDS1.iter().map(|(k, v)| (*v, *k)).collect();
-    let lut2: FastMap<LutId, Lut2Def> = GIDS2.iter().map(|(k, v)| (*v, *k)).collect();
+    let lut1: FastMap<LutId, Lut1> = GIDS1.iter().map(|(k, v)| (*v, k.clone())).collect();
+    let lut2: FastMap<LutId, Lut2> = GIDS2.iter().map(|(k, v)| (*v, k.clone())).collect();
 
     // Discover input slots from the IOP IR.
     let mut input_slots: Vec<(usize, bool, u16)> = Vec::new();
@@ -257,27 +258,27 @@ fn test_add_ir() {
             // Raw sum                | %23 = add_ct(%7, %15);
             // Raw sum                | %24 = add_ct(%8, %16);
             // Raw sum                | %25 = add_ct(%9, %17);
-            // Block States / G0-B0   | %27, %28 = pbs2<ManyCarryMsg>(%18);
-            // Block States / G0-B1   | %29 = pbs<Protect, ExtractPropGroup0>(%19);
-            // Block States / G0-B2   | %30 = pbs<Protect, ExtractPropGroup1>(%20);
-            // Block States / G0-B3   | %31 = pbs<Protect, ExtractPropGroup2>(%21);
-            // Block States / GN-B0   | %32 = pbs<Protect, ExtractPropGroup0>(%22);
-            // Block States / GN-B1   | %33 = pbs<Protect, ExtractPropGroup1>(%23);
-            // Block States / GN-B2   | %34 = pbs<Protect, ExtractPropGroup2>(%24);
+            // Block States / G0-B0   | %27, %28 = pbs2<Protect, Lut2("ManyCarryMsg")>(%18);
+            // Block States / G0-B1   | %29 = pbs<Protect, Lut1("ExtractPropGroup0")>(%19);
+            // Block States / G0-B2   | %30 = pbs<Protect, Lut1("ExtractPropGroup1")>(%20);
+            // Block States / G0-B3   | %31 = pbs<Protect, Lut1("ExtractPropGroup2")>(%21);
+            // Block States / GN-B0   | %32 = pbs<Protect, Lut1("ExtractPropGroup0")>(%22);
+            // Block States / GN-B1   | %33 = pbs<Protect, Lut1("ExtractPropGroup1")>(%23);
+            // Block States / GN-B2   | %34 = pbs<Protect, Lut1("ExtractPropGroup2")>(%24);
             // Group states           | %36 = add_ct(%28, %29);
             // Group states           | %37 = add_ct(%36, %30);
             // Group states           | %38 = temper_add_ct(%37, %31);
-            // Group states           | %39 = pbs<Protect, SolvePropGroupFinal2>(%38);
+            // Group states           | %39 = pbs<Protect, Lut1("SolvePropGroupFinal2")>(%38);
             // Group states           | %44 = add_ct(%32, %33);
             // Group states           | %45 = add_ct(%44, %34);
-            // Final resolution       | %56 = pbs<Protect, SolvePropGroupFinal0>(%36);
-            // Final resolution       | %57 = pbs<Protect, SolvePropGroupFinal1>(%37);
+            // Final resolution       | %56 = pbs<Protect, Lut1("SolvePropGroupFinal0")>(%36);
+            // Final resolution       | %57 = pbs<Protect, Lut1("SolvePropGroupFinal1")>(%37);
             // Final resolution       | %62 = add_ct(%32, %39);
-            // Final resolution       | %63 = pbs<Protect, SolvePropGroupFinal0>(%62);
+            // Final resolution       | %63 = pbs<Protect, Lut1("SolvePropGroupFinal0")>(%62);
             // Final resolution       | %64 = add_ct(%44, %39);
-            // Final resolution       | %65 = pbs<Protect, SolvePropGroupFinal1>(%64);
+            // Final resolution       | %65 = pbs<Protect, Lut1("SolvePropGroupFinal1")>(%64);
             // Final resolution       | %66 = add_ct(%45, %39);
-            // Final resolution       | %67 = pbs<Protect, SolvePropGroupFinal2>(%66);
+            // Final resolution       | %67 = pbs<Protect, Lut1("SolvePropGroupFinal2")>(%66);
             // Carry propagation      | %74 = add_ct(%19, %28);
             // Carry propagation      | %75 = add_ct(%20, %56);
             // Carry propagation      | %76 = add_ct(%21, %57);
@@ -285,14 +286,14 @@ fn test_add_ir() {
             // Carry propagation      | %78 = add_ct(%23, %63);
             // Carry propagation      | %79 = add_ct(%24, %65);
             // Carry propagation      | %80 = add_ct(%25, %67);
-            // Cleanup                | %81 = pbs<Protect, MsgOnly>(%27);
-            // Cleanup                | %82 = pbs<Protect, MsgOnly>(%74);
-            // Cleanup                | %83 = pbs<Protect, MsgOnly>(%75);
-            // Cleanup                | %84 = pbs<Protect, MsgOnly>(%76);
-            // Cleanup                | %85 = pbs<Protect, MsgOnly>(%77);
-            // Cleanup                | %86 = pbs<Protect, MsgOnly>(%78);
-            // Cleanup                | %87 = pbs<Protect, MsgOnly>(%79);
-            // Cleanup                | %88 = pbs<Protect, MsgOnly>(%80);
+            // Cleanup                | %81 = pbs<Protect, Lut1("MsgOnly")>(%27);
+            // Cleanup                | %82 = pbs<Protect, Lut1("MsgOnly")>(%74);
+            // Cleanup                | %83 = pbs<Protect, Lut1("MsgOnly")>(%75);
+            // Cleanup                | %84 = pbs<Protect, Lut1("MsgOnly")>(%76);
+            // Cleanup                | %85 = pbs<Protect, Lut1("MsgOnly")>(%77);
+            // Cleanup                | %86 = pbs<Protect, Lut1("MsgOnly")>(%78);
+            // Cleanup                | %87 = pbs<Protect, Lut1("MsgOnly")>(%79);
+            // Cleanup                | %88 = pbs<Protect, Lut1("MsgOnly")>(%80);
             // Join                   | %89 = decl_ct<16>();
             // Join                   | %90 = store_ct_block<0>(%81, %89);
             // Join                   | %91 = store_ct_block<1>(%82, %90);
@@ -332,40 +333,40 @@ fn test_cmp_ir() {
                                        | %16 = extract_ct_block<6>(%1);
                                        | %17 = extract_ct_block<7>(%1);
             // Pack A                  | %18 = pack_ct<4>(%3, %2);
-            // Pack A                  | %19 = pbs<Protect, None>(%18);
+            // Pack A                  | %19 = pbs<Protect, Lut1("None")>(%18);
             // Pack A                  | %20 = pack_ct<4>(%5, %4);
-            // Pack A                  | %21 = pbs<Protect, None>(%20);
+            // Pack A                  | %21 = pbs<Protect, Lut1("None")>(%20);
             // Pack A                  | %22 = pack_ct<4>(%7, %6);
-            // Pack A                  | %23 = pbs<Protect, None>(%22);
+            // Pack A                  | %23 = pbs<Protect, Lut1("None")>(%22);
             // Pack A                  | %24 = pack_ct<4>(%9, %8);
-            // Pack A                  | %25 = pbs<Protect, None>(%24);
+            // Pack A                  | %25 = pbs<Protect, Lut1("None")>(%24);
             // Pack B                  | %26 = pack_ct<4>(%11, %10);
-            // Pack B                  | %27 = pbs<Protect, None>(%26);
+            // Pack B                  | %27 = pbs<Protect, Lut1("None")>(%26);
             // Pack B                  | %28 = pack_ct<4>(%13, %12);
-            // Pack B                  | %29 = pbs<Protect, None>(%28);
+            // Pack B                  | %29 = pbs<Protect, Lut1("None")>(%28);
             // Pack B                  | %30 = pack_ct<4>(%15, %14);
-            // Pack B                  | %31 = pbs<Protect, None>(%30);
+            // Pack B                  | %31 = pbs<Protect, Lut1("None")>(%30);
             // Pack B                  | %32 = pack_ct<4>(%17, %16);
-            // Pack B                  | %33 = pbs<Protect, None>(%32);
+            // Pack B                  | %33 = pbs<Protect, Lut1("None")>(%32);
             // Compare blocks / 0-th   | %34 = sub_ct(%19, %27);
-            // Compare blocks / 0-th   | %35 = pbs<Protect, CmpSign>(%34);
+            // Compare blocks / 0-th   | %35 = pbs<Protect, Lut1("CmpSign")>(%34);
             // Compare blocks / 0-th   | %36 = let_pt_block<1>();
             // Compare blocks / 0-th   | %37 = add_pt(%35, %36);
             // Compare blocks / 1-th   | %38 = sub_ct(%21, %29);
-            // Compare blocks / 1-th   | %39 = pbs<Protect, CmpSign>(%38);
+            // Compare blocks / 1-th   | %39 = pbs<Protect, Lut1("CmpSign")>(%38);
             // Compare blocks / 1-th   | %41 = add_pt(%39, %36);
             // Compare blocks / 2-th   | %42 = sub_ct(%23, %31);
-            // Compare blocks / 2-th   | %43 = pbs<Protect, CmpSign>(%42);
+            // Compare blocks / 2-th   | %43 = pbs<Protect, Lut1("CmpSign")>(%42);
             // Compare blocks / 2-th   | %45 = add_pt(%43, %36);
             // Compare blocks / 3-th   | %46 = sub_ct(%25, %33);
-            // Compare blocks / 3-th   | %47 = pbs<Protect, CmpSign>(%46);
+            // Compare blocks / 3-th   | %47 = pbs<Protect, Lut1("CmpSign")>(%46);
             // Compare blocks / 3-th   | %49 = add_pt(%47, %36);
             // Reduce comparison       | %50 = pack_ct<4>(%41, %37);
             // Reduce comparison       | %51 = pack_ct<4>(%49, %45);
-            // Reduce comparison       | %52 = pbs<Protect, CmpReduce>(%50);
-            // Reduce comparison       | %53 = pbs<Protect, CmpReduce>(%51);
+            // Reduce comparison       | %52 = pbs<Protect, Lut1("CmpReduce")>(%50);
+            // Reduce comparison       | %53 = pbs<Protect, Lut1("CmpReduce")>(%51);
                                        | %54 = pack_ct<4>(%53, %52);
-                                       | %55 = pbs<Protect, CmpGtMrg>(%54);
+                                       | %55 = pbs<Protect, Lut1("CmpGtMrg")>(%54);
                                        | %56 = decl_ct<2>();
                                        | %57 = store_ct_block<0>(%55, %56);
                                        | output<0>(%57);

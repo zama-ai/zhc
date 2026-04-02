@@ -330,7 +330,7 @@ impl Builder {
                 }
                 if expectations != outputs {
                     println!(
-                        "Random test failed for input {:?}:\nExpected:\n{:?}\nOutput:\n{:?}",
+                        "Random test failed for input {:#?}:\nExpected:\n{:#?}\nOutput:\n{:#?}",
                         inputs, expectations, outputs
                     );
                     self.eval().with_inputs(inputs).dump_and_panic();
@@ -1038,10 +1038,10 @@ impl Builder {
         &self,
         src_a: impl AsRef<CiphertextBlock>,
         src_b: impl AsRef<CiphertextBlock>,
-        lut: Lut1Def,
+        def: Lut1Def,
     ) -> CiphertextBlock {
         let packed = self.block_pack(src_a, src_b);
-        self.block_lookup(&packed, lut)
+        self.block_lookup(&packed, def)
     }
 
     /// Applies a single-output programmable bootstrapping (PBS) lookup to a block.
@@ -1061,8 +1061,9 @@ impl Builder {
     /// // Extract only the message bits, clearing the carry.
     /// let clean = builder.block_lookup(&blocks[0], Lut1Def::MsgOnly);
     /// ```
-    pub fn block_lookup(&self, src: impl AsRef<CiphertextBlock>, lut: Lut1Def) -> CiphertextBlock {
+    pub fn block_lookup(&self, src: impl AsRef<CiphertextBlock>, def: Lut1Def) -> CiphertextBlock {
         let src = src.as_ref();
+        let lut = def.into_lut(self.spec);
         let (_node, ret) = self.inner_mut().insert_op(
             IopInstructionSet::Pbs {
                 check: LookupCheck::Protect,
@@ -1097,9 +1098,10 @@ impl Builder {
     pub fn block_padding_lookup(
         &self,
         src: impl AsRef<CiphertextBlock>,
-        lut: Lut1Def,
+        def: Lut1Def,
     ) -> CiphertextBlock {
         let src = src.as_ref();
+        let lut = def.into_lut(self.spec);
         let (_node, ret) = self.inner_mut().insert_op(
             IopInstructionSet::Pbs {
                 check: LookupCheck::AllowOutputPadding,
@@ -1134,9 +1136,10 @@ impl Builder {
     pub fn block_wrapping_lookup(
         &self,
         src: impl AsRef<CiphertextBlock>,
-        lut: Lut1Def,
+        def: Lut1Def,
     ) -> CiphertextBlock {
         let src = src.as_ref();
+        let lut = def.into_lut(self.spec);
         let (_node, ret) = self.inner_mut().insert_op(
             IopInstructionSet::Pbs {
                 check: LookupCheck::AllowBothPadding,
@@ -1172,11 +1175,15 @@ impl Builder {
     pub fn block_lookup2(
         &self,
         src: impl AsRef<CiphertextBlock>,
-        lut: Lut2Def,
+        def: Lut2Def,
     ) -> (CiphertextBlock, CiphertextBlock) {
         let src = src.as_ref();
+        let lut = def.into_lut(self.spec);
         let (_node, ret) = self.inner_mut().insert_op(
-            IopInstructionSet::Pbs2 { lut },
+            IopInstructionSet::Pbs2 {
+                check: LookupCheck::Protect,
+                lut,
+            },
             svec![src.valid],
             self.current_hierarchy(),
         );
@@ -1309,7 +1316,7 @@ impl Builder {
     pub fn vector_pack_then_lookup(
         &self,
         blocks: impl AsRef<[CiphertextBlock]>,
-        lut: Lut1Def,
+        def: Lut1Def,
     ) -> Vec<CiphertextBlock> {
         blocks
             .as_ref()
@@ -1318,7 +1325,7 @@ impl Builder {
             .map(|a| match a {
                 Chunk::Complete(sv) => {
                     let packed = self.block_pack(sv[1], sv[0]);
-                    self.block_lookup(&packed, lut)
+                    self.block_lookup(&packed, def.clone())
                 }
                 Chunk::Rest(sv) => *sv[0],
             })
@@ -1360,7 +1367,7 @@ impl Builder {
         &self,
         lhs: impl AsRef<[CiphertextBlock]>,
         rhs: impl AsRef<[CiphertextBlock]>,
-        lut: Lut1Def,
+        def: Lut1Def,
         extension: ExtensionBehavior,
     ) -> Vec<CiphertextBlock> {
         let mut output = Vec::new();
@@ -1370,7 +1377,7 @@ impl Builder {
             match (&extension, lhs_i.next(), rhs_i.next()) {
                 (_, Some(li), Some(ri)) => {
                     let packed = self.block_pack(li, ri);
-                    output.push(self.block_lookup(packed, lut))
+                    output.push(self.block_lookup(packed, def.clone()))
                 }
                 (_, None, None) => break,
                 (ExtensionBehavior::Panic, _, _) => panic!(),
@@ -1401,12 +1408,12 @@ impl Builder {
     pub fn vector_lookup(
         &self,
         blocks: impl AsRef<[CiphertextBlock]>,
-        lut: Lut1Def,
+        def: Lut1Def,
     ) -> Vec<CiphertextBlock> {
         blocks
             .as_ref()
             .iter()
-            .map(|b| self.block_lookup(b, lut))
+            .map(|b| self.block_lookup(b, def.clone()))
             .collect()
     }
 
@@ -1429,12 +1436,12 @@ impl Builder {
     pub fn vector_lookup2(
         &self,
         blocks: impl AsRef<[CiphertextBlock]>,
-        lut: Lut2Def,
+        def: Lut2Def,
     ) -> Vec<(CiphertextBlock, CiphertextBlock)> {
         blocks
             .as_ref()
             .iter()
-            .map(|b| self.block_lookup2(b, lut))
+            .map(|b| self.block_lookup2(b, def.clone()))
             .collect()
     }
 

@@ -1,11 +1,8 @@
 use std::{fmt::Debug, hash::Hash};
-use zhc_crypto::integer_semantics::lut::LookupCheck;
+use zhc_crypto::integer_semantics::lut::{LookupCheck, Lut1, Lut2};
 use zhc_ir::{DialectInstructionSet, Format, FormatContext, Signature, sig};
 
-use crate::ioplang::{
-    IopTypeSystem,
-    lut::{Lut1Def, Lut2Def, Lut4Def, Lut8Def},
-};
+use crate::ioplang::IopTypeSystem;
 
 /// Instruction set for the IOP dialect.
 ///
@@ -112,26 +109,19 @@ pub enum IopInstructionSet {
     /// returning the updated ciphertext.
     /// `(CiphertextBlock, Ciphertext) → (Ciphertext)`
     StoreCtBlock { index: u8 },
-    /// Single-output PBS. Applies a [`Lut1Def`] lookup table with the
-    /// given padding-check policy.
+    /// Single-output PBS. Checked according to the given policy.
     /// `(CiphertextBlock) → (CiphertextBlock)`
-    Pbs { check: LookupCheck, lut: Lut1Def },
-    /// 2-output many-LUT PBS. Padding is unconditionally checked.
+    Pbs { check: LookupCheck, lut: Lut1 },
+    /// 2-output many-LUT PBS. Checked according to the given policy.
     /// `(CiphertextBlock) → (CiphertextBlock, CiphertextBlock)`
-    Pbs2 { lut: Lut2Def },
-    /// 4-output many-LUT PBS. Padding is unconditionally checked.
-    /// `(CiphertextBlock) → (CiphertextBlock × 4)`
-    Pbs4 { lut: Lut4Def },
-    /// 8-output many-LUT PBS. Padding is unconditionally checked.
-    /// `(CiphertextBlock) → (CiphertextBlock × 8)`
-    Pbs8 { lut: Lut8Def },
+    Pbs2 { check: LookupCheck, lut: Lut2 },
 }
 
 impl IopInstructionSet {
     /// Returns true if this instruction is a PBS operation.
     pub fn is_pbs(&self) -> bool {
         use IopInstructionSet::*;
-        matches!(self, Pbs { .. } | Pbs2 { .. } | Pbs4 { .. } | Pbs8 { .. })
+        matches!(self, Pbs { .. } | Pbs2 { .. })
     }
 }
 
@@ -164,9 +154,7 @@ impl Format for IopInstructionSet {
             IopInstructionSet::ExtractPtBlock { index } => write!(f, "extract_pt_block<{index}>"),
             IopInstructionSet::StoreCtBlock { index } => write!(f, "store_ct_block<{index}>"),
             IopInstructionSet::Pbs { check, lut } => write!(f, "pbs<{check:?}, {lut:?}>"),
-            IopInstructionSet::Pbs2 { lut } => write!(f, "pbs2<{lut:?}>"),
-            IopInstructionSet::Pbs4 { lut } => write!(f, "pbs4<{lut:?}>"),
-            IopInstructionSet::Pbs8 { lut } => write!(f, "pbs8<{lut:?}>"),
+            IopInstructionSet::Pbs2 { check, lut } => write!(f, "pbs2<{check:?}, {lut:?}>"),
         }
     }
 }
@@ -228,12 +216,6 @@ impl DialectInstructionSet for IopInstructionSet {
             IopInstructionSet::Pbs { .. } => sig![(CiphertextBlock) -> (CiphertextBlock)],
             IopInstructionSet::Pbs2 { .. } => {
                 sig![(CiphertextBlock) -> (CiphertextBlock, CiphertextBlock)]
-            }
-            IopInstructionSet::Pbs4 { .. } => {
-                sig![(CiphertextBlock) -> (CiphertextBlock, CiphertextBlock, CiphertextBlock, CiphertextBlock)]
-            }
-            IopInstructionSet::Pbs8 { .. } => {
-                sig![(CiphertextBlock) -> (CiphertextBlock, CiphertextBlock, CiphertextBlock, CiphertextBlock, CiphertextBlock, CiphertextBlock, CiphertextBlock, CiphertextBlock)]
             }
             IopInstructionSet::Inspect { typ } => sig![(typ.clone()) -> (typ.clone())],
         }

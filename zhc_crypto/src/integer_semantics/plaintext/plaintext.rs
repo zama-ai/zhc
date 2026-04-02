@@ -1,6 +1,6 @@
 use super::*;
 use std::fmt::Debug;
-use zhc_utils::{SafeAs, iter::Separate};
+use zhc_utils::{Dumpable, SafeAs, iter::Separate};
 
 use super::super::{EmulatedPlaintextBlock, EmulatedPlaintextBlockStorage};
 
@@ -117,5 +117,11 @@ impl std::hash::Hash for EmulatedPlaintext {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.raw_int_bits().hash(state);
         self.spec.hash(state);
+    }
+}
+
+impl Dumpable for EmulatedPlaintext {
+    fn dump_to_string(&self) -> String {
+        format!("{:#?}", self)
     }
 }

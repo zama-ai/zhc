@@ -1,13 +1,18 @@
 //! Lookup table operations for ciphertext blocks.
 //!
-//! This module provides functions that emulate programmable bootstrapping (PBS) lookups on
-//! ciphertext blocks. In TFHE, a PBS applies an arbitrary function to an encrypted value by
-//! evaluating a lookup table — this module emulates that behavior for semantic testing.
+//! This module provides types and functions that emulate programmable bootstrapping (PBS)
+//! lookups on ciphertext blocks. In TFHE, a PBS applies an arbitrary function to an encrypted
+//! value by evaluating a lookup table — this module emulates that behavior for semantic testing.
 //!
-//! The central entry point is [`lookup`], which applies a LUT function to an
-//! [`EmulatedCiphertextBlock`](super::EmulatedCiphertextBlock) with negacyclic wraparound
-//! semantics. When the input padding bit is set, the raw output is two's-complement negated to
-//! reproduce the negacyclic table folding of a real TFHE bootstrap.
+//! Two LUT types are provided for different use cases:
+//!
+//! - [`Lut1`] — single-output lookup table. Build with [`Lut1::from_fn`], apply with
+//!   [`Lut1::lookup`].
+//! - [`Lut2`] — two-output "many-LUT" table. Evaluates two functions on the same input in a single
+//!   operation.
+//!
+//! The legacy [`lookup`] function is also available for ad-hoc lookups without precomputing a
+//! table.
 //!
 //! Padding-bit assertions on both input and output are controlled by a [`LookupCheck`] mode:
 //!
@@ -23,21 +28,24 @@
 //! # Examples
 //!
 //! ```rust,no_run
-//! # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, lut::{lookup, LookupCheck}};
+//! # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, lut::{Lut1, LookupCheck}};
 //! let spec = CiphertextBlockSpec(2, 4);
-//! let block = spec.from_message(5);
-//! let identity = |b| b;
 //!
-//! // Protected lookup — both padding bits must be zero
-//! let result = lookup(identity, block, LookupCheck::Protect);
+//! // Build a reusable LUT
+//! let double = Lut1::from_fn("double", spec, |b| {
+//!     spec.from_message((b.raw_message_bits() * 2) & spec.message_mask())
+//! });
 //!
-//! // Permissive lookup — skip all padding-bit checks
-//! let result = lookup(identity, block, LookupCheck::AllowBothPadding);
+//! let input = spec.from_message(5);
+//! let output = double.lookup(input, LookupCheck::Protect);
+//! assert_eq!(output.raw_message_bits(), 10);
 //! ```
 
+mod builtin;
 mod lookup;
 mod lut;
 
+pub use builtin::*;
 pub use lookup::*;
 pub use lut::*;
 

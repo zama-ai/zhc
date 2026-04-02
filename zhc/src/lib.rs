@@ -16,7 +16,7 @@ pub mod prelude {
     pub use zhc_builder::Builder;
     pub use zhc_crypto::integer_semantics::CiphertextBlockSpec;
     pub use zhc_langs::ioplang::IopValue;
-    pub use zhc_langs::ioplang::{Lut1Def, Lut2Def, Lut4Def, Lut8Def};
+    pub use zhc_langs::ioplang::{Lut1Def, Lut2Def};
     use zhc_pipeline::gpu_metrics::GpuMetrics;
     use zhc_pipeline::hpu_metrics::HpuMetrics;
     use zhc_pipeline::pbs_metrics::PbsMetrics;

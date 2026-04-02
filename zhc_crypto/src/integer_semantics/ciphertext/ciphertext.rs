@@ -2,8 +2,8 @@ use super::super::{EmulatedCiphertextBlock, EmulatedCiphertextBlockStorage};
 use super::*;
 use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
-use zhc_utils::SafeAs;
 use zhc_utils::iter::Separate;
+use zhc_utils::{Dumpable, SafeAs};
 
 /// An emulated TFHE radix ciphertext representing a large integer.
 ///
@@ -143,5 +143,11 @@ impl PartialOrd for EmulatedCiphertext {
         } else {
             None
         }
+    }
+}
+
+impl Dumpable for EmulatedCiphertext {
+    fn dump_to_string(&self) -> String {
+        format!("{:#?}", self)
     }
 }

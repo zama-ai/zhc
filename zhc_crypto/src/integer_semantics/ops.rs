@@ -7,6 +7,14 @@ use crate::integer_semantics::EmulatedCiphertext;
 use super::{EmulatedCiphertextBlock, EmulatedPlaintextBlock};
 
 impl EmulatedCiphertextBlock {
+    /// Negates the ciphertext block. This can freely set or unset the padding bit.
+    pub fn neg(mut self) -> Self {
+        let a = !self.raw_complete_bits() & self.spec().complete_mask();
+        let raw_out = (a + 1) & self.spec().complete_mask();
+        self.storage = raw_out;
+        self
+    }
+
     /// Adds two ciphertext blocks while protecting the padding bit from writes.
     pub fn protect_add(self, rhs: Self) -> Self {
         assert_eq!(self.spec, rhs.spec, "Spec mismatch.");

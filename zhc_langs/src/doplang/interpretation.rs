@@ -1,5 +1,6 @@
 use std::fmt::Debug;
 
+use zhc_crypto::integer_semantics::lut::{Lut1, Lut2};
 use zhc_crypto::integer_semantics::{
     CiphertextBlockSpec, EmulatedCiphertextBlock, EmulatedPlaintextBlock,
     EmulatedPlaintextBlockStorage, lut::LookupCheck,
@@ -9,7 +10,6 @@ use zhc_utils::small::SmallVec;
 use zhc_utils::{FastMap, SafeAs, svec};
 
 use crate::hpulang::LutId;
-use crate::ioplang::{Lut1Def, Lut2Def, Lut4Def, Lut8Def};
 
 use super::{Argument, DopTypeSystem};
 
@@ -56,14 +56,10 @@ pub struct DopInterpreterContext {
     pub heap: FastMap<usize, EmulatedCiphertextBlock>,
     /// I/O memory, keyed by I/O slot address.
     pub io: FastMap<usize, EmulatedCiphertextBlock>,
-    /// Reverse LUT table: LutId → Lut1Def (for PBS / PBS_F).
-    pub lut1_table: FastMap<LutId, Lut1Def>,
-    /// Reverse LUT table: LutId → Lut2Def (for PBS_ML2 / PBS_ML2_F).
-    pub lut2_table: FastMap<LutId, Lut2Def>,
-    /// Reverse LUT table: LutId → Lut4Def (for PBS_ML4 / PBS_ML4_F).
-    pub lut4_table: FastMap<LutId, Lut4Def>,
-    /// Reverse LUT table: LutId → Lut8Def (for PBS_ML8 / PBS_ML8_F).
-    pub lut8_table: FastMap<LutId, Lut8Def>,
+    /// Reverse LUT table: LutId → Lut1 (for PBS / PBS_F).
+    pub lut1_table: FastMap<LutId, Lut1>,
+    /// Reverse LUT table: LutId → Lut2 (for PBS_ML2 / PBS_ML2_F).
+    pub lut2_table: FastMap<LutId, Lut2>,
     /// Symbolic ciphertext sources (unpatched stream), keyed by (id, block).
     pub sources: FastMap<(usize, usize), EmulatedCiphertextBlock>,
     /// Symbolic ciphertext destinations (unpatched stream), keyed by (id, block).
@@ -94,8 +90,6 @@ impl DopInterpreterContext {
             io: FastMap::default(),
             lut1_table: FastMap::default(),
             lut2_table: FastMap::default(),
-            lut4_table: FastMap::default(),
-            lut8_table: FastMap::default(),
             sources: FastMap::default(),
             destinations: FastMap::default(),
             pt_sources: FastMap::default(),
@@ -261,7 +255,7 @@ impl Interpretable<DopValue> for super::DopInstructionSet {
                     .lut2_table
                     .get(&lut_id)
                     .unwrap_or_else(|| panic!("Lut2 {lut_id} missing from context"));
-                let (ct0, ct1) = lut_def.lookup(ct);
+                let (ct0, ct1) = lut_def.lookup(ct, LookupCheck::AllowOutputPadding);
                 // Write to consecutive registers from the aligned base.
                 let Argument::CtReg { addr, mask } = dst else {
                     panic!("PBS_ML2 dst must be CtReg, got {dst:?}");
@@ -273,47 +267,13 @@ impl Interpretable<DopValue> for super::DopInstructionSet {
             }
 
             // ── PBS: 4-output many-LUT ───────────────────────────────
-            PBS_ML4 { dst, src, lut } | PBS_ML4_F { dst, src, lut } => {
-                let ct = context.read_ct(src);
-                let lut_id = DopInterpreterContext::resolve_lut_id(lut);
-                let lut_def = context
-                    .lut4_table
-                    .get(&lut_id)
-                    .unwrap_or_else(|| panic!("Lut4 {lut_id} missing from context"));
-                let (ct0, ct1, ct2, ct3) = lut_def.lookup(ct);
-                let Argument::CtReg { addr, mask } = dst else {
-                    panic!("PBS_ML4 dst must be CtReg, got {dst:?}");
-                };
-                let base = addr & mask;
-                context.registers[base] = Some(ct0);
-                context.registers[base + 1] = Some(ct1);
-                context.registers[base + 2] = Some(ct2);
-                context.registers[base + 3] = Some(ct3);
-                svec![DopValue::Ctx]
+            PBS_ML4 { .. } | PBS_ML4_F { .. } => {
+                panic!("PBS_ML4 interpretation not implementd.")
             }
 
             // ── PBS: 8-output many-LUT ───────────────────────────────
-            PBS_ML8 { dst, src, lut } | PBS_ML8_F { dst, src, lut } => {
-                let ct = context.read_ct(src);
-                let lut_id = DopInterpreterContext::resolve_lut_id(lut);
-                let lut_def = context
-                    .lut8_table
-                    .get(&lut_id)
-                    .unwrap_or_else(|| panic!("Lut8 {lut_id} missing from context"));
-                let (ct0, ct1, ct2, ct3, ct4, ct5, ct6, ct7) = lut_def.lookup(ct);
-                let Argument::CtReg { addr, mask } = dst else {
-                    panic!("PBS_ML8 dst must be CtReg, got {dst:?}");
-                };
-                let base = addr & mask;
-                context.registers[base] = Some(ct0);
-                context.registers[base + 1] = Some(ct1);
-                context.registers[base + 2] = Some(ct2);
-                context.registers[base + 3] = Some(ct3);
-                context.registers[base + 4] = Some(ct4);
-                context.registers[base + 5] = Some(ct5);
-                context.registers[base + 6] = Some(ct6);
-                context.registers[base + 7] = Some(ct7);
-                svec![DopValue::Ctx]
+            PBS_ML8 { .. } | PBS_ML8_F { .. } => {
+                panic!("PBS_ML8 interpretation not implementd.")
             }
 
             // ── Control ──────────────────────────────────────────────

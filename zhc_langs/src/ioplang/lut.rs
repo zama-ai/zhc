@@ -1,16 +1,6 @@
-use zhc_crypto::integer_semantics::{
-    EmulatedCiphertextBlock,
-    lut::{LookupCheck, lookup, lookup2, lookup4, lookup8},
-};
+use zhc_crypto::integer_semantics::{CiphertextBlockSpec, EmulatedCiphertextBlock, lut::*};
 
-/// Single-output lookup table definitions for [`Pbs`](super::IopInstructionSet::Pbs).
-///
-/// Each variant names a `CiphertextBlock → CiphertextBlock` function
-/// defined in `zhc_crypto`. Variants are used as symbolic identifiers
-/// at the IOP level; the pipeline maps them to numeric
-/// [`LutId`](crate::hpulang::LutId) values during translation to
-/// the HPU dialect.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone)]
 pub enum Lut1Def {
     None,
     MsgOnly,
@@ -73,19 +63,81 @@ pub enum Lut1Def {
     IfPos0TrueZeroed,
     IfPos0FalseZeroed,
     IfPos1TrueZeroed,
+    Custom {
+        name: String,
+        f: fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
+    },
 }
 
 impl Lut1Def {
-    pub(crate) fn lookup(
-        &self,
-        inp: EmulatedCiphertextBlock,
-        check: LookupCheck,
-    ) -> EmulatedCiphertextBlock {
-        lookup(self.get_fn(), inp, check)
+    fn name(&self) -> String {
+        match self {
+            Lut1Def::None => "None".to_string(),
+            Lut1Def::MsgOnly => "MsgOnly".to_string(),
+            Lut1Def::CarryOnly => "CarryOnly".to_string(),
+            Lut1Def::CarryInMsg => "CarryInMsg".to_string(),
+            Lut1Def::MultCarryMsg => "MultCarryMsg".to_string(),
+            Lut1Def::MultCarryMsgLsb => "MultCarryMsgLsb".to_string(),
+            Lut1Def::MultCarryMsgMsb => "MultCarryMsgMsb".to_string(),
+            Lut1Def::BwAnd => "BwAnd".to_string(),
+            Lut1Def::BwOr => "BwOr".to_string(),
+            Lut1Def::BwXor => "BwXor".to_string(),
+            Lut1Def::CmpSign => "CmpSign".to_string(),
+            Lut1Def::CmpReduce => "CmpReduce".to_string(),
+            Lut1Def::CmpGt => "CmpGt".to_string(),
+            Lut1Def::CmpGte => "CmpGte".to_string(),
+            Lut1Def::CmpLt => "CmpLt".to_string(),
+            Lut1Def::CmpLte => "CmpLte".to_string(),
+            Lut1Def::CmpEq => "CmpEq".to_string(),
+            Lut1Def::CmpNeq => "CmpNeq".to_string(),
+            Lut1Def::ReduceCarry2 => "ReduceCarry2".to_string(),
+            Lut1Def::ReduceCarry3 => "ReduceCarry3".to_string(),
+            Lut1Def::ReduceCarryPad => "ReduceCarryPad".to_string(),
+            Lut1Def::GenPropAdd => "GenPropAdd".to_string(),
+            Lut1Def::IfTrueZeroed => "IfTrueZeroed".to_string(),
+            Lut1Def::IfFalseZeroed => "IfFalseZeroed".to_string(),
+            Lut1Def::Ripple2GenProp => "Ripple2GenProp".to_string(),
+            Lut1Def::CmpGtMrg => "CmpGtMrg".to_string(),
+            Lut1Def::CmpGteMrg => "CmpGteMrg".to_string(),
+            Lut1Def::CmpLtMrg => "CmpLtMrg".to_string(),
+            Lut1Def::CmpLteMrg => "CmpLteMrg".to_string(),
+            Lut1Def::CmpEqMrg => "CmpEqMrg".to_string(),
+            Lut1Def::CmpNeqMrg => "CmpNeqMrg".to_string(),
+            Lut1Def::IsSome => "IsSome".to_string(),
+            Lut1Def::CarryIsSome => "CarryIsSome".to_string(),
+            Lut1Def::CarryIsNone => "CarryIsNone".to_string(),
+            Lut1Def::MultCarryMsgIsSome => "MultCarryMsgIsSome".to_string(),
+            Lut1Def::MultCarryMsgMsbIsSome => "MultCarryMsgMsbIsSome".to_string(),
+            Lut1Def::IsNull => "IsNull".to_string(),
+            Lut1Def::IsNullPos1 => "IsNullPos1".to_string(),
+            Lut1Def::NotNull => "NotNull".to_string(),
+            Lut1Def::MsgNotNull => "MsgNotNull".to_string(),
+            Lut1Def::MsgNotNullPos1 => "MsgNotNullPos1".to_string(),
+            Lut1Def::SolvePropGroupFinal0 => "SolvePropGroupFinal0".to_string(),
+            Lut1Def::SolvePropGroupFinal1 => "SolvePropGroupFinal1".to_string(),
+            Lut1Def::SolvePropGroupFinal2 => "SolvePropGroupFinal2".to_string(),
+            Lut1Def::ExtractPropGroup0 => "ExtractPropGroup0".to_string(),
+            Lut1Def::ExtractPropGroup1 => "ExtractPropGroup1".to_string(),
+            Lut1Def::ExtractPropGroup2 => "ExtractPropGroup2".to_string(),
+            Lut1Def::ExtractPropGroup3 => "ExtractPropGroup3".to_string(),
+            Lut1Def::SolveProp => "SolveProp".to_string(),
+            Lut1Def::SolvePropCarry => "SolvePropCarry".to_string(),
+            Lut1Def::SolveQuotient => "SolveQuotient".to_string(),
+            Lut1Def::SolveQuotientPos1 => "SolveQuotientPos1".to_string(),
+            Lut1Def::IfPos1FalseZeroed => "IfPos1FalseZeroed".to_string(),
+            Lut1Def::IfPos1FalseZeroedMsgCarry1 => "IfPos1FalseZeroedMsgCarry1".to_string(),
+            Lut1Def::ShiftLeftByCarryPos0Msg => "ShiftLeftByCarryPos0Msg".to_string(),
+            Lut1Def::ShiftLeftByCarryPos0MsgNext => "ShiftLeftByCarryPos0MsgNext".to_string(),
+            Lut1Def::ShiftRightByCarryPos0Msg => "ShiftRightByCarryPos0Msg".to_string(),
+            Lut1Def::ShiftRightByCarryPos0MsgNext => "ShiftRightByCarryPos0MsgNext".to_string(),
+            Lut1Def::IfPos0TrueZeroed => "IfPos0TrueZeroed".to_string(),
+            Lut1Def::IfPos0FalseZeroed => "IfPos0FalseZeroed".to_string(),
+            Lut1Def::IfPos1TrueZeroed => "IfPos1TrueZeroed".to_string(),
+            Lut1Def::Custom { name, .. } => name.clone(),
+        }
     }
 
-    fn get_fn(&self) -> fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-        use zhc_crypto::integer_semantics::lut::*;
+    pub fn func(&self) -> fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
         match self {
             Lut1Def::None => None_0,
             Lut1Def::MsgOnly => MsgOnly_0,
@@ -148,16 +200,16 @@ impl Lut1Def {
             Lut1Def::IfPos0TrueZeroed => IfPos0TrueZeroed_0,
             Lut1Def::IfPos0FalseZeroed => IfPos0FalseZeroed_0,
             Lut1Def::IfPos1TrueZeroed => IfPos1TrueZeroed_0,
+            Lut1Def::Custom { f, .. } => *f,
         }
+    }
+
+    pub fn into_lut(&self, spec: CiphertextBlockSpec) -> Lut1 {
+        Lut1::from_fn(self.name(), spec, self.func())
     }
 }
 
-/// Two-output lookup table definitions for [`Pbs2`](super::IopInstructionSet::Pbs2).
-///
-/// Each variant names a pair of `CiphertextBlock → CiphertextBlock`
-/// functions defined in `zhc_crypto`, evaluated jointly via a single
-/// many-LUT PBS. Padding is unconditionally checked on both outputs.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone)]
 pub enum Lut2Def {
     ManyGenProp,
     ManyCarryMsg,
@@ -174,24 +226,41 @@ pub enum Lut2Def {
     Manym2lPropBit0MsgSplit,
     Manyl2mPropBit1MsgSplit,
     Manyl2mPropBit0MsgSplit,
+    Custom {
+        name: String,
+        f1: fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
+        f2: fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
+    },
 }
 
 impl Lut2Def {
-    pub(crate) fn lookup(
-        &self,
-        inp: EmulatedCiphertextBlock,
-    ) -> (EmulatedCiphertextBlock, EmulatedCiphertextBlock) {
-        let (f0, f1) = self.get_fns();
-        lookup2(f0, f1, inp)
+    fn name(&self) -> String {
+        match self {
+            Lut2Def::ManyGenProp => "ManyGenProp".to_string(),
+            Lut2Def::ManyCarryMsg => "ManyCarryMsg".to_string(),
+            Lut2Def::ManyMsgSplitShift1 => "ManyMsgSplitShift1".to_string(),
+            Lut2Def::ManyInv1CarryMsg => "ManyInv1CarryMsg".to_string(),
+            Lut2Def::ManyInv2CarryMsg => "ManyInv2CarryMsg".to_string(),
+            Lut2Def::ManyInv3CarryMsg => "ManyInv3CarryMsg".to_string(),
+            Lut2Def::ManyInv4CarryMsg => "ManyInv4CarryMsg".to_string(),
+            Lut2Def::ManyInv5CarryMsg => "ManyInv5CarryMsg".to_string(),
+            Lut2Def::ManyInv6CarryMsg => "ManyInv6CarryMsg".to_string(),
+            Lut2Def::ManyInv7CarryMsg => "ManyInv7CarryMsg".to_string(),
+            Lut2Def::ManyMsgSplit => "ManyMsgSplit".to_string(),
+            Lut2Def::Manym2lPropBit1MsgSplit => "Manym2lPropBit1MsgSplit".to_string(),
+            Lut2Def::Manym2lPropBit0MsgSplit => "Manym2lPropBit0MsgSplit".to_string(),
+            Lut2Def::Manyl2mPropBit1MsgSplit => "Manyl2mPropBit1MsgSplit".to_string(),
+            Lut2Def::Manyl2mPropBit0MsgSplit => "Manyl2mPropBit0MsgSplit".to_string(),
+            Lut2Def::Custom { name, .. } => name.clone(),
+        }
     }
 
-    fn get_fns(
+    pub fn func(
         &self,
     ) -> (
         fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
         fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
     ) {
-        use zhc_crypto::integer_semantics::lut::*;
         match self {
             Lut2Def::ManyGenProp => (ManyGenProp_0, ManyGenProp_1),
             Lut2Def::ManyCarryMsg => (ManyCarryMsg_0, ManyCarryMsg_1),
@@ -216,80 +285,12 @@ impl Lut2Def {
             Lut2Def::Manyl2mPropBit0MsgSplit => {
                 (Manyl2mPropBit0MsgSplit_0, Manyl2mPropBit0MsgSplit_1)
             }
+            Lut2Def::Custom { f1, f2, .. } => (*f1, *f2),
         }
     }
-}
 
-/// Four-output lookup table definitions for [`Pbs4`](super::IopInstructionSet::Pbs4).
-///
-/// Placeholder — currently uninhabited. The enum exists to reserve the
-/// structural slot for future 4-output many-LUT PBS definitions.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Lut4Def {}
-
-impl Lut4Def {
-    pub(crate) fn lookup(
-        &self,
-        inp: EmulatedCiphertextBlock,
-    ) -> (
-        EmulatedCiphertextBlock,
-        EmulatedCiphertextBlock,
-        EmulatedCiphertextBlock,
-        EmulatedCiphertextBlock,
-    ) {
-        let (f0, f1, f2, f3) = self.get_fns();
-        lookup4(f0, f1, f2, f3, inp)
-    }
-
-    fn get_fns(
-        &self,
-    ) -> (
-        fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
-        fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
-        fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
-        fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
-    ) {
-        unreachable!()
-    }
-}
-
-/// Eight-output lookup table definitions for [`Pbs8`](super::IopInstructionSet::Pbs8).
-///
-/// Placeholder — currently uninhabited. The enum exists to reserve the
-/// structural slot for future 8-output many-LUT PBS definitions.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Lut8Def {}
-
-impl Lut8Def {
-    pub(crate) fn lookup(
-        &self,
-        inp: EmulatedCiphertextBlock,
-    ) -> (
-        EmulatedCiphertextBlock,
-        EmulatedCiphertextBlock,
-        EmulatedCiphertextBlock,
-        EmulatedCiphertextBlock,
-        EmulatedCiphertextBlock,
-        EmulatedCiphertextBlock,
-        EmulatedCiphertextBlock,
-        EmulatedCiphertextBlock,
-    ) {
-        let (f0, f1, f2, f3, f4, f5, f6, f7) = self.get_fns();
-        lookup8(f0, f1, f2, f3, f4, f5, f6, f7, inp)
-    }
-
-    fn get_fns(
-        &self,
-    ) -> (
-        fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
-        fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
-        fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
-        fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
-        fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
-        fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
-        fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
-        fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
-    ) {
-        unreachable!()
+    pub fn into_lut(&self, spec: CiphertextBlockSpec) -> Lut2 {
+        let (f1, f2) = self.func();
+        Lut2::from_fn(self.name(), spec, f1, f2)
     }
 }

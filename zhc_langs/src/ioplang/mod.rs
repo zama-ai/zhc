@@ -15,9 +15,8 @@
 //! instructions operate exclusively on blocks; composite values are
 //! disassembled and reassembled via extract/store operations.
 //!
-//! PBS operations apply lookup tables defined by the [`Lut1Def`],
-//! [`Lut2Def`], [`Lut4Def`], and [`Lut8Def`] enums, which enumerate all
-//! available single- and multi-output table functions. The dialect supports
+//! PBS operations apply lookup tables defined by the [`Lut1Def`] and [`Lut2Def`] enums, which
+//! enumerate all available single- and two-output table functions. The dialect supports
 //! CSE via the [`AllowCse`](zhc_ir::cse::AllowCse) trait, normalizing
 //! commutative addition operand order.
 //!

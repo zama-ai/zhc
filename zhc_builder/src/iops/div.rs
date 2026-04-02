@@ -343,25 +343,6 @@ impl Builder {
 mod test {
     use super::*;
     use zhc_langs::ioplang::IopValue;
-    use zhc_utils::iter::CollectInSmallVec;
-
-    #[test]
-    fn test_div() {
-        let spec = CiphertextSpec::new(64, 2, 2);
-        let ir = div(spec);
-        let eval = ir
-            .eval()
-            .with_inputs([
-                IopValue::Ciphertext(spec.from_int(20)),
-                IopValue::Ciphertext(spec.from_int(3)),
-            ])
-            .get_outputs();
-        let eval = eval
-            .into_iter()
-            .map(|a| a.unwrap_ciphertext().as_storage())
-            .cosvec();
-        dbg!(&eval);
-    }
 
     #[test]
     fn correctness() {
