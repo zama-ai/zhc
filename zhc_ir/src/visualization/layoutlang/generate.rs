@@ -160,7 +160,7 @@ impl StackFrame {
         let (opid, rets) = self.ir.add_op(
             LayoutInstructionSet::Operation {
                 opid: op.id,
-                op: OpContent::from_op(op, &FormatContext::new()),
+                op: OpContent::from_op(op, &FormatContext::new().show_types(true)),
                 args: op.get_arg_valids().iter().cloned().collect(),
                 returns: op.get_return_valids().iter().cloned().collect(),
             },

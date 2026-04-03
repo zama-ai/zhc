@@ -1,7 +1,9 @@
+use std::cmp::{max_by, min_by};
+
 use zhc_utils::{
     FastMap,
     graphics::{Frame, Height, Position},
-    iter::CollectInSmallVec,
+    iter::{CollectInSmallVec, Interleave, Slide, SliderExt},
     svec,
 };
 
@@ -48,17 +50,51 @@ fn gen_layers<'ir, 'ann>(
         order.sort_unstable_by_key(|(place, _)| *place);
         let (variable, assocs) = gen_layer(ir.walk_ops_with(order.into_iter().map(|(_, id)| id)));
         variables.push(LayerMemberLayer(variable));
-        let links_out = ir
-            .walk_ops_with(layer.walker())
-            .flat_map(|op| op.get_returns_iter().flat_map(|v| v.get_uses_iter()))
-            .count();
-        let sep_height = Height::new(10. * links_out as f64);
-        variables.push(LayerMemberSeparator(LayerSeparator::vertical(sep_height)));
         assocs.into_iter().for_each(|(k, v)| {
             opmap.insert(k, v);
         });
     }
-    variables.pop();
+    let variables = variables
+        .into_iter()
+        .interleave_with(
+            layers_map
+                .iter_layers()
+                .slide::<2>()
+                .skip_noncompletes()
+                .map(|layers| {
+                    let [layer_before, layer_after] = layers.unwrap_complete().into_array();
+                    let is_group_input_sep = ir.walk_ops_with(layer_before.walker()).all(|op| {
+                        matches!(
+                            op.get_instruction(),
+                            LayoutInstructionSet::GroupInput { .. }
+                        )
+                    });
+                    let is_group_output_sep = ir.walk_ops_with(layer_after.walker()).all(|op| {
+                        matches!(
+                            op.get_instruction(),
+                            LayoutInstructionSet::GroupOutput { .. }
+                        )
+                    });
+                    let width_before = layer_before.walker().count() as f64;
+                    let width_after = layer_after.walker().count() as f64;
+                    let traffic = ir
+                        .walk_ops_with(layer_after.walker())
+                        .map(|op| op.get_args_arity())
+                        .sum::<usize>() as f64;
+                    let width_min =
+                        min_by(width_before, width_after, |a, b| a.partial_cmp(b).unwrap());
+                    let width_max =
+                        max_by(width_before, width_after, |a, b| a.partial_cmp(b).unwrap());
+                    let spread = (width_max / width_min.max(1.)).max(1.).sqrt();
+                    let sep_height = if is_group_input_sep | is_group_output_sep {
+                        Height::new(0.)
+                    } else {
+                        Height::new(20.0 + 10.0 * traffic * spread)
+                    };
+                    LayerMemberSeparator(LayerSeparator::vertical(sep_height))
+                }),
+        )
+        .collect();
     (
         Layers::new(variables),
         AnnIR::new(ir.ir, opmap, ir.filled_valmap(())),
@@ -222,10 +258,16 @@ fn gen_group_node<'ir, 'ann>(
 
     for op in ir.walk_ops_linear() {
         match (op.get_instruction(), op.get_annotation()) {
-            (LayoutInstructionSet::GroupInput { .. }, PlacementSolution::NonGroup { op: lp }) => {
+            (
+                LayoutInstructionSet::GroupInput { .. },
+                PlacementSolution::NonGroup { op: lp, .. },
+            ) => {
                 group_inputs.push((*lp, op.get_id()));
             }
-            (LayoutInstructionSet::GroupOutput { .. }, PlacementSolution::NonGroup { op: lp }) => {
+            (
+                LayoutInstructionSet::GroupOutput { .. },
+                PlacementSolution::NonGroup { op: lp, .. },
+            ) => {
                 group_outputs.push((*lp, op.get_id()));
             }
             _ => {}

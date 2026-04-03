@@ -188,6 +188,17 @@ impl<A: Dumpable, B: Dumpable> Dumpable for (A, B) {
     }
 }
 
+impl<A: Dumpable, B: Dumpable, C: Dumpable> Dumpable for (A, B, C) {
+    fn dump_to_string(&self) -> String {
+        format!(
+            "({}, {}, {})",
+            self.0.dump_to_string(),
+            self.1.dump_to_string(),
+            self.2.dump_to_string()
+        )
+    }
+}
+
 macro_rules! impl_dumpable_via_display {
     ($($t:ty),* $(,)?) => {
         $(

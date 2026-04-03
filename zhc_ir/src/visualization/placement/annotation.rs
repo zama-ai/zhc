@@ -194,7 +194,7 @@ pub enum PlacementSolution {
 impl PlacementSolution {
     pub fn get_place(&self) -> Place {
         match self {
-            PlacementSolution::NonGroup { op } | PlacementSolution::Group { op, .. } => *op,
+            PlacementSolution::NonGroup { op, .. } | PlacementSolution::Group { op, .. } => *op,
         }
     }
 }

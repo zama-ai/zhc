@@ -26,8 +26,8 @@ impl OpContent {
                 .get_returns_iter()
                 .map(|a| a.fmt_to_string(ctx))
                 .collect(),
-            call: opref.fmt_to_string(ctx),
-            comment: opref.comment.clone(),
+            call: opref.fmt_to_string(&ctx.clone().show_comments(false).show_types(false)),
+            comment: None,
         }
     }
 }

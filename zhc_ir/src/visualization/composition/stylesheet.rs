@@ -139,11 +139,13 @@ impl StyleSheet {
         });
         output.insert::<LayerSpacerClass>(Style {
             hjustify: Justify::Space,
+            padding: Thickness::new(0.),
+            spacing: Thickness::new(0.),
             ..Default::default()
         });
-        output.insert::<VerticesClass>(Style {
+        output.insert::<LayersClass>(Style {
             padding: Thickness::new(10.),
-            spacing: Thickness::new(10.),
+            spacing: Thickness::new(0.),
             ..Default::default()
         });
         output.insert::<LinkClass>(Style {
@@ -255,8 +257,8 @@ impl Class for LayerClass {}
 pub struct LayerSpacerClass;
 impl Class for LayerSpacerClass {}
 
-pub struct VerticesClass;
-impl Class for VerticesClass {}
+pub struct LayersClass;
+impl Class for LayersClass {}
 
 pub struct LinkClass;
 impl Class for LinkClass {}

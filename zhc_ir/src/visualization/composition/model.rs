@@ -83,14 +83,14 @@ pub use D7::E7 as NodeGroupOutputPortVar;
 /// Horizontal row of nodes forming a diagram layer.
 pub type Layer = HStack<Node, LayerClass>;
 
-pub type LayerSeparator = Spacer<LayerClass>;
+pub type LayerSeparator = Spacer<LayerSpacerClass>;
 
 pub type LayerMember = D2<Layer, LayerSeparator>;
 pub use D2::E1 as LayerMemberLayer;
 pub use D2::E2 as LayerMemberSeparator;
 
 /// All the diagram layers
-pub type Layers = VStack<LayerMember, VerticesClass>;
+pub type Layers = VStack<LayerMember, LayersClass>;
 
 /// Content inside a group element (uses smaller padding/spacing than top-level Vertices).
 pub type GroupContent = Layers;
