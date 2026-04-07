@@ -690,6 +690,14 @@ impl Size {
             width: max(self.width, other.width),
         }
     }
+
+    /// Returns the bounding box containing both sizes.
+    pub fn union(self, other: Self) -> Self {
+        Self {
+            width: max(self.width, other.width),
+            height: max(self.height, other.height),
+        }
+    }
 }
 
 impl Mul<usize> for Size {
@@ -962,7 +970,7 @@ impl Frame {
     ///
     /// Panics if `width` is greater than the current frame width.
     pub fn resize_horizontal(self, width: Width, align: HAlign) -> Frame {
-        assert!(width <= self.size.width);
+        assert!(width.0 <= self.size.width.0 + Thickness::EPSILON);
         let x_offset = match align {
             HAlign::Left => Width::ZERO,
             HAlign::Center => (self.size.width - width) / 2,
@@ -987,7 +995,7 @@ impl Frame {
     ///
     /// Panics if `height` is greater than the current frame height.
     pub fn resize_vertical(self, height: Height, align: VAlign) -> Frame {
-        assert!(height <= self.size.height);
+        assert!(height.0 <= self.size.height.0 + Thickness::EPSILON);
         let y_offset = match align {
             VAlign::Top => Height::ZERO,
             VAlign::Center => (self.size.height - height) / 2,
@@ -1307,6 +1315,13 @@ impl Color {
     /// Creates a new opaque color with the specified RGB values and full alpha.
     pub const fn rgb(r: u8, g: u8, b: u8) -> Self {
         Self { r, g, b, a: 255 }
+    }
+
+    /// Mutates the color to use the opacity. Between 0 and 1
+    pub const fn with_opacity(mut self, opacity: f64) -> Self {
+        assert!(0. <= opacity && opacity <= 1.);
+        self.a = (opacity * 255.) as u8;
+        self
     }
 
     pub const TRANSPARENT: Self = Color::new(0, 0, 0, 0);

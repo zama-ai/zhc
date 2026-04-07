@@ -1,7 +1,6 @@
 use super::*;
-use std::marker::PhantomData;
 use zhc_utils::{
-    graphics::{Frame, Justify, Size, Width},
+    graphics::{Color, Frame, Justify, Size, Width},
     iter::Separate,
 };
 
@@ -11,26 +10,40 @@ enum Spaced<E> {
 }
 
 /// Horizontal stack container that arranges child elements left to right with spacing.
-pub struct HStack<E: Element, C: Class = NoClass> {
+pub struct HStack<E, C: Class = NoClass> {
     pub content: Vec<E>,
-    class: PhantomData<C>,
+    styler: Styler<C>,
     variable: VariableCell,
 }
 
-impl<E: Element, C: Class> HStack<E, C> {
+impl<E, C: Class> HStack<E, C> {
     /// Creates a new horizontal stack with the given child elements.
-    pub fn new(content: Vec<E>) -> Self {
+    pub fn new(modifier: Option<StyleModifier>, content: Vec<E>) -> Self {
         Self {
             content,
-            class: PhantomData,
+            styler: Styler::new(modifier),
             variable: VariableCell::fresh(),
         }
     }
 }
 
-impl<E: Element, C: Class> Element for HStack<E, C> {
-    fn solve_size(&mut self, stylesheet: &StyleSheet) {
-        let style = stylesheet.get::<C>();
+impl<E, C: Class> SceneElement for HStack<E, C> {
+    fn get_size(&self) -> Size {
+        self.variable.get_size()
+    }
+
+    fn get_frame(&self) -> Frame {
+        self.variable.get_frame()
+    }
+
+    fn get_variable_cell(&self) -> VariableCell {
+        self.variable.clone()
+    }
+}
+
+impl<E: SceneSolver, C: Class> SceneSolver for HStack<E, C> {
+    fn solve_size(&mut self) {
+        let style = self.styler.get();
         let size = self
             .content
             .iter_mut()
@@ -38,7 +51,7 @@ impl<E: Element, C: Class> Element for HStack<E, C> {
             .separate_with(|| Spaced::Space)
             .fold(Size::ZERO, |size, element| match element {
                 Spaced::Element(element) => {
-                    element.solve_size(stylesheet);
+                    element.solve_size();
                     size.stack_horizontal(element.get_size())
                 }
                 Spaced::Space => size.pad_right(style.spacing),
@@ -47,8 +60,8 @@ impl<E: Element, C: Class> Element for HStack<E, C> {
         self.variable.set_size(size);
     }
 
-    fn solve_frame(&mut self, stylesheet: &StyleSheet, available: Frame) {
-        let style = stylesheet.get::<C>();
+    fn solve_frame(&mut self, available: Frame) {
+        let style = self.styler.get();
         let intrinsic = self.get_size();
 
         // Determine HStack's frame based on justify mode.
@@ -73,19 +86,39 @@ impl<E: Element, C: Class> Element for HStack<E, C> {
 
         // Position each child.
         for (element, child_frame) in self.content.iter_mut().zip(child_frames) {
-            element.solve_frame(stylesheet, child_frame);
+            element.solve_frame(child_frame);
         }
     }
+}
 
-    fn get_size(&self) -> Size {
-        self.variable.get_size()
-    }
+impl<E: Renderable, C: Class> Renderable for HStack<E, C> {
+    fn render(&self) -> Vec<SvgElement> {
+        let style = self.styler.get();
+        let frame = self.get_frame();
+        let mut elements = Vec::new();
 
-    fn get_frame(&self) -> Frame {
-        self.variable.get_frame()
-    }
+        // Background rect if visible
+        if style.fill_color != Color::TRANSPARENT || style.border_color != Color::TRANSPARENT {
+            elements.push(SvgElement::Rect {
+                x: frame.position.x.0,
+                y: frame.position.y.0,
+                width: frame.size.width.0.0,
+                height: frame.size.height.0.0,
+                rx: (style.corner_radius.0 > 0.0).then_some(style.corner_radius.0),
+                fill: Some(style.fill_color.to_string()),
+                stroke: Some(style.border_color.to_string()),
+                stroke_width: Some(style.border_width.0),
+                class: None,
+                id: None,
+                data_val: None,
+            });
+        }
 
-    fn get_variable_cell(&self) -> VariableCell {
-        self.variable.clone()
+        // Render children
+        for child in &self.content {
+            elements.extend(child.render());
+        }
+
+        elements
     }
 }

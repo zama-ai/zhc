@@ -5,12 +5,6 @@ use zhc_utils::{
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Solution {
-    pub size: Size,
-    pub frame: Frame,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VariableCell(Rc<RefCell<Variable>>);
 
 impl VariableCell {
@@ -35,10 +29,6 @@ impl VariableCell {
     pub fn get_frame(&self) -> Frame {
         self.0.borrow().get_frame()
     }
-
-    pub fn get_solution(&self) -> Solution {
-        self.0.borrow().get_solution()
-    }
 }
 
 impl Display for VariableCell {
@@ -46,6 +36,22 @@ impl Display for VariableCell {
         let ptr_str = format!("{:p}", self.0.as_ptr());
         let last_4 = &ptr_str[ptr_str.len().saturating_sub(4)..];
         write!(f, "#{}", last_4)
+    }
+}
+
+impl VariableCell {
+    pub fn watch(&self) -> VariableWatch {
+        VariableWatch(self.0.clone())
+    }
+}
+
+/// Read-only reference to a variable cell.
+#[derive(Debug, Clone)]
+pub struct VariableWatch(Rc<RefCell<Variable>>);
+
+impl VariableWatch {
+    pub fn get_frame(&self) -> Frame {
+        self.0.borrow().get_frame()
     }
 }
 
@@ -89,16 +95,6 @@ impl Variable {
     pub fn get_frame(&self) -> Frame {
         match self {
             Self::Framed { frame, .. } => frame.clone(),
-            _ => panic!(),
-        }
-    }
-
-    pub fn get_solution(&self) -> Solution {
-        match self {
-            Self::Framed { frame, size } => Solution {
-                frame: frame.clone(),
-                size: size.clone(),
-            },
             _ => panic!(),
         }
     }

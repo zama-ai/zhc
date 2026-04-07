@@ -8,6 +8,7 @@ pub struct Svg {
     pub elements: Vec<SvgElement>,
 }
 
+#[allow(unused)]
 #[derive(Debug, Clone)]
 pub enum SvgElement {
     Rect {
@@ -15,6 +16,7 @@ pub enum SvgElement {
         y: f64,
         width: f64,
         height: f64,
+        rx: Option<f64>,
         fill: Option<String>,
         stroke: Option<String>,
         stroke_width: Option<f64>,
@@ -52,6 +54,7 @@ pub enum SvgElement {
     },
 }
 
+#[allow(unused)]
 #[derive(Debug, Clone)]
 pub enum PathCommand {
     MoveTo(Position),
@@ -125,6 +128,7 @@ impl std::fmt::Display for SvgElement {
                 y,
                 width,
                 height,
+                rx,
                 fill,
                 stroke,
                 stroke_width,
@@ -137,6 +141,9 @@ impl std::fmt::Display for SvgElement {
                     r#"  <rect x="{}" y="{}" width="{}" height="{}""#,
                     x, y, width, height
                 )?;
+                if let Some(rx) = rx {
+                    write!(f, r#" rx="{}""#, rx)?;
+                }
                 if let Some(id) = id {
                     write!(f, r#" id="{}""#, id)?;
                 }

@@ -4,23 +4,11 @@ use zhc_utils::graphics::{Frame, Size};
 macro_rules! discriminated_union {
     ($name:ident, [$($etype:ident),*]) => {
         /// Discriminated union for runtime polymorphism.
-        pub enum $name<$($etype: Element),*> {
+        pub enum $name<$($etype),*> {
             $($etype($etype),)*
         }
 
-        impl<$($etype: Element),*> Element for $name<$($etype),*> {
-            fn solve_size(&mut self, stylesheet: &StyleSheet) {
-                match self {
-                    $($name::$etype(e) => e.solve_size(stylesheet),)*
-                }
-            }
-
-            fn solve_frame(&mut self, stylesheet: &StyleSheet, available: Frame) {
-                match self {
-                    $($name::$etype(e) => e.solve_frame(stylesheet, available),)*
-                }
-            }
-
+        impl<$($etype: SceneElement),*> SceneElement for $name<$($etype),*> {
             fn get_size(&self) -> Size {
                 match self {
                     $($name::$etype(e) => e.get_size(),)*
@@ -36,6 +24,28 @@ macro_rules! discriminated_union {
             fn get_variable_cell(&self) -> VariableCell {
                 match self {
                     $($name::$etype(e) => e.get_variable_cell(),)*
+                }
+            }
+        }
+
+        impl<$($etype: SceneSolver),*> SceneSolver for $name<$($etype),*> {
+            fn solve_size(&mut self) {
+                match self {
+                    $($name::$etype(e) => e.solve_size(),)*
+                }
+            }
+
+            fn solve_frame(&mut self, available: Frame) {
+                match self {
+                    $($name::$etype(e) => e.solve_frame(available),)*
+                }
+            }
+        }
+
+        impl<$($etype: Renderable),*> Renderable for $name<$($etype),*> {
+            fn render(&self) -> Vec<SvgElement> {
+                match self {
+                    $($name::$etype(e) => e.render(),)*
                 }
             }
         }

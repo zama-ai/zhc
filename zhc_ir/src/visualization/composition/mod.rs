@@ -31,12 +31,11 @@ mod model;
 mod primitives;
 mod solution;
 mod solver;
-mod stylesheet;
+mod style;
 
-pub use annotation::*;
 pub use element::*;
 pub use model::*;
 pub use primitives::*;
 pub use solution::*;
 pub use solver::*;
-pub use stylesheet::*;
+pub use style::*;

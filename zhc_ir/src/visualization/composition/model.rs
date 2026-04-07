@@ -18,14 +18,13 @@ pub type OpOutputPort = TextBox<OpOutputPortClass>;
 /// Horizontal collection of output ports.
 pub type OpOutputs = HStack<OpOutputPort, OpOutputsClass>;
 
-/// Input operation: either without comment (Body, Outputs) or with comment (Body, Comment,
-/// Outputs).
+/// Input operation: body + optional comment + outputs.
 pub type InputOp = V3<OpBody, Optional<OpComment>, OpOutputs, InputOpClass>;
 
-/// Standard operation: either without comment or with comment.
+/// Standard operation: inputs + body + optional comment + outputs.
 pub type Op = V4<OpInputs, OpBody, Optional<OpComment>, OpOutputs, OpClass>;
 
-/// Effect operation: either without comment or with comment.
+/// Effect operation: inputs + body + optional comment.
 pub type EffectOp = V3<OpInputs, OpBody, Optional<OpComment>, EffectOpClass>;
 
 /// Empty placeholder element for missing nodes.
@@ -49,15 +48,7 @@ pub type GroupTitle = TextBox<GroupTitleClass>;
 /// Group element containing nested vertices with boundary ports.
 pub struct Group(pub V4<GroupTitle, GroupInputs, GroupContent, GroupOutputs, GroupClass>);
 
-impl Element for Group {
-    fn solve_size(&mut self, stylesheet: &StyleSheet) {
-        self.0.solve_size(stylesheet);
-    }
-
-    fn solve_frame(&mut self, stylesheet: &StyleSheet, available: zhc_utils::graphics::Frame) {
-        self.0.solve_frame(stylesheet, available);
-    }
-
+impl SceneElement for Group {
     fn get_size(&self) -> zhc_utils::graphics::Size {
         self.0.get_size()
     }
@@ -68,6 +59,22 @@ impl Element for Group {
 
     fn get_variable_cell(&self) -> VariableCell {
         self.0.get_variable_cell()
+    }
+}
+
+impl SceneSolver for Group {
+    fn solve_size(&mut self) {
+        self.0.solve_size();
+    }
+
+    fn solve_frame(&mut self, available: zhc_utils::graphics::Frame) {
+        self.0.solve_frame(available);
+    }
+}
+
+impl crate::visualization::svg::Renderable for Group {
+    fn render(&self) -> Vec<crate::visualization::svg::SvgElement> {
+        self.0.render()
     }
 }
 
@@ -94,3 +101,9 @@ pub type Layers = VStack<LayerMember, LayersClass>;
 
 /// Content inside a group element (uses smaller padding/spacing than top-level Vertices).
 pub type GroupContent = Layers;
+
+/// Collection of curves connecting nodes.
+pub type Curves = Inert<Bag<Curve>>;
+
+/// Root scene graph: layers with curves overlay.
+pub type Scene = Z2<Layers, Curves>;

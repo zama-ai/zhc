@@ -2,19 +2,21 @@
 use super::*;
 use zhc_utils::graphics::{Frame, Size};
 
-pub enum Optional<E: Element> {
+pub enum Optional<E> {
     Some(E),
     None(VariableCell),
 }
 
-impl<E: Element> Optional<E> {
+impl<E> Optional<E> {
     pub fn new(content: Option<E>) -> Self {
         match content {
             Some(e) => Optional::Some(e),
             None => Optional::None(VariableCell::fresh()),
         }
     }
+}
 
+impl<E: SceneElement> Optional<E> {
     pub fn maybe_variable_cell(&self) -> Option<VariableCell> {
         match self {
             Optional::Some(e) => Some(e.get_variable_cell()),
@@ -23,21 +25,7 @@ impl<E: Element> Optional<E> {
     }
 }
 
-impl<E: Element> Element for Optional<E> {
-    fn solve_size(&mut self, stylesheet: &StyleSheet) {
-        match self {
-            Optional::Some(e) => e.solve_size(stylesheet),
-            Optional::None(v) => v.set_size(Size::ZERO),
-        }
-    }
-
-    fn solve_frame(&mut self, stylesheet: &StyleSheet, available: Frame) {
-        match self {
-            Optional::Some(e) => e.solve_frame(stylesheet, available),
-            Optional::None(variable_cell) => variable_cell.set_frame(available),
-        }
-    }
-
+impl<E: SceneElement> SceneElement for Optional<E> {
     fn get_size(&self) -> Size {
         match self {
             Optional::Some(e) => e.get_size(),
@@ -60,11 +48,36 @@ impl<E: Element> Element for Optional<E> {
     }
 }
 
-impl<E: Element> From<Option<E>> for Optional<E> {
+impl<E: SceneSolver> SceneSolver for Optional<E> {
+    fn solve_size(&mut self) {
+        match self {
+            Optional::Some(e) => e.solve_size(),
+            Optional::None(v) => v.set_size(Size::ZERO),
+        }
+    }
+
+    fn solve_frame(&mut self, available: Frame) {
+        match self {
+            Optional::Some(e) => e.solve_frame(available),
+            Optional::None(variable_cell) => variable_cell.set_frame(available),
+        }
+    }
+}
+
+impl<E> From<Option<E>> for Optional<E> {
     fn from(value: Option<E>) -> Self {
         match value {
             Some(e) => Optional::Some(e),
             None => Optional::None(VariableCell::fresh()),
+        }
+    }
+}
+
+impl<E: Renderable> Renderable for Optional<E> {
+    fn render(&self) -> Vec<SvgElement> {
+        match self {
+            Optional::Some(e) => e.render(),
+            Optional::None(_) => vec![],
         }
     }
 }

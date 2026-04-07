@@ -1,18 +1,56 @@
-use std::hash::Hash;
+use std::{hash::Hash, rc::Rc};
 
 use zhc_utils::{small::SmallVec, svec};
 
 use crate::{
     Dialect, DialectInstructionSet, Format, FormatContext, IR, OpId, OpRef, Signature, ValId, sig,
-    visualization::layoutlang::{LayoutDialect, LayoutTypeSystem},
+    visualization::{
+        layoutlang::{LayoutDialect, LayoutTypeSystem},
+        visual_annotation::VisualAnnotation,
+    },
 };
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Debug)]
 pub struct OpContent {
     pub args: SmallVec<String>,
     pub returns: SmallVec<String>,
     pub call: String,
     pub comment: Option<String>,
+    pub annotation: Option<Rc<dyn VisualAnnotation>>,
+}
+
+impl Clone for OpContent {
+    fn clone(&self) -> Self {
+        Self {
+            args: self.args.clone(),
+            returns: self.returns.clone(),
+            call: self.call.clone(),
+            comment: self.comment.clone(),
+            annotation: self.annotation.clone(),
+        }
+    }
+}
+
+impl PartialEq for OpContent {
+    fn eq(&self, other: &Self) -> bool {
+        // Annotation is intentionally excluded from equality
+        self.args == other.args
+            && self.returns == other.returns
+            && self.call == other.call
+            && self.comment == other.comment
+    }
+}
+
+impl Eq for OpContent {}
+
+impl Hash for OpContent {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        // Annotation is intentionally excluded from hashing
+        self.args.hash(state);
+        self.returns.hash(state);
+        self.call.hash(state);
+        self.comment.hash(state);
+    }
 }
 
 impl OpContent {
@@ -28,6 +66,7 @@ impl OpContent {
                 .collect(),
             call: opref.fmt_to_string(&ctx.clone().show_comments(false).show_types(false)),
             comment: None,
+            annotation: None,
         }
     }
 }

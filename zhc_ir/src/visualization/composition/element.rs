@@ -2,14 +2,8 @@ use zhc_utils::graphics::{Frame, Size};
 
 use super::*;
 
-/// Defines the two-phase layout protocol for all renderable diagram elements.
-pub trait Element {
-    /// Computes the element's intrinsic size based on content and stylesheet.
-    fn solve_size(&mut self, stylesheet: &StyleSheet);
-
-    /// Positions the element within the available frame using stylesheet alignment rules.
-    fn solve_frame(&mut self, stylesheet: &StyleSheet, available: Frame);
-
+/// Query interface for scene graph elements after layout.
+pub trait SceneElement {
     /// Returns the computed size from the sizing phase.
     fn get_size(&self) -> Size;
 
@@ -19,21 +13,16 @@ pub trait Element {
     fn get_variable_cell(&self) -> VariableCell;
 }
 
-impl<T: Element> Element for Option<T> {
-    fn solve_size(&mut self, stylesheet: &StyleSheet) {
-        match self {
-            Some(e) => e.solve_size(stylesheet),
-            None => {}
-        }
-    }
+/// Layout solver interface for scene graph elements.
+pub trait SceneSolver: SceneElement {
+    /// Computes the element's intrinsic size based on content and style.
+    fn solve_size(&mut self);
 
-    fn solve_frame(&mut self, stylesheet: &StyleSheet, available: Frame) {
-        match self {
-            Some(e) => e.solve_frame(stylesheet, available),
-            None => {}
-        }
-    }
+    /// Positions the element within the available frame using style alignment rules.
+    fn solve_frame(&mut self, available: Frame);
+}
 
+impl<T: SceneElement> SceneElement for Option<T> {
     fn get_size(&self) -> Size {
         match self {
             Some(e) => e.get_size(),
@@ -52,6 +41,22 @@ impl<T: Element> Element for Option<T> {
         match self {
             Some(e) => e.get_variable_cell(),
             None => panic!(),
+        }
+    }
+}
+
+impl<T: SceneSolver> SceneSolver for Option<T> {
+    fn solve_size(&mut self) {
+        match self {
+            Some(e) => e.solve_size(),
+            None => {}
+        }
+    }
+
+    fn solve_frame(&mut self, available: Frame) {
+        match self {
+            Some(e) => e.solve_frame(available),
+            None => {}
         }
     }
 }

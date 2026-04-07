@@ -4,7 +4,7 @@ use crate::testlang::{TestInstructionSet, TestLang};
 use crate::visualization::Hierarchy;
 use zhc_utils::svec;
 
-const PREFIX: &'static str = "/tmp/";
+const PREFIX: &'static str = "";
 
 /// Build a small IR and annotate it with a flat hierarchy (all ops at root).
 #[test]
