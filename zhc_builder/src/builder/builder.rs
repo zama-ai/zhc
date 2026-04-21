@@ -828,7 +828,7 @@ impl Builder {
         let (_node, ret) = self.inner_mut().insert_op(
             IopInstructionSet::Transfer,
             svec![src.valid],
-            self.current_comment(),
+            self.current_hierarchy(),
         );
         CiphertextBlock {
             valid: ret[0],
