@@ -168,3 +168,24 @@ fn mh_mul() {
             .expect("Failed to write to .asm file");
     }
 }
+
+#[test]
+fn asm_view() {
+    use zhc_builder::CiphertextSpec;
+    use zhc_sim::hpu::PhysicalConfig;
+
+    let mut hpu_config = HpuConfig::from(PhysicalConfig::tuniform_64b_pfail128_psi64());
+    hpu_config.pbs_min_batch_size = 12;
+    hpu_config.pbs_max_batch_size = 12;
+    let builder = zhc_builder::mul_lsb(CiphertextSpec::new(8, 2, 2));
+    builder.draw("asm_view.html");
+    let mut ir = builder.into_ir();
+
+    let allocated = regular_pipeline(ir, &hpu_config);
+    use std::fs::File;
+    use std::io::Write;
+    let filename = format!("output.asm");
+    let mut file = File::create(&filename).expect("Failed to create .asm file");
+    file.write_all(emit_assembly(&allocated).as_bytes())
+        .expect("Failed to write to .asm file");
+}
