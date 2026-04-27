@@ -32,7 +32,7 @@ use zhc_crypto::integer_semantics::{
     CiphertextBlockSpec, CiphertextSpec, PlaintextBlockSpec, PlaintextSpec, lut::LookupCheck,
 };
 use zhc_ir::{
-    IR, OpId, PrintWalker, Signature,
+    IR, OpId, OpMap, PrintWalker, Signature,
     cse::eliminate_common_subexpressions,
     dce::eliminate_dead_code,
     visualization::{Hierarchy, draw_ir_to_html},
@@ -264,6 +264,16 @@ impl Builder {
         Ref::map(self.inner(), |inner| &inner.ir)
     }
 
+    /// Returns the hierarchy annotations for all operations.
+    ///
+    /// The returned [`OpMap`] associates each operation with its [`Hierarchy`], derived from the
+    /// comment stack active when the operation was emitted. Visualization functions use this to
+    /// group related operations together.
+    pub fn hierarchy(&self) -> OpMap<Hierarchy> {
+        self.ir()
+            .partially_mapped_opmap(|op| self.inner().hierarchies.get(*op).cloned())
+    }
+
     /// Creates an evaluator for interpreting this circuit.
     ///
     /// Returns an [`Evaluator`] that can be configured with inputs and run to compute
@@ -339,6 +349,28 @@ impl Builder {
         }
     }
 
+    /// Renders the IR as an interactive HTML visualization and writes it to the given path.
+    ///
+    /// The visualization displays the IR as an SVG graph where operations appear as nodes and
+    /// data dependencies as edges. Operations sharing the same comment hierarchy are grouped
+    /// together visually, making the logical structure of the program easier to follow. The
+    /// resulting HTML file supports interactive features such as zooming and panning.
+    ///
+    /// This is primarily a debugging and exploration tool — call it at any point during
+    /// construction to inspect the current state of the IR.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the file cannot be written to the given path.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// # let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// # let ct = builder.ciphertext_input(4);
+    /// builder.draw("debug.html");
+    /// ```
     pub fn draw(&self, path: impl AsRef<Path>) {
         draw_ir_to_html(
             &self.ir(),
@@ -351,6 +383,7 @@ impl Builder {
     /// Returns a new builder handle with the given comment appended to the annotation stack.
     ///
     /// Unlike [`push_comment`](Self::push_comment) which mutates the current builder, this
+    ///
     /// method returns a *new* [`Builder`] sharing the same underlying IR but with an
     /// independent comment stack containing the new comment. All instructions emitted
     /// through the returned builder are annotated with the full stack including the new

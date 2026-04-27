@@ -18,6 +18,7 @@
 
 use std::{
     cmp::max,
+    f64::EPSILON,
     ops::{Add, Div, Mul, Neg, Sub},
 };
 
@@ -1505,14 +1506,18 @@ impl<const N: usize> Dumpable for ColorScale<N> {
 
 impl ColorScale<3> {
     pub const TRAFFIC_LIGHT: Self = Self([Color::GREEN, Color::YELLOW, Color::RED]);
+    pub const INVERSE_TRAFFIC_LIGHT: Self = Self([Color::RED, Color::YELLOW, Color::GREEN]);
 }
 
 impl<const N: usize> ColorScale<N> {
-    pub fn interpolate(&self, val: f64) -> Color {
+    pub fn interpolate(&self, mut val: f64) -> Color {
         assert!(
-            0. <= val && val < 1.,
+            0. <= val && val <= 1.,
             "Scale member must be between 0 and 1."
         );
+        if val == 1. {
+            val -= EPSILON;
+        }
         let n_ranges = self.0.len() - 1;
         let range_length = 1. / (n_ranges as f64);
         let val_range = val.div_euclid(range_length) as usize;

@@ -21,7 +21,7 @@ pub mod prelude {
     use zhc_pipeline::hpu_metrics::HpuMetrics;
     use zhc_pipeline::pbs_metrics::PbsMetrics;
     use zhc_pipeline::{
-        compute_gpu_metrics, compute_hpu_metrics, compute_latency, compute_pbs_metrics,
+        compute_gpu_metrics, compute_hpu_metrics, compute_latency, compute_pbs_metrics, draw_slack,
         trace_execution,
     };
     use zhc_sim::MHz;
@@ -46,6 +46,11 @@ pub mod prelude {
 
         /// Computes GPU-level metrics (batch statistics).
         fn compute_gpu_metrics(&self, optimal_batch_size: usize) -> GpuMetrics;
+
+        /// Renders a slack heatmap of the IR as an interactive HTML file.
+        ///
+        /// See [`draw_slack()`] for details.
+        fn draw_slack(&self, path: impl AsRef<Path>);
     }
 
     impl BuilderExt for Builder {
@@ -67,6 +72,10 @@ pub mod prelude {
 
         fn compute_gpu_metrics(&self, optimal_batch_size: usize) -> GpuMetrics {
             compute_gpu_metrics(self, optimal_batch_size)
+        }
+
+        fn draw_slack(&self, path: impl AsRef<Path>) {
+            draw_slack(self, path);
         }
     }
 }

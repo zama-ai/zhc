@@ -269,6 +269,18 @@ mod test {
     use zhc_utils::assert_display_is;
 
     #[test]
+    fn test_add_kfdsaj() {
+        let spec = CiphertextSpec::new(18, 2, 2);
+        let ir = add(spec);
+        ir.eval()
+            .with_inputs([
+                IopValue::Ciphertext(spec.from_int(55)),
+                IopValue::Ciphertext(spec.from_int(104)),
+            ])
+            .draw("test.html");
+    }
+
+    #[test]
     fn test_add() {
         let spec = CiphertextSpec::new(18, 2, 2);
         let ir = add(spec).into_ir();

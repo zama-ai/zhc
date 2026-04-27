@@ -24,6 +24,7 @@ pub mod allocator;
 pub mod batch_scheduler;
 pub mod batcher;
 pub mod compat;
+pub mod draw_slack;
 pub mod gpu_metrics;
 pub mod hpu_metrics;
 pub mod latency;
@@ -105,6 +106,10 @@ pub fn compute_latency(builder: &Builder, config: HpuConfig, freq: MHz) -> f64 {
     latency::compute_latency(&allocated, &config)
         .0
         .as_ts(freq.period())
+}
+
+pub fn draw_slack(builder: &Builder, path: impl AsRef<Path>) {
+    draw_slack::draw_slack(builder, path);
 }
 
 fn regular_pipeline(mut ir: IR<IopLang>, config: &HpuConfig) -> IR<DopLang> {

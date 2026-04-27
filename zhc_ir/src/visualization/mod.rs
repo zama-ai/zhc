@@ -1,7 +1,4 @@
-use crate::{
-    AnnIR, Annotation, Dialect, IR, OpMap,
-    visualization::{svg::Svg, visual_annotation::VisualAnnotation},
-};
+use crate::{AnnIR, Annotation, Dialect, IR, OpMap, visualization::svg::Svg};
 use std::path::Path;
 
 mod composition;
@@ -13,9 +10,11 @@ mod placement;
 mod svg;
 mod visual_annotation;
 
+pub use composition::*;
 pub use hierarchy::*;
 pub use layer_map::*;
 pub use layoutlang::*;
+pub use visual_annotation::*;
 
 #[cfg(test)]
 mod test;
@@ -41,10 +40,19 @@ fn draw_ann_ir<D: Dialect, OpAnn: Annotation + VisualAnnotation, ValAnn: Annotat
     svg::draw(&scene)
 }
 
-/// Draws an IR diagram to an SVG file.
+/// Renders an IR graph as a static SVG file.
 ///
-/// Takes an IR with hierarchy annotations and produces an SVG visualization
-/// showing the compound graph structure with operations, groups, and edges.
+/// The visualization displays operations as nodes and data dependencies as edges.
+/// Operations sharing the same hierarchy annotation are grouped together visually,
+/// making the logical structure of the program easier to follow.
+///
+/// For an interactive version with zoom and pan, use [`draw_ir_to_html`]. To include
+/// custom per-operation visual annotations (e.g., computed values), use
+/// [`draw_ann_ir_to_svg`] instead.
+///
+/// # Panics
+///
+/// Panics if the file cannot be written to the given path.
 pub fn draw_ir_to_svg<D: Dialect>(
     ir: &IR<D>,
     hierarchy_ann: OpMap<Hierarchy>,
@@ -55,6 +63,18 @@ pub fn draw_ir_to_svg<D: Dialect>(
     std::fs::write(path, svg_content).expect("Failed to write SVG file");
 }
 
+/// Renders an annotated IR graph as a static SVG file.
+///
+/// Like [`draw_ir_to_svg`], but accepts an [`AnnIR`] whose operation annotations implement
+/// [`VisualAnnotation`]. Each operation's annotation can provide a custom widget (displayed
+/// inside the node) and a style modifier (affecting the node's appearance). This is useful
+/// for visualizing interpreter results, optimization metadata, or any per-operation data.
+///
+/// For an interactive version with zoom and pan, use [`draw_ann_ir_to_html`].
+///
+/// # Panics
+///
+/// Panics if the file cannot be written to the given path.
 pub fn draw_ann_ir_to_svg<D: Dialect, OpAnn: Annotation + VisualAnnotation, ValAnn: Annotation>(
     ir: &AnnIR<D, OpAnn, ValAnn>,
     hierarchy_ann: OpMap<Hierarchy>,
@@ -65,10 +85,20 @@ pub fn draw_ann_ir_to_svg<D: Dialect, OpAnn: Annotation + VisualAnnotation, ValA
     std::fs::write(path, svg_content).expect("Failed to write SVG file");
 }
 
-/// Draws an IR diagram to an HTML file with interactive zoom/pan.
+/// Renders an IR graph as an interactive HTML file.
 ///
-/// Similar to `draw_ir` but outputs an HTML document that embeds the SVG
-/// with better viewport handling and transform-based zoom/pan.
+/// The visualization displays operations as nodes and data dependencies as edges.
+/// Operations sharing the same hierarchy annotation are grouped together visually,
+/// making the logical structure of the program easier to follow. The resulting HTML
+/// file supports interactive features such as zooming and panning.
+///
+/// For a static SVG without interactivity, use [`draw_ir_to_svg`]. To include custom
+/// per-operation visual annotations (e.g., computed values), use [`draw_ann_ir_to_html`]
+/// instead.
+///
+/// # Panics
+///
+/// Panics if the file cannot be written to the given path.
 pub fn draw_ir_to_html<D: Dialect>(
     ir: &IR<D>,
     hierarchy_ann: OpMap<Hierarchy>,
@@ -80,6 +110,19 @@ pub fn draw_ir_to_html<D: Dialect>(
     std::fs::write(path, html_content).expect("Failed to write HTML file");
 }
 
+/// Renders an annotated IR graph as an interactive HTML file.
+///
+/// Like [`draw_ir_to_html`], but accepts an [`AnnIR`] whose operation annotations implement
+/// [`VisualAnnotation`]. Each operation's annotation can provide a custom widget (displayed
+/// inside the node) and a style modifier (affecting the node's appearance). This is useful
+/// for visualizing interpreter results, optimization metadata, or any per-operation data.
+/// The resulting HTML file supports interactive features such as zooming and panning.
+///
+/// For a static SVG without interactivity, use [`draw_ann_ir_to_svg`].
+///
+/// # Panics
+///
+/// Panics if the file cannot be written to the given path.
 pub fn draw_ann_ir_to_html<D: Dialect, OpAnn: Annotation + VisualAnnotation, ValAnn: Annotation>(
     ir: &AnnIR<D, OpAnn, ValAnn>,
     hierarchy_ann: OpMap<Hierarchy>,

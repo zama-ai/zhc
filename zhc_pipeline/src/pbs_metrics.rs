@@ -24,17 +24,17 @@ pub struct PbsMetrics {
 
 /// Per-operation criticality annotation used during dataflow analysis.
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct Criticallity {
+pub(super) struct Criticallity {
     /// Distance from inputs (PBS-hops).
-    depth: u16,
+    pub depth: u16,
     /// Distance to outputs (PBS-hops).
-    height: u16,
+    pub height: u16,
     /// Scheduling flexibility: critical_length - depth - height + 1.
-    slack: u16,
+    pub slack: u16,
 }
 
 /// Annotates each operation with its criticality (depth, height, slack).
-fn analyze(ir: &IR<IopLang>) -> AnnIR<'_, IopLang, Criticallity, ()> {
+pub(super) fn analyze(ir: &IR<IopLang>) -> AnnIR<'_, IopLang, Criticallity, ()> {
     let a = ir.forward_dataflow_analysis(|opref| {
         let previous_depth = opref
             .get_predecessors_iter()
