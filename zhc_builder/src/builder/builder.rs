@@ -35,7 +35,7 @@ use zhc_ir::{
     IR, OpId, PrintWalker, Signature,
     cse::eliminate_common_subexpressions,
     dce::eliminate_dead_code,
-    visualization::{Hierarchy, draw_ir_html},
+    visualization::{Hierarchy, draw_ir_to_html},
 };
 use zhc_langs::ioplang::{
     IopInstructionSet, IopLang, IopTypeSystem, IopValue, Lut1Def, Lut2Def, eliminate_aliases,
@@ -340,7 +340,7 @@ impl Builder {
     }
 
     pub fn draw(&self, path: impl AsRef<Path>) {
-        draw_ir_html(
+        draw_ir_to_html(
             &self.ir(),
             self.ir()
                 .partially_mapped_opmap(|op| self.inner().hierarchies.get(*op).cloned()),

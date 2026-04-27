@@ -40,7 +40,6 @@ pub struct Style {
     pub valign: VAlign,
     pub hjustify: Justify,
     pub vjustify: Justify,
-    /// When true, draw horizontal separators between children in vertical stacks.
     pub draw_separators: bool,
 }
 
@@ -113,27 +112,31 @@ pub struct StyleModifier {
     pub draw_separators: Option<bool>,
 }
 
-impl StyleModifier {
-    pub fn trivial() -> Self {
-        StyleModifier {
-            font: None,
-            font_size: None,
-            font_halign: None,
-            font_valign: None,
-            font_color: None,
-            padding: None,
-            spacing: None,
-            border_width: None,
-            border_color: None,
-            fill_color: None,
-            corner_radius: None,
-            halign: None,
-            valign: None,
-            hjustify: None,
-            vjustify: None,
-            draw_separators: None,
-        }
+impl Default for StyleModifier {
+    fn default() -> Self {
+        Self::DEFAULT
     }
+}
+
+impl StyleModifier {
+    pub const DEFAULT: Self = StyleModifier {
+        font: None,
+        font_size: None,
+        font_halign: None,
+        font_valign: None,
+        font_color: None,
+        padding: None,
+        spacing: None,
+        border_width: None,
+        border_color: None,
+        fill_color: None,
+        corner_radius: None,
+        halign: None,
+        valign: None,
+        hjustify: None,
+        vjustify: None,
+        draw_separators: None,
+    };
 }
 
 pub struct Styler<C: Class> {
@@ -143,7 +146,7 @@ pub struct Styler<C: Class> {
 
 impl<C: Class> Styler<C> {
     pub fn new(modifier: Option<StyleModifier>) -> Self {
-        let modifier = modifier.unwrap_or(StyleModifier::trivial());
+        let modifier = modifier.unwrap_or(StyleModifier::DEFAULT);
         Styler {
             class: PhantomData,
             modifier,

@@ -374,8 +374,8 @@ impl<D: Dialect> IR<D> {
     }
 
     /// Applies a mutation function to all active operations in linear order.
-    pub fn mutate_ops(&mut self, f: impl FnMut(&mut D::InstructionSet)) {
-        self.mutate_ops_with_walker(
+    pub fn mutate_ops_linear(&mut self, f: impl FnMut(&mut D::InstructionSet)) {
+        self.mutate_ops_with(
             self.raw_linear_opwalker()
                 .collect::<SmallVec<_>>()
                 .into_iter(),
@@ -386,7 +386,7 @@ impl<D: Dialect> IR<D> {
     /// Applies a mutation function to operations visited by the specified walker.
     ///
     /// Only active operations are mutated; inactive operations are skipped.
-    pub fn mutate_ops_with_walker(
+    pub fn mutate_ops_with(
         &mut self,
         walker: impl Iterator<Item = OpId>,
         mut f: impl FnMut(&mut D::InstructionSet),

@@ -145,5 +145,5 @@ macro_rules! vstack_fixed {
     };
 }
 
-vstack_fixed!(V3, 3, [E1, e1, E2, e2, E3, e3]);
 vstack_fixed!(V4, 4, [E1, e1, E2, e2, E3, e3, E4, e4]);
+vstack_fixed!(V5, 5, [E1, e1, E2, e2, E3, e3, E4, e4, E5, e5]);

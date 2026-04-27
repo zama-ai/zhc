@@ -21,7 +21,7 @@ use std::{
     ops::{Add, Div, Mul, Neg, Sub},
 };
 
-use crate::iter::CollectInSmallVec;
+use crate::{Dumpable, iter::CollectInSmallVec};
 
 /// Font family identifier using static string references.
 #[derive(Debug, Clone)]
@@ -1485,5 +1485,61 @@ impl std::fmt::Display for Color {
                 self.r, self.g, self.b, self.a
             )
         }
+    }
+}
+
+impl Dumpable for Color {
+    fn dump_to_string(&self) -> String {
+        format!("{:?}", self)
+    }
+}
+
+#[derive(Debug)]
+pub struct ColorScale<const N: usize>(pub [Color; N]);
+
+impl<const N: usize> Dumpable for ColorScale<N> {
+    fn dump_to_string(&self) -> String {
+        format!("{:#?}", self)
+    }
+}
+
+impl ColorScale<3> {
+    pub const TRAFFIC_LIGHT: Self = Self([Color::GREEN, Color::YELLOW, Color::RED]);
+}
+
+impl<const N: usize> ColorScale<N> {
+    pub fn interpolate(&self, val: f64) -> Color {
+        assert!(
+            0. <= val && val < 1.,
+            "Scale member must be between 0 and 1."
+        );
+        let n_ranges = self.0.len() - 1;
+        let range_length = 1. / (n_ranges as f64);
+        let val_range = val.div_euclid(range_length) as usize;
+        let val_rem = val.rem_euclid(range_length);
+        let from = self.0[val_range];
+        let to = self.0[val_range + 1];
+        let mut output = from;
+        output.r = if from.r > to.r {
+            output.r - ((from.r - to.r) as f64 * val_rem / range_length) as u8
+        } else {
+            output.r + ((to.r - from.r) as f64 * val_rem / range_length) as u8
+        };
+        output.g = if from.g > to.g {
+            output.g - ((from.g - to.g) as f64 * val_rem / range_length) as u8
+        } else {
+            output.g + ((to.g - from.g) as f64 * val_rem / range_length) as u8
+        };
+        output.b = if from.b > to.b {
+            output.b - ((from.b - to.b) as f64 * val_rem / range_length) as u8
+        } else {
+            output.b + ((to.b - from.b) as f64 * val_rem / range_length) as u8
+        };
+        output.a = if from.a > to.a {
+            output.a - ((from.a - to.a) as f64 * val_rem / range_length) as u8
+        } else {
+            output.a + ((to.a - from.a) as f64 * val_rem / range_length) as u8
+        };
+        output
     }
 }

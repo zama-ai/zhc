@@ -2,6 +2,7 @@ use super::*;
 use crate::visualization::svg::{Renderable, SvgElement};
 
 mod bag;
+mod box_dyn;
 mod curve;
 mod dunions;
 mod empty;
@@ -15,6 +16,7 @@ mod vstack;
 mod zfixed;
 
 pub use bag::*;
+pub use box_dyn::*;
 pub use curve::*;
 pub use dunions::*;
 pub use empty::*;

@@ -19,13 +19,22 @@ pub type OpOutputPort = TextBox<OpOutputPortClass>;
 pub type OpOutputs = HStack<OpOutputPort, OpOutputsClass>;
 
 /// Input operation: body + optional comment + outputs.
-pub type InputOp = V3<OpBody, Optional<OpComment>, OpOutputs, InputOpClass>;
+pub type InputOp =
+    V4<OpBody, Optional<OpComment>, Optional<Box<dyn DynamicElement>>, OpOutputs, InputOpClass>;
 
 /// Standard operation: inputs + body + optional comment + outputs.
-pub type Op = V4<OpInputs, OpBody, Optional<OpComment>, OpOutputs, OpClass>;
+pub type Op = V5<
+    OpInputs,
+    OpBody,
+    Optional<OpComment>,
+    Optional<Box<dyn DynamicElement>>,
+    OpOutputs,
+    OpClass,
+>;
 
 /// Effect operation: inputs + body + optional comment.
-pub type EffectOp = V3<OpInputs, OpBody, Optional<OpComment>, EffectOpClass>;
+pub type EffectOp =
+    V4<OpInputs, OpBody, Optional<OpComment>, Optional<Box<dyn DynamicElement>>, EffectOpClass>;
 
 /// Empty placeholder element for missing nodes.
 pub type Dummy = Empty<DummyClass>;

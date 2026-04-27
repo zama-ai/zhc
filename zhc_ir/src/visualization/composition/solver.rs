@@ -127,7 +127,7 @@ fn gen_node<'ir, 'ann>(
                 sol: variable.get_variable_cell(),
                 args: svec![],
                 rets: variable
-                    .e3
+                    .e4
                     .content
                     .iter()
                     .map(|s| s.get_variable_cell())
@@ -167,7 +167,7 @@ fn gen_node<'ir, 'ann>(
                 body: variable.e2.get_variable_cell(),
                 comment: variable.e3.maybe_variable_cell(),
                 rets: variable
-                    .e4
+                    .e5
                     .content
                     .iter()
                     .map(|s| s.get_variable_cell())
@@ -241,7 +241,13 @@ fn gen_input_op_node(orig_op: &OpContent) -> InputOp {
             .map(|a| TextBox::new(None, a))
             .collect(),
     );
-    InputOp::new(None, body, comment.into(), outputs)
+    InputOp::new(
+        orig_op.annotation.clone().and_then(|a| a.style_modifier()),
+        body,
+        comment.into(),
+        Optional::new(orig_op.annotation.clone().and_then(|a| a.widget())),
+        outputs,
+    )
 }
 
 fn gen_effect_op_node(orig_op: &OpContent) -> EffectOp {
@@ -260,7 +266,13 @@ fn gen_effect_op_node(orig_op: &OpContent) -> EffectOp {
             .map(|a| TextBox::new(None, a))
             .collect(),
     );
-    EffectOp::new(None, inputs, body, comment.into())
+    EffectOp::new(
+        orig_op.annotation.clone().and_then(|a| a.style_modifier()),
+        inputs,
+        body,
+        comment.into(),
+        Optional::new(orig_op.annotation.clone().and_then(|a| a.widget())),
+    )
 }
 
 fn gen_op_node(orig_op: &OpContent) -> Op {
@@ -288,7 +300,14 @@ fn gen_op_node(orig_op: &OpContent) -> Op {
             .map(|a| TextBox::new(None, a))
             .collect(),
     );
-    Op::new(None, inputs, body, comment.into(), outputs)
+    Op::new(
+        orig_op.annotation.clone().and_then(|a| a.style_modifier()),
+        inputs,
+        body,
+        comment.into(),
+        Optional::new(orig_op.annotation.clone().and_then(|a| a.widget())),
+        outputs,
+    )
 }
 
 /// Generates a node for a group (compound graph region).
