@@ -18,6 +18,85 @@ pub const MASK_PBS4: usize = usize::MAX << 2;
 /// octets of consecutive registers produced by an 8-output PBS.
 pub const MASK_PBS8: usize = usize::MAX << 3;
 
+pub const LUT_ALIASES: [&str; 76] = [
+    "None",
+    "MsgOnly",
+    "CarryOnly",
+    "CarryInMsg",
+    "MultCarryMsg",
+    "MultCarryMsgLsb",
+    "MultCarryMsgMsb",
+    "BwAnd",
+    "BwOr",
+    "BwXor",
+    "CmpSign",
+    "CmpReduce",
+    "CmpGt",
+    "CmpGte",
+    "CmpLt",
+    "CmpLte",
+    "CmpEq",
+    "CmpNeq",
+    "ManyGenProp",
+    "ReduceCarry2",
+    "ReduceCarry3",
+    "ReduceCarryPad",
+    "GenPropAdd",
+    "IfTrueZeroed",
+    "IfFalseZeroed",
+    "Ripple2GenProp",
+    "ManyCarryMsg",
+    "CmpGtMrg",
+    "CmpGteMrg",
+    "CmpLtMrg",
+    "CmpLteMrg",
+    "CmpEqMrg",
+    "CmpNeqMrg",
+    "IsSome",
+    "CarryIsSome",
+    "CarryIsNone",
+    "MultCarryMsgIsSome",
+    "MultCarryMsgMsbIsSome",
+    "IsNull",
+    "IsNullPos1",
+    "NotNull",
+    "MsgNotNull",
+    "MsgNotNullPos1",
+    "ManyMsgSplitShift1",
+    "SolvePropGroupFinal0",
+    "SolvePropGroupFinal1",
+    "SolvePropGroupFinal2",
+    "ExtractPropGroup0",
+    "ExtractPropGroup1",
+    "ExtractPropGroup2",
+    "ExtractPropGroup3",
+    "SolveProp",
+    "SolvePropCarry",
+    "SolveQuotient",
+    "SolveQuotientPos1",
+    "IfPos1FalseZeroed",
+    "IfPos1FalseZeroedMsgCarry1",
+    "ShiftLeftByCarryPos0Msg",
+    "ShiftLeftByCarryPos0MsgNext",
+    "ShiftRightByCarryPos0Msg",
+    "ShiftRightByCarryPos0MsgNext",
+    "IfPos0TrueZeroed",
+    "IfPos0FalseZeroed",
+    "IfPos1TrueZeroed",
+    "ManyInv1CarryMsg",
+    "ManyInv2CarryMsg",
+    "ManyInv3CarryMsg",
+    "ManyInv4CarryMsg",
+    "ManyInv5CarryMsg",
+    "ManyInv6CarryMsg",
+    "ManyInv7CarryMsg",
+    "ManyMsgSplit",
+    "Manym2lPropBit1MsgSplit",
+    "Manym2lPropBit0MsgSplit",
+    "Manyl2mPropBit1MsgSplit",
+    "Manyl2mPropBit0MsgSplit",
+];
+
 /// Inline operand carried by DOP instructions.
 ///
 /// Supports two stream modes. *Unpatched* streams use symbolic
@@ -40,12 +119,15 @@ pub enum Argument {
     CtHeap { addr: usize },
     /// Ciphertext block located in I/O memory.
     CtIo { addr: usize },
-    /// Symbolic ciphertext variable, patched to a physical address by
+    /// Symbolic ciphertext source variable, patched to a physical address by
     /// the microcontroller.
-    CtVar { id: usize, block: usize },
-    /// Symbolic plaintext variable, patched to a `PtConst` by the
+    CtSrcVar { id: usize, block: usize },
+    /// Symbolic ciphertext destination variable, patched to a physical address by
+    /// the microcontroller.
+    CtDstVar { id: usize, block: usize },
+    /// Symbolic plaintext source variable, patched to a `PtConst` by the
     /// microcontroller.
-    PtVar { id: usize, block: usize },
+    PtSrcVar { id: usize, block: usize },
     /// Physical ciphertext register with an alignment mask.
     CtReg { mask: usize, addr: usize },
     /// Lookup table identifier.
@@ -85,14 +167,19 @@ impl Argument {
         }
     }
 
-    /// Creates a symbolic ciphertext variable operand.
-    pub fn ct_var(id: usize, block: usize) -> Self {
-        Argument::CtVar { id, block }
+    /// Creates a symbolic ciphertext source variable operand.
+    pub fn ct_src_var(id: usize, block: usize) -> Self {
+        Argument::CtSrcVar { id, block }
+    }
+
+    /// Creates a symbolic ciphertext destination variable operand.
+    pub fn ct_dst_var(id: usize, block: usize) -> Self {
+        Argument::CtDstVar { id, block }
     }
 
     /// Creates a symbolic plaintext variable operand.
-    pub fn pt_var(id: usize, block: usize) -> Self {
-        Argument::PtVar { id, block }
+    pub fn pt_src_var(id: usize, block: usize) -> Self {
+        Argument::PtSrcVar { id, block }
     }
 
     /// Creates a heap-addressed ciphertext operand.
@@ -114,6 +201,19 @@ impl Argument {
     pub fn lut_id(val: LutId) -> Self {
         Argument::LutId { id: val.0 }
     }
+
+    pub fn asm(&self) -> String {
+        match self {
+            Argument::PtConst { val } => format!("{val}"),
+            Argument::CtHeap { addr } => format!("TH.{addr}"),
+            Argument::CtIo { addr } => format!("@{addr}"),
+            Argument::CtSrcVar { id, block } => format!("TS[{id}].{block}"),
+            Argument::CtDstVar { id, block } => format!("TD[{id}].{block}"),
+            Argument::PtSrcVar { id, block } => format!("TI[{id}].{block}"),
+            Argument::CtReg { addr, .. } => format!("R{addr}"),
+            Argument::LutId { id } => LUT_ALIASES[*id].into(),
+        }
+    }
 }
 
 impl PartialEq for Argument {
@@ -133,21 +233,31 @@ impl PartialEq for Argument {
                 },
             ) => ((lhs ^ rhs) & (lhs_m & rhs_m)) == 0,
             (
-                Argument::CtVar {
+                Argument::CtSrcVar {
                     id: lhs_id,
                     block: lhs_block,
                 },
-                Argument::CtVar {
+                Argument::CtSrcVar {
                     id: rhs_id,
                     block: rhs_block,
                 },
             ) => (lhs_id, lhs_block) == (rhs_id, rhs_block),
             (
-                Argument::PtVar {
+                Argument::CtDstVar {
                     id: lhs_id,
                     block: lhs_block,
                 },
-                Argument::PtVar {
+                Argument::CtDstVar {
+                    id: rhs_id,
+                    block: rhs_block,
+                },
+            ) => (lhs_id, lhs_block) == (rhs_id, rhs_block),
+            (
+                Argument::PtSrcVar {
+                    id: lhs_id,
+                    block: lhs_block,
+                },
+                Argument::PtSrcVar {
                     id: rhs_id,
                     block: rhs_block,
                 },
@@ -161,17 +271,19 @@ impl PartialEq for Argument {
 impl Display for Argument {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Argument::PtConst { val } => write!(f, "PT_I({})", val),
-            Argument::CtHeap { addr } => write!(f, "CT_H({})", addr),
-            Argument::CtIo { addr } => write!(f, "CT_IO({})", addr),
-            Argument::CtReg { mask, addr } if *mask == MASK_NONE => write!(f, "R({})", addr),
-            Argument::CtReg { mask, addr } if *mask == MASK_PBS2 => write!(f, "R({}, 2)", addr),
-            Argument::CtReg { mask, addr } if *mask == MASK_PBS4 => write!(f, "R({}, 4)", addr),
-            Argument::CtReg { mask, addr } if *mask == MASK_PBS8 => write!(f, "R({}, 8)", addr),
-            Argument::CtVar { id, block } => write!(f, "TC({}, {})", id, block),
-            Argument::PtVar { id, block } => write!(f, "TI({}, {})", id, block),
-            Argument::LutId { id } => write!(f, "LUT({})", id),
-            _ => unreachable!(),
+            Argument::PtConst { val } => write!(f, "PT_I({val})"),
+            Argument::CtHeap { addr } => write!(f, "CT_H({addr})"),
+            Argument::CtIo { addr } => write!(f, "CT_IO({addr})"),
+            Argument::CtReg { mask, addr } if *mask == MASK_NONE => write!(f, "R({addr})"),
+            Argument::CtReg { mask, addr } if *mask == MASK_PBS2 => write!(f, "R({addr}, 2)"),
+            Argument::CtReg { mask, addr } if *mask == MASK_PBS4 => write!(f, "R({addr}, 4)"),
+            Argument::CtReg { mask, addr } if *mask == MASK_PBS8 => write!(f, "R({addr}, 8)"),
+            Argument::CtReg { .. } => unreachable!(),
+            Argument::CtSrcVar { id, block } | Argument::CtDstVar { id, block } => {
+                write!(f, "TC({id}, {block})")
+            }
+            Argument::PtSrcVar { id, block } => write!(f, "TI({id}, {block})"),
+            Argument::LutId { id } => write!(f, "LUT({id})"),
         }
     }
 }

@@ -111,7 +111,7 @@ impl DopInterpreterContext {
                 .get(addr)
                 .unwrap_or_else(|| panic!("I/O CT_IO({addr}) not populated"))
                 .clone(),
-            Argument::CtVar { id, block } => self
+            Argument::CtSrcVar { id, block } => self
                 .sources
                 .get(&(*id, *block))
                 .unwrap_or_else(|| panic!("Source TC({id}, {block}) not populated"))
@@ -130,7 +130,7 @@ impl DopInterpreterContext {
             Argument::CtIo { addr } => {
                 self.io.insert(*addr, val);
             }
-            Argument::CtVar { id, block } => {
+            Argument::CtDstVar { id, block } => {
                 self.destinations.insert((*id, *block), val);
             }
             _ => panic!("Expected ciphertext destination, got {arg:?}"),
@@ -144,7 +144,7 @@ impl DopInterpreterContext {
                 .spec
                 .complete_plaintext_block_spec()
                 .from_message((*val).sas::<EmulatedPlaintextBlockStorage>()),
-            Argument::PtVar { id, block } => self
+            Argument::PtSrcVar { id, block } => self
                 .pt_sources
                 .get(&(*id, *block))
                 .unwrap_or_else(|| panic!("Plaintext TI({id}, {block}) not populated"))

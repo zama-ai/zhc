@@ -96,22 +96,6 @@ pub fn emit_assembly(ir: &IR<DopLang>) -> String {
             ),
             SYNC => writeln!(output, "SYNC"),
             _INIT => Ok(()),
-            WAIT { flag, slot } => match slot {
-                Some(slot) => writeln!(output, "WAIT {} {}", flag.asm(), slot.asm()),
-                None => writeln!(output, "WAIT {}", flag.asm()),
-            },
-            NOTIFY {
-                virt_id,
-                flag,
-                slot,
-            } => writeln!(
-                output,
-                "NOTIFY {} {} {}",
-                virt_id.asm(),
-                flag.asm(),
-                slot.asm()
-            ),
-            LD_B2B { flag, slot } => writeln!(output, "LD_B2B {} {}", flag.asm(), slot.asm()),
         }
         .unwrap();
     }
@@ -205,22 +189,6 @@ fn parse_argument(s: &str, reg_mask: usize) -> Result<Argument, String> {
             .position(|&a| a == alias)
             .ok_or_else(|| format!("unknown LUT alias: {alias}"))?;
         return Ok(Argument::LutId { id });
-    }
-
-    // UserFlag: FN
-    if let Some(rest) = s.strip_prefix('F') {
-        let flag = rest
-            .parse::<u8>()
-            .map_err(|_| format!("invalid flag: {rest}"))?;
-        return Ok(Argument::UserFlag { flag });
-    }
-
-    // VirtId: NN
-    if let Some(rest) = s.strip_prefix('N') {
-        let id = rest
-            .parse::<u8>()
-            .map_err(|_| format!("invalid virt id: {rest}"))?;
-        return Ok(Argument::VirtId { id });
     }
 
     Err(format!("unrecognized argument: {s}"))
@@ -403,30 +371,6 @@ pub fn parse_assembly(input: &str) -> Result<IR<DopLang>, ParseError> {
                 DopInstructionSet::PBS_ML8_F { dst, src, lut }
             }
             "SYNC" => DopInstructionSet::SYNC,
-            "WAIT" => {
-                let flag = parse_arg(0, MASK_NONE)?;
-                let slot = if args.len() > 1 {
-                    Some(parse_arg(1, MASK_NONE)?)
-                } else {
-                    None
-                };
-                DopInstructionSet::WAIT { flag, slot }
-            }
-            "NOTIFY" => {
-                let virt_id = parse_arg(0, MASK_NONE)?;
-                let flag = parse_arg(1, MASK_NONE)?;
-                let slot = parse_arg(2, MASK_NONE)?;
-                DopInstructionSet::NOTIFY {
-                    virt_id,
-                    flag,
-                    slot,
-                }
-            }
-            "LD_B2B" => {
-                let flag = parse_arg(0, MASK_NONE)?;
-                let slot = parse_arg(1, MASK_NONE)?;
-                DopInstructionSet::LD_B2B { flag, slot }
-            }
             _ => {
                 return Err(ParseError {
                     line: line_num,
