@@ -58,6 +58,8 @@ pub enum IopInstructionSet {
     Inspect { typ: IopTypeSystem },
     /// Zero-initialized composite ciphertext. `() → (Ciphertext)`
     DeclareCiphertext { int_size: u16 },
+    /// Plaintext constant. `() → (Plaintext)`
+    LetPlaintext { int_size: u16, value: u128 },
     /// Plaintext block constant. `() → (PlaintextBlock)`
     LetPlaintextBlock { value: u8 },
     /// Ciphertext block constant. `() → (CiphertextBlock)`
@@ -142,6 +144,7 @@ impl Format for IopInstructionSet {
             IopInstructionSet::_Consume { typ } => write!(f, "_consume<{typ}>"),
             IopInstructionSet::Inspect { .. } => write!(f, "inspect"),
             IopInstructionSet::DeclareCiphertext { int_size } => write!(f, "decl_ct<{int_size}>"),
+            IopInstructionSet::LetPlaintext { int_size, value } => write!(f, "let_pt<{int_size}, {value}>"),
             IopInstructionSet::LetPlaintextBlock { value } => write!(f, "let_pt_block<{value}>"),
             IopInstructionSet::LetCiphertextBlock { value } => write!(f, "let_ct_block<{value}>"),
             IopInstructionSet::PackCt { mul } => write!(f, "pack_ct<{mul}>"),
@@ -181,6 +184,7 @@ impl DialectInstructionSet for IopInstructionSet {
             IopInstructionSet::OutputCiphertext { .. } => sig![(Ciphertext) -> ()],
             IopInstructionSet::_Consume { typ } => sig![(typ.clone()) -> ()],
             IopInstructionSet::DeclareCiphertext { .. } => sig![() -> (Ciphertext)],
+            IopInstructionSet::LetPlaintext { .. } => sig![() -> (Plaintext)],
             IopInstructionSet::LetPlaintextBlock { .. } => sig![() -> (PlaintextBlock)],
             IopInstructionSet::LetCiphertextBlock { .. } => sig![() -> (CiphertextBlock)],
             IopInstructionSet::AddCt => {

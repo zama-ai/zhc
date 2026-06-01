@@ -28,7 +28,8 @@ fn main() {
         // Sort by position descending (apply from end to start to preserve offsets)
         updates.sort_by(|a, b| (b.line, b.column).cmp(&(a.line, a.column)));
 
-        let mut content = fs::read_to_string(&file).expect("Failed to read source file");
+        let mut content = fs::read_to_string(&file)
+            .unwrap_or_else(|_| panic!("Failed to read source file: {}", file));
 
         for update in updates {
             content = apply_update(&content, &update);

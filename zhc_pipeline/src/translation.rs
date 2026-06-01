@@ -365,6 +365,9 @@ pub fn lower_iop_to_hpu(ir: &IR<IopLang>) -> IR<HpuLang> {
             IopInstructionSet::_Consume { .. } => {
                 panic!("Tried to translate a _consume op");
             }
+            IopInstructionSet::LetPlaintext { .. } => {
+                panic!("Tried to translate a let plaintext. It should have been folded by now.");
+            }
             IopInstructionSet::InputCiphertext { .. }
             | IopInstructionSet::InputPlaintext { .. }
             | IopInstructionSet::LetPlaintextBlock { .. } => {

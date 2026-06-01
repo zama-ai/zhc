@@ -37,6 +37,7 @@ mod lut;
 mod skip_redundant_stores;
 mod skip_store_load;
 mod type_system;
+mod fold_plaintext_const;
 
 pub use dialect::*;
 pub use eliminate_aliases::*;
@@ -46,3 +47,4 @@ pub use lut::*;
 pub use skip_redundant_stores::*;
 pub use skip_store_load::*;
 pub use type_system::*;
+pub use fold_plaintext_const::*;

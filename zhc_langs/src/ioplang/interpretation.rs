@@ -180,6 +180,15 @@ impl Interpretable<IopValue> for super::IopInstructionSet {
                     context.spec.ciphertext_spec(*int_size).from_int(0)
                 )]
             }
+            LetPlaintext { int_size, value } => {
+                svec![IopValue::Plaintext(
+                    context
+                        .spec
+                        .matching_plaintext_block_spec()
+                        .plaintext_spec(*int_size)
+                        .from_int(*value)
+                )]
+            }
             LetPlaintextBlock { value } => {
                 svec![IopValue::PlaintextBlock(
                     context

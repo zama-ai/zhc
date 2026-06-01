@@ -38,8 +38,7 @@ use zhc_ir::{
     visualization::{Hierarchy, draw_ir_to_html},
 };
 use zhc_langs::ioplang::{
-    IopInstructionSet, IopLang, IopTypeSystem, IopValue, Lut1Def, Lut2Def, eliminate_aliases,
-    skip_redundant_stores, skip_store_load,
+    IopInstructionSet, IopLang, IopTypeSystem, IopValue, Lut1Def, Lut2Def, eliminate_aliases, fold_plaintext_const, skip_redundant_stores, skip_store_load
 };
 use zhc_utils::{
     Dumpable, SafeAs, Store,
@@ -221,6 +220,8 @@ impl Builder {
         let mut ir = self.ir().clone();
         eliminate_aliases(&mut ir);
         skip_store_load(&mut ir);
+        eliminate_dead_code(&mut ir);
+        fold_plaintext_const(&mut ir, self.spec().matching_plaintext_block_spec());
         eliminate_dead_code(&mut ir);
         skip_redundant_stores(&mut ir);
         eliminate_dead_code(&mut ir);
@@ -525,6 +526,22 @@ impl Builder {
         let pos = self.inner_mut().push_arg_type(Type::Plaintext(spec));
         let (_, inp) = self.inner_mut().insert_op(
             IopInstructionSet::InputPlaintext { pos, int_size },
+            svec![],
+            self.current_hierarchy(),
+        );
+        Plaintext {
+            valid: inp[0],
+            spec,
+        }
+    }
+
+    pub fn plaintext_const(&self, int_size: u16, value: u128) -> Plaintext {
+        let spec = self
+            .spec
+            .matching_plaintext_block_spec()
+            .plaintext_spec(int_size);
+        let (_, inp) = self.inner_mut().insert_op(
+            IopInstructionSet::LetPlaintext { int_size, value },
             svec![],
             self.current_hierarchy(),
         );

@@ -26,11 +26,18 @@ pub struct EmulatedPlaintextBlock {
 }
 
 impl EmulatedPlaintextBlock {
-    pub(crate) fn raw_message_bits(&self) -> EmulatedPlaintextBlockStorage {
+    /// Returns the message value as a right-aligned integer.
+    ///
+    /// Equivalent to [`raw_mask_message`](Self::raw_mask_message) since message bits are already
+    /// in the lowest position.
+    pub fn raw_message_bits(&self) -> EmulatedPlaintextBlockStorage {
         self.raw_mask_message()
     }
 
-    pub(crate) fn raw_mask_message(&self) -> EmulatedPlaintextBlockStorage {
+    /// Returns the message bits in their original position, with all other bits cleared.
+    ///
+    /// For plaintext blocks this is the whole value, as there are no carry or padding regions.
+    pub fn raw_mask_message(&self) -> EmulatedPlaintextBlockStorage {
         self.storage & self.spec.message_mask()
     }
 
