@@ -539,13 +539,13 @@ impl Builder {
 /// A single entry in the Kogge tree, holding both the raw accumulated value
 /// and a reduced (fresh) PG-encoded version.
 #[derive(Copy, Clone, Debug)]
-struct KoggeEntry {
+pub struct KoggeEntry {
     /// Raw accumulated MAC value (may span multiple PG positions).
-    block: CiphertextBlock,
+    pub(crate) block: CiphertextBlock,
     /// Bit-width of the raw value (number of PG positions accumulated).
-    cpos: usize,
+    pub(crate) cpos: usize,
     /// Reduced PG-encoded value (cpos conceptually == 1).
-    fresh: CiphertextBlock,
+    pub(crate) fresh: CiphertextBlock,
 }
 
 /// Kogge-Stone prefix tree over PG-encoded carry values.
@@ -554,7 +554,7 @@ struct KoggeEntry {
 /// computes prefix reductions using MAC (multiply-accumulate via doubling)
 /// and PBS reduction operations (`ReduceCarry2`, `ReduceCarry3`,
 /// `ReduceCarryPad`).
-struct KoggeTree<'a> {
+pub struct KoggeTree<'a> {
     builder: &'a Builder,
     cache: HashMap<(usize, usize), KoggeEntry>,
     /// `carry_size + message_size` for the block spec (4 for (2,2) params).
@@ -759,7 +759,7 @@ impl Builder {
 
     /// Propagates carries through a slice of carry-save sums using a Kogge
     /// tree. Returns `(output_blocks, carry_out_pg)`.
-    fn kogge_propagate_carry(
+    pub fn kogge_propagate_carry(
         &self,
         sums: &[CiphertextBlock],
         cin_pg: &KoggeEntry,
