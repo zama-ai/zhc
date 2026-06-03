@@ -987,6 +987,38 @@ impl Builder {
         }
     }
 
+    /// Adds a ciphertext block with a Plaintext block (protect flavor).
+    ///
+    /// Computes `src_c + src_p` at the block level. Uses protect semantics — see
+    /// [Operation Flavors](super::super#operation-flavors).
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let ct = builder.ciphertext_input(4);
+    /// let cipherblocks = builder.ciphertext_split(&ct);
+    /// let pt = builder.plaintext_input(4);
+    /// let plainblocks = builder.ciphertext_split(&ct);
+    /// let sum = builder.block_add(&blocks[0], &blocks[1]);
+    /// ```
+    pub fn block_adds(
+        &self,
+        src_c: impl AsRef<CiphertextBlock>,
+        src_p: impl AsRef<PlaintextBlock>,
+    ) -> CiphertextBlock {
+        let (src_c, src_p) = (src_c.as_ref(), src_p.as_ref());
+        let (_node, ret) = self.inner_mut().insert_op(
+            IopInstructionSet::AddPt,
+            svec![src_c.valid, src_p.valid],
+            self.current_hierarchy(),
+        );
+        CiphertextBlock {
+            valid: ret[0],
+            spec: self.spec,
+        }
+    }
     /// Creates a new IR node that aliases an existing ciphertext block.
     ///
     /// The returned block references the same underlying value but has a distinct IR
@@ -1895,6 +1927,50 @@ impl Builder {
                 (ExtensionBehavior::Panic, _, _) => panic!(),
                 (ExtensionBehavior::Limit, _, _) => break,
                 (ExtensionBehavior::Passthrough, None, Some(v)) => output.push(*v),
+                (ExtensionBehavior::Passthrough, Some(v), None) => output.push(*v),
+            }
+        }
+        return output;
+    }
+
+    /// Adds a cyphertext block slices and a plaintext block slices element-wise.
+    ///
+    /// For each position, calls [`block_add`](Self::block_adds) on the corresponding pair.
+    /// When the two slices have different lengths, `extension` controls the behavior (see
+    /// [`ExtensionBehavior`]).
+    ///
+    /// # Panics
+    ///
+    /// Panics if the slices differ in length and `extension` is
+    /// [`Panic`](ExtensionBehavior::Panic).
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let c = builder.ciphertext_input(8);
+    /// let p = builder.plaintext_input(8);
+    /// let c_blocks = builder.ciphertext_split(&c);
+    /// let p_blocks = builder.plaintext_split(&p);
+    /// let sums = builder.vector_adds(&c_blocks, &p_blocks, ExtensionBehavior::Panic);
+    /// ```
+    pub fn vector_adds(
+        &self,
+        lhs: impl AsRef<[CiphertextBlock]>,
+        rhs: impl AsRef<[PlaintextBlock]>,
+        extension: ExtensionBehavior,
+    ) -> Vec<CiphertextBlock> {
+        let mut output = Vec::new();
+        let mut lhs_i = lhs.as_ref().iter();
+        let mut rhs_i = rhs.as_ref().iter();
+        loop {
+            match (&extension, lhs_i.next(), rhs_i.next()) {
+                (_, Some(li), Some(ri)) => output.push(self.block_adds(li, ri)),
+                (_, None, None) => break,
+                (ExtensionBehavior::Panic, _, _) => panic!(),
+                (ExtensionBehavior::Limit, _, _) => break,
+                (ExtensionBehavior::Passthrough, None, _) => break,
                 (ExtensionBehavior::Passthrough, Some(v), None) => output.push(*v),
             }
         }

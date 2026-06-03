@@ -4,6 +4,7 @@ use zhc_utils::SafeAs;
 
 use crate::integer_semantics::CiphertextSpec;
 use crate::integer_semantics::EmulatedCiphertext;
+use crate::integer_semantics::EmulatedPlaintext;
 
 use super::{EmulatedCiphertextBlock, EmulatedPlaintextBlock};
 
@@ -456,6 +457,16 @@ impl EmulatedCiphertext {
 
     pub fn add(self, other: Self) -> EmulatedCiphertext {
         assert_eq!(self.spec, other.spec(), "Spec mismatch.");
+        let storage = (self.storage + other.storage) & self.spec.int_mask();
+        EmulatedCiphertext {
+            storage,
+            spec: self.spec,
+        }
+    }
+
+    pub fn adds(self, other: EmulatedPlaintext) -> EmulatedCiphertext {
+        assert_eq!(self.spec.int_size(), other.spec().int_size(), "Spec mismatch.");
+        assert_eq!(self.spec.block_count(), other.spec().block_count(), "Spec mismatch.");
         let storage = (self.storage + other.storage) & self.spec.int_mask();
         EmulatedCiphertext {
             storage,
