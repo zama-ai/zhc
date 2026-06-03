@@ -51,6 +51,7 @@ pub enum PropagationDirection {
 pub const SIMD_N: usize = 12;
 
 mod add;
+mod adds;
 mod bitwise;
 mod cmp;
 mod count;
@@ -66,6 +67,7 @@ mod sub;
 mod trivial_encrypt;
 
 pub use add::*;
+pub use adds::*;
 pub use bitwise::*;
 pub use cmp::*;
 pub use count::*;
