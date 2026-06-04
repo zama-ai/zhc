@@ -5,6 +5,7 @@ use zhc_builder::{
     cmp_eq, cmp_gt, cmp_gte, cmp_lt, cmp_lte, cmp_neq, count_0, count_1, div, erc7984,
     erc7984_simd, if_then_else, if_then_zero, ilog2, lead0, lead1, mul, overflow_add, overflow_mul,
     overflow_sub, rem, rotate_left, rotate_right, shift_left, shift_right, sub, trail0, trail1,
+    adds
 };
 use zhc_config::{hpu::HpuConfig, multi_hpu::MultiHpuConfig};
 use zhc_utils::units::Microseconds;
@@ -39,7 +40,7 @@ pub enum Iop {
     Div,
     /// Unsigned remainder of two encrypted integers.
     Mod,
-    // AddPt,
+    AddPt,
     // SubPt,
     // PtSub,
     // MulPt,
@@ -95,7 +96,7 @@ impl FromStr for Iop {
             "TRAIL1" => Ok(Iop::TrailingOnes),
             "DIV" => Ok(Iop::Div),
             "MOD" => Ok(Iop::Mod),
-            // "ADDS" => Ok(Iop::AddPt),
+            "ADDS" => Ok(Iop::AddPt),
             // "SUBS" => Ok(Iop::SubPt),
             // "SSUB" => Ok(Iop::PtSub),
             // "MULS" => Ok(Iop::MulPt),
@@ -152,6 +153,7 @@ impl Iop {
         Iop::TrailingOnes,
         Iop::Div,
         Iop::Mod,
+        Iop::AddPt,
         Iop::BwAnd,
         Iop::BwOr,
         Iop::BwXor,
@@ -191,6 +193,7 @@ impl Iop {
             Iop::TrailingOnes => trail1(spec),
             Iop::Div => div(spec),
             Iop::Mod => rem(spec),
+            Iop::AddPt => adds(spec),
             Iop::BwAnd => bitwise_and(spec),
             Iop::BwOr => bitwise_or(spec),
             Iop::BwXor => bitwise_xor(spec),
@@ -241,6 +244,7 @@ impl Iop {
         pipeline.get_hpu_metrics().latency
     }
 
+<<<<<<< HEAD
     pub fn get_builder(&self, spec: CiphertextSpec) -> Builder {
         match self {
             Iop::CmpGt => cmp_gt(spec),
