@@ -336,7 +336,9 @@ pub fn batch<'a, 'b>(
             | CstCt { .. }
             | ImmLd { .. }
             | DstSt { .. }
-            | SrcLd { .. } => {
+            | SrcLd { .. }
+            | TransferIn { .. }
+            | TransferOut { .. } => {
                 let new_args = opref
                     .get_arg_valids()
                     .iter()
