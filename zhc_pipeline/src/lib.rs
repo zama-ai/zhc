@@ -12,7 +12,7 @@ use zhc_builder::Builder;
 use zhc_ir::IR;
 use zhc_langs::doplang::DopLang;
 use zhc_langs::hpulang::{HpuLang, get_batch_statistics};
-use zhc_langs::ioplang::IopLang;
+use zhc_langs::ioplang::{IopInstructionSet, IopLang, cut_transfers, isolate_subgraphs};
 use zhc_sim::MHz;
 use zhc_sim::hpu::HpuConfig;
 
@@ -114,6 +114,25 @@ pub fn alternative_pipeline(ir: IR<IopLang>, config: &HpuConfig) -> (IR<HpuLang>
     );
     let allocated = allocate_registers(&scheduled, config);
     (scheduled, allocated)
+}
+
+#[allow(unused)]
+fn multi_hpu_regular_pipeline(mut ir: IR<IopLang>, config: &HpuConfig) -> Vec<IR<DopLang>> {
+    cut_transfers(&mut ir);
+    let components = isolate_subgraphs(&ir, |op| {
+        use IopInstructionSet::*;
+        match op {
+            InputCiphertext { .. }
+            | InputPlaintext { .. }
+            | ExtractCtBlock { .. }
+            | ExtractPtBlock { .. }
+            | DeclareCiphertext { .. }
+            | LetCiphertextBlock { .. }
+            | LetPlaintextBlock { .. } => true,
+            _ => false,
+        }
+    });
+    components.into_iter().map(|ir| regular_pipeline(ir, config)).collect()
 }
 
 #[cfg(test)]

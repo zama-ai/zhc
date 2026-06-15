@@ -53,7 +53,9 @@ pub fn batch(ir: &IR<HpuLang>, sched: Vec<SchedElm>) -> IR<HpuLang> {
             | CstCt { .. }
             | ImmLd { .. }
             | DstSt { .. }
-            | SrcLd { .. } => {
+            | SrcLd { .. }
+            | TransferIn { .. }
+            | TransferOut { .. } => {
                 let new_args = opref
                     .get_arg_valids()
                     .iter()
