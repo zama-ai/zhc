@@ -70,12 +70,12 @@ mod test {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : CtBlock = let_ct_block<3>();
-            %1 : CtBlock = let_ct_block<5>();
-            %2 : CtBlock = add_ct(%0 : CtBlock, %1 : CtBlock);
-            %3 : CtBlock = transfer(%2 : CtBlock);
-            _consume<CtBlock>(%3 : CtBlock);
-        "#
+                %0 = let_ct_block<3>();
+                %1 = let_ct_block<5>();
+                %2 = add_ct(%0, %1);
+                %3 = transfer(%2);
+                _consume<CtBlock>(%3);
+            "#
         );
 
         cut_transfers(&mut ir);
@@ -83,13 +83,13 @@ mod test {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : CtBlock = let_ct_block<3>();
-            %1 : CtBlock = let_ct_block<5>();
-            %4 : CtBlock = transfer_in<#1>();
-            %2 : CtBlock = add_ct(%0 : CtBlock, %1 : CtBlock);
-            _consume<CtBlock>(%4 : CtBlock);
-            transfer_out<#1>(%2 : CtBlock);
-        "#
+                %0 = let_ct_block<3>();
+                %1 = let_ct_block<5>();
+                %2 = add_ct(%0, %1);
+                _consume<CtBlock>(%4);
+                transfer_out<#1>(%2);
+                %4 = transfer_in<#1>();
+            "#
         );
     }
 }

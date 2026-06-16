@@ -87,7 +87,8 @@ pub fn isolate_subgraphs<D: Fn(IopInstructionSet) -> bool>(
             }),
             ir.filled_valmap(()),
         );
-        let mut output_ir = translate_ann(&annir, Order::Linear, |op, translator| {
+
+        let mut output_ir = translate_ann(&annir, Order::Topological, |op, translator| {
             if !op.get_annotation() {
                 // If the op is not in the component, we continue.
                 return;
@@ -130,12 +131,12 @@ mod test {
         assert_display_is!(
             ir.format(),
             r#"
-            %0 : CtBlock = let_ct_block<3>();
-            %1 : CtBlock = let_ct_block<5>();
-            %2 : CtBlock = add_ct(%0 : CtBlock, %1 : CtBlock);
-            %3 : CtBlock = transfer(%2 : CtBlock);
-            _consume<CtBlock>(%3 : CtBlock);
-        "#
+                %0 = let_ct_block<3>();
+                %1 = let_ct_block<5>();
+                %2 = add_ct(%0, %1);
+                %3 = transfer(%2);
+                _consume<CtBlock>(%3);
+            "#
         );
 
         cut_transfers(&mut ir);
@@ -156,18 +157,18 @@ mod test {
         assert_display_is!(
             components[0].format(),
             r#"
-                %0 : CtBlock = transfer_in<#1>();
-                _consume<CtBlock>(%0 : CtBlock);
+                %2 = transfer_in<#1>();
+                _consume<CtBlock>(%2);
             "#
         );
 
         assert_display_is!(
             components[1].format(),
             r#"
-                %0 : CtBlock = let_ct_block<3>();
-                %1 : CtBlock = let_ct_block<5>();
-                %2 : CtBlock = add_ct(%0 : CtBlock, %1 : CtBlock);
-                transfer_out<#1>(%2 : CtBlock);
+                %0 = let_ct_block<3>();
+                %1 = let_ct_block<5>();
+                %2 = add_ct(%0, %1);
+                transfer_out<#1>(%2);
             "#
         );
     }
@@ -191,12 +192,12 @@ mod test {
         assert_display_is!(
             ir.format().with_walker(zhc_ir::PrintWalker::Linear),
             r#"
-                %0 : CtBlock = let_ct_block<1>();
-                %1 : CtBlock = let_ct_block<2>();
-                %2 : CtBlock = add_ct(%0 : CtBlock, %1 : CtBlock);
-                %3 : CtBlock = transfer(%2 : CtBlock);
-                %4 : CtBlock = add_ct(%3 : CtBlock, %0 : CtBlock);
-                _consume<CtBlock>(%4 : CtBlock);
+                %0 = let_ct_block<1>();
+                %1 = let_ct_block<2>();
+                %2 = add_ct(%0, %1);
+                %3 = transfer(%2);
+                %4 = add_ct(%3, %0);
+                _consume<CtBlock>(%4);
             "#
         );
 
@@ -220,10 +221,10 @@ mod test {
         assert_display_is!(
             components[0].format(),
             r#"
-                %0 : CtBlock = let_ct_block<1>();
-                %1 : CtBlock = transfer_in<#1>();
-                %2 : CtBlock = add_ct(%1 : CtBlock, %0 : CtBlock);
-                _consume<CtBlock>(%2 : CtBlock);
+                %0 = let_ct_block<1>();
+                %2 = transfer_in<#1>();
+                %3 = add_ct(%2, %0);
+                _consume<CtBlock>(%3);
             "#
         );
 
@@ -231,10 +232,10 @@ mod test {
         assert_display_is!(
             components[1].format(),
             r#"
-                %0 : CtBlock = let_ct_block<1>();
-                %1 : CtBlock = let_ct_block<2>();
-                %2 : CtBlock = add_ct(%0 : CtBlock, %1 : CtBlock);
-                transfer_out<#1>(%2 : CtBlock);
+                %0 = let_ct_block<1>();
+                %1 = let_ct_block<2>();
+                %2 = add_ct(%0, %1);
+                transfer_out<#1>(%2);
             "#
         );
     }
