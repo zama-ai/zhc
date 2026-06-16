@@ -1,9 +1,9 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use crate::{Ciphertext, CiphertextBlock, NU, NU_BOOL, builder::Builder};
 use zhc_crypto::integer_semantics::CiphertextSpec;
 use zhc_langs::ioplang::Lut1Def;
-use zhc_utils::SafeAs;
+use zhc_utils::{Dumpable, SafeAs};
 
 /// Creates an IR for multiplication of two encrypted integers.
 ///
@@ -116,8 +116,8 @@ impl Builder {
     /// ```
     pub fn iop_mul_raw(
         &self,
-        src_a_blocks: &Vec<CiphertextBlock>,
-        src_b_blocks: &Vec<CiphertextBlock>,
+        src_a_blocks: &[CiphertextBlock],
+        src_b_blocks: &[CiphertextBlock],
         cut_off_block: u8,
     ) -> (Vec<CiphertextBlock>, CiphertextBlock) {
         // Phase 1 expand:
@@ -126,7 +126,7 @@ impl Builder {
         // NB: nu encode range of data. nu*(1<<msg_w) = Max Ct value
         // After the cut-off block only NonNull flag is computed instead of the complete partial
         // product with carry extract
-        let mut partial_product_map = HashMap::<usize, Vec<CiphertextBlock>>::new();
+        let mut partial_product_map = BTreeMap::<usize, Vec<CiphertextBlock>>::new();
         let mut overflow_v = Vec::<CiphertextBlock>::new();
 
         for (i, ai) in src_a_blocks.iter().enumerate() {

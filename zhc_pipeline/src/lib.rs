@@ -132,7 +132,7 @@ fn multi_hpu_regular_pipeline(mut ir: IR<IopLang>, config: &HpuConfig) -> Vec<IR
             _ => false,
         }
     });
-    components.into_iter().map(|ir| regular_pipeline(ir, config)).collect()
+    components.into_iter().map(|ir| regular_pipeline(ir, config).1).collect()
 }
 
 #[cfg(test)]

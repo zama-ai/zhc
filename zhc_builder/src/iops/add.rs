@@ -20,7 +20,7 @@ pub fn add(spec: CiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
     let src_a = builder.ciphertext_input(spec.int_size());
     let src_b = builder.ciphertext_input(spec.int_size());
-    let res = builder.iop_add(&src_a, &src_b);
+    let res = builder.iop_add(&src_a, &src_b, None);
     builder.ciphertext_output(res);
     builder
 }
@@ -105,7 +105,7 @@ pub fn overflow_add(spec: CiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
     let src_a = builder.ciphertext_input(spec.int_size());
     let src_b = builder.ciphertext_input(spec.int_size());
-    let (res, flag) = builder.iop_overflow_add(&src_a, &src_b);
+    let (res, flag) = builder.iop_overflow_add(&src_a, &src_b, None);
     builder.ciphertext_output(res);
     builder.ciphertext_output(flag);
     builder
@@ -134,7 +134,12 @@ impl Builder {
     /// # let b = builder.ciphertext_input(spec.int_size());
     /// let sum = builder.iop_add(&a, &b);
     /// ```
-    pub fn iop_add(&self, lhs: &Ciphertext, rhs: &Ciphertext) -> Ciphertext {
+    pub fn iop_add(
+        &self,
+        lhs: &Ciphertext,
+        rhs: &Ciphertext,
+        cin: Option<&CiphertextBlock>,
+    ) -> Ciphertext {
         let par_w = match lhs.spec().int_size() {
             8..16 => 1,
             16..24 => 7,
@@ -142,9 +147,9 @@ impl Builder {
             _ => 1,
         };
         match lhs.spec().int_size() {
-            0..8 => self.iop_add_ripple_carry(&lhs, &rhs, None).0,
-            8..17 => self.iop_add_hillis_steele(&lhs, &rhs, None).0,
-            17..256 => self.iop_add_kogge_stone(&lhs, &rhs, None, par_w).0,
+            0..8 => self.iop_add_ripple_carry(&lhs, &rhs, cin).0,
+            8..17 => self.iop_add_hillis_steele(&lhs, &rhs, cin).0,
+            17..256 => self.iop_add_kogge_stone(&lhs, &rhs, cin, par_w).0,
             _ => todo!(),
         }
     }
@@ -166,7 +171,12 @@ impl Builder {
     /// # let b = builder.ciphertext_input(spec.int_size());
     /// let (sum, overflow) = builder.iop_overflow_add(&a, &b);
     /// ```
-    pub fn iop_overflow_add(&self, lhs: &Ciphertext, rhs: &Ciphertext) -> (Ciphertext, Ciphertext) {
+    pub fn iop_overflow_add(
+        &self,
+        lhs: &Ciphertext,
+        rhs: &Ciphertext,
+        cin: Option<&CiphertextBlock>,
+    ) -> (Ciphertext, Ciphertext) {
         let par_w = match lhs.spec().int_size() {
             8..16 => 1,
             16..24 => 7,
@@ -174,9 +184,9 @@ impl Builder {
             _ => 1,
         };
         match lhs.spec().int_size() {
-            0..8 => self.iop_add_ripple_carry(&lhs, &rhs, None),
-            8..17 => self.iop_add_hillis_steele(&lhs, &rhs, None),
-            17..256 => self.iop_add_kogge_stone(&lhs, &rhs, None, par_w),
+            0..8 => self.iop_add_ripple_carry(&lhs, &rhs, cin),
+            8..17 => self.iop_add_hillis_steele(&lhs, &rhs, cin),
+            17..256 => self.iop_add_kogge_stone(&lhs, &rhs, cin, par_w),
             _ => todo!(),
         }
     }
@@ -212,9 +222,15 @@ impl Builder {
 
         let mut carry = cin.cloned().unwrap_or_else(|| self.block_let_ciphertext(0));
         let mut output_blocks = Vec::new();
-        for i in 0..lhs_blocks.iter().len() {
+        let wider_inputs = lhs_blocks.iter().len().max(rhs_blocks.iter().len());
+        for i in 0..wider_inputs {
             self.push_comment(format!("{i}-th"));
-            let raw_sum = self.block_add(lhs_blocks[i], rhs_blocks[i]);
+            let raw_sum = match (lhs_blocks.get(i), rhs_blocks.get(i)) {
+                (Some(lhs), Some(rhs)) => self.block_add(lhs, rhs),
+                (Some(lhs), None) => lhs.clone(),
+                (None, Some(rhs)) => rhs.clone(),
+                _ => unreachable!(),
+            };
             let sum = self.block_add(raw_sum, carry);
             let (message, carry_tmp) = self.block_lookup2(sum, Lut2Def::ManyCarryMsg);
             carry = carry_tmp;
