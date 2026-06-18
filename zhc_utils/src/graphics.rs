@@ -1508,6 +1508,17 @@ impl ColorScale<3> {
     pub const TRAFFIC_LIGHT: Self = Self([Color::GREEN, Color::YELLOW, Color::RED]);
     pub const INVERSE_TRAFFIC_LIGHT: Self = Self([Color::RED, Color::YELLOW, Color::GREEN]);
 }
+impl ColorScale<7> {
+    pub const RAINBOW: Self = Self([
+        Color::VIOLET,
+        Color::INDIGO,
+        Color::BLUE,
+        Color::GREEN,
+        Color::YELLOW,
+        Color::ORANGE,
+        Color::RED,
+    ]);
+}
 
 impl<const N: usize> ColorScale<N> {
     pub fn interpolate(&self, mut val: f64) -> Color {
