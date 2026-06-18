@@ -252,19 +252,26 @@ impl Builder {
                     match (current.next(), current.next()) {
                         (Some(a), Some(b)) => {
                             let (sum, cout) =
-                                self.comment(format!("iter {tree_iter}")).iop_overflow_add(
-                                    &self.ciphertext_join(a.as_blocks(), Some(limbs_size)),
-                                    &self.ciphertext_join(b.as_blocks(), Some(limbs_size)),
+                                self.comment(format!("iter {tree_iter}")).add_ripple_carry(
+                                    a.as_blocks(),
+                                    b.as_blocks(),
                                     carry_in.pop().as_ref(),
                                 );
-                            next.push(CiphertextLimb::new(k, &self.ciphertext_split(sum)));
+                            next.push(CiphertextLimb::new(k, &sum));
+                            let raw_cout = cout;
+                            // self.comment(format!("iter {tree_iter}")).iop_overflow_add(
+                            //     &self.ciphertext_join(a.as_blocks(), Some(limbs_size)),
+                            //     &self.ciphertext_join(b.as_blocks(), Some(limbs_size)),
+                            //     carry_in.pop().as_ref(),
+                            // );
+                            // next.push(CiphertextLimb::new(k, &self.ciphertext_split(sum)));
 
                             // NB: carry is only 1 ciphertextBlock but it's wrapped in Ciphertext
                             // type
-                            let raw_cout = self
-                                .ciphertext_split(cout)
-                                .pop()
-                                .expect("Overflow flag must be encoded in 1 block");
+                            // let raw_cout = self
+                            //     .ciphertext_split(cout)
+                            //     .pop()
+                            //     .expect("Overflow flag must be encoded in 1 block");
                             carry_buffer.entry(k + 1).or_default().push(raw_cout)
                         }
                         (Some(a), None) => {

@@ -245,6 +245,33 @@ impl Builder {
             self.comment("Join Carry").ciphertext_join([carry], None),
         )
     }
+    pub fn add_ripple_carry(
+        &self,
+        lhs: &[CiphertextBlock],
+        rhs: &[CiphertextBlock],
+        cin: Option<&CiphertextBlock>,
+    ) -> (Vec<CiphertextBlock>, CiphertextBlock) {
+        let mut carry = cin.cloned().unwrap_or_else(|| self.block_let_ciphertext(0));
+        let mut output_blocks = Vec::new();
+        let wider_inputs = lhs.iter().len().max(rhs.iter().len());
+        for i in 0..wider_inputs {
+            self.push_comment(format!("{i}-th"));
+            let raw_sum = match (lhs.get(i), rhs.get(i)) {
+                (Some(lhs), Some(rhs)) => self.block_add(lhs, rhs),
+                (Some(lhs), None) => lhs.clone(),
+                (None, Some(rhs)) => rhs.clone(),
+                _ => unreachable!(),
+            };
+            let sum = self.block_add(raw_sum, carry);
+            let (message, carry_tmp) = self.block_lookup2(sum, Lut2Def::ManyCarryMsg);
+            carry = carry_tmp;
+            output_blocks.push(message);
+            self.pop_comment();
+        }
+
+        // carry is now the carry-out of the last block (clean 0/1 via CarryInMsg)
+        (output_blocks, carry)
+    }
 
     /// Adds two encrypted integers using Hillis-Steele carry propagation.
     ///
