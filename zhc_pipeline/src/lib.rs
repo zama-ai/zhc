@@ -149,14 +149,20 @@ mod test;
 
 #[test]
 fn pipeline_mh_mul() {
+    const INT_SIZE: u16 = 16;
+    const MH_FACTOR: u8 = 4;
+
     let mut hpu_config = HpuConfig::from(PhysicalConfig::tuniform_64b_pfail128_psi64());
     hpu_config.pbs_min_batch_size = 12;
-    hpu_config.pbs_max_batch_size = 12;
-    let builder = mh_mul(CiphertextSpec::new(8, 2, 2), 2);
+    let builder = mh_mul(CiphertextSpec::new(INT_SIZE, 2, 2), MH_FACTOR);
+
+    builder.draw("mh_mul_ir.html");
+    builder.draw_partitions("mh_mul_partition_ir.html");
     let mut ir = builder.ir().clone();
     insert_transfers(&mut ir, builder.partitions());
     cut_transfers(&mut ir);
     ir.dump_and_wait();
+
     let components = isolate_subgraphs(&ir, |op| {
         use IopInstructionSet::*;
         match op {
@@ -170,6 +176,7 @@ fn pipeline_mh_mul() {
             _ => false,
         }
     });
+
     for (i, mut comp) in components.into_iter().rev().enumerate() {
         eliminate_aliases(&mut comp);
         skip_store_load(&mut comp);
@@ -178,6 +185,7 @@ fn pipeline_mh_mul() {
         eliminate_dead_code(&mut comp);
         eliminate_common_subexpressions(&mut comp);
         eliminate_dead_code(&mut comp);
+
         let unscheduled = translation::lower_iop_to_hpu(&comp);
         let scheduled =
             one_step::schedule(&unscheduled, &hpu_config, SchedPolicy::AsLateAsPossible);

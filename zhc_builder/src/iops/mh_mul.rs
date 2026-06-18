@@ -198,6 +198,8 @@ impl Builder {
                 .iter()
                 .map(|CiphertextLimb { offset, blocks }| (offset, blocks))
             {
+                self.new_partition();
+
                 // Compute cut_off point based on input and current limb offset
                 let blocks_ofst = (i + j) * mh_blocks;
                 let relin_cut_off = cut_off_block.saturating_sub(blocks_ofst as u8);
@@ -229,6 +231,7 @@ impl Builder {
         let mut dst_limb = vec![Default::default(); mh_factor as usize];
         let mut carry_buffer = BTreeMap::<usize, Vec<CiphertextBlock>>::new();
         for k in first_limb_id..=last_limb_id {
+            self.new_partition();
             self.push_comment(format!("Limb reduce[{k}]"));
             let mut stage_limb = limb_map.remove(&k).unwrap_or_default();
             let mut carry_in = carry_buffer.remove(&k).unwrap_or_default();
@@ -251,29 +254,15 @@ impl Builder {
                 loop {
                     match (current.next(), current.next()) {
                         (Some(a), Some(b)) => {
-                            // let (sum, cout) =
-                            //     self.comment(format!("iter {tree_iter}")).add_ripple_carry(
-                            //         a.as_blocks(),
-                            //         b.as_blocks(),
-                            //         carry_in.pop().as_ref(),
-                            //     );
-                            // next.push(CiphertextLimb::new(k, &sum));
-                            // let raw_cout = cout;
                             let (sum, cout) =
-                                self.comment(format!("iter {tree_iter}")).iop_overflow_add(
-                                    &self.ciphertext_join(a.as_blocks(), Some(limbs_size)),
-                                    &self.ciphertext_join(b.as_blocks(), Some(limbs_size)),
+                                self.comment(format!("iter {tree_iter}")).iop_add_raw(
+                                    limbs_size,
+                                    a.as_blocks(),
+                                    b.as_blocks(),
                                     carry_in.pop().as_ref(),
                                 );
-                            next.push(CiphertextLimb::new(k, &self.ciphertext_split(sum)));
-
-                            // NB: carry is only 1 ciphertextBlock but it's wrapped in Ciphertext
-                            // type
-                            let raw_cout = self
-                                .ciphertext_split(cout)
-                                .pop()
-                                .expect("Overflow flag must be encoded in 1 block");
-                            carry_buffer.entry(k + 1).or_default().push(raw_cout)
+                            next.push(CiphertextLimb::new(k, &sum));
+                            carry_buffer.entry(k + 1).or_default().push(cout)
                         }
                         (Some(a), None) => {
                             // odd element passes through unchanged
@@ -303,6 +292,7 @@ impl Builder {
             .collect::<Vec<_>>();
         let post_carry = carry_buffer.into_values().flatten().collect::<Vec<_>>();
 
+        self.new_partition();
         let ovf_flag = self.merge_overflow_flag(out_of_range_limb, post_carry);
         (ovf_flag, dst_limb)
     }
