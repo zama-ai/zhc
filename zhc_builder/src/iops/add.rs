@@ -140,18 +140,7 @@ impl Builder {
         rhs: &Ciphertext,
         cin: Option<&CiphertextBlock>,
     ) -> Ciphertext {
-        let par_w = match lhs.spec().int_size() {
-            8..16 => 1,
-            16..24 => 7,
-            24..256 => 12,
-            _ => 1,
-        };
-        match lhs.spec().int_size() {
-            0..8 => self.iop_add_ripple_carry(&lhs, &rhs, cin).0,
-            8..17 => self.iop_add_hillis_steele(&lhs, &rhs, cin).0,
-            17..256 => self.iop_add_kogge_stone(&lhs, &rhs, cin, par_w).0,
-            _ => todo!(),
-        }
+        self.iop_overflow_add(lhs, rhs, cin).0
     }
 
     /// Adds two encrypted integers with overflow detection.
@@ -177,16 +166,38 @@ impl Builder {
         rhs: &Ciphertext,
         cin: Option<&CiphertextBlock>,
     ) -> (Ciphertext, Ciphertext) {
-        let par_w = match lhs.spec().int_size() {
-            8..16 => 1,
-            16..24 => 7,
-            24..256 => 12,
-            _ => 1,
-        };
-        match lhs.spec().int_size() {
-            0..8 => self.iop_add_ripple_carry(&lhs, &rhs, cin),
-            8..17 => self.iop_add_hillis_steele(&lhs, &rhs, cin),
-            17..256 => self.iop_add_kogge_stone(&lhs, &rhs, cin, par_w),
+        let lhs_blocks = self.ciphertext_split(lhs);
+        let rhs_blocks = self.ciphertext_split(rhs);
+        let int_size = lhs.spec().int_size();
+
+        let (output_blocks, carry_out) = self.iop_add_raw(int_size, lhs_blocks, rhs_blocks, cin);
+        (
+            self.comment("Join Output")
+                .ciphertext_join(output_blocks, None),
+            self.comment("Join Carry")
+                .ciphertext_join([carry_out], None),
+        )
+    }
+
+    pub fn iop_add_raw(
+        &self,
+        int_size: u16,
+        lhs_blocks: impl AsRef<[CiphertextBlock]>,
+        rhs_blocks: impl AsRef<[CiphertextBlock]>,
+        cin: Option<&CiphertextBlock>,
+    ) -> (Vec<CiphertextBlock>, CiphertextBlock) {
+        match int_size {
+            0..8 => self.iop_add_ripple_carry_raw(&lhs_blocks, &rhs_blocks, cin),
+            8..17 => self.iop_add_hillis_steele_raw(&lhs_blocks, &rhs_blocks, cin, true),
+            17..256 => {
+                // select internal par_w based on integer_w
+                let par_w = match int_size {
+                    16..24 => 7,
+                    24..256 => 12,
+                    _ => 1,
+                };
+                self.iop_add_kogge_stone_raw(&lhs_blocks, &rhs_blocks, cin, par_w, true)
+            }
             _ => todo!(),
         }
     }
@@ -219,44 +230,31 @@ impl Builder {
     ) -> (Ciphertext, Ciphertext) {
         let lhs_blocks = self.ciphertext_split(lhs);
         let rhs_blocks = self.ciphertext_split(rhs);
-
-        let mut carry = cin.cloned().unwrap_or_else(|| self.block_let_ciphertext(0));
-        let mut output_blocks = Vec::new();
-        let wider_inputs = lhs_blocks.iter().len().max(rhs_blocks.iter().len());
-        for i in 0..wider_inputs {
-            self.push_comment(format!("{i}-th"));
-            let raw_sum = match (lhs_blocks.get(i), rhs_blocks.get(i)) {
-                (Some(lhs), Some(rhs)) => self.block_add(lhs, rhs),
-                (Some(lhs), None) => lhs.clone(),
-                (None, Some(rhs)) => rhs.clone(),
-                _ => unreachable!(),
-            };
-            let sum = self.block_add(raw_sum, carry);
-            let (message, carry_tmp) = self.block_lookup2(sum, Lut2Def::ManyCarryMsg);
-            carry = carry_tmp;
-            output_blocks.push(message);
-            self.pop_comment();
-        }
-
-        // carry is now the carry-out of the last block (clean 0/1 via CarryInMsg)
+        let (output_blocks, carry_out) = self.iop_add_ripple_carry_raw(lhs_blocks, rhs_blocks, cin);
         (
             self.comment("Join Output")
                 .ciphertext_join(output_blocks, None),
-            self.comment("Join Carry").ciphertext_join([carry], None),
+            self.comment("Join Carry")
+                .ciphertext_join([carry_out], None),
         )
     }
-    pub fn add_ripple_carry(
+
+    pub fn iop_add_ripple_carry_raw(
         &self,
-        lhs: &[CiphertextBlock],
-        rhs: &[CiphertextBlock],
+        lhs_blocks: impl AsRef<[CiphertextBlock]>,
+        rhs_blocks: impl AsRef<[CiphertextBlock]>,
         cin: Option<&CiphertextBlock>,
     ) -> (Vec<CiphertextBlock>, CiphertextBlock) {
         let mut carry = cin.cloned().unwrap_or_else(|| self.block_let_ciphertext(0));
         let mut output_blocks = Vec::new();
-        let wider_inputs = lhs.iter().len().max(rhs.iter().len());
+        let wider_inputs = lhs_blocks
+            .as_ref()
+            .iter()
+            .len()
+            .max(rhs_blocks.as_ref().iter().len());
         for i in 0..wider_inputs {
             self.push_comment(format!("{i}-th"));
-            let raw_sum = match (lhs.get(i), rhs.get(i)) {
+            let raw_sum = match (lhs_blocks.as_ref().get(i), rhs_blocks.as_ref().get(i)) {
                 (Some(lhs), Some(rhs)) => self.block_add(lhs, rhs),
                 (Some(lhs), None) => lhs.clone(),
                 (None, Some(rhs)) => rhs.clone(),
