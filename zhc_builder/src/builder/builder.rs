@@ -22,20 +22,18 @@ use crate::{
     builder::{Ciphertext, CiphertextBlock, Plaintext, PlaintextBlock},
 };
 use std::{
-    cell::{Ref, RefCell, RefMut},
-    fmt::Debug,
-    iter::repeat_n,
-    path::Path,
-    rc::Rc,
+    cell::{Ref, RefCell, RefMut}, fmt::Debug, iter::repeat_n, ops::Div, path::Path, rc::Rc
 };
 use zhc_crypto::integer_semantics::{
     CiphertextBlockSpec, CiphertextSpec, PlaintextBlockSpec, PlaintextSpec, lut::LookupCheck,
 };
 use zhc_ir::{
-    IR, OpId, OpMap, PrintWalker, Signature,
+    AnnIR, IR, OpId, OpIdRaw, OpMap, PrintWalker, Signature,
     cse::eliminate_common_subexpressions,
     dce::eliminate_dead_code,
-    visualization::{Hierarchy, draw_ir_to_html},
+    visualization::{
+        Hierarchy, StyleModifier, VisualAnnotation, draw_ann_ir_to_html, draw_ir_to_html,
+    },
 };
 use zhc_langs::ioplang::{
     IopInstructionSet, IopLang, IopTypeSystem, IopValue, Lut1Def, Lut2Def, eliminate_aliases,
@@ -43,6 +41,7 @@ use zhc_langs::ioplang::{
 };
 use zhc_utils::{
     Dumpable, SafeAs, Store,
+    graphics::ColorScale,
     iter::{Chunk, ChunkIt},
     small::SmallVec,
     svec,
@@ -94,10 +93,23 @@ impl Debug for Type {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PartitionId(pub OpIdRaw);
+
+impl VisualAnnotation for PartitionId {
+    fn style_modifier(&self) -> Option<StyleModifier> {
+        Some(StyleModifier {
+            fill_color: Some(ColorScale::RAINBOW.interpolate((self.0 as f64 * 0.6180339887498949) % 1.0)),
+            ..Default::default()
+        })
+    }
+}
+
 #[derive(Debug)]
 pub(super) struct InnerBuilder {
     pub(super) ir: IR<IopLang>,
     pub(super) hierarchies: Store<OpId, Hierarchy>,
+    pub(super) partitions: Store<OpId, PartitionId>,
     pub(super) sig: Signature<Type>,
 }
 
@@ -107,14 +119,17 @@ impl InnerBuilder {
         op: IopInstructionSet,
         args: SmallVec<zhc_ir::ValId>,
         hierarchy: Hierarchy,
+        partition: PartitionId,
     ) -> (zhc_ir::OpId, SmallVec<zhc_ir::ValId>) {
         if !hierarchy.is_root() {
             let (opid, rets) = self.ir.add_op_with_comment(op, args, hierarchy.to_string());
             self.hierarchies.push(hierarchy);
+            self.partitions.push(partition);
             (opid, rets)
         } else {
             let (opid, rets) = self.ir.add_op(op, args);
             self.hierarchies.push(hierarchy);
+            self.partitions.push(partition);
             (opid, rets)
         }
     }
@@ -178,6 +193,7 @@ pub struct Builder {
     spec: CiphertextBlockSpec,
     inner: Rc<RefCell<InnerBuilder>>,
     hierarchy: RefCell<Hierarchy>,
+    partition: RefCell<PartitionId>,
 }
 
 impl Builder {
@@ -191,6 +207,10 @@ impl Builder {
 
     fn current_hierarchy(&self) -> Hierarchy {
         self.hierarchy.borrow().clone()
+    }
+
+    fn current_partition(&self) -> PartitionId {
+        self.partition.borrow().clone()
     }
 
     /// Creates a new builder with the given block specification.
@@ -211,9 +231,11 @@ impl Builder {
             inner: Rc::new(RefCell::new(InnerBuilder {
                 ir: IR::empty(),
                 hierarchies: Store::empty(),
+                partitions: Store::empty(),
                 sig: Signature::empty(),
             })),
             hierarchy: RefCell::new(Hierarchy::new()),
+            partition: RefCell::new(PartitionId(0)),
         }
     }
 
@@ -367,6 +389,24 @@ impl Builder {
         );
     }
 
+    pub fn draw_partitions(&self, path: impl AsRef<Path>) {
+        let partitions = &self.inner().partitions;
+        let ir = &self.ir();
+        let ann_ir = AnnIR::new(
+            ir,
+            ir.totally_mapped_opmap(|op| partitions[*op]),
+            ir.filled_valmap(()),
+        );
+        draw_ann_ir_to_html(
+            &ann_ir,
+            Some(
+                self.ir()
+                    .partially_mapped_opmap(|op| self.inner().hierarchies.get(*op).cloned()),
+            ),
+            path,
+        );
+    }
+
     /// Returns a new builder handle with the given comment appended to the annotation stack.
     ///
     /// Unlike [`push_comment`](Self::push_comment) which mutates the current builder, this
@@ -393,7 +433,12 @@ impl Builder {
             spec: self.spec,
             inner: self.inner.clone(),
             hierarchy,
+            partition: self.partition.clone(),
         }
+    }
+
+    pub fn new_partition(&self) {
+        self.partition.borrow_mut().0 += 1;
     }
 
     /// Pushes a comment onto the annotation stack.
@@ -458,6 +503,7 @@ impl Builder {
             IopInstructionSet::InputCiphertext { pos, int_size },
             svec![],
             self.current_hierarchy(),
+            self.current_partition(),
         );
         Ciphertext {
             valid: inp[0],
@@ -488,6 +534,7 @@ impl Builder {
                     IopInstructionSet::ExtractCtBlock { index },
                     svec![inp.valid],
                     self.current_hierarchy(),
+                    self.current_partition(),
                 );
                 CiphertextBlock {
                     valid: ret[0],
@@ -527,6 +574,7 @@ impl Builder {
             IopInstructionSet::InputPlaintext { pos, int_size },
             svec![],
             self.current_hierarchy(),
+            self.current_partition(),
         );
         Plaintext {
             valid: inp[0],
@@ -557,6 +605,7 @@ impl Builder {
                     IopInstructionSet::ExtractPtBlock { index },
                     svec![inp.valid],
                     self.current_hierarchy(),
+                    self.current_partition(),
                 );
                 PlaintextBlock {
                     valid: ret[0],
@@ -614,11 +663,13 @@ impl Builder {
             IopInstructionSet::DeclareCiphertext { int_size },
             svec![],
             self.current_hierarchy(),
+            self.current_partition(),
         );
         let (_, zero) = self.inner_mut().insert_op(
             IopInstructionSet::LetCiphertextBlock { value: 0 },
             svec![],
             self.current_hierarchy(),
+            self.current_partition(),
         );
         let mut acc = acc[0];
         for index in 0..spec.block_count() {
@@ -627,6 +678,7 @@ impl Builder {
                 IopInstructionSet::StoreCtBlock { index },
                 svec![zero[0], acc],
                 self.current_hierarchy(),
+                self.current_partition(),
             );
             acc = ret[0];
         }
@@ -636,6 +688,7 @@ impl Builder {
                 IopInstructionSet::StoreCtBlock { index },
                 svec![block.valid, acc],
                 self.current_hierarchy(),
+                self.current_partition(),
             );
             acc = ret[0];
         }
@@ -664,6 +717,7 @@ impl Builder {
             },
             svec![src.valid],
             self.current_hierarchy(),
+            self.current_partition(),
         );
         Ciphertext {
             valid: ret[0],
@@ -692,6 +746,7 @@ impl Builder {
             IopInstructionSet::OutputCiphertext { pos },
             svec![ct.valid],
             self.current_hierarchy(),
+            self.current_partition(),
         );
     }
 
@@ -715,6 +770,7 @@ impl Builder {
             IopInstructionSet::LetPlaintextBlock { value },
             svec![],
             self.current_hierarchy(),
+            self.current_partition(),
         );
         PlaintextBlock {
             valid: ret[0],
@@ -746,6 +802,7 @@ impl Builder {
             IopInstructionSet::AddCt,
             svec![src_a.valid, src_b.valid],
             self.current_hierarchy(),
+            self.current_partition(),
         );
         CiphertextBlock {
             valid: ret[0],
@@ -775,6 +832,7 @@ impl Builder {
             },
             svec![src.valid],
             self.current_hierarchy(),
+            self.current_partition(),
         );
         CiphertextBlock {
             valid: ret[0],
@@ -788,6 +846,7 @@ impl Builder {
             IopInstructionSet::Transfer,
             svec![src.valid],
             self.current_hierarchy(),
+            self.current_partition(),
         );
         CiphertextBlock {
             valid: ret[0],
@@ -819,6 +878,7 @@ impl Builder {
             IopInstructionSet::TemperAddCt,
             svec![src_a.valid, src_b.valid],
             self.current_hierarchy(),
+            self.current_partition(),
         );
         CiphertextBlock {
             valid: ret[0],
@@ -850,6 +910,7 @@ impl Builder {
             IopInstructionSet::WrappingAddCt,
             svec![src_a.valid, src_b.valid],
             self.current_hierarchy(),
+            self.current_partition(),
         );
         CiphertextBlock {
             valid: ret[0],
@@ -882,6 +943,7 @@ impl Builder {
             IopInstructionSet::AddPt,
             svec![src_a.valid, src_b.valid],
             self.current_hierarchy(),
+            self.current_partition(),
         );
         CiphertextBlock {
             valid: ret[0],
@@ -914,6 +976,7 @@ impl Builder {
             IopInstructionSet::WrappingAddPt,
             svec![src_a.valid, src_b.valid],
             self.current_hierarchy(),
+            self.current_partition(),
         );
         CiphertextBlock {
             valid: ret[0],
@@ -945,6 +1008,7 @@ impl Builder {
             IopInstructionSet::SubCt,
             svec![src_a.valid, src_b.valid],
             self.current_hierarchy(),
+            self.current_partition(),
         );
         CiphertextBlock {
             valid: ret[0],
@@ -977,6 +1041,7 @@ impl Builder {
             IopInstructionSet::WrappingSubCt,
             svec![src_a.valid, src_b.valid],
             self.current_hierarchy(),
+            self.current_partition(),
         );
         CiphertextBlock {
             valid: ret[0],
@@ -1009,6 +1074,7 @@ impl Builder {
             IopInstructionSet::SubPt,
             svec![src_a.valid, src_b.valid],
             self.current_hierarchy(),
+            self.current_partition(),
         );
         CiphertextBlock {
             valid: ret[0],
@@ -1043,6 +1109,7 @@ impl Builder {
             IopInstructionSet::PtSub,
             svec![src_a.valid, src_b.valid],
             self.current_hierarchy(),
+            self.current_partition(),
         );
         CiphertextBlock {
             valid: ret[0],
@@ -1075,6 +1142,7 @@ impl Builder {
             IopInstructionSet::MulPt,
             svec![src_a.valid, src_b.valid],
             self.current_hierarchy(),
+            self.current_partition(),
         );
         CiphertextBlock {
             valid: ret[0],
@@ -1118,6 +1186,7 @@ impl Builder {
             },
             svec![src_a.valid, src_b.valid],
             self.current_hierarchy(),
+            self.current_partition(),
         );
         CiphertextBlock {
             valid: ret[0],
@@ -1183,6 +1252,7 @@ impl Builder {
             IopInstructionSet::PackCt { mul },
             svec![src_a.valid, src_b.valid],
             self.current_hierarchy(),
+            self.current_partition(),
         );
         CiphertextBlock {
             valid: ret[0],
@@ -1245,6 +1315,7 @@ impl Builder {
             },
             svec![src.valid],
             self.current_hierarchy(),
+            self.current_partition(),
         );
         CiphertextBlock {
             valid: ret[0],
@@ -1283,6 +1354,7 @@ impl Builder {
             },
             svec![src.valid],
             self.current_hierarchy(),
+            self.current_partition(),
         );
         CiphertextBlock {
             valid: ret[0],
@@ -1321,6 +1393,7 @@ impl Builder {
             },
             svec![src.valid],
             self.current_hierarchy(),
+            self.current_partition(),
         );
         CiphertextBlock {
             valid: ret[0],
@@ -1360,6 +1433,7 @@ impl Builder {
             },
             svec![src.valid],
             self.current_hierarchy(),
+            self.current_partition(),
         );
         (
             CiphertextBlock {
@@ -1394,6 +1468,7 @@ impl Builder {
             IopInstructionSet::LetCiphertextBlock { value },
             svec![],
             self.current_hierarchy(),
+            self.current_partition(),
         );
         CiphertextBlock {
             valid: ret[0],
