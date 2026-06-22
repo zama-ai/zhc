@@ -22,7 +22,7 @@ use crate::{
     builder::{Ciphertext, CiphertextBlock, Plaintext, PlaintextBlock},
 };
 use std::{
-    cell::{Ref, RefCell, RefMut}, fmt::Debug, iter::repeat_n, ops::Div, path::Path, rc::Rc
+    cell::{Ref, RefCell, RefMut}, fmt::Debug, iter::repeat_n, path::Path, rc::Rc
 };
 use zhc_crypto::integer_semantics::{
     CiphertextBlockSpec, CiphertextSpec, PlaintextBlockSpec, PlaintextSpec, lut::LookupCheck,
@@ -439,6 +439,17 @@ impl Builder {
 
     pub fn new_partition(&self) {
         self.partition.borrow_mut().0 += 1;
+    }
+
+    pub fn merge_partitions(&self, ping: PartitionId, pong: PartitionId) {
+        if ping != pong {
+            let (new, old) = if ping.0 > pong.0 {
+                (ping, pong)
+            } else {
+                (pong, ping)
+            };
+            self.inner_mut().partitions.iter_mut().for_each(|p| if *p == old {*p = new});
+        }
     }
 
     /// Pushes a comment onto the annotation stack.
