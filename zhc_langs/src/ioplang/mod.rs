@@ -39,6 +39,7 @@ mod lut;
 mod skip_redundant_stores;
 mod skip_store_load;
 mod type_system;
+mod insert_transfers;
 
 pub use cut_transfers::*;
 pub use dialect::*;
@@ -50,3 +51,4 @@ pub use lut::*;
 pub use skip_redundant_stores::*;
 pub use skip_store_load::*;
 pub use type_system::*;
+pub use insert_transfers::*;
