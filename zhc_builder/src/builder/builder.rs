@@ -36,8 +36,7 @@ use zhc_ir::{
     },
 };
 use zhc_langs::ioplang::{
-    IopInstructionSet, IopLang, IopTypeSystem, IopValue, Lut1Def, Lut2Def, eliminate_aliases,
-    skip_redundant_stores, skip_store_load,
+    IopInstructionSet, IopLang, IopTypeSystem, IopValue, Lut1Def, Lut2Def, Partition, eliminate_aliases, skip_redundant_stores, skip_store_load
 };
 use zhc_utils::{
     Dumpable, SafeAs, Store,
@@ -450,6 +449,10 @@ impl Builder {
             };
             self.inner_mut().partitions.iter_mut().for_each(|p| if *p == old {*p = new});
         }
+    }
+
+    pub fn partitions(&self) -> OpMap<Partition> {
+        self.ir().totally_mapped_opmap(|op| self.inner().partitions[*op].0)
     }
 
     /// Pushes a comment onto the annotation stack.

@@ -10,9 +10,14 @@ use std::f64;
 use std::path::Path;
 use zhc_builder::{Builder, CiphertextSpec, mh_mul};
 use zhc_ir::IR;
+use zhc_ir::cse::eliminate_common_subexpressions;
+use zhc_ir::dce::eliminate_dead_code;
 use zhc_langs::doplang::{DopLang, emit_assembly};
 use zhc_langs::hpulang::{HpuLang, get_batch_statistics};
-use zhc_langs::ioplang::{IopInstructionSet, IopLang, cut_transfers, isolate_subgraphs};
+use zhc_langs::ioplang::{
+    IopInstructionSet, IopLang, cut_transfers, eliminate_aliases, insert_transfers,
+    isolate_subgraphs, skip_redundant_stores, skip_store_load,
+};
 use zhc_sim::MHz;
 use zhc_sim::hpu::{HpuConfig, PhysicalConfig};
 use zhc_utils::Dumpable;
@@ -133,14 +138,10 @@ fn multi_hpu_regular_pipeline(mut ir: IR<IopLang>, config: &HpuConfig) -> Vec<IR
             _ => false,
         }
     });
-<<<<<<< HEAD
-    components.into_iter().map(|ir| regular_pipeline(ir, config).1).collect()
-=======
     components
         .into_iter()
         .map(|ir| regular_pipeline(ir, config).1)
         .collect()
->>>>>>> 03c6a9e (WIP: mh_mul pipeline debug)
 }
 
 #[cfg(test)]
@@ -152,47 +153,40 @@ fn pipeline_mh_mul() {
     hpu_config.pbs_min_batch_size = 12;
     hpu_config.pbs_max_batch_size = 12;
     let builder = mh_mul(CiphertextSpec::new(8, 2, 2), 2);
-    builder.draw("start_ir.html");
-    // let mut ir = builder.optimize_ir().clone();
     let mut ir = builder.ir().clone();
-    let unscheduled = translation::lower_iop_to_hpu(&ir);
-    let scheduled = one_step::schedule(&unscheduled, &hpu_config, SchedPolicy::AsLateAsPossible);
-    let allocated = allocate_registers(&scheduled, &hpu_config);
-    use std::fs::File;
-    use std::io::Write;
-    let filename = format!("output_full.asm");
-    let mut file = File::create(&filename).expect("Failed to create .asm file");
-    file.write_all(emit_assembly(&allocated).as_bytes())
-        .expect("Failed to write to .asm file");
-
-    // cut_transfers(&mut ir);
-    // let components = isolate_subgraphs(&ir, |op| {
-    //     use IopInstructionSet::*;
-    //     match op {
-    //         InputCiphertext { .. }
-    //         | InputPlaintext { .. }
-    //         | ExtractCtBlock { .. }
-    //         | ExtractPtBlock { .. }
-    //         | DeclareCiphertext { .. }
-    //         | LetCiphertextBlock { .. }
-    //         | LetPlaintextBlock { .. } => true,
-    //         _ => false,
-    //     }
-    // });
-
-    // println!("{components:?}");
-    // assert_eq!(components.len(), 2);
-
-    // for (i, comp) in components.into_iter().rev().enumerate() {
-    //     let unscheduled = translation::lower_iop_to_hpu(&comp);
-    //     let batched = batcher::batch(&unscheduled, &hpu_config);
-    //     let scheduled = batch_scheduler::schedule(&batched, &hpu_config);
-    //     let allocated = allocate_registers(&scheduled, &hpu_config);
-    //     use std::fs::File;
-    //     use std::io::Write;
-    //     let filename = format!("output_{}.asm", i);
-    //     let mut file = File::create(&filename).expect("Failed to create .asm file");
-    //     file.write_all(emit_assembly(&allocated).as_bytes())
-    //         .expect("Failed to write to .asm file");
-    // }
+    insert_transfers(&mut ir, builder.partitions());
+    cut_transfers(&mut ir);
+    ir.dump_and_wait();
+    let components = isolate_subgraphs(&ir, |op| {
+        use IopInstructionSet::*;
+        match op {
+            InputCiphertext { .. }
+            | InputPlaintext { .. }
+            | ExtractCtBlock { .. }
+            | ExtractPtBlock { .. }
+            | DeclareCiphertext { .. }
+            | LetCiphertextBlock { .. }
+            | LetPlaintextBlock { .. } => true,
+            _ => false,
+        }
+    });
+    for (i, mut comp) in components.into_iter().rev().enumerate() {
+        eliminate_aliases(&mut comp);
+        skip_store_load(&mut comp);
+        eliminate_dead_code(&mut comp);
+        skip_redundant_stores(&mut comp);
+        eliminate_dead_code(&mut comp);
+        eliminate_common_subexpressions(&mut comp);
+        eliminate_dead_code(&mut comp);
+        let unscheduled = translation::lower_iop_to_hpu(&comp);
+        let scheduled =
+            one_step::schedule(&unscheduled, &hpu_config, SchedPolicy::AsLateAsPossible);
+        let allocated = allocate_registers(&scheduled, &hpu_config);
+        use std::fs::File;
+        use std::io::Write;
+        let filename = format!("output_{}.asm", i);
+        let mut file = File::create(&filename).expect("Failed to create .asm file");
+        file.write_all(emit_assembly(&allocated).as_bytes())
+            .expect("Failed to write to .asm file");
+    }
 }

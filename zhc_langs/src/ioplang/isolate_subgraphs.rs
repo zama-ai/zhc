@@ -66,9 +66,7 @@ pub fn isolate_subgraphs<D: Fn(IopInstructionSet) -> bool>(
     for valref in ir.walk_vals_linear() {
         let origin = valref.get_origin().opref;
         for user in valref.get_users_iter() {
-            if !(should_duplicate(origin.get_instruction())) {
-                uf.union(*origin, *user);
-            }
+            uf.union(*origin, *user);
         }
     }
 
