@@ -116,7 +116,9 @@ impl Builder {
         src_amount: &Ciphertext,
     ) -> (Ciphertext, Ciphertext) {
         // Step 1: Check if sender has sufficient funds.
-        let enough_fund = self.iop_cmp(src_from, src_amount, CmpKind::GreaterOrEqual);
+        let amount_inv = self.iop_bitwise_inv(src_amount);
+        let one = self.block_let_ciphertext(1);
+        let (_diff, enough_fund) = self.iop_add_ripple_carry(src_from, &amount_inv, Some(&one));
 
         // Step 2: Compute conditional transfer amount.
         let actual_amount = self.iop_if_then_zero(src_amount, &enough_fund);
