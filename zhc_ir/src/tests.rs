@@ -1,5 +1,5 @@
 use crate::testlang::{TestInstructionSet, TestLang};
-use crate::{DialectInstructionSet, IR};
+use crate::{DialectInstructionSet, ValUse, IR};
 use zhc_utils::{assert_display_is, iter::CollectInVec, svec};
 
 /// Tests basic IR construction with complex operation graph and validates
@@ -1616,4 +1616,190 @@ fn test_position_tracking_with_iterators() {
     assert_eq!(returns[1].users.len(), 1);
     assert_eq!(returns[1].users[0].opid, add_id);
     assert_eq!(returns[1].users[0].position, 1);
+}
+
+/// Tests that replace_val_use_at rewrites only the targeted use site,
+/// leaving other uses of the same value untouched.
+#[test]
+fn test_replace_val_use_at_selective() {
+    let mut store: IR<TestLang> = IR::empty();
+    let (_, v0) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![]);
+    let (_, v1) = store.add_op(TestInstructionSet::IntInput { pos: 1 }, svec![]);
+    // add_op1 uses v0 at positions 0 and 1
+    let (add1_id, _) = store.add_op(TestInstructionSet::Add, svec![v0[0], v0[0]]);
+    // add_op2 also uses v0
+    let (add2_id, _) = store.add_op(TestInstructionSet::Add, svec![v0[0], v0[0]]);
+    assert_display_is!(
+        store.format(),
+        r#"
+            %0 = int_input<pos: 0>();
+            %1 = int_input<pos: 1>();
+            %2 = add(%0, %0);
+            %3 = add(%0, %0);
+        "#
+    );
+    // Replace only position 0 of add1_id with v1
+    store.replace_val_use_at(ValUse { opid: add1_id, position: 0 }, v1[0]);
+    assert_display_is!(
+        store.format(),
+        r#"
+            %0 = int_input<pos: 0>();
+            %1 = int_input<pos: 1>();
+            %2 = add(%1, %0);
+            %3 = add(%0, %0);
+        "#
+    );
+    // v0 still used 3 times (pos 1 of add1, pos 0+1 of add2); v1 used once
+    let val0 = store.get_val(v0[0]);
+    let val1 = store.get_val(v1[0]);
+    assert_eq!(val0.users.len(), 3);
+    assert_eq!(val1.users.len(), 1);
+    assert_eq!(val1.users[0].opid, add1_id);
+    assert_eq!(val1.users[0].position, 0);
+    // position 1 of add1 still uses v0
+    assert!(val0.users.iter().any(|u| u.opid == add1_id && u.position == 1));
+    // add2 still uses v0 at both positions
+    assert!(val0.users.iter().any(|u| u.opid == add2_id && u.position == 0));
+    assert!(val0.users.iter().any(|u| u.opid == add2_id && u.position == 1));
+}
+
+/// Tests that replace_val_use_at with a same-value replacement is a no-op.
+#[test]
+fn test_replace_val_use_at_noop_same_value() {
+    let mut store: IR<TestLang> = IR::empty();
+    let (_, v0) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![]);
+    let (inc_id, _) = store.add_op(TestInstructionSet::Inc, svec![v0[0]]);
+    assert_display_is!(
+        store.format(),
+        r#"
+            %0 = int_input<pos: 0>();
+            %1 = inc(%0);
+        "#
+    );
+    let users_before: Vec<_> = { store.get_val(v0[0]).users.to_vec() };
+    store.replace_val_use_at(ValUse { opid: inc_id, position: 0 }, v0[0]);
+    assert_display_is!(
+        store.format(),
+        r#"
+            %0 = int_input<pos: 0>();
+            %1 = inc(%0);
+        "#
+    );
+    let users_after: Vec<_> = store.get_val(v0[0]).users.to_vec();
+    assert_eq!(users_before, users_after);
+}
+
+/// Tests that replace_val_use_at updates depth correctly.
+#[test]
+fn test_replace_val_use_at_depth_update() {
+    let mut store: IR<TestLang> = IR::empty();
+    let (_, v0) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![]);
+    let (_, v1) = store.add_op(TestInstructionSet::IntInput { pos: 1 }, svec![]);
+    let (_, v2) = store.add_op(TestInstructionSet::Inc, svec![v1[0]]);
+    let (_, v3) = store.add_op(TestInstructionSet::Inc, svec![v2[0]]);
+    // last uses v0 (depth 1), replaced with v3 whose producer is at depth 3 → new depth = 4
+    let (last_id, _) = store.add_op(TestInstructionSet::Inc, svec![v0[0]]);
+    assert_display_is!(
+        store.format(),
+        r#"
+            %0 = int_input<pos: 0>();
+            %1 = int_input<pos: 1>();
+            %2 = inc(%1);
+            %3 = inc(%2);
+            %4 = inc(%0);
+        "#
+    );
+    assert_eq!(store.get_op(last_id).get_depth(), 2);
+    store.replace_val_use_at(ValUse { opid: last_id, position: 0 }, v3[0]);
+    assert_display_is!(
+        store.format(),
+        r#"
+            %0 = int_input<pos: 0>();
+            %1 = int_input<pos: 1>();
+            %2 = inc(%1);
+            %3 = inc(%2);
+            %4 = inc(%3);
+        "#
+    );
+    assert_eq!(store.get_op(last_id).get_depth(), 4);
+}
+
+/// Tests that replace_val_use_at panics on an out-of-bounds position.
+#[test]
+#[should_panic(expected = "Invalid use_site.")]
+fn test_replace_val_use_at_invalid_position() {
+    let mut store: IR<TestLang> = IR::empty();
+    let (_, v0) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![]);
+    let (_, v1) = store.add_op(TestInstructionSet::IntInput { pos: 1 }, svec![]);
+    let (inc_id, _) = store.add_op(TestInstructionSet::Inc, svec![v0[0]]);
+    // Inc takes 1 argument; position 1 is out of bounds
+    store.replace_val_use_at(ValUse { opid: inc_id, position: 1 }, v1[0]);
+}
+
+/// Tests that replace_val_use_at panics on a type mismatch.
+#[test]
+#[should_panic(expected = "Tried to replace a value with one of different type.")]
+fn test_replace_val_use_at_type_mismatch() {
+    let mut store: IR<TestLang> = IR::empty();
+    let (_, v_int) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![]);
+    let (_, v_bool) = store.add_op(TestInstructionSet::BoolConstant { val: true }, svec![]);
+    let (inc_id, _) = store.add_op(TestInstructionSet::Inc, svec![v_int[0]]);
+    store.replace_val_use_at(ValUse { opid: inc_id, position: 0 }, v_bool[0]);
+}
+
+/// Tests that replace_val_use_at panics when the replacement would create a cycle.
+/// Direct self-reference: inc(%0) tries to consume its own output.
+#[test]
+#[should_panic(expected = "Tried to replace a value with one it reaches.")]
+fn test_replace_val_use_at_cycle() {
+    let mut store: IR<TestLang> = IR::empty();
+    let (_, v0) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![]);
+    let (inc_id, v1) = store.add_op(TestInstructionSet::Inc, svec![v0[0]]);
+    // Replacing the argument of inc_id with its own output creates a self-cycle
+    store.replace_val_use_at(ValUse { opid: inc_id, position: 0 }, v1[0]);
+}
+
+/// Tests that replace_val_use_at use-def chains remain consistent for multi-return ops.
+#[test]
+fn test_replace_val_use_at_multi_return_arg() {
+    let mut store: IR<TestLang> = IR::empty();
+    let (_, v0) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![]);
+    let (_, v1) = store.add_op(TestInstructionSet::IntInput { pos: 1 }, svec![]);
+    let (_, v2) = store.add_op(TestInstructionSet::IntInput { pos: 2 }, svec![]);
+    // DivRem returns two values; use both in an Add
+    let (_, v_dr) = store.add_op(TestInstructionSet::DivRem, svec![v0[0], v1[0]]);
+    let (add_id, _) = store.add_op(TestInstructionSet::Add, svec![v_dr[0], v_dr[1]]);
+    assert_display_is!(
+        store.format(),
+        r#"
+            %0 = int_input<pos: 0>();
+            %1 = int_input<pos: 1>();
+            %2 = int_input<pos: 2>();
+            %3, %4 = div_rem(%0, %1);
+            %5 = add(%3, %4);
+        "#
+    );
+    // Replace the second argument of add (v_dr[1]) with v2[0]
+    store.replace_val_use_at(ValUse { opid: add_id, position: 1 }, v2[0]);
+    assert_display_is!(
+        store.format(),
+        r#"
+            %0 = int_input<pos: 0>();
+            %1 = int_input<pos: 1>();
+            %2 = int_input<pos: 2>();
+            %3, %4 = div_rem(%0, %1);
+            %5 = add(%3, %2);
+        "#
+    );
+    // v_dr[1] should have no users; v2[0] should be used at position 1 of add
+    let vdr1 = store.get_val(v_dr[1]);
+    let vdr0 = store.get_val(v_dr[0]);
+    let v2_val = store.get_val(v2[0]);
+    assert_eq!(vdr1.users.len(), 0);
+    assert_eq!(vdr0.users.len(), 1);
+    assert_eq!(vdr0.users[0].opid, add_id);
+    assert_eq!(vdr0.users[0].position, 0);
+    assert_eq!(v2_val.users.len(), 1);
+    assert_eq!(v2_val.users[0].opid, add_id);
+    assert_eq!(v2_val.users[0].position, 1);
 }

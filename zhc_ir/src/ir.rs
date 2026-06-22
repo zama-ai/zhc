@@ -652,6 +652,73 @@ impl<D: Dialect> IR<D> {
         new_mut.append(old_mut);
     }
 
+    /// Replaces a single use of a value with another value.
+    ///
+    /// Unlike [`replace_val_use`](Self::replace_val_use), which rewrites every
+    /// consumer of a value, this targets one specific use site. The `use_site`
+    /// identifies a single argument slot through a [`ValUse`] — the consuming
+    /// operation and the zero-based position of the argument within that
+    /// operation. Only that slot is rewritten to consume `new`; any other uses
+    /// of the original value are left untouched. If the slot already holds
+    /// `new`, this is a no-op. Use-def chains and operation depths are updated
+    /// automatically.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `use_site.position` is out of range for the consuming
+    /// operation's argument list, if `new` or the value currently at the slot
+    /// is unknown or inactive, if the two values have different types, or if
+    /// the replacement would introduce a cycle (i.e. `new` is produced by an
+    /// operation reachable from the consuming operation).
+    pub fn replace_val_use_at(&mut self, use_site: ValUse, new: impl AsValId) {
+        assert!(
+            (use_site.position as usize) < self.op_arguments[use_site.opid].len(),
+           "Invalid use_site."
+        );
+        let old = self.op_arguments[use_site.opid][use_site.position as usize];
+        let new = new.val_id();
+        assert!(self.has_valid(old), "Unknown value.");
+        assert!(self.has_valid(new), "Unknown value.");
+        if old == new {
+            return;
+        }
+
+        assert_eq!(
+            self.raw_get_val(old).get_type(),
+            self.raw_get_val(new).get_type(),
+            "Tried to replace a value with one of different type."
+        );
+
+        // Cycle check: the consuming op must not reach the producer of new.
+        assert!(
+            !self
+                .raw_get_op(use_site.opid)
+                .reaches(&self.raw_get_val(new).get_origin().opref),
+            "Tried to replace a value with one it reaches."
+        );
+
+        // Rewrite the specific argument slot.
+        self.op_arguments[use_site.opid][use_site.position as usize] = new;
+
+        // Propagate depth changes through the affected op.
+        Self::raw_update_depths(
+            &mut self.op_depth,
+            &self.op_arguments,
+            &self.op_returns,
+            &self.val_origins,
+            &self.val_users,
+            use_site.opid,
+        );
+
+        // Update use-def chains.
+        let idx = self.val_users[old]
+            .iter()
+            .position(|u| u == &use_site)
+            .unwrap();
+        self.val_users[old].remove(idx);
+        self.val_users[new].push(use_site.clone());
+    }
+
     /// Deletes multiple operations in dependency-safe order.
     ///
     /// Operations are deleted in reverse topological order to ensure that
