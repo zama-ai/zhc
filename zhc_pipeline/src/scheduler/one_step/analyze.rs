@@ -26,8 +26,13 @@ fn compute_cost(opref: impl AsOpRef<Dialect = HpuLang>) -> OpIdRaw {
         | AddCst { .. }
         | SubCst { .. }
         | CstSub { .. }
-        | MulCst { .. } => NON_PBS_COST,
-        CstCt { .. } | ImmLd { .. } | DstSt { .. } | SrcLd { .. } => NON_PBS_COST,
+        | MulCst { .. }
+        | CstCt { .. }
+        | ImmLd { .. }
+        | DstSt { .. }
+        | SrcLd { .. }
+        | TransferIn { .. }
+        | TransferOut { .. } => NON_PBS_COST,
         Pbs { .. }
         | Pbs2 { .. }
         | Pbs4 { .. }

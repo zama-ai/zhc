@@ -26,6 +26,7 @@ impl Affinity {
             | MulCst { .. } => Affinity::Pea,
             CstCt { .. } => Affinity::Ctl,
             ImmLd { .. } | DstSt { .. } | SrcLd { .. } => Affinity::Pem,
+            TransferIn { .. } | TransferOut { .. } => Affinity::Ctl,
             Pbs { .. }
             | Pbs2 { .. }
             | Pbs4 { .. }
