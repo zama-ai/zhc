@@ -10,14 +10,18 @@ use std::{collections::HashMap, sync::LazyLock};
 use zhc_builder::CiphertextBlockSpec;
 use zhc_crypto::integer_semantics::lut::{Lut1, Lut2};
 use zhc_ir::{
-    IR,
-    translation::{Order, translate_ann},
+    IR, OpMap,
+    partition::PartitionId,
+    translation::{Order, Translation, translate_ann},
 };
 use zhc_langs::{
-    hpulang::{HpuInstructionSet, HpuLang, Immediate, LutId, TDstId, TImmId, TSrcId},
+    hpulang::{
+        HpuId, HpuInstructionSet, HpuLang, HpuLocality, Immediate, LutId, TDstId, TImmId, TSrcId,
+        insert_transfers,
+    },
     ioplang::{IopInstructionSet, IopLang, Lut1Def, Lut2Def},
 };
-use zhc_utils::{FastMap, SafeAs, small::SmallMap, svec};
+use zhc_utils::{FastMap, SafeAs, iter::{Deduped, DedupedByKey}, small::SmallMap, svec};
 
 pub(crate) static GIDS1: LazyLock<FastMap<Lut1, LutId>> = LazyLock::new(|| {
     HashMap::from([
@@ -321,7 +325,7 @@ pub(crate) static GIDS2: LazyLock<FastMap<Lut2, LutId>> = LazyLock::new(|| {
     ])
 });
 
-pub fn lower_iop_to_hpu(ir: &IR<IopLang>) -> IR<HpuLang> {
+pub fn lower_iop_to_hpu(ir: &IR<IopLang>) -> Translation<HpuLang> {
     use IopInstructionSet::*;
     let remap = ir
         .walk_ops_linear()
@@ -383,16 +387,6 @@ pub fn lower_iop_to_hpu(ir: &IR<IopLang>) -> IR<HpuLang> {
         });
     translate_ann(&ann_ir, Order::Linear, |op, translator| {
         match op.get_instruction() {
-            IopInstructionSet::Transfer => {
-                // Transfer should have been cut and split into different graphs at this point.
-                panic!("Unexpected Transfer op encountered.");
-            }
-            IopInstructionSet::TransferIn { uid } => {
-                translator.direct_translation(op, HpuInstructionSet::TransferIn { tid: uid });
-            }
-            IopInstructionSet::TransferOut { uid } => {
-                translator.direct_translation(op, HpuInstructionSet::TransferOut { tid: uid });
-            }
             IopInstructionSet::_Consume { .. } => {
                 panic!("Tried to translate a _consume op");
             }
@@ -423,7 +417,7 @@ pub fn lower_iop_to_hpu(ir: &IR<IopLang>) -> IR<HpuLang> {
             }
             IopInstructionSet::LetCiphertextBlock { value } => {
                 translator.direct_translation(
-                    op,
+                    &op,
                     HpuInstructionSet::CstCt {
                         cst: Immediate(value),
                     },
@@ -432,14 +426,14 @@ pub fn lower_iop_to_hpu(ir: &IR<IopLang>) -> IR<HpuLang> {
             IopInstructionSet::AddCt
             | IopInstructionSet::WrappingAddCt
             | IopInstructionSet::TemperAddCt => {
-                translator.direct_translation(op, HpuInstructionSet::AddCt);
+                translator.direct_translation(&op, HpuInstructionSet::AddCt);
             }
             IopInstructionSet::SubCt | IopInstructionSet::WrappingSubCt => {
-                translator.direct_translation(op, HpuInstructionSet::SubCt);
+                translator.direct_translation(&op, HpuInstructionSet::SubCt);
             }
             IopInstructionSet::PackCt { mul } => {
                 translator.direct_translation(
-                    op,
+                    &op,
                     HpuInstructionSet::Mac {
                         cst: Immediate(mul.sas()),
                     },
@@ -464,7 +458,7 @@ pub fn lower_iop_to_hpu(ir: &IR<IopLang>) -> IR<HpuLang> {
                         translator.register_translation(op.get_return_valids()[0], new_rets[0]);
                     }
                     _ => {
-                        translator.direct_translation(op, HpuInstructionSet::AddPt);
+                        translator.direct_translation(&op, HpuInstructionSet::AddPt);
                     }
                 }
             }
@@ -487,7 +481,7 @@ pub fn lower_iop_to_hpu(ir: &IR<IopLang>) -> IR<HpuLang> {
                         translator.register_translation(op.get_return_valids()[0], new_rets[0]);
                     }
                     _ => {
-                        translator.direct_translation(op, HpuInstructionSet::SubPt);
+                        translator.direct_translation(&op, HpuInstructionSet::SubPt);
                     }
                 }
             }
@@ -510,7 +504,7 @@ pub fn lower_iop_to_hpu(ir: &IR<IopLang>) -> IR<HpuLang> {
                         translator.register_translation(op.get_return_valids()[0], new_rets[0]);
                     }
                     _ => {
-                        translator.direct_translation(op, HpuInstructionSet::PtSub);
+                        translator.direct_translation(&op, HpuInstructionSet::PtSub);
                     }
                 }
             }
@@ -533,7 +527,7 @@ pub fn lower_iop_to_hpu(ir: &IR<IopLang>) -> IR<HpuLang> {
                         translator.register_translation(op.get_return_valids()[0], new_rets[0]);
                     }
                     _ => {
-                        translator.direct_translation(op, HpuInstructionSet::MulPt);
+                        translator.direct_translation(&op, HpuInstructionSet::MulPt);
                     }
                 }
             }
@@ -591,7 +585,7 @@ pub fn lower_iop_to_hpu(ir: &IR<IopLang>) -> IR<HpuLang> {
                         }
                     }
                 };
-                translator.direct_translation(op, HpuInstructionSet::Pbs { lut });
+                translator.direct_translation(&op, HpuInstructionSet::Pbs { lut });
             }
             IopInstructionSet::Pbs2 { lut, .. } => {
                 let lut = match GIDS2.get(&lut) {
@@ -607,10 +601,47 @@ pub fn lower_iop_to_hpu(ir: &IR<IopLang>) -> IR<HpuLang> {
                         }
                     }
                 };
-                translator.direct_translation(op, HpuInstructionSet::Pbs2 { lut });
+                translator.direct_translation(&op, HpuInstructionSet::Pbs2 { lut });
             }
         }
     })
+}
+
+pub fn lower_iop_to_multi_hpu<'a>(
+    ir: &IR<IopLang>,
+    partitions: &OpMap<PartitionId>,
+) -> (IR<HpuLang>, OpMap<HpuLocality>) {
+    let Translation {
+        output: mut ir,
+        op_provenance_map,
+    } = lower_iop_to_hpu(ir);
+    let partition_to_hid: SmallMap<PartitionId, HpuId> = partitions
+        .iter()
+        .map(|a| a.1.clone())
+        .dedup_by_key(|a| *a)
+        .enumerate()
+        .map(|(i, p)| (p, HpuId(i.sas())))
+        .collect();
+    let hid_map: OpMap<HpuId> = partitions
+        .clone()
+        .map(|a| partition_to_hid.get(&a).unwrap().clone());
+    let hid_map = op_provenance_map.project_opmap(&hid_map);
+    insert_transfers(&mut ir, &hid_map);
+    let localities = ir.totally_mapped_opmap(|opref| {
+        use HpuInstructionSet::*;
+        match opref.get_instruction() {
+            Transfer { from, to } => HpuLocality::Transfer { from, to },
+            CstCt { .. } | ImmLd { .. } | SrcLd { .. } => HpuLocality::Shared(
+                opref
+                    .get_users_iter()
+                    .map(|u| *hid_map.get(u).unwrap())
+                    .dedup()
+                    .collect(),
+            ),
+            _ => HpuLocality::OnHpu(*hid_map.get(opref).unwrap()),
+        }
+    });
+    (ir, localities)
 }
 
 #[cfg(test)]
@@ -626,7 +657,7 @@ mod test {
     use crate::{test::check_iop_hpu_equivalence, translation::lower_iop_to_hpu};
 
     fn pipeline(ir: &IR<IopLang>) -> IR<HpuLang> {
-        lower_iop_to_hpu(&ir)
+        lower_iop_to_hpu(&ir).output
     }
 
     #[test]

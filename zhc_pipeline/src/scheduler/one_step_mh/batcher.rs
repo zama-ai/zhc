@@ -1,16 +1,14 @@
 use zhc_ir::{
-    IR,
-    translation::{Order, translate},
+    IR, OpId, translation::{Order, translate}
 };
-use zhc_langs::hpulang::HpuLang;
-use zhc_utils::iter::{CollectInSmallVec, CollectInVec, MultiZip, ReconcilerOf2};
+use zhc_langs::hpulang::{HpuId, HpuLang, TransferId};
+use zhc_utils::{iter::{CollectInSmallVec, CollectInVec, MultiZip, ReconcilerOf2}, small::SmallMap, svec};
 
 use crate::scheduler::{
-    one_step::SchedElm,
-    utils::{Batch, Batches},
+    one_step_mh::SchedElm, utils::{Batch, Batches}
 };
 
-pub fn batch(ir: &IR<HpuLang>, sched: Vec<SchedElm>) -> IR<HpuLang> {
+pub fn batch(ir: &IR<HpuLang>, hid: HpuId, sched: Vec<SchedElm>, transfer_map: &SmallMap<OpId, TransferId>) -> IR<HpuLang> {
     // We get the batches back
     let mut batches = Batches::new();
     sched
@@ -26,7 +24,6 @@ pub fn batch(ir: &IR<HpuLang>, sched: Vec<SchedElm>) -> IR<HpuLang> {
             }
             batches.push(batch);
         });
-
     // We get the schedule back
     let flat_sched = sched
         .into_iter()
@@ -39,6 +36,24 @@ pub fn batch(ir: &IR<HpuLang>, sched: Vec<SchedElm>) -> IR<HpuLang> {
     translate(ir, Order::Custom(flat_sched), move |opref, engine| {
         use zhc_langs::hpulang::HpuInstructionSet::*;
         match opref.get_instruction() {
+            Transfer { from, to } => {
+                let id = transfer_map.get(&opref.get_id()).unwrap().clone();
+                if hid == from {
+                    let new_args = opref
+                        .get_arg_valids()
+                        .iter()
+                        .map(|valid| engine.translate_val(*valid))
+                        .cosvec();
+                    engine.add_op(TransferOut { from, to, id }, new_args);
+                } else if hid == to {
+                    let new_rets = engine.add_op(TransferIn { from, to, id }, svec![]);
+                    (opref.get_return_valids().iter(), new_rets.into_iter())
+                        .mzip()
+                        .for_each(|(old, new)| engine.register_translation(*old, new));
+                } else {
+                    unreachable!()
+                }
+            }
             AddCt
             | SubCt
             | Mac { .. }
@@ -54,15 +69,7 @@ pub fn batch(ir: &IR<HpuLang>, sched: Vec<SchedElm>) -> IR<HpuLang> {
             | ImmLd { .. }
             | DstSt { .. }
             | SrcLd { .. } => {
-                let new_args = opref
-                    .get_arg_valids()
-                    .iter()
-                    .map(|valid| engine.translate_val(*valid))
-                    .cosvec();
-                let new_rets = engine.add_op(opref.get_instruction(), new_args);
-                (opref.get_return_valids().iter(), new_rets.into_iter())
-                    .mzip()
-                    .for_each(|(old, new)| engine.register_translation(*old, new));
+                engine.direct_translation(&opref, opref.get_instruction());
             }
             Pbs { .. }
             | Pbs2 { .. }
@@ -87,11 +94,9 @@ pub fn batch(ir: &IR<HpuLang>, sched: Vec<SchedElm>) -> IR<HpuLang> {
                     .mzip()
                     .for_each(|(old, new)| engine.register_translation(old.get_id(), new));
             }
-            Batch { .. } | BatchArg { .. } | BatchRet { .. } => {
+            TransferIn { .. } | TransferOut { .. } | Batch { .. } | BatchArg { .. } | BatchRet { .. } => {
                 panic!("Unexpected batch operations encountered.")
             }
-            _ => unreachable!(),
         }
-    })
-    .output
+    }).output
 }

@@ -210,3 +210,18 @@ impl Default for HpuConfig {
         Self::from(PhysicalConfig::tuniform_64b_pfail128_psi64())
     }
 }
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq, Hash)]
+pub struct MultiHpuConfig {
+    pub hpu_config: HpuConfig,
+    pub n_hpus: u8,
+}
+
+impl Default for MultiHpuConfig {
+    fn default() -> Self {
+        MultiHpuConfig {
+            hpu_config: HpuConfig::default(),
+            n_hpus: 4,
+        }
+    }
+}

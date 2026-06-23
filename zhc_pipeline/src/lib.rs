@@ -6,23 +6,19 @@
 //! operation scheduling, register allocation, and final code generation.
 
 use allocator::allocate_registers;
+use zhc_builder::Builder;
+use zhc_ir::IR;
+use zhc_langs::doplang::DopLang;
+use zhc_langs::hpulang::{HpuLang, get_batch_statistics};
+use zhc_langs::ioplang::IopLang;
+use zhc_sim::MHz;
+use zhc_sim::hpu::HpuConfig;
 use std::f64;
 use std::path::Path;
-use zhc_builder::{Builder, CiphertextSpec, PartitionId, mh_mul};
-use zhc_ir::IR;
-use zhc_ir::cse::eliminate_common_subexpressions;
-use zhc_ir::dce::eliminate_dead_code;
-use zhc_langs::doplang::{DopLang, emit_assembly};
-use zhc_langs::hpulang::{HpuLang, get_batch_statistics};
-use zhc_langs::ioplang::{
-    IopInstructionSet, IopLang, cut_transfers, eliminate_aliases, insert_transfers,
-    isolate_subgraphs, skip_redundant_stores, skip_store_load,
-};
-use zhc_sim::MHz;
-use zhc_sim::hpu::{HpuConfig, PhysicalConfig};
-use zhc_utils::Dumpable;
 
-use crate::scheduler::{SchedPolicy, one_step};
+
+use crate::scheduler::SchedPolicy;
+
 
 pub mod allocator;
 pub mod compat;
@@ -103,7 +99,7 @@ pub fn draw_slack(builder: &Builder, path: impl AsRef<Path>) {
 }
 
 pub fn regular_pipeline(ir: IR<IopLang>, config: &HpuConfig) -> (IR<HpuLang>, IR<DopLang>) {
-    let unscheduled = translation::lower_iop_to_hpu(&ir);
+    let unscheduled = translation::lower_iop_to_hpu(&ir).output;
     let scheduled =
         scheduler::one_step::schedule(&unscheduled, config, SchedPolicy::AsLateAsPossible);
     let allocated = allocate_registers(&scheduled, config);
@@ -111,7 +107,7 @@ pub fn regular_pipeline(ir: IR<IopLang>, config: &HpuConfig) -> (IR<HpuLang>, IR
 }
 
 pub fn alternative_pipeline(ir: IR<IopLang>, config: &HpuConfig) -> (IR<HpuLang>, IR<DopLang>) {
-    let unscheduled = translation::lower_iop_to_hpu(&ir);
+    let unscheduled = translation::lower_iop_to_hpu(&ir).output;
     let scheduled = scheduler::two_step::schedule(
         &unscheduled,
         config,
@@ -122,106 +118,213 @@ pub fn alternative_pipeline(ir: IR<IopLang>, config: &HpuConfig) -> (IR<HpuLang>
     (scheduled, allocated)
 }
 
-#[allow(unused)]
-fn multi_hpu_regular_pipeline(mut ir: IR<IopLang>, config: &HpuConfig) -> Vec<IR<DopLang>> {
-    cut_transfers(&mut ir);
-    let components = isolate_subgraphs(&ir, |op| {
-        use IopInstructionSet::*;
-        match op {
-            InputCiphertext { .. }
-            | InputPlaintext { .. }
-            | ExtractCtBlock { .. }
-            | ExtractPtBlock { .. }
-            | DeclareCiphertext { .. }
-            | LetCiphertextBlock { .. }
-            | LetPlaintextBlock { .. } => true,
-            _ => false,
-        }
-    });
-    components
-        .into_iter()
-        .map(|ir| regular_pipeline(ir, config).1)
-        .collect()
-}
-
 #[cfg(test)]
 mod test;
 
-#[test]
-fn pipeline_mh_mul() {
-    const INT_SIZE: u16 = 16;
-    const MH_FACTOR: u8 = 4;
+#[cfg(test)]
+mod test_mh{
+    use zhc_builder::{Builder, CiphertextSpec, mh_mul};
+    use zhc_ir::{AnnIR, partition::PartitionId};
+    use zhc_sim::{Simulator, hpu::{DOp, DOpId, MultiHpuConfig}, multi_hpu::{Events, MultiHpu}};
+    use crate::{allocator::allocate_registers, scheduler::{SchedPolicy, one_step_mh}, translation::lower_iop_to_multi_hpu};
 
-    let mut hpu_config = HpuConfig::from(PhysicalConfig::tuniform_64b_pfail128_psi64());
-    hpu_config.pbs_min_batch_size = 12;
-    let builder = mh_mul(CiphertextSpec::new(INT_SIZE, 2, 2), MH_FACTOR);
+    #[test]
+    fn pipeline_mh_dbg() {
+        // Configuration
+        const INT_SIZE: u16 = 8;
+        const _MH_FACTOR: u8 = 4;
 
-    builder.draw("mh_mul_ir.html");
-    builder.draw_partitions("mh_mul_partition_ir.html");
-    let mut ir = builder.ir().clone();
+        let config = MultiHpuConfig::default();
 
-    // Hpu 0
-    builder.merge_partition_group(
-        &[0, 21, 1, 2, 16, 17, 18, 19, 20]
-            .iter()
-            .map(|x| PartitionId(*x))
-            .collect::<Vec<_>>(),
-    );
-    builder.merge_partition_group(
-        &[3, 4, 5, 6]
-            .iter()
-            .map(|x| PartitionId(*x))
-            .collect::<Vec<_>>(),
-    );
-    builder.merge_partition_group(
-        &[7, 8, 9, 10, 11]
-            .iter()
-            .map(|x| PartitionId(*x))
-            .collect::<Vec<_>>(),
-    );
-    builder.merge_partition_group(
-        &[12, 13, 14, 15]
-            .iter()
-            .map(|x| PartitionId(*x))
-            .collect::<Vec<_>>(),
-    );
+        // Build simple circuit
+        // (ra, rb) <= f(a,b,c,d)
+        // ra <= (a + b) - (c + d)
+        // rb <= (a + b) + (c + d)
+        fn mh_dbg(spec: CiphertextSpec) -> Builder {
+            let builder = Builder::new(spec.block_spec());
+            // Define inputs
+            let src_a = builder.ciphertext_input(spec.int_size());
+            let src_b = builder.ciphertext_input(spec.int_size());
+            let src_c = builder.ciphertext_input(spec.int_size());
+            let src_d = builder.ciphertext_input(spec.int_size());
 
-    insert_transfers(&mut ir, builder.partitions());
-    cut_transfers(&mut ir);
-    ir.dump_and_wait();
+            // extract inputs as array of blk
+            let src_a_blocks = builder.ciphertext_split(&src_a);
+            let src_b_blocks = builder.ciphertext_split(&src_b);
+            let src_c_blocks = builder.ciphertext_split(&src_c);
+            let src_d_blocks = builder.ciphertext_split(&src_d);
 
-    let components = isolate_subgraphs(&ir, |op| {
-        use IopInstructionSet::*;
-        match op {
-            InputCiphertext { .. }
-            | InputPlaintext { .. }
-            | ExtractCtBlock { .. }
-            | ExtractPtBlock { .. }
-            | DeclareCiphertext { .. }
-            | LetCiphertextBlock { .. }
-            | LetPlaintextBlock { .. } => true,
-            _ => false,
+            // Partition A
+            let cur_partition = builder.new_partition();
+            println!("Partition A: (a+b) => {cur_partition:?}");
+            let (apb, _) = builder.comment(format!("apb")).iop_add_raw(
+                spec.int_size(),
+                src_a_blocks,
+                src_b_blocks,
+                None,
+            );
+
+            // Partition B
+            let cur_partition = builder.new_partition();
+            println!("Partition B: (c+d) => {cur_partition:?}");
+            let (cpd, _) = builder.comment(format!("cpd")).iop_add_raw(
+                spec.int_size(),
+                src_c_blocks,
+                src_d_blocks,
+                None,
+            );
+
+            // Partition C
+            let cur_partition = builder.new_partition();
+            println!("Partition C: A + B => {cur_partition:?}");
+            let (ap_b, _) =
+                builder
+                    .comment(format!("ApB"))
+                    .iop_add_raw(spec.int_size(), &apb, &cpd, None);
+
+            // Partition D
+            // Output on hpu A
+            let cur_partition = builder.new_partition();
+            println!("Partition D: Output hpu_A => {cur_partition:?}");
+            builder.ciphertext_output(builder.ciphertext_join(ap_b, Some(spec.int_size())));
+
+            // // Partition E
+            // // NB: Tricky part reintroduce ciphertext_join
+            // // WARN: Not supported yet, must rely on _raw version of iop
+            // let cur_partition = builder.new_partition();
+            // println!("Partition E: A - B => {cur_partition:?}");
+            // let AmB = builder.comment(format!("A&B")).iop_sub(
+            //     &builder.ciphertext_join(apb, Some(spec.int_size())),
+            //     &builder.ciphertext_join(cpd, Some(spec.int_size())),
+            // );
+
+            // // Partition F
+            // // Output on hpu B
+            // let cur_partition = builder.new_partition();
+            // println!("Partition E: Output hpu_B => {cur_partition:?}");
+            // builder.ciphertext_output(AmB);
+
+            builder
         }
-    });
 
-    for (i, mut comp) in components.into_iter().rev().enumerate() {
-        eliminate_aliases(&mut comp);
-        skip_store_load(&mut comp);
-        eliminate_dead_code(&mut comp);
-        skip_redundant_stores(&mut comp);
-        eliminate_dead_code(&mut comp);
-        eliminate_common_subexpressions(&mut comp);
-        eliminate_dead_code(&mut comp);
+        let builder = mh_dbg(CiphertextSpec::new(INT_SIZE, 2, 2));
 
-        let unscheduled = translation::lower_iop_to_hpu(&comp);
-        let scheduled =
-            one_step::schedule(&unscheduled, &hpu_config, SchedPolicy::AsLateAsPossible);
-        let allocated = allocate_registers(&scheduled, &hpu_config);
-        use std::fs::File;
-        use std::io::Write;
-        let filename = format!("output_{}.asm", i);
-        let mut file = File::create(&filename).expect("Failed to create .asm file");
-        file.write_all(emit_assembly(&allocated).as_bytes())
-            .expect("Failed to write to .asm file");
+        builder.draw("mh_dbg_ir.html");
+        builder.draw_partitions("mh_dbg_ir_raw_part.html");
+
+        // Hpu 0
+        builder.merge_partition_group(
+            &[0, 1, 3, 4]
+                .iter()
+                .map(|x| PartitionId(*x))
+                .collect::<Vec<_>>(),
+        );
+        builder.merge_partition_group(
+            // &[2, 5, 6]
+            &[2].iter().map(|x| PartitionId(*x)).collect::<Vec<_>>(),
+        );
+        builder.draw_partitions("mh_dbg_ir_grp_part.html");
+
+        let partitions = builder.partitions();
+        let ir = builder.optimize_ir();
+
+        let (mhir, localities) = lower_iop_to_multi_hpu(&ir, &partitions);
+
+        AnnIR::new(&mhir, localities.clone(), mhir.filled_valmap(())).draw_ann_to_html(None, "hfdsah.html");
+
+        let scheds = one_step_mh::schedule(&mhir, localities, &config, SchedPolicy::AsLateAsPossible);
+
+        let mut streams = Vec::new();
+        for scheduled in scheds.into_iter() {
+            let allocated = allocate_registers(&scheduled, &config.hpu_config);
+            let dops: Vec<DOp> = allocated
+                .walk_ops_linear()
+                .map(|a| DOp {
+                    raw: a.get_instruction(),
+                    id: DOpId(a.get_id().into()),
+                })
+                .collect();
+            streams.push(dops);
+        }
+
+        let mut simulator = Simulator::from_simulatable(
+            config.hpu_config.freq,
+            MultiHpu::new(&config),
+            zhc_sim::TracingLevel::Events,
+        );
+        let event = zhc_sim::multi_hpu::Events::PushDOps(streams);
+        simulator.dispatch(event);
+        simulator.play_until_event(Events::ProcessOver);
+        simulator.dump_trace("brrrrrrrrr.json");
     }
+
+    #[test]
+    fn pipeline_mh_mul() {
+        const INT_SIZE: u16 = 16;
+        const MH_FACTOR: u8 = 4;
+
+        let config = MultiHpuConfig{n_hpus: 5, ..Default::default()};
+        let builder = mh_mul(CiphertextSpec::new(INT_SIZE, 2, 2), MH_FACTOR);
+
+        // let mut ir = builder.ir().clone();
+        let ir = builder.optimize_ir().clone();
+
+        // Hpu 0
+        builder.merge_partition_group(
+            &[0, 17, 18, 19, 21]
+                .iter()
+                .map(|x| PartitionId(*x))
+                .collect::<Vec<_>>(),
+        );
+        builder.merge_partition_group(
+            &[2, 9, 10, 12, 15]
+                .iter()
+                .map(|x| PartitionId(*x))
+                .collect::<Vec<_>>(),
+        );
+        builder.merge_partition_group(
+            &[5, 6, 7, 16, 20]
+                .iter()
+                .map(|x| PartitionId(*x))
+                .collect::<Vec<_>>(),
+        );
+        builder.merge_partition_group(
+            &[3, 4, 13, 14, 8, 11]
+                .iter()
+                .map(|x| PartitionId(*x))
+                .collect::<Vec<_>>(),
+        );
+
+        let partitions = builder.partitions();
+
+        let (mhir, localities) = lower_iop_to_multi_hpu(&ir, &partitions);
+
+        AnnIR::new(&mhir, localities.clone(), mhir.filled_valmap(())).draw_ann_to_html(None, "hfdsah.html");
+
+        let scheds = one_step_mh::schedule(&mhir, localities, &config, SchedPolicy::AsLateAsPossible);
+
+        let mut streams = Vec::new();
+        for scheduled in scheds.into_iter() {
+            let allocated = allocate_registers(&scheduled, &config.hpu_config);
+            let dops: Vec<DOp> = allocated
+                .walk_ops_linear()
+                .map(|a| DOp {
+                    raw: a.get_instruction(),
+                    id: DOpId(a.get_id().into()),
+                })
+                .collect();
+            streams.push(dops);
+        }
+
+        let mut simulator = Simulator::from_simulatable(
+            config.hpu_config.freq,
+            MultiHpu::new(&config),
+            zhc_sim::TracingLevel::Events,
+        );
+        let event = zhc_sim::multi_hpu::Events::PushDOps(streams);
+        simulator.dispatch(event);
+        simulator.play_until_event(Events::ProcessOver);
+        simulator.dump_trace("brrrrrrrrr.json");
+    }
+
 }

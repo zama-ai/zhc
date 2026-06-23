@@ -436,7 +436,7 @@ mod test {
     };
 
     fn pipeline(ir: &IR<IopLang>) -> IR<HpuLang> {
-        let ir = lower_iop_to_hpu(ir);
+        let ir = lower_iop_to_hpu(ir).output;
         let config = HpuConfig::from(PhysicalConfig::gaussian_64b());
         let batched = batch(&ir, &config, SchedPolicy::AsSoonAsPossible);
         schedule(&batched, &config, SchedPolicy::AsSoonAsPossible)

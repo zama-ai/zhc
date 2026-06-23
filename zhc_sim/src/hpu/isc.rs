@@ -51,6 +51,10 @@ impl Pool {
         self.slots.len() == self.slots.capacity()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.slots.is_empty()
+    }
+
     pub fn slots_available(&self) -> bool {
         !self.is_full()
     }
@@ -61,7 +65,8 @@ impl Pool {
                 dop.raw,
                 RawDOp::NOTIFY { .. } | RawDOp::WAIT { .. } | RawDOp::LD_B2B { .. }
             ),
-            "Multi-HPU is not yet supported in simulation."
+            "Received transfer op in ISC {}.",
+            dop.raw
         );
         assert!(self.slots_available());
         self.slots.push(Slot {
@@ -392,8 +397,6 @@ pub struct InstructionScheduler {
     write_unlock_buffer: VecDeque<DOpId>,
     read_unlock_buffer: VecDeque<DOpId>,
     pool: Pool,
-    dop_processed: usize,
-    dop_target: usize,
 }
 
 impl InstructionScheduler {
@@ -410,8 +413,6 @@ impl InstructionScheduler {
             write_unlock_buffer: VecDeque::new(),
             read_unlock_buffer: VecDeque::new(),
             pool: Pool::with_capacity(pool_capacity),
-            dop_processed: 0,
-            dop_target: 0,
         }
     }
 
@@ -466,9 +467,8 @@ impl Simulatable for InstructionScheduler {
     ) {
         // NB: Each event that triggered side effect rearm IscQuery if none is already pending
         match trigger.event {
-            Events::IscPushDOps(small_vec) => {
-                self.dop_target += small_vec.len();
-                self.front_buffer.extend(small_vec.into_iter());
+            Events::IscPushDOp(dop) => {
+                self.front_buffer.push_back(dop);
                 dispatcher.dispatch_after_if_no_there(self.query_period, Events::IscQuery);
             }
             Events::IscUnlockWrite(dopid) => {
@@ -514,7 +514,6 @@ impl Simulatable for InstructionScheduler {
                     dispatcher.dispatch_after_if_no_there(self.query_period, Events::IscQuery);
                 } else if self.pool.slots_available() && self.has_pending_dops() {
                     let dop = self.front_buffer.pop_front().unwrap();
-                    // Used ?
                     dispatcher.dispatch_now(Events::IscRefillDOp(dop.clone()));
                     dispatcher.dispatch_now(Events::NotifyIsc(dop.id, IscCommand::Refill));
                     self.pool.refill(dop);
@@ -535,11 +534,10 @@ impl Simulatable for InstructionScheduler {
                 }
             }
             Events::IscRetireDOp(_) => {
-                self.dop_processed += 1;
-                if self.dop_processed == self.dop_target {
-                    dispatcher.dispatch_next(Events::IscProcessOver);
-                }
                 dispatcher.dispatch_after_if_no_there(self.query_period, Events::IscQuery);
+                if self.pool.is_empty() && self.front_buffer.is_empty() {
+                    dispatcher.dispatch_now(Events::IscStarved);
+                }
             }
             _ => {}
         };

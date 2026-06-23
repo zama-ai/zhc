@@ -1,6 +1,7 @@
 use std::fmt::Display;
 
 use serde::Serialize;
+use zhc_langs::hpulang::{HpuId, TransferId};
 
 use crate::Event;
 
@@ -10,10 +11,10 @@ use super::{DOp, DOpId, IscCommand};
 pub type BatchSize = usize;
 
 /// Simulation events representing state changes and operations within HPU components.
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Events {
     /// Instruction scheduler receives new operations to schedule.
-    IscPushDOps(Vec<DOp>),
+    IscPushDOp(DOp),
     /// Instruction scheduler issues an operation to a processing element.
     IscIssueDOp(DOp),
     /// Unlocks read access for the specified operation.
@@ -28,8 +29,7 @@ pub enum Events {
     IscQuery,
     /// Refills an operation back into the scheduler queue.
     IscRefillDOp(DOp),
-    /// Signals completion of all scheduled operations.
-    IscProcessOver,
+    IscStarved,
 
     /// ALU processing element begins operation execution.
     PeAluLaunchProcessing,
@@ -68,16 +68,34 @@ pub enum Events {
     /// PBS processing element becomes unavailable for new operations.
     PePbsUnavailable,
 
+
     /// External notification of scheduler command execution.
     NotifyIsc(DOpId, IscCommand),
     /// External notification
     NotifyStartOnTimeout { last_in: DOp },
+
+    UCorePushDOps(Vec<DOp>),
+    UCoreProcessDOps,
+    UCoreTransferInNotified(TransferId),
+    UCoreTransferInFinished(TransferId),
+    UCoreTransferOutReady(HpuId, TransferId),
+    UCoreStarved,
+}
+
+impl Events {
+    /// Returns `true` if the events is [`UCoreNotify`].
+    ///
+    /// [`UCoreNotify`]: Events::UCoreNotify
+    #[must_use]
+    pub fn is_ucore_notify(&self) -> bool {
+        matches!(self, Self::UCoreTransferInNotified(..))
+    }
 }
 
 impl Display for Events {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Events::IscPushDOps(_) => write!(f, "IscPushDOps"),
+            Events::IscPushDOp(_) => write!(f, "IscPushDOp"),
             Events::IscIssueDOp(_) => write!(f, "IscIssueDOp"),
             Events::IscUnlockRead(_) => write!(f, "IscUnlockRead"),
             Events::IscUnlockWrite(_) => write!(f, "IscUnlockWrite"),
@@ -85,7 +103,6 @@ impl Display for Events {
             Events::IscRetireDOp(_) => write!(f, "IscRetireDOp"),
             Events::IscQuery => write!(f, "IscQuery"),
             Events::IscRefillDOp(_) => write!(f, "IscQueryRefill"),
-            Events::IscProcessOver => write!(f, "IscProcessOver"),
             Events::PeAluLandProcessing => write!(f, "PeAluLandProcessing"),
             Events::PeAluLaunchProcessing => write!(f, "PeAluLaunchProcessing"),
             Events::PeMemLandProcessing => write!(f, "PeMemLandProcessing"),
@@ -105,6 +122,13 @@ impl Display for Events {
             Events::PeMemUnavailable => write!(f, "PeMemUnavailable"),
             Events::NotifyIsc(_, _) => write!(f, "NotifyIsc"),
             Events::NotifyStartOnTimeout { .. } => write!(f, "NotifyStartOnTimeout"),
+            Events::UCorePushDOps(_) => write!(f, "UCorePushDOps"),
+            Events::UCoreProcessDOps => write!(f, "UCoreProcessDOps"),
+            Events::UCoreTransferInNotified(..) => write!(f, "UCoreTransferInNotified"),
+            Events::UCoreTransferInFinished(..) => write!(f, "UCoreTransferInFinished"),
+            Events::UCoreStarved => write!(f, "UCoreStarved"),
+            Events::IscStarved => write!(f, "IscStarved"),
+            Events::UCoreTransferOutReady(..) => write!(f, "UCoreTransferOutReady"),
         }
     }
 }

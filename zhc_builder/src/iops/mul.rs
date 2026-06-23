@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use crate::{Ciphertext, CiphertextBlock, NU, NU_BOOL, builder::Builder};
 use zhc_crypto::integer_semantics::CiphertextSpec;
 use zhc_langs::ioplang::Lut1Def;
-use zhc_utils::{Dumpable, SafeAs};
+use zhc_utils::SafeAs;
 
 /// Creates an IR for multiplication of two encrypted integers.
 ///

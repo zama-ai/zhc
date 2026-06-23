@@ -15,13 +15,30 @@ pub fn translate<'ir>(ir: &AnnIR<'ir, HpuLang, Alloc, ()>) -> IR<DopLang> {
     use HpuInstructionSet::*;
 
     let mut output = IR::empty();
-    let (_, val) = output.add_op(DopInstructionSet::_INIT, svec![]);
+    let (_, val) = output.add_op(DopInstructionSet::_START, svec![]);
     let mut ctx = val[0];
 
     let mut add_op = |dop| {
         let (_, rets) = output.add_op(dop, svec![ctx]);
         ctx = rets[0];
     };
+
+    for op in ir.walk_ops_linear() {
+        let Alloc {
+            slots,
+            ..
+        } = op.get_annotation();
+
+        match op.get_instruction() {
+            TransferIn { id, .. } => {
+                add_op(DopInstructionSet::LD_B2B {
+                    flag: Argument::UserFlag { flag: id.0 },
+                    slot: Argument::ct_heap(slots[0].0 as usize),
+                });
+            }
+            _ => {}
+        }
+    }
 
     for op in ir.walk_ops_linear() {
         let Alloc {
@@ -56,26 +73,20 @@ pub fn translate<'ir>(ir: &AnnIR<'ir, HpuLang, Alloc, ()>) -> IR<DopLang> {
                     ),
                 });
             }
-            TransferOut { tid } => {
+            TransferOut { to, id, .. } => {
                 add_op(DopInstructionSet::ST {
                     dst: Argument::ct_heap(slots[0].0 as usize),
                     src: Argument::ct_reg(srcs[0].0),
                 });
                 add_op(DopInstructionSet::NOTIFY {
-                    virt_id: Argument::VirtId { id: 0 },
-                    flag: Argument::UserFlag { flag: tid },
+                    virt_id: Argument::VirtId { id: to.0 },
+                    flag: Argument::UserFlag { flag: id.0 },
                     slot: Argument::ct_heap(slots[0].0 as usize),
                 });
             }
-            TransferIn { tid } => {
-                // Ajouter un load_b2b
-                // Ajouter le wait et voila
-                add_op(DopInstructionSet::LD_B2B {
-                    flag: Argument::UserFlag { flag: tid },
-                    slot: Argument::ct_heap(slots[0].0 as usize),
-                });
+            TransferIn { id, .. } => {
                 add_op(DopInstructionSet::WAIT {
-                    flag: Argument::UserFlag { flag: tid },
+                    flag: Argument::UserFlag { flag: id.0 },
                     slot: Some(Argument::ct_heap(slots[0].0 as usize)),
                 });
                 add_op(DopInstructionSet::LD {
@@ -323,6 +334,8 @@ pub fn translate<'ir>(ir: &AnnIR<'ir, HpuLang, Alloc, ()>) -> IR<DopLang> {
             ),
         }
     }
+
+    output.add_op(DopInstructionSet::_END, svec![ctx]);
 
     output
 }

@@ -28,6 +28,8 @@
 
 use std::{collections::VecDeque, io::Write, path::Path};
 
+use crate::small::SmallVec;
+
 /// A type that can render itself as a human-readable string for debugging.
 ///
 /// Implement [`dump_to_string`](Dumpable::dump_to_string) to define the string representation;
@@ -179,6 +181,23 @@ impl<E: Dumpable> Dumpable for VecDeque<E> {
     fn dump_to_string(&self) -> String {
         let elements: Vec<String> = self.iter().map(|e| e.dump_to_string()).collect();
         format!("[{}]", elements.join(", "))
+    }
+}
+
+impl<E: Dumpable> Dumpable for SmallVec<E> {
+    fn dump_to_string(&self) -> String {
+        let elements: Vec<String> = self.iter().map(|e| e.dump_to_string()).collect();
+        format!("[{}]", elements.join(", "))
+    }
+}
+
+impl<E: Dumpable> Dumpable for Option<E> {
+    fn dump_to_string(&self) -> String {
+        match self {
+            Some(e) => format!("Some({})", e.dump_to_string()),
+            None => format!("None"),
+        }
+
     }
 }
 

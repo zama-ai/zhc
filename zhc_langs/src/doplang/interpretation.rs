@@ -283,8 +283,9 @@ impl Interpretable<DopValue> for super::DopInstructionSet {
             }
 
             // ── Control ──────────────────────────────────────────────
-            _INIT => svec![DopValue::Ctx],
-            SYNC => svec![],
+            _START => svec![DopValue::Ctx],
+            _END => svec![],
+            SYNC => svec![DopValue::Ctx],
             WAIT { .. } | NOTIFY { .. } | LD_B2B { .. } => panic!("Multi-HPU not supported yet."),
         }
     }

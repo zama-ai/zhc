@@ -10,9 +10,13 @@
 //! |-------|---------------------|-------------------------|
 //! | Plain | [`translate`]       | [`translate_ann`]       |
 
-use crate::{AnnIR, AnnOpRef, Annotation, AsValId, Dialect, IR, OpId, OpRef, ValId, ValMap};
-use std::marker::PhantomData;
+use crate::{
+    AnnIR, AnnOpRef, Annotation, AsOpId, AsValId, Dialect, IR, OpId, OpMap, OpRef, State, ValId,
+    ValMap,
+};
+use std::{marker::PhantomData, ops::Index};
 use zhc_utils::{
+    SafeAs,
     iter::{CollectInSmallVec, MultiZip},
     small::SmallVec,
 };
@@ -33,14 +37,48 @@ pub enum Order {
     Custom(Vec<OpId>),
 }
 
+pub struct TranslatedFrom(pub OpId);
+
+pub struct OpProvenanceMap(Vec<TranslatedFrom>);
+
+impl OpProvenanceMap {
+    pub fn project_opmap<T: Clone>(&self, opmap: &OpMap<T>) -> OpMap<T> {
+        let store = self
+            .0
+            .iter()
+            .map(|from| State::Active(opmap.get(from.0).cloned()))
+            .collect();
+        OpMap {
+            store,
+            n_stored: self.0.len().sas(),
+            n_inactive: 0,
+        }
+    }
+}
+
+impl<A: AsOpId> Index<A> for OpProvenanceMap {
+    type Output = TranslatedFrom;
+
+    fn index(&self, index: A) -> &Self::Output {
+        &self.0[index.op_id().0 as usize]
+    }
+}
+
+pub struct Translation<OD: Dialect> {
+    pub output: IR<OD>,
+    pub op_provenance_map: OpProvenanceMap,
+}
+
 /// Mutable translation state for dialect-to-dialect IR translation.
 ///
 /// Passed to the driver callback by [`translate`] and [`translate_ann`]. The
 /// driver uses this handle to look up already-translated values, emit
 /// operations in the output dialect, and register value correspondences.
 pub struct Translator<ID: Dialect, OD: Dialect> {
-    output: IR<OD>,
+    pub output: IR<OD>,
     valmap: ValMap<ValId>,
+    pub op_provenance_map: OpProvenanceMap,
+    current: Option<OpId>,
     phantom: PhantomData<ID>,
 }
 
@@ -51,7 +89,10 @@ impl<ID: Dialect, OD: Dialect> Translator<ID, OD> {
     ///
     /// Panics if no translation has been registered for `old`.
     pub fn translate_val(&self, old: impl AsValId) -> ValId {
-        self.valmap.get(old).unwrap().clone()
+        match self.valmap.get(old.val_id()) {
+            Some(val) => val.clone(),
+            None => panic!("Failed to translate val {}", old.val_id()),
+        }
     }
 
     /// Emits an operation in the output [`IR`] and returns its newly created return values.
@@ -60,7 +101,11 @@ impl<ID: Dialect, OD: Dialect> Translator<ID, OD> {
     /// or [`translate_val`](Self::translate_val) calls. The number of returned values is
     /// determined by `instr`'s signature.
     pub fn add_op(&mut self, instr: OD::InstructionSet, args: SmallVec<ValId>) -> SmallVec<ValId> {
-        self.output.add_op(instr, args).1
+        let (_, valids) = self.output.add_op(instr, args);
+        self.op_provenance_map
+            .0
+            .push(TranslatedFrom(self.current.unwrap()));
+        valids
     }
 
     /// Returns whether a translation has been registered for `old`.
@@ -92,11 +137,7 @@ impl<ID: Dialect, OD: Dialect> Translator<ID, OD> {
     ///
     /// Panics if any argument lacks a registered translation, if the return
     /// arity differs, or if any return value already has a translation.
-    pub fn direct_translation<'a, 'b, OpAnn: Annotation, ValAnn: Annotation>(
-        &mut self,
-        op: AnnOpRef<'a, 'b, ID, OpAnn, ValAnn>,
-        instr: OD::InstructionSet,
-    ) {
+    pub fn direct_translation<'a>(&mut self, op: &OpRef<'a, ID>, instr: OD::InstructionSet) {
         let new_args = op
             .get_arg_valids()
             .iter()
@@ -107,6 +148,13 @@ impl<ID: Dialect, OD: Dialect> Translator<ID, OD> {
         (new_rets.into_iter(), op.get_return_valids().iter())
             .mzip()
             .for_each(|(new, old)| self.register_translation(*old, new));
+    }
+
+    fn into_translation(self) -> Translation<OD> {
+        Translation {
+            output: self.output,
+            op_provenance_map: self.op_provenance_map,
+        }
     }
 }
 
@@ -120,32 +168,39 @@ pub fn translate<'a, ID: Dialect, OD: Dialect>(
     ir: &'a IR<ID>,
     order: Order,
     driver: impl Fn(OpRef<'a, ID>, &mut Translator<ID, OD>),
-) -> IR<OD> {
+) -> Translation<OD> {
     let output = IR::empty();
     let valmap = ir.empty_valmap();
+    let op_provenance_map = OpProvenanceMap(Vec::new());
+    let current = None;
     let mut translator = Translator {
         output,
         valmap,
+        op_provenance_map,
+        current,
         phantom: PhantomData,
     };
     match order {
         Order::Linear => {
             for op in ir.walk_ops_linear() {
+                translator.current = Some(op.get_id());
                 driver(op, &mut translator);
             }
         }
         Order::Topological => {
             for op in ir.walk_ops_topological() {
+                translator.current = Some(op.get_id());
                 driver(op, &mut translator);
             }
         }
         Order::Custom(ids) => {
             for op in ir.walk_ops_with(ids.into_iter()) {
+                translator.current = Some(op.get_id());
                 driver(op, &mut translator);
             }
         }
     }
-    translator.output
+    translator.into_translation()
 }
 
 /// Translates an [`AnnIR`] into an [`IR<OD>`] by visiting operations in the
@@ -157,30 +212,37 @@ pub fn translate_ann<'a, 'b, ID: Dialect, OpAnn: Annotation, ValAnn: Annotation,
     ir: &'b AnnIR<'a, ID, OpAnn, ValAnn>,
     order: Order,
     driver: impl Fn(AnnOpRef<'a, 'b, ID, OpAnn, ValAnn>, &mut Translator<ID, OD>),
-) -> IR<OD> {
+) -> Translation<OD> {
     let output = IR::empty();
     let valmap = ir.empty_valmap();
+    let op_provenance_map = OpProvenanceMap(Vec::new());
+    let current = None;
     let mut translator = Translator {
         output,
         valmap,
+        op_provenance_map,
+        current,
         phantom: PhantomData,
     };
     match order {
         Order::Linear => {
             for op in ir.walk_ops_linear() {
+                translator.current = Some(op.get_id());
                 driver(op, &mut translator);
             }
         }
         Order::Topological => {
             for op in ir.walk_ops_topological() {
+                translator.current = Some(op.get_id());
                 driver(op, &mut translator);
             }
         }
         Order::Custom(ids) => {
             for op in ir.walk_ops_with(ids.into_iter()) {
+                translator.current = Some(op.get_id());
                 driver(op, &mut translator);
             }
         }
     }
-    translator.output
+    translator.into_translation()
 }

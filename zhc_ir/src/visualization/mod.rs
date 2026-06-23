@@ -158,7 +158,7 @@ impl<'ir, D: Dialect, OpAnn: Annotation + VisualAnnotation, ValAnn: Annotation>
     /// # Panics
     ///
     /// Panics if the file cannot be written to the given path.
-    pub fn draw_to_html(&self, hierarchy_ann: Option<OpMap<Hierarchy>>, path: impl AsRef<Path>) {
+    pub fn draw_ann_to_html(&self, hierarchy_ann: Option<OpMap<Hierarchy>>, path: impl AsRef<Path>) {
         draw_ann_ir_to_html(self, hierarchy_ann, path);
     }
 }

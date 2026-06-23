@@ -11,7 +11,7 @@ struct Counter {
     target: usize,
 }
 
-#[derive(Debug, Clone, Copy, Default, Serialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, Serialize, PartialEq, Eq, PartialOrd, Ord)]
 enum CounterEvent {
     #[default]
     Increment,
@@ -61,7 +61,7 @@ struct PingPong {
     max_rounds: usize,
 }
 
-#[derive(Debug, Clone, Copy, Default, Serialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, Serialize, PartialEq, Eq, PartialOrd, Ord)]
 enum PingPongEvent {
     #[default]
     Ping,
@@ -125,7 +125,7 @@ struct Timer {
     interval: Cycle,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq, PartialOrd, Ord)]
 enum TimerEvent {
     Tick,
     Tock,
@@ -185,7 +185,7 @@ struct Pipeline {
     items_started: usize,
 }
 
-#[derive(Debug, Clone, Copy, Default, Serialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, Serialize, PartialEq, Eq, PartialOrd, Ord)]
 enum PipelineEvent {
     #[default]
     StartItem,
@@ -379,7 +379,7 @@ fn test_power_up_scheduling() {
         ticks: usize,
     }
 
-    #[derive(Debug, Clone, Copy, Serialize, PartialEq)]
+    #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq, PartialOrd, Ord)]
     enum AutoStartEvent {
         Boot,
         Tick,
@@ -439,7 +439,7 @@ fn test_power_up_scheduling() {
 #[test]
 fn test_tuple_composition() {
     // Two counters with shared event type
-    #[derive(Debug, Clone, Copy, Serialize, PartialEq)]
+    #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq, PartialOrd, Ord)]
     enum SharedEvent {
         CountA,
         CountB,
@@ -521,7 +521,7 @@ fn test_tuple_composition() {
 
 #[test]
 fn test_tuple_power_up() {
-    #[derive(Debug, Clone, Copy, Serialize, PartialEq)]
+    #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq, PartialOrd, Ord)]
     enum StartEvent {
         InitEarly,
         InitLate,
@@ -603,7 +603,7 @@ fn test_tuple_power_up() {
 
 #[test]
 fn test_triple_tuple_composition() {
-    #[derive(Debug, Clone, Copy, Serialize, PartialEq)]
+    #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq, PartialOrd, Ord)]
     enum TripleEvent {
         Ping,
     }
@@ -665,9 +665,9 @@ fn test_triple_tuple_composition() {
         ) {
             self.count += 3;
         }
-        fn report(&self, at: Cycle, tracer: &mut Tracer<Self::Event>, tracing_level: TracingLevel) {
-            tracer.add_simulatable(tracing_level, at, self);
-            tracer.add_counter(tracing_level, at, "ComponentC_count", self.count as f64);
+        fn report(&self, at: Cycle, tracer: &mut Tracer, tracing_level: TracingLevel) {
+            tracer.add_state(tracing_level, at, None, self.name(), self);
+            tracer.add_counter(tracing_level, at, None, "ComponentC_count", self.count as f64);
         }
     }
 

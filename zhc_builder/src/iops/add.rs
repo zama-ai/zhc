@@ -903,17 +903,26 @@ mod test {
                 // Kogge chunk [7..9)               | %95 = pbs<Protect, Lut1("ReduceCarry3")>(%94);
                 // Kogge chunk [7..9)               | %96 = pack_ct<4>(%95, %91);
                 // Kogge chunk [7..9)               | %97 = pbs<Protect, Lut1("GenPropAdd")>(%96);
-                // Join Output                      | %103 = decl_ct<18>();
-                // Join Output                      | %114 = store_ct_block<0>(%45, %103);
-                // Join Output                      | %115 = store_ct_block<1>(%49, %114);
-                // Join Output                      | %116 = store_ct_block<2>(%53, %115);
-                // Join Output                      | %117 = store_ct_block<3>(%61, %116);
-                // Join Output                      | %118 = store_ct_block<4>(%65, %117);
-                // Join Output                      | %119 = store_ct_block<5>(%71, %118);
-                // Join Output                      | %120 = store_ct_block<6>(%79, %119);
-                // Join Output                      | %121 = store_ct_block<7>(%93, %120);
-                // Join Output                      | %122 = store_ct_block<8>(%97, %121);
-                                                    | output<0>(%122);
+                // Cleanup                          | %102 = pbs<Protect, Lut1("MsgOnly")>(%45);
+                // Cleanup                          | %103 = pbs<Protect, Lut1("MsgOnly")>(%49);
+                // Cleanup                          | %104 = pbs<Protect, Lut1("MsgOnly")>(%53);
+                // Cleanup                          | %105 = pbs<Protect, Lut1("MsgOnly")>(%61);
+                // Cleanup                          | %106 = pbs<Protect, Lut1("MsgOnly")>(%65);
+                // Cleanup                          | %107 = pbs<Protect, Lut1("MsgOnly")>(%71);
+                // Cleanup                          | %108 = pbs<Protect, Lut1("MsgOnly")>(%79);
+                // Cleanup                          | %109 = pbs<Protect, Lut1("MsgOnly")>(%93);
+                // Cleanup                          | %110 = pbs<Protect, Lut1("MsgOnly")>(%97);
+                // Join Output                      | %111 = decl_ct<18>();
+                // Join Output                      | %122 = store_ct_block<0>(%102, %111);
+                // Join Output                      | %123 = store_ct_block<1>(%103, %122);
+                // Join Output                      | %124 = store_ct_block<2>(%104, %123);
+                // Join Output                      | %125 = store_ct_block<3>(%105, %124);
+                // Join Output                      | %126 = store_ct_block<4>(%106, %125);
+                // Join Output                      | %127 = store_ct_block<5>(%107, %126);
+                // Join Output                      | %128 = store_ct_block<6>(%108, %127);
+                // Join Output                      | %129 = store_ct_block<7>(%109, %128);
+                // Join Output                      | %130 = store_ct_block<8>(%110, %129);
+                                                    | output<0>(%130);
             "#
         );
     }

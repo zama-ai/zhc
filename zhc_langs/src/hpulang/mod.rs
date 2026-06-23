@@ -28,10 +28,14 @@ mod batch_statistics;
 mod dialect;
 mod instruction_set;
 pub mod interpretation;
+mod insert_transfers;
 mod type_system;
+mod locality;
 
 pub use batch_statistics::*;
 pub use dialect::*;
 pub use instruction_set::*;
 pub use interpretation::*;
 pub use type_system::*;
+pub use locality::*;
+pub use insert_transfers::*;

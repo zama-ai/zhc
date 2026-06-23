@@ -3,6 +3,8 @@ use std::fmt::{Debug, Display};
 use zhc_ir::{DialectInstructionSet, Format, FormatContext, IR, Signature, sig};
 use zhc_utils::iter::CollectInSmallVec;
 
+use crate::hpulang::{HpuId, TransferId};
+
 use super::{HpuLang, type_system::HpuTypeSystem};
 
 /// Plaintext constant inlined into an HPU instruction.
@@ -224,11 +226,24 @@ pub enum HpuInstructionSet {
     },
     /// Batch output at positional slot `pos`. Appears inside a
     /// [`Batch`](Self::Batch) block. `(ty) → ()`
-    BatchRet { pos: u8, ty: HpuTypeSystem },
-
-    TransferIn {tid: u8},
-
-    TransferOut {tid: u8}
+    BatchRet {
+        pos: u8,
+        ty: HpuTypeSystem,
+    },
+    Transfer {
+        from: HpuId,
+        to: HpuId,
+    },
+    TransferIn {
+        from: HpuId,
+        to: HpuId,
+        id: TransferId,
+    },
+    TransferOut {
+        from: HpuId,
+        to: HpuId,
+        id: TransferId,
+    },
 }
 
 impl HpuInstructionSet {
@@ -250,8 +265,16 @@ impl HpuInstructionSet {
         matches!(self, HpuInstructionSet::Batch { .. })
     }
 
-    pub fn is_transfer_in(&self) -> bool {
-        matches!(self, HpuInstructionSet::TransferIn { .. })
+    pub fn is_transfer(&self) -> bool {
+        matches!(self, HpuInstructionSet::Transfer { .. })
+    }
+
+    pub fn is_replicable(&self) -> bool {
+        use HpuInstructionSet::*;
+        matches!(
+            self,
+            CstCt { .. } | ImmLd { .. } | SrcLd { .. }
+        )
     }
 }
 
@@ -290,8 +313,9 @@ impl Format for HpuInstructionSet {
             }
             HpuInstructionSet::BatchArg { pos, ty } => write!(f, "batch_arg<{pos}, {ty}>"),
             HpuInstructionSet::BatchRet { pos, ty } => write!(f, "batch_ret<{pos}, {ty}>"),
-            HpuInstructionSet::TransferIn { tid } => write!(f, "transfer_in<#{tid}>"),
-            HpuInstructionSet::TransferOut { tid } => write!(f, "transfer_out<#{tid}>"),
+            HpuInstructionSet::Transfer { from, to } => write!(f, "transfer<{from}, {to}>"),
+            HpuInstructionSet::TransferIn { id, .. } => write!(f, "transfer_in<{id}>"),
+            HpuInstructionSet::TransferOut { id, .. } => write!(f, "transfer_out<{id}>"),
         }
     }
 }
@@ -362,6 +386,7 @@ impl DialectInstructionSet for HpuInstructionSet {
             }
             HpuInstructionSet::BatchArg { ty, .. } => sig![() -> (ty.clone())],
             HpuInstructionSet::BatchRet { ty, .. } => sig![(ty.clone()) -> ()],
+            HpuInstructionSet::Transfer { .. } => sig![(CtRegister) -> (CtRegister)],
             HpuInstructionSet::TransferIn { .. } => sig![() -> (CtRegister)],
             HpuInstructionSet::TransferOut { .. } => sig![(CtRegister) -> ()],
         }

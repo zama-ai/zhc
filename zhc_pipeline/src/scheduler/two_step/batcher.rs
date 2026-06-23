@@ -336,9 +336,7 @@ pub fn batch<'a, 'b>(
             | CstCt { .. }
             | ImmLd { .. }
             | DstSt { .. }
-            | SrcLd { .. }
-            | TransferIn { .. }
-            | TransferOut { .. } => {
+            | SrcLd { .. } => {
                 let new_args = opref
                     .get_arg_valids()
                     .iter()
@@ -375,8 +373,10 @@ pub fn batch<'a, 'b>(
             Batch { .. } | BatchArg { .. } | BatchRet { .. } => {
                 panic!("Unexpected batch operations encountered.")
             }
+            _ => unreachable!()
         }
     })
+    .output
 }
 
 #[cfg(test)]
@@ -394,7 +394,7 @@ mod test {
     use super::*;
 
     fn pipeline(ir: &IR<IopLang>) -> IR<HpuLang> {
-        let ir = lower_iop_to_hpu(&ir);
+        let ir = lower_iop_to_hpu(&ir).output;
         let config = HpuConfig::from(PhysicalConfig::gaussian_64b());
         batch(&ir, &config, SchedPolicy::AsSoonAsPossible)
     }

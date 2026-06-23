@@ -62,7 +62,7 @@ impl<I: StoreIndex, V> Store<I, V> {
     }
 
     /// Returns an iterator over typed indices and mutable element references.
-    pub fn enumerate_iter_mut(&mut self) -> impl Iterator<Item = (I, &mut V)> {
+    pub fn enumerate_iter_mut(&mut self) -> impl DoubleEndedIterator<Item = (I, &mut V)> {
         self.0
             .iter_mut()
             .enumerate()

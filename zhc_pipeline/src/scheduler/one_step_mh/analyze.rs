@@ -1,7 +1,7 @@
 use std::ops::{Div, Mul};
 
-use zhc_ir::{Analysing, AnnIR, AnnOpRef, AsOpRef, IR, OpIdRaw};
-use zhc_langs::{hpulang::{HpuInstructionSet, HpuLang}};
+use zhc_ir::{Analysing, AnnIR, AnnOpRef, AsOpRef, IR, OpIdRaw, OpMap, visualization::{DynamicElement, NoClass, TextBox, VisualAnnotation}};
+use zhc_langs::hpulang::{HpuInstructionSet, HpuLang, HpuLocality};
 use zhc_utils::svec;
 
 static PBS_COST: OpIdRaw = 1000;
@@ -11,6 +11,16 @@ static NON_PBS_COST: OpIdRaw = 1;
 pub struct Stats {
     pub height: OpIdRaw,
     pub depth: OpIdRaw,
+    pub locality: HpuLocality
+}
+
+impl VisualAnnotation for Stats {
+    fn widget(&self) -> Option<Box<dyn DynamicElement>> {
+        Some(Box::new(TextBox::<NoClass>::new(
+            None,
+            format!("{:?}", self),
+        )))
+    }
 }
 
 fn compute_cost(opref: impl AsOpRef<Dialect = HpuLang>) -> OpIdRaw {
@@ -30,7 +40,8 @@ fn compute_cost(opref: impl AsOpRef<Dialect = HpuLang>) -> OpIdRaw {
         | CstCt { .. }
         | ImmLd { .. }
         | DstSt { .. }
-        | SrcLd { .. } => NON_PBS_COST,
+        | SrcLd { .. }
+        | Transfer { .. } => NON_PBS_COST,
         Pbs { .. }
         | Pbs2 { .. }
         | Pbs4 { .. }
@@ -43,7 +54,7 @@ fn compute_cost(opref: impl AsOpRef<Dialect = HpuLang>) -> OpIdRaw {
     }
 }
 
-pub fn analyze<'a>(ir: &'a IR<HpuLang>) -> AnnIR<'a, HpuLang, Stats, ()> {
+pub fn analyze<'a>(ir: &'a IR<HpuLang>, partitions: OpMap<HpuLocality>) -> AnnIR<'a, HpuLang, Stats, ()> {
     let heighted = ir.backward_dataflow_analysis(|opref| {
         let op_cost = compute_cost(&opref);
         let mut height = opref
@@ -70,7 +81,7 @@ pub fn analyze<'a>(ir: &'a IR<HpuLang>) -> AnnIR<'a, HpuLang, Stats, ()> {
                 depth = depth.div(PBS_COST).mul(PBS_COST);
             }
             let height = *previous_opref.get_annotation();
-            let stat = Stats { height, depth };
+            let stat = Stats { height, depth, locality: partitions.get(&running_opref).unwrap().clone() };
             (stat, svec![(); running_opref.get_return_arity()])
         },
     )

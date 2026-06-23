@@ -43,7 +43,7 @@ mod test {
     use super::allocate_registers;
 
     fn pipeline(ir: &IR<IopLang>) -> IR<DopLang> {
-        let ir = lower_iop_to_hpu(&ir);
+        let ir = lower_iop_to_hpu(&ir).output;
         let config = HpuConfig::from(PhysicalConfig::gaussian_64b());
         let scheduled = scheduler::two_step::schedule(
             &ir,
@@ -60,7 +60,7 @@ mod test {
         assert_display_is!(
             ir.format(),
             r#"
-                %0 = _INIT();
+                %0 = _START();
                 %1 = LD<R(0), TC(0, 0)>(%0);
                 %2 = LD<R(1), TC(1, 6)>(%1);
                 %3 = LD<R(2), TC(0, 1)>(%2);
@@ -129,6 +129,7 @@ mod test {
                 %66 = ST<TC(0, 5), R(3)>(%65);
                 %67 = ST<TC(0, 7), R(5)>(%66);
                 %68 = ST<TC(0, 6), R(4)>(%67);
+                _END(%68);
             "#
         );
     }
@@ -139,7 +140,7 @@ mod test {
         assert_display_is!(
             ir.format().with_walker(PrintWalker::Linear),
             r#"
-                %0 = _INIT();
+                %0 = _START();
                 %1 = LD<R(0), TC(0, 0)>(%0);
                 %2 = LD<R(1), TC(1, 7)>(%1);
                 %3 = LD<R(2), TC(0, 1)>(%2);
@@ -191,6 +192,7 @@ mod test {
                 %49 = MAC<R(0), R(3), R(2), PT_I(4)>(%48);
                 %50 = PBSF<R(1), R(0), LUT(27)>(%49);
                 %51 = ST<TC(0, 0), R(1)>(%50);
+                _END(%51);
             "#
         );
     }

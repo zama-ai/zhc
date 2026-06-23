@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use zhc_ir::IR;
-use zhc_langs::doplang::DopLang;
+use zhc_langs::{doplang::DopLang, hpulang::HpuId};
 use zhc_sim::{
     Cycle, MHz, Simulator,
     hpu::{DOp, DOpId, Events, Hpu, HpuConfig},
@@ -10,7 +10,7 @@ use zhc_utils::tracing::Event;
 
 pub fn trace_execution(ir: &IR<DopLang>, config: &HpuConfig, path: impl AsRef<Path>) {
     let mut simulator =
-        Simulator::from_simulatable(config.freq, Hpu::new(&config), zhc_sim::TracingLevel::Load);
+        Simulator::from_simulatable(config.freq, Hpu::new(&config, HpuId(0)), zhc_sim::TracingLevel::Events);
     let dops = ir
         .walk_ops_linear()
         .map(|a| DOp {
@@ -18,9 +18,9 @@ pub fn trace_execution(ir: &IR<DopLang>, config: &HpuConfig, path: impl AsRef<Pa
             id: DOpId(a.get_id().into()),
         })
         .collect();
-    let event = Events::IscPushDOps(dops);
+    let event = Events::UCorePushDOps(dops);
     simulator.dispatch(event);
-    simulator.play_until_event(Events::IscProcessOver);
+    simulator.play_until_event(Events::UCoreStarved);
     simulator.dump_trace(path.as_ref());
 }
 

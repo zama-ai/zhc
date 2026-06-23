@@ -24,12 +24,14 @@
 
 pub mod cse;
 pub mod dce;
+pub mod split;
 pub mod interpretation;
 pub mod scheduler;
 pub mod slack;
 pub mod translation;
 pub mod traversal;
 pub mod visualization;
+pub mod partition;
 
 mod annotation;
 mod dialect;

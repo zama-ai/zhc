@@ -139,13 +139,6 @@ pub enum IopInstructionSet {
     /// 2-output many-LUT PBS. Checked according to the given policy.
     /// `(CiphertextBlock) → (CiphertextBlock, CiphertextBlock)`
     Pbs2 { check: LookupCheck, lut: Lut2 },
-    Transfer,
-    TransferIn {
-        uid: u8,
-    },
-    TransferOut {
-        uid: u8,
-    },
 }
 
 impl IopInstructionSet {
@@ -188,9 +181,6 @@ impl Format for IopInstructionSet {
             StoreCtBlock { index } => write!(f, "store_ct_block<{index}>"),
             Pbs { check, lut } => write!(f, "pbs<{check:?}, {lut:?}>"),
             Pbs2 { check, lut } => write!(f, "pbs2<{check:?}, {lut:?}>"),
-            Transfer => write!(f, "transfer"),
-            TransferIn { uid } => write!(f, "transfer_in<#{uid}>"),
-            TransferOut { uid } => write!(f, "transfer_out<#{uid}>"),
         }
     }
 }
@@ -258,9 +248,6 @@ impl DialectInstructionSet for IopInstructionSet {
                 sig![(CiphertextBlock) -> (CiphertextBlock, CiphertextBlock)]
             }
             Inspect { typ } => sig![(typ.clone()) -> (typ.clone())],
-            Transfer => sig![(CiphertextBlock) -> (CiphertextBlock)],
-            TransferIn { .. } => sig![() -> (CiphertextBlock)],
-            TransferOut { .. } => sig![(CiphertextBlock) -> ()],
         }
     }
 }

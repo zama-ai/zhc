@@ -32,21 +32,16 @@ use zhc_crypto::integer_semantics::{
     CiphertextBlockSpec, CiphertextSpec, PlaintextBlockSpec, PlaintextSpec, lut::LookupCheck,
 };
 use zhc_ir::{
-    AnnIR, IR, OpId, OpIdRaw, OpMap, PrintWalker, Signature,
-    cse::eliminate_common_subexpressions,
-    dce::eliminate_dead_code,
-    visualization::{
-        DynamicElement, Hierarchy, NoClass, StyleModifier, TextBox, VisualAnnotation,
+    AnnIR, IR, OpId, OpMap, PrintWalker, Signature, cse::eliminate_common_subexpressions, dce::eliminate_dead_code, partition::PartitionId, visualization::{
+        Hierarchy,
         draw_ann_ir_to_html, draw_ir_to_html,
-    },
+    }
 };
 use zhc_langs::ioplang::{
-    IopInstructionSet, IopLang, IopTypeSystem, IopValue, Lut1Def, Lut2Def, Partition,
-    eliminate_aliases, skip_redundant_stores, skip_store_load,
+    IopInstructionSet, IopLang, IopTypeSystem, IopValue, Lut1Def, Lut2Def, eliminate_aliases, skip_redundant_stores, skip_store_load
 };
 use zhc_utils::{
     Dumpable, SafeAs, Store,
-    graphics::ColorScale,
     iter::{Chunk, ChunkIt},
     small::SmallVec,
     svec,
@@ -98,26 +93,7 @@ impl Debug for Type {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct PartitionId(pub OpIdRaw);
 
-impl VisualAnnotation for PartitionId {
-    fn style_modifier(&self) -> Option<StyleModifier> {
-        Some(StyleModifier {
-            fill_color: Some(
-                ColorScale::RAINBOW.interpolate((self.0 as f64 * 0.6180339887498949) % 1.0),
-            ),
-            ..Default::default()
-        })
-    }
-
-    fn widget(&self) -> Option<Box<dyn DynamicElement>> {
-        Some(Box::new(TextBox::<NoClass>::new(
-            None,
-            format!("Partition {:?}", self),
-        )))
-    }
-}
 
 #[derive(Debug)]
 pub(super) struct InnerBuilder {
@@ -451,8 +427,10 @@ impl Builder {
         }
     }
 
-    pub fn new_partition(&self) {
-        self.partition.borrow_mut().0 += 1;
+    pub fn new_partition(&self) -> PartitionId {
+        let mut partition = self.partition.borrow_mut();
+        partition.0 += 1;
+        *partition
     }
 
     pub fn merge_partitions(&self, ping: PartitionId, pong: PartitionId) -> PartitionId {
@@ -482,9 +460,9 @@ impl Builder {
             .expect("Expect an NonEmpty group")
     }
 
-    pub fn partitions(&self) -> OpMap<Partition> {
+    pub fn partitions(&self) -> OpMap<PartitionId> {
         self.ir()
-            .totally_mapped_opmap(|op| self.inner().partitions[*op].0)
+            .totally_mapped_opmap(|op| self.inner().partitions[*op])
     }
 
     /// Pushes a comment onto the annotation stack.
@@ -876,20 +854,6 @@ impl Builder {
             IopInstructionSet::Inspect {
                 typ: IopTypeSystem::CiphertextBlock,
             },
-            svec![src.valid],
-            self.current_hierarchy(),
-            self.current_partition(),
-        );
-        CiphertextBlock {
-            valid: ret[0],
-            spec: self.spec,
-        }
-    }
-
-    pub fn block_transfer(&self, src: impl AsRef<CiphertextBlock>) -> CiphertextBlock {
-        let src = src.as_ref();
-        let (_node, ret) = self.inner_mut().insert_op(
-            IopInstructionSet::Transfer,
             svec![src.valid],
             self.current_hierarchy(),
             self.current_partition(),

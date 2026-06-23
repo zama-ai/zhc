@@ -1,5 +1,5 @@
 use std::fmt::{Debug, Display};
-use zhc_utils::small::SmallVec;
+use zhc_utils::{Dumpable, small::SmallVec};
 
 /// A function signature specifying argument and return types.
 ///
@@ -81,6 +81,12 @@ impl<T: Debug> Display for Signature<T> {
                 d.finish()
             }
         }
+    }
+}
+
+impl<T: Debug> Dumpable for Signature<T> {
+    fn dump_to_string(&self) -> String {
+        format!("{:?}", self)
     }
 }
 

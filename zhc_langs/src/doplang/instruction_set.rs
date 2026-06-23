@@ -347,12 +347,18 @@ impl Display for Affinity {
 /// Instructions fall into four categories matching the [`Affinity`]
 /// lanes: register arithmetic (`ADD`, `SUB`, `MAC`, `ADDS`, `SUBS`,
 /// `SSUB`, `MULS`), memory transfer (`LD`, `ST`), programmable
-/// bootstrapping (`PBS` family), and control (`_INIT`, `SYNC`).
+/// bootstrapping (`PBS` family), and control (`_START`, `_END`).
 /// Scalar-operand arithmetic variants (`ADDS`, `SUBS`, `SSUB`,
 /// `MULS`) take a plaintext constant in `cst`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[allow(non_camel_case_types)]
 pub enum DopInstructionSet {
+    /// Stream start marker. Produces the initial context
+    /// token.
+    _START,
+    /// Stream end marker. Consumes the context token, ensuring
+    /// all preceding instructions have completed.
+    _END,
     /// `dst = src1 + src2` — ciphertext addition.
     ADD {
         dst: Argument,
@@ -448,11 +454,7 @@ pub enum DopInstructionSet {
         src: Argument,
         lut: Argument,
     },
-    /// Stream initialization marker. Produces the initial context
-    /// token.
-    _INIT,
-    /// Synchronization barrier. Consumes the context token, ensuring
-    /// all preceding instructions have completed.
+    /// Synchronization barrier.
     SYNC,
     /// Wait virtual op for Multi-HPU
     WAIT {
@@ -495,7 +497,8 @@ impl Format for DopInstructionSet {
             PBS_ML2_F { dst, src, lut } => write!(f, "PBS2F<{dst}, {src}, {lut}>"),
             PBS_ML4_F { dst, src, lut } => write!(f, "PBS4F<{dst}, {src}, {lut}>"),
             PBS_ML8_F { dst, src, lut } => write!(f, "PBS8F<{dst}, {src}, {lut}>"),
-            _INIT => write!(f, "_INIT"),
+            _START => write!(f, "_START"),
+            _END => write!(f, "_END"),
             SYNC => write!(f, "SYNC"),
             WAIT { flag, slot } => match slot {
                 Some(slot) => write!(f, "WAIT<{flag}, {slot}>"),
@@ -559,7 +562,8 @@ impl DopInstructionSet {
             PBS_ML2_F { .. } => Pbs,
             PBS_ML4_F { .. } => Pbs,
             PBS_ML8_F { .. } => Pbs,
-            _INIT => Ctl,
+            _START => Ctl,
+            _END => Ctl,
             SYNC => Ctl,
             NOTIFY { .. } => Ctl,
             WAIT { .. } => Ctl,
@@ -570,7 +574,7 @@ impl DopInstructionSet {
     /// Returns true if this instruction reads from the given argument.
     ///
     /// Only checks ciphertext source operands (`src`, `src1`, `src2`),
-    /// not `cst` or `lut` fields. Returns false for `_INIT` and `SYNC`.
+    /// not `cst` or `lut` fields. Returns false for `_START` and `_END`.
     pub fn has_source(&self, arg: &Argument) -> bool {
         use DopInstructionSet::*;
         match self {
@@ -591,13 +595,14 @@ impl DopInstructionSet {
             PBS_ML2_F { src, .. } => arg == src,
             PBS_ML4_F { src, .. } => arg == src,
             PBS_ML8_F { src, .. } => arg == src,
-            _INIT => false,
+            _START => false,
+            _END => false,
             SYNC => false,
             LD_B2B { .. } | WAIT { .. } | NOTIFY { .. } => panic!(),
         }
     }
 
-    /// Returns the destination operand, or `None` for `_INIT` and `SYNC`.
+    /// Returns the destination operand, or `None` for `_START` and `_END`.
     pub fn get_dst(&self) -> Option<&Argument> {
         use DopInstructionSet::*;
         match self {
@@ -618,14 +623,15 @@ impl DopInstructionSet {
             PBS_ML2_F { dst, .. } => Some(dst),
             PBS_ML4_F { dst, .. } => Some(dst),
             PBS_ML8_F { dst, .. } => Some(dst),
-            _INIT => None,
+            _START => None,
+            _END => None,
             SYNC => None,
             LD_B2B { .. } | WAIT { .. } | NOTIFY { .. } => panic!(),
         }
     }
 
-    /// Returns the first source operand, or `None` for `_INIT` and
-    /// `SYNC`.
+    /// Returns the first source operand, or `None` for `_START` and
+    /// `_END`.
     pub fn get_src1(&self) -> Option<&Argument> {
         use DopInstructionSet::*;
         match self {
@@ -646,7 +652,8 @@ impl DopInstructionSet {
             PBS_ML2_F { src, .. } => Some(src),
             PBS_ML4_F { src, .. } => Some(src),
             PBS_ML8_F { src, .. } => Some(src),
-            _INIT => None,
+            _START => None,
+            _END => None,
             SYNC => None,
             LD_B2B { .. } | WAIT { .. } | NOTIFY { .. } => panic!(),
         }
@@ -676,7 +683,8 @@ impl DopInstructionSet {
             PBS_ML2_F { .. } => None,
             PBS_ML4_F { .. } => None,
             PBS_ML8_F { .. } => None,
-            _INIT => None,
+            _START => None,
+            _END => None,
             SYNC => None,
             LD_B2B { .. } | WAIT { .. } | NOTIFY { .. } => panic!(),
         }
@@ -707,11 +715,12 @@ impl DialectInstructionSet for DopInstructionSet {
             | PBS_ML2_F { .. }
             | PBS_ML4_F { .. }
             | PBS_ML8_F { .. }
+            | SYNC
             | WAIT { .. }
             | NOTIFY { .. }
             | LD_B2B { .. } => sig![(Ctx(0)) -> (Ctx(0))],
-            _INIT => sig![() -> (Ctx(0))],
-            SYNC => sig![(Ctx(0)) -> ()],
+            _START => sig![() -> (Ctx(0))],
+            _END => sig![(Ctx(0)) -> ()],
         }
     }
 }
