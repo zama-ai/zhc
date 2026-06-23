@@ -8,7 +8,7 @@
 use allocator::allocate_registers;
 use std::f64;
 use std::path::Path;
-use zhc_builder::{Builder, CiphertextSpec, mh_mul};
+use zhc_builder::{Builder, CiphertextSpec, PartitionId, mh_mul};
 use zhc_ir::IR;
 use zhc_ir::cse::eliminate_common_subexpressions;
 use zhc_ir::dce::eliminate_dead_code;
@@ -159,6 +159,33 @@ fn pipeline_mh_mul() {
     builder.draw("mh_mul_ir.html");
     builder.draw_partitions("mh_mul_partition_ir.html");
     let mut ir = builder.ir().clone();
+
+    // Hpu 0
+    builder.merge_partition_group(
+        &[0, 21, 1, 2, 16, 17, 18, 19, 20]
+            .iter()
+            .map(|x| PartitionId(*x))
+            .collect::<Vec<_>>(),
+    );
+    builder.merge_partition_group(
+        &[3, 4, 5, 6]
+            .iter()
+            .map(|x| PartitionId(*x))
+            .collect::<Vec<_>>(),
+    );
+    builder.merge_partition_group(
+        &[7, 8, 9, 10, 11]
+            .iter()
+            .map(|x| PartitionId(*x))
+            .collect::<Vec<_>>(),
+    );
+    builder.merge_partition_group(
+        &[12, 13, 14, 15]
+            .iter()
+            .map(|x| PartitionId(*x))
+            .collect::<Vec<_>>(),
+    );
+
     insert_transfers(&mut ir, builder.partitions());
     cut_transfers(&mut ir);
     ir.dump_and_wait();

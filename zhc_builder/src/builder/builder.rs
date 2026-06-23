@@ -22,7 +22,11 @@ use crate::{
     builder::{Ciphertext, CiphertextBlock, Plaintext, PlaintextBlock},
 };
 use std::{
-    cell::{Ref, RefCell, RefMut}, fmt::Debug, iter::repeat_n, path::Path, rc::Rc
+    cell::{Ref, RefCell, RefMut},
+    fmt::Debug,
+    iter::repeat_n,
+    path::Path,
+    rc::Rc,
 };
 use zhc_crypto::integer_semantics::{
     CiphertextBlockSpec, CiphertextSpec, PlaintextBlockSpec, PlaintextSpec, lut::LookupCheck,
@@ -32,11 +36,13 @@ use zhc_ir::{
     cse::eliminate_common_subexpressions,
     dce::eliminate_dead_code,
     visualization::{
-        Hierarchy, StyleModifier, VisualAnnotation, draw_ann_ir_to_html, draw_ir_to_html,
+        DynamicElement, Hierarchy, NoClass, StyleModifier, TextBox, VisualAnnotation,
+        draw_ann_ir_to_html, draw_ir_to_html,
     },
 };
 use zhc_langs::ioplang::{
-    IopInstructionSet, IopLang, IopTypeSystem, IopValue, Lut1Def, Lut2Def, Partition, eliminate_aliases, skip_redundant_stores, skip_store_load
+    IopInstructionSet, IopLang, IopTypeSystem, IopValue, Lut1Def, Lut2Def, Partition,
+    eliminate_aliases, skip_redundant_stores, skip_store_load,
 };
 use zhc_utils::{
     Dumpable, SafeAs, Store,
@@ -98,9 +104,18 @@ pub struct PartitionId(pub OpIdRaw);
 impl VisualAnnotation for PartitionId {
     fn style_modifier(&self) -> Option<StyleModifier> {
         Some(StyleModifier {
-            fill_color: Some(ColorScale::RAINBOW.interpolate((self.0 as f64 * 0.6180339887498949) % 1.0)),
+            fill_color: Some(
+                ColorScale::RAINBOW.interpolate((self.0 as f64 * 0.6180339887498949) % 1.0),
+            ),
             ..Default::default()
         })
+    }
+
+    fn widget(&self) -> Option<Box<dyn DynamicElement>> {
+        Some(Box::new(TextBox::<NoClass>::new(
+            None,
+            format!("Partition {:?}", self),
+        )))
     }
 }
 
@@ -440,19 +455,36 @@ impl Builder {
         self.partition.borrow_mut().0 += 1;
     }
 
-    pub fn merge_partitions(&self, ping: PartitionId, pong: PartitionId) {
+    pub fn merge_partitions(&self, ping: PartitionId, pong: PartitionId) -> PartitionId {
         if ping != pong {
             let (new, old) = if ping.0 > pong.0 {
                 (ping, pong)
             } else {
                 (pong, ping)
             };
-            self.inner_mut().partitions.iter_mut().for_each(|p| if *p == old {*p = new});
+            self.inner_mut().partitions.iter_mut().for_each(|p| {
+                if *p == old {
+                    *p = new
+                }
+            });
+            new
+        } else {
+            ping
         }
     }
 
+    pub fn merge_partition_group(&self, group: impl AsRef<[PartitionId]>) -> PartitionId {
+        group
+            .as_ref()
+            .iter()
+            .map(|x| *x)
+            .reduce(|acc, p| self.merge_partitions(acc, p))
+            .expect("Expect an NonEmpty group")
+    }
+
     pub fn partitions(&self) -> OpMap<Partition> {
-        self.ir().totally_mapped_opmap(|op| self.inner().partitions[*op].0)
+        self.ir()
+            .totally_mapped_opmap(|op| self.inner().partitions[*op].0)
     }
 
     /// Pushes a comment onto the annotation stack.
