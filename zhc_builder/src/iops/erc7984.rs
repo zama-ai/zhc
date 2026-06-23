@@ -1,4 +1,5 @@
 use zhc_crypto::integer_semantics::CiphertextSpec;
+use zhc_langs::ioplang::Lut1Def;
 
 use crate::{Ciphertext, CmpKind, builder::Builder};
 
@@ -118,7 +119,13 @@ impl Builder {
         // Step 1: Check if sender has sufficient funds.
         let amount_inv = self.iop_bitwise_inv(src_amount);
         let one = self.block_let_ciphertext(1);
-        let (_diff, enough_fund) = self.iop_add_ripple_carry(src_from, &amount_inv, Some(&one));
+        let (_diff, carry_out) = self.iop_add_ripple_carry(src_from, &amount_inv, Some(&one));
+
+        // Normalise the carry-out.
+        // Redundant for the ripple carry but keeps a clean flag if it is ever output.
+        let carry_blocks = self.ciphertext_split(&carry_out);
+        let enough_fund =
+            self.ciphertext_join([self.block_lookup(&carry_blocks[0], Lut1Def::IsSome)], None);
 
         // Step 2: Compute conditional transfer amount.
         let actual_amount = self.iop_if_then_zero(src_amount, &enough_fund);
