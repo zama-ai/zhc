@@ -26,6 +26,9 @@ pub use pe_pbs::*;
 use serde::Serialize;
 pub use statistics::*;
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct HpuId(pub u8);
+
 /// HPU simulator containing all processing elements and scheduling logic.
 #[derive(Debug, Serialize)]
 pub struct Hpu {
@@ -36,6 +39,7 @@ pub struct Hpu {
     pub pe_ctl: PeCtl,
     pub statistics: Statistics,
     pub config: HpuConfig,
+    pub id: HpuId
 }
 
 impl Simulatable for Hpu {
@@ -64,12 +68,12 @@ impl Simulatable for Hpu {
     }
 
     fn report<'t>(&self, at: Cycle, tracer: &mut Tracer<Events>, tracing_level: TracingLevel) {
-        tracer.add_simulatable(tracing_level, at, &self.scheduler);
-        tracer.add_simulatable(tracing_level, at, &self.pe_mem);
-        tracer.add_simulatable(tracing_level, at, &self.pe_pbs);
-        tracer.add_simulatable(tracing_level, at, &self.pe_alu);
-        tracer.add_simulatable(tracing_level, at, &self.pe_ctl);
-        tracer.add_simulatable(tracing_level, at, &self.statistics);
+        tracer.add_state(tracing_level, at, self.scheduler.name(), &self.scheduler);
+        tracer.add_state(tracing_level, at, self.pe_mem.name(), &self.pe_mem);
+        tracer.add_state(tracing_level, at, self.pe_pbs.name(), &self.pe_pbs);
+        tracer.add_state(tracing_level, at, self.pe_alu.name(), &self.pe_alu);
+        tracer.add_state(tracing_level, at, self.pe_ctl.name(), &self.pe_ctl);
+        tracer.add_state(tracing_level, at, self.statistics.name(), &self.statistics);
 
         // PE loading counters
         tracer.add_counter(
@@ -98,7 +102,7 @@ impl Hpu {
     ///
     /// All processing elements are initialized with their respective capacities,
     /// latencies, and operational parameters as specified in the configuration.
-    pub fn new(config: &HpuConfig) -> Self {
+    pub fn new(config: &HpuConfig, id: HpuId) -> Self {
         Hpu {
             scheduler: InstructionScheduler::new(config.isc_query_period, config.isc_depth),
             pe_mem: PeMem::new(
@@ -126,6 +130,7 @@ impl Hpu {
             pe_ctl: PeCtl,
             statistics: Statistics::default(),
             config: config.clone(),
+            id
         }
     }
 }

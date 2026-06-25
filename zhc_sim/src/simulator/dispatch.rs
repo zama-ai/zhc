@@ -53,14 +53,6 @@ impl<E: Event> Dispatch for Dispatcher<E> {
             });
         }
     }
-
-    fn iter_triggers(&self) -> impl Iterator<Item = &Trigger<Self::Event>> {
-        self.triggers.iter()
-    }
-
-    fn now(&self) -> Cycle {
-        self.now
-    }
 }
 
 impl<E: Event> Dispatcher<E> {

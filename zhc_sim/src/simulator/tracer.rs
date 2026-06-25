@@ -201,6 +201,9 @@ impl<E: Event> Tracer<E> {
         &self.trace
     }
 
+    /// Records the state of a simulatable component at the specified cycle.
+    ///
+    /// Recording occurs only if `tracing_level` enables simulatables.
     pub fn add_state<S: Serialize, St: AsRef<str>>(
         &mut self,
         tracing_level: TracingLevel,
@@ -227,53 +230,6 @@ impl<E: Event> Tracer<E> {
 
             let tracker = self.state_trackers.get_mut(&address).unwrap();
             let state = serde_json::to_value(state).unwrap();
-            if tracker.state.is_none() {
-                tracker.state_change = Some(at);
-                tracker.state = Some(state);
-            } else if tracker.state.as_ref().unwrap() != &state {
-                self.trace.new_complete(
-                    tracker.state_change.as_ref().unwrap().as_ts(PERIOD_IN_US),
-                    STATES_PID,
-                    tracker.tid,
-                    &tracker.name,
-                    Some(json!({"val": tracker.state.as_ref().unwrap()})),
-                    (at - *tracker.state_change.as_ref().unwrap()).as_ts(PERIOD_IN_US)
-                        - 5. * f64::EPSILON,
-                );
-                tracker.state_change = Some(at);
-                tracker.state = Some(state);
-            }
-        }
-    }
-
-    /// Records the state of a simulatable component at the specified cycle.
-    ///
-    /// Recording occurs only if `tracing_level` enables simulatables.
-    pub fn add_simulatable<S: Simulatable>(
-        &mut self,
-        tracing_level: TracingLevel,
-        at: Cycle,
-        simulatable: &S,
-    ) {
-        if tracing_level.trace_simulatables() {
-            let address = simulatable as *const S as usize;
-            if !self.state_trackers.contains_key(&address) {
-                let tid = self.state_trackers.len() + 1;
-                let name = simulatable.name();
-                self.trace.set_thread_name(STATES_PID, tid, &name);
-                self.state_trackers.insert(
-                    address,
-                    StateTracker {
-                        tid,
-                        state: None,
-                        state_change: None,
-                        name,
-                    },
-                );
-            }
-
-            let tracker = self.state_trackers.get_mut(&address).unwrap();
-            let state = serde_json::to_value(simulatable).unwrap();
             if tracker.state.is_none() {
                 tracker.state_change = Some(at);
                 tracker.state = Some(state);

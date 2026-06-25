@@ -9,7 +9,7 @@ use zhc_ir::IR;
 use zhc_langs::doplang::DopLang;
 use zhc_sim::{
     Cycle, MHz, Simulator,
-    hpu::{DOp, DOpId, Events, FlatLinLatency, Hpu, HpuConfig},
+    hpu::{DOp, DOpId, Events, FlatLinLatency, Hpu, HpuConfig, HpuId},
 };
 use zhc_utils::tracing::Event;
 
@@ -40,7 +40,7 @@ pub fn compute_lower_bound(ir: &IR<DopLang>, config: &HpuConfig) -> Cycle {
 /// `(total_latency, pbs_pe_idle_time)` in cycles.
 pub fn compute_latency(ir: &IR<DopLang>, config: &HpuConfig) -> (Cycle, Cycle) {
     let mut simulator =
-        Simulator::from_simulatable(config.freq, Hpu::new(&config), zhc_sim::TracingLevel::Load);
+        Simulator::from_simulatable(config.freq, Hpu::new(&config, HpuId(0)), zhc_sim::TracingLevel::Load);
     let dops = ir
         .walk_ops_linear()
         .map(|a| DOp {
@@ -62,7 +62,7 @@ pub fn compute_latency(ir: &IR<DopLang>, config: &HpuConfig) -> (Cycle, Cycle) {
 /// traffic (spill/unspill) — i.e. unspills are gating batches.
 pub fn compute_pe_overlap(ir: &IR<DopLang>, config: &HpuConfig) -> (usize, usize, usize, usize) {
     let mut simulator =
-        Simulator::from_simulatable(config.freq, Hpu::new(&config), zhc_sim::TracingLevel::Load);
+        Simulator::from_simulatable(config.freq, Hpu::new(&config, HpuId(0)), zhc_sim::TracingLevel::Load);
     let dops = ir
         .walk_ops_linear()
         .map(|a| DOp {
@@ -150,7 +150,7 @@ pub fn compute_pe_overlap_windowed(
     n: usize,
 ) -> Vec<(usize, usize, usize)> {
     let mut simulator =
-        Simulator::from_simulatable(config.freq, Hpu::new(&config), zhc_sim::TracingLevel::Load);
+        Simulator::from_simulatable(config.freq, Hpu::new(&config, HpuId(0)), zhc_sim::TracingLevel::Load);
     let dops = ir
         .walk_ops_linear()
         .map(|a| DOp {

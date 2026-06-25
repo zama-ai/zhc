@@ -21,9 +21,6 @@ pub trait Dispatch {
     /// If `delay` is `None`, the event is dispatched immediately.
     fn dispatch(&mut self, event: Self::Event, delay: Option<Cycle>);
 
-    fn iter_triggers(&self) -> impl Iterator<Item = &Trigger<Self::Event>>;
-    fn now(&self) -> Cycle;
-
     /// Schedules an `event` for immediate dispatch.
     fn dispatch_now(&mut self, event: Self::Event) {
         self.dispatch(event, None);
@@ -76,7 +73,7 @@ pub trait Simulatable: Sized + Serialize {
     /// The `tracing_level` controls which data is recorded; implementations should forward it to
     /// tracer methods.
     fn report(&self, at: Cycle, tracer: &mut Tracer<Self::Event>, tracing_level: TracingLevel) {
-        tracer.add_simulatable(tracing_level, at, self);
+        tracer.add_state(tracing_level, at, self.name(), self);
     }
 }
 

@@ -453,7 +453,7 @@ impl<'a, 'b> zhc_sim::Simulatable for LightHpu<'a, 'b> {
     }
 
     fn report<'t>(&self, at: Cycle, tracer: &mut Tracer<Events>, tracing_level: TracingLevel) {
-        tracer.add_simulatable(tracing_level, at, self);
+        tracer.add_state(tracing_level, at, self.name(), self);
 
         // ── PE occupancy: how many ops each unit is currently executing.
         //    pe_pbs_load doubles as the size of the batch currently running.
