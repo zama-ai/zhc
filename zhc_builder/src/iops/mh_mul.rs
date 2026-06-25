@@ -198,7 +198,8 @@ impl Builder {
                 .iter()
                 .map(|CiphertextLimb { offset, blocks }| (offset, blocks))
             {
-                self.new_partition();
+                let cur_partition = self.new_partition();
+                println!("Pp@[{i}::{j}] => {cur_partition:?}");
 
                 // Compute cut_off point based on input and current limb offset
                 let blocks_ofst = (i + j) * mh_blocks;
@@ -231,19 +232,16 @@ impl Builder {
         let mut dst_limb = vec![Default::default(); mh_factor as usize];
         let mut carry_buffer = BTreeMap::<usize, Vec<CiphertextBlock>>::new();
         for k in first_limb_id..=last_limb_id {
-            self.new_partition();
             self.push_comment(format!("Limb reduce[{k}]"));
             let mut stage_limb = limb_map.remove(&k).unwrap_or_default();
             let mut carry_in = carry_buffer.remove(&k).unwrap_or_default();
 
-            // TODO add explicit cut at correct place
-            // let xfer_first = {
-            //     let xfer = first
-            //         .blocks
-            //         .into_iter()
-            //         .map(|b| self.block_transfer(b))
-            //         .collect::<Vec<_>>();
-            //     CiphertextLimb::new(k, &xfer)
+            if stage_limb.len() > 1 {
+                let cur_partition = self.new_partition();
+                println!("LimbRed@[{k}] => {cur_partition:?}");
+            } else {
+                println!("LimbRed@[{k}] => skiped");
+            }
 
             // Tree-like reduction
             let mut tree_iter = 0;
@@ -292,8 +290,12 @@ impl Builder {
             .collect::<Vec<_>>();
         let post_carry = carry_buffer.into_values().flatten().collect::<Vec<_>>();
 
-        self.new_partition();
+        let cur_partition = self.new_partition();
+        println!("OvfRed => {cur_partition:?}");
         let ovf_flag = self.merge_overflow_flag(out_of_range_limb, post_carry);
+
+        let cur_partition = self.new_partition();
+        println!("Output => {cur_partition:?}");
         (ovf_flag, dst_limb)
     }
 

@@ -157,38 +157,39 @@ fn pipeline_mh_mul() {
     let builder = mh_mul(CiphertextSpec::new(INT_SIZE, 2, 2), MH_FACTOR);
 
     builder.draw("mh_mul_ir.html");
-    builder.draw_partitions("mh_mul_partition_ir.html");
-    let mut ir = builder.ir().clone();
+    builder.draw_partitions("mh_mul_ir_raw_part.html");
 
     // Hpu 0
     builder.merge_partition_group(
-        &[0, 21, 1, 2, 16, 17, 18, 19, 20]
+        &[0, 17, 18, 19, 21]
             .iter()
             .map(|x| PartitionId(*x))
             .collect::<Vec<_>>(),
     );
     builder.merge_partition_group(
-        &[3, 4, 5, 6]
+        &[2, 9, 10, 12, 15]
             .iter()
             .map(|x| PartitionId(*x))
             .collect::<Vec<_>>(),
     );
     builder.merge_partition_group(
-        &[7, 8, 9, 10, 11]
+        &[5, 6, 7, 16, 20]
             .iter()
             .map(|x| PartitionId(*x))
             .collect::<Vec<_>>(),
     );
     builder.merge_partition_group(
-        &[12, 13, 14, 15]
+        &[3, 4, 13, 14, 8, 11]
             .iter()
             .map(|x| PartitionId(*x))
             .collect::<Vec<_>>(),
     );
+    builder.draw_partitions("mh_mul_ir_grp_part.html");
 
+    let mut ir = builder.ir().clone();
     insert_transfers(&mut ir, builder.partitions());
     cut_transfers(&mut ir);
-    ir.dump_and_wait();
+    // ir.dump_and_wait();
 
     let components = isolate_subgraphs(&ir, |op| {
         use IopInstructionSet::*;
@@ -219,7 +220,7 @@ fn pipeline_mh_mul() {
         let allocated = allocate_registers(&scheduled, &hpu_config);
         use std::fs::File;
         use std::io::Write;
-        let filename = format!("output_{}.asm", i);
+        let filename = format!("mhmul_hid{}.asm", i);
         let mut file = File::create(&filename).expect("Failed to create .asm file");
         file.write_all(emit_assembly(&allocated).as_bytes())
             .expect("Failed to write to .asm file");

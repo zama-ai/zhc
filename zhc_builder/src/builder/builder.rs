@@ -451,8 +451,10 @@ impl Builder {
         }
     }
 
-    pub fn new_partition(&self) {
-        self.partition.borrow_mut().0 += 1;
+    pub fn new_partition(&self) -> PartitionId {
+        let mut partition = self.partition.borrow_mut();
+        partition.0 += 1;
+        *partition
     }
 
     pub fn merge_partitions(&self, ping: PartitionId, pong: PartitionId) -> PartitionId {
