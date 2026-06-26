@@ -452,15 +452,15 @@ impl<'a, 'b> zhc_sim::Simulatable for LightHpu<'a, 'b> {
         }
     }
 
-    fn report<'t>(&self, at: Cycle, tracer: &mut Tracer<Events>, tracing_level: TracingLevel) {
-        tracer.add_state(tracing_level, at, self.name(), self);
+    fn report<'t>(&self, at: Cycle, tracer: &mut Tracer, tracing_level: TracingLevel) {
+        tracer.add_state(tracing_level, at, None, self.name(), self);
 
         // ── PE occupancy: how many ops each unit is currently executing.
         //    pe_pbs_load doubles as the size of the batch currently running.
         let alu = self.pe_alu_state.as_counter();
         let pbs = self.pe_pbs_state.as_counter();
-        tracer.add_counter(tracing_level, at, "pe_alu_load", alu);
-        tracer.add_counter(tracing_level, at, "pe_pbs_load", pbs);
+        tracer.add_counter(tracing_level, at, None, "pe_alu_load", alu);
+        tracer.add_counter(tracing_level, at, None, "pe_pbs_load", pbs);
 
         // ── Ready-queue depths: independent work waiting on each unit.
         //    `pbs_ready` is the rib reservoir — when it collapses toward 0 while
@@ -468,12 +468,14 @@ impl<'a, 'b> zhc_sim::Simulatable for LightHpu<'a, 'b> {
         tracer.add_counter(
             tracing_level,
             at,
+            None,
             "ready_pbs",
             self.pe_pbs_ready.len() as f64,
         );
         tracer.add_counter(
             tracing_level,
             at,
+            None,
             "ready_alu",
             self.pe_alu_ready.len() as f64,
         );
@@ -484,10 +486,10 @@ impl<'a, 'b> zhc_sim::Simulatable for LightHpu<'a, 'b> {
             .iter()
             .filter(|a| matches!(a.1, ValState::InFlight(_)))
             .count();
-        tracer.add_counter(tracing_level, at, "live_values", live as f64);
+        tracer.add_counter(tracing_level, at, None, "live_values", live as f64);
 
         // ── Monotone progress: schedule elements emitted so far.
-        tracer.add_counter(tracing_level, at, "scheduled", self.schedule.len() as f64);
+        tracer.add_counter(tracing_level, at, None, "scheduled", self.schedule.len() as f64);
 
         // let name = format!("schedule_{}.html", at.0);
         // let ann_ir = AnnIR::new(self.ir, self.op_states.clone(), self.val_states.clone());

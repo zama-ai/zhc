@@ -45,7 +45,7 @@ where
 {
     pub simulatable: S,
     quantum: Microseconds,
-    tracer: Tracer<S::Event>,
+    tracer: Tracer,
     dispatcher: Dispatcher<S::Event>,
     tracing_level: TracingLevel,
 }
@@ -106,7 +106,7 @@ where
     pub fn from_raw_parts(
         simulatable: S,
         quantum: Microseconds,
-        tracer: Tracer<S::Event>,
+        tracer: Tracer,
         dispatcher: Dispatcher<S::Event>,
         tracing_level: TracingLevel,
     ) -> Self {
@@ -244,7 +244,7 @@ where
         self.tracer.dump(self.now(), path);
     }
 
-    pub fn get_tracer(&self) -> &Tracer<S::Event> {
+    pub fn get_tracer(&self) -> &Tracer {
         &self.tracer
     }
 

@@ -1,4 +1,4 @@
-use std::collections::BinaryHeap;
+use std::{collections::BinaryHeap, marker::PhantomData};
 
 use super::*;
 
@@ -84,5 +84,34 @@ impl<E: Event> Dispatcher<E> {
         } else {
             None
         }
+    }
+}
+
+pub struct MappedDispatcher<'a, D: Dispatch, E: Event, F: Fn(E) -> D::Event> {
+    inner:&'a mut D,
+    map: F,
+    phantom: PhantomData<E>
+}
+
+
+impl<'a, D: Dispatch, E: Event, F: Fn(E) -> D::Event> Dispatch for MappedDispatcher<'a, D,E,F> {
+    type Event = E;
+
+    fn contains_event(&self, event: &Self::Event, filter: Option<Cycle>) -> bool {
+        self.inner.contains_event(&(self.map)(event.to_owned()), filter)
+    }
+
+    fn dispatch(&mut self, event: Self::Event, delay: Option<Cycle>) {
+        self.inner.dispatch((self.map)(event), delay);
+    }
+}
+
+pub trait MapDispatch where Self: Dispatch + Sized {
+    fn map<E: Event, F: Fn(E) -> Self::Event>(&mut self, f: F) -> MappedDispatcher<'_, Self, E, F>;
+}
+
+impl<D: Dispatch + Sized> MapDispatch for D {
+    fn map<E: Event, F: Fn(E) -> Self::Event>(&mut self, f: F) -> MappedDispatcher<'_, Self, E, F> {
+        MappedDispatcher { inner: self, map: f, phantom: PhantomData }
     }
 }

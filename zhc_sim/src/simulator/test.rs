@@ -665,9 +665,9 @@ fn test_triple_tuple_composition() {
         ) {
             self.count += 3;
         }
-        fn report(&self, at: Cycle, tracer: &mut Tracer<Self::Event>, tracing_level: TracingLevel) {
-            tracer.add_state(tracing_level, at, self.name(), self);
-            tracer.add_counter(tracing_level, at, "ComponentC_count", self.count as f64);
+        fn report(&self, at: Cycle, tracer: &mut Tracer, tracing_level: TracingLevel) {
+            tracer.add_state(tracing_level, at, None, self.name(), self);
+            tracer.add_counter(tracing_level, at, None, "ComponentC_count", self.count as f64);
         }
     }
 

@@ -4,7 +4,7 @@ use super::*;
 use crate::Cycle;
 use crate::Simulator;
 
-mod legacy;
+pub mod legacy;
 
 macro_rules! test_hpu_simulation {
     ($($name: ident => $cycles: literal),+) => {

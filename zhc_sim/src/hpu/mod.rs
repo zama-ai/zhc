@@ -13,7 +13,7 @@ mod pe_mem;
 mod pe_pbs;
 mod statistics;
 #[cfg(test)]
-mod test;
+pub mod test;
 pub use config::*;
 pub use dops::*;
 pub use events::*;
@@ -26,8 +26,8 @@ pub use pe_pbs::*;
 use serde::Serialize;
 pub use statistics::*;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct HpuId(pub u8);
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Copy)]
+pub struct HpuId(pub usize);
 
 /// HPU simulator containing all processing elements and scheduling logic.
 #[derive(Debug, Serialize)]
@@ -67,30 +67,33 @@ impl Simulatable for Hpu {
         self.statistics.power_up(dispatcher);
     }
 
-    fn report<'t>(&self, at: Cycle, tracer: &mut Tracer<Events>, tracing_level: TracingLevel) {
-        tracer.add_state(tracing_level, at, self.scheduler.name(), &self.scheduler);
-        tracer.add_state(tracing_level, at, self.pe_mem.name(), &self.pe_mem);
-        tracer.add_state(tracing_level, at, self.pe_pbs.name(), &self.pe_pbs);
-        tracer.add_state(tracing_level, at, self.pe_alu.name(), &self.pe_alu);
-        tracer.add_state(tracing_level, at, self.pe_ctl.name(), &self.pe_ctl);
-        tracer.add_state(tracing_level, at, self.statistics.name(), &self.statistics);
+    fn report<'t>(&self, at: Cycle, tracer: &mut Tracer, tracing_level: TracingLevel) {
+        tracer.add_state(tracing_level, at, Some(self.id.0), self.scheduler.name(), &self.scheduler);
+        tracer.add_state(tracing_level, at, Some(self.id.0), self.pe_mem.name(), &self.pe_mem);
+        tracer.add_state(tracing_level, at, Some(self.id.0), self.pe_pbs.name(), &self.pe_pbs);
+        tracer.add_state(tracing_level, at, Some(self.id.0), self.pe_alu.name(), &self.pe_alu);
+        tracer.add_state(tracing_level, at, Some(self.id.0), self.pe_ctl.name(), &self.pe_ctl);
+        tracer.add_state(tracing_level, at, Some(self.id.0), self.statistics.name(), &self.statistics);
 
         // PE loading counters
         tracer.add_counter(
             tracing_level,
             at,
+            Some(self.id.0),
             "pe_alu_busy",
             self.pe_alu.busy() as u8 as f64,
         );
         tracer.add_counter(
             tracing_level,
             at,
+            Some(self.id.0),
             "pe_mem_busy",
             self.pe_mem.busy() as u8 as f64,
         );
         tracer.add_counter(
             tracing_level,
             at,
+            Some(self.id.0),
             "pe_pbs_working",
             self.pe_pbs.memory().n_working() as f64,
         );

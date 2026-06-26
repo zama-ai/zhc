@@ -10,7 +10,7 @@ use zhc_utils::tracing::Event;
 
 pub fn trace_execution(ir: &IR<DopLang>, config: &HpuConfig, path: impl AsRef<Path>) {
     let mut simulator =
-        Simulator::from_simulatable(config.freq, Hpu::new(&config, HpuId(0)), zhc_sim::TracingLevel::Load);
+        Simulator::from_simulatable(config.freq, Hpu::new(&config, HpuId(0)), zhc_sim::TracingLevel::Events);
     let dops = ir
         .walk_ops_linear()
         .map(|a| DOp {

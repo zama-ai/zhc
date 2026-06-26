@@ -28,3 +28,10 @@ impl<E: Event> Ord for Trigger<E> {
         self.partial_cmp(other).unwrap()
     }
 }
+
+
+impl<E: Event> Trigger<E> {
+    pub fn map<EE: Event>(self, f: impl Fn(E) -> EE) -> Trigger<EE> {
+        Trigger { at: self.at, event: f(self.event) }
+    }
+}

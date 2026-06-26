@@ -1,6 +1,6 @@
 use serde::Serialize;
 use serde_json::{Value, json};
-use std::{f64, fs::File, io::Write, mem::Discriminant, path::Path};
+use std::{f64, fs::File, io::Write, path::Path};
 
 use super::*;
 use zhc_utils::{
@@ -9,9 +9,9 @@ use zhc_utils::{
 };
 
 pub static PERIOD_IN_US: f64 = MHz(400).period();
-static EVENTS_PID: usize = 0;
-static STATES_PID: usize = 1;
-static COUNTERS_PID: usize = 2;
+static DEFAULT_EVENTS_PID: usize = 0;
+static DEFAULT_STATES_PID: usize = 1;
+static DEFAULT_COUNTERS_PID: usize = 2;
 
 /// Controls the verbosity and overhead of simulation tracing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -63,6 +63,7 @@ impl TracingLevel {
 
 /// Tracks simulation state changes for a specific simulatable component.
 pub struct StateTracker {
+    pid: usize,
     tid: usize,
     name: String,
     state_change: Option<Cycle>,
@@ -71,43 +72,45 @@ pub struct StateTracker {
 
 /// Tracks event occurrences for a specific event type.
 pub struct EventTracker {
+    pid: usize,
     tid: usize,
     name: String,
 }
 
 /// Tracks numeric counter values over time.
 pub struct CounterTracker {
+    pid: usize,
     tid: usize,
     state: Option<f64>,
 }
 
 /// Records simulation events, component states, and counters for analysis and visualization.
-pub struct Tracer<E: Event> {
+pub struct Tracer {
     trace: Trace,
-    // Events are added to the profile under pid 0
-    event_trackers: FastMap<Discriminant<E>, EventTracker>,
-    // Simulatables are added to the profile under pid 1
-    state_trackers: FastMap<usize, StateTracker>,
-    // Counters are added to the profile under pid 2
-    counter_trackers: FastMap<String, CounterTracker>,
+    event_trackers: FastMap<String, EventTracker>,
+    state_trackers: FastMap<(usize, usize), StateTracker>,
+    counter_trackers: FastMap<(usize, String), CounterTracker>,
+    groups_tids: FastMap<usize, usize>,
 }
 
-impl<E: Event> Tracer<E> {
+impl Tracer {
     /// Creates a new tracer for recording simulation data.
     pub fn new() -> Self {
         let mut trace = Trace::default();
         trace.display_time_unit = Some(zhc_utils::tracing::Unit::Nanoseconds);
-        trace.set_process_name(EVENTS_PID, "Events");
-        trace.set_process_name(STATES_PID, "Simulatables");
-        trace.set_process_name(COUNTERS_PID, "Counters");
-        let simulatable_trackers = FastMap::new();
+        trace.set_process_name(DEFAULT_EVENTS_PID, "Events");
+        trace.set_process_name(DEFAULT_STATES_PID, "States");
+        trace.set_process_name(DEFAULT_COUNTERS_PID, "Counters");
+        let state_trackers = FastMap::new();
         let event_trackers = FastMap::new();
         let counter_trackers = FastMap::new();
+        let groups_tids = FastMap::new();
         Tracer {
             trace,
-            state_trackers: simulatable_trackers,
+            state_trackers,
             event_trackers,
             counter_trackers,
+            groups_tids,
         }
     }
 
@@ -118,7 +121,7 @@ impl<E: Event> Tracer<E> {
         for (_, tracker) in self.state_trackers.iter() {
             trace.new_complete(
                 tracker.state_change.as_ref().unwrap().as_ts(PERIOD_IN_US),
-                STATES_PID,
+                tracker.pid,
                 tracker.tid,
                 &tracker.name,
                 Some(json!({"val": tracker.state.as_ref().unwrap()})),
@@ -139,25 +142,35 @@ impl<E: Event> Tracer<E> {
         &mut self,
         tracing_level: TracingLevel,
         at: Cycle,
+        group: Option<usize>,
         name: S,
         value: f64,
     ) {
         if tracing_level.trace_counters() {
-            if !self.counter_trackers.contains_key(name.as_ref()) {
-                let tid = self.counter_trackers.len() + 1;
-                self.counter_trackers
-                    .insert(name.as_ref().into(), CounterTracker { tid, state: None });
-                self.trace.set_thread_name(COUNTERS_PID, tid, name.as_ref());
+            let pid = group.map(|a| a + 3).unwrap_or(DEFAULT_COUNTERS_PID);
+            let name = name.as_ref().to_string();
+            let key = (pid, name);
+            if !self.counter_trackers.contains_key(&key) {
+                let tid = self.groups_tids.get(&pid).cloned().unwrap_or(0) + 1;
+                self.groups_tids.insert(pid, tid);
+                self.counter_trackers.insert(
+                    key.clone(),
+                    CounterTracker {
+                        pid,
+                        tid,
+                        state: None,
+                    },
+                );
+                self.trace.set_thread_name(pid, tid, key.1.as_str());
             }
 
-            let tracker = self.counter_trackers.get_mut(name.as_ref()).unwrap();
-
+            let tracker = self.counter_trackers.get_mut(&key).unwrap();
             if tracker.state != Some(value) {
                 self.trace.new_counter(
                     at.as_ts(PERIOD_IN_US),
-                    COUNTERS_PID,
+                    pid,
                     tracker.tid,
-                    name,
+                    key.1,
                     Some(json!({"state": value})),
                 );
                 tracker.state = Some(value);
@@ -168,37 +181,33 @@ impl<E: Event> Tracer<E> {
     /// Records an event occurrence at the specified cycle.
     ///
     /// Recording occurs only if `tracing_level` enables events.
-    pub fn add_event(&mut self, tracing_level: TracingLevel, at: Cycle, event: &E) {
+    pub fn add_event<E: Event>(
+        &mut self,
+        tracing_level: TracingLevel,
+        at: Cycle,
+        event: &E,
+    ) {
         if tracing_level.trace_events() {
-            if !self
-                .event_trackers
-                .contains_key(&std::mem::discriminant(event))
-            {
+            let pid = DEFAULT_EVENTS_PID;
+            let event_name = format!("{}", event);
+            if !self.event_trackers.contains_key(&event_name) {
                 let tid = self.event_trackers.len() + 1;
                 let name = format!("{}", event);
-                self.trace.set_thread_name(EVENTS_PID, tid, &name);
+                self.trace.set_thread_name(pid, tid, &name);
                 self.event_trackers
-                    .insert(std::mem::discriminant(event), EventTracker { tid, name });
+                    .insert(event_name.clone(), EventTracker { pid, tid, name });
             }
-            let tracker = self
-                .event_trackers
-                .get(&std::mem::discriminant(event))
-                .unwrap();
+            let tracker = self.event_trackers.get(&event_name).unwrap();
             let state = serde_json::to_value(event).unwrap();
             self.trace.new_instant(
                 at.as_ts(PERIOD_IN_US),
-                EVENTS_PID,
+                pid,
                 tracker.tid,
                 &tracker.name,
                 Some(json!({"state": state})),
                 Scope::Thread,
             );
         }
-    }
-
-    /// Returns a reference to the underlying trace.
-    pub fn trace(&self) -> &Trace {
-        &self.trace
     }
 
     /// Records the state of a simulatable component at the specified cycle.
@@ -208,18 +217,23 @@ impl<E: Event> Tracer<E> {
         &mut self,
         tracing_level: TracingLevel,
         at: Cycle,
+        group: Option<usize>,
         name: St,
         state: &S,
     ) {
         if tracing_level.trace_states() {
+            let pid = group.map(|a| a + 3).unwrap_or(DEFAULT_STATES_PID);
             let address = state as *const S as usize;
-            if !self.state_trackers.contains_key(&address) {
-                let tid = self.state_trackers.len() + 1;
+            let key = (pid, address);
+            if !self.state_trackers.contains_key(&key) {
+                let tid = self.groups_tids.get(&pid).cloned().unwrap_or(0) + 1;
+                self.groups_tids.insert(pid, tid);
                 let name = name.as_ref().into();
-                self.trace.set_thread_name(STATES_PID, tid, &name);
+                self.trace.set_thread_name(pid, tid, &name);
                 self.state_trackers.insert(
-                    address,
+                    key,
                     StateTracker {
+                        pid,
                         tid,
                         state: None,
                         state_change: None,
@@ -228,7 +242,7 @@ impl<E: Event> Tracer<E> {
                 );
             }
 
-            let tracker = self.state_trackers.get_mut(&address).unwrap();
+            let tracker = self.state_trackers.get_mut(&key).unwrap();
             let state = serde_json::to_value(state).unwrap();
             if tracker.state.is_none() {
                 tracker.state_change = Some(at);
@@ -236,7 +250,7 @@ impl<E: Event> Tracer<E> {
             } else if tracker.state.as_ref().unwrap() != &state {
                 self.trace.new_complete(
                     tracker.state_change.as_ref().unwrap().as_ts(PERIOD_IN_US),
-                    STATES_PID,
+                    pid,
                     tracker.tid,
                     &tracker.name,
                     Some(json!({"val": tracker.state.as_ref().unwrap()})),
@@ -247,5 +261,10 @@ impl<E: Event> Tracer<E> {
                 tracker.state = Some(state);
             }
         }
+    }
+
+    /// Returns a reference to the underlying trace.
+    pub fn trace(&self) -> &Trace {
+        &self.trace
     }
 }

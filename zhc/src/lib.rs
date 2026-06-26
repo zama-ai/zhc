@@ -1,3 +1,4 @@
+use zhc_builder::{CiphertextSpec, div};
 pub use zhc_builder as builder;
 pub use zhc_crypto as crypto;
 pub use zhc_ir as ir;
@@ -5,6 +6,8 @@ pub use zhc_langs as langs;
 pub use zhc_pipeline as pipeline;
 pub use zhc_sim as sim;
 pub use zhc_utils as utils;
+
+use crate::prelude::BuilderExt;
 
 /// Convenience re-exports for common ZHC usage patterns.
 ///
@@ -78,4 +81,9 @@ pub mod prelude {
             draw_slack(self, path);
         }
     }
+}
+
+#[test]
+fn testgdksamg() {
+    div(CiphertextSpec::new(8, 2, 2)).trace_hpu_execution("kgdsagnds.json");
 }
