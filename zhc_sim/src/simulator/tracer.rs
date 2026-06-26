@@ -88,7 +88,7 @@ pub struct CounterTracker {
 pub struct Tracer {
     trace: Trace,
     event_trackers: FastMap<String, EventTracker>,
-    state_trackers: FastMap<(usize, usize), StateTracker>,
+    state_trackers: FastMap<(usize, String), StateTracker>,
     counter_trackers: FastMap<(usize, String), CounterTracker>,
     groups_tids: FastMap<usize, usize>,
 }
@@ -125,8 +125,11 @@ impl Tracer {
                 tracker.tid,
                 &tracker.name,
                 Some(json!({"val": tracker.state.as_ref().unwrap()})),
+                // Shrink the slice by a few ULP *at the end's magnitude* so that, after the
+                // trace viewer recomputes `ts + dur`, it stays strictly below the next slice's
+                // `ts` and the two render as siblings rather than nested (see `add_state`).
                 (at - *tracker.state_change.as_ref().unwrap()).as_ts(PERIOD_IN_US)
-                    - 5. * f64::EPSILON,
+                    - at.as_ts(PERIOD_IN_US).abs() * 4. * f64::EPSILON,
             );
         }
         let json = serde_json::to_string_pretty(&trace).expect("Failed to serialize trace.");
@@ -223,15 +226,15 @@ impl Tracer {
     ) {
         if tracing_level.trace_states() {
             let pid = group.map(|a| a + 3).unwrap_or(DEFAULT_STATES_PID);
-            let address = state as *const S as usize;
-            let key = (pid, address);
+            let name = name.as_ref().to_string();
+            let key = (pid, name);
             if !self.state_trackers.contains_key(&key) {
                 let tid = self.groups_tids.get(&pid).cloned().unwrap_or(0) + 1;
                 self.groups_tids.insert(pid, tid);
-                let name = name.as_ref().into();
-                self.trace.set_thread_name(pid, tid, &name);
+                self.trace.set_thread_name(pid, tid, &key.1);
+                let name = key.1.clone();
                 self.state_trackers.insert(
-                    key,
+                    key.clone(),
                     StateTracker {
                         pid,
                         tid,
@@ -254,8 +257,13 @@ impl Tracer {
                     tracker.tid,
                     &tracker.name,
                     Some(json!({"val": tracker.state.as_ref().unwrap()})),
+                    // Shrink the slice by a few ULP *at the end's magnitude*. An absolute nudge
+                    // (e.g. `5 * f64::EPSILON`) is far below one ULP at trace-scale timestamps and
+                    // gets rounded away, leaving `ts + dur` to land ~1 ULP above the next slice's
+                    // `ts` on float-rounding luck — which the viewer renders as a nested slice and
+                    // a depth-0 hole. Scaling to the magnitude keeps adjacent slices as siblings.
                     (at - *tracker.state_change.as_ref().unwrap()).as_ts(PERIOD_IN_US)
-                        - 5. * f64::EPSILON,
+                        - at.as_ts(PERIOD_IN_US).abs() * 4. * f64::EPSILON,
                 );
                 tracker.state_change = Some(at);
                 tracker.state = Some(state);

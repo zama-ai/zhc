@@ -50,6 +50,7 @@ impl Simulatable for MultiHpu {
 #[cfg(test)]
 #[test]
 fn testmulti() {
+
     use super::hpu::Events as HpuEvents;
     let mut config = HpuConfig::from(PhysicalConfig::gaussian_64b_fast());
     config.pbs_timeout = Cycle(100_000);
@@ -58,5 +59,4 @@ fn testmulti() {
     sim.dispatch(Events::Hpu(HpuId(0), HpuEvents::IscPushDOps(stream.collect())));
     sim.play_until_event(Events::Hpu(HpuId(0), HpuEvents::IscProcessOver));
     sim.dump_trace("gfsdanfdsnafds.json");
-
 }

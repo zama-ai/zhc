@@ -3,6 +3,7 @@ use super::*;
 /// Tracks completed operations and manages resource cleanup after execution.
 #[derive(Debug, Default, Serialize)]
 pub struct Statistics {
+    #[serde(skip)]
     pub dops: Vec<DOp>,
     pub timeouts: u16,
 }
