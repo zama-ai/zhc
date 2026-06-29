@@ -94,7 +94,7 @@ impl Builder {
             17..256 => {
                 let lhs = self.ciphertext_split(&lhs);
                 let rhs = self.ciphertext_split(&b_inv);
-                let (blocks, co) = self.iop_add_kogge_stone_raw(lhs, rhs, Some(&one), par_w, false);
+                let (blocks, co) = self.iop_add_kogge_stone_raw(lhs, rhs, Some(&one), par_w);
                 (
                     self.comment("Join Output").ciphertext_join(blocks, None),
                     self.comment("Join Carry").ciphertext_join([co], None),
