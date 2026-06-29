@@ -196,7 +196,7 @@ impl Builder {
                     24..256 => 12,
                     _ => 1,
                 };
-                self.iop_add_kogge_stone_raw(&lhs_blocks, &rhs_blocks, cin, par_w, true)
+                self.iop_add_kogge_stone_raw(&lhs_blocks, &rhs_blocks, cin, par_w)
             }
             _ => todo!(),
         }
@@ -691,7 +691,7 @@ impl Builder {
         let lhs_blocks = self.ciphertext_split(lhs);
         let rhs_blocks = self.ciphertext_split(rhs);
         let (output_blocks, carry_out) =
-            self.iop_add_kogge_stone_raw(lhs_blocks, rhs_blocks, cin, par_w, false);
+            self.iop_add_kogge_stone_raw(lhs_blocks, rhs_blocks, cin, par_w);
         let co_issome = self.block_lookup(&carry_out, Lut1Def::IsSome);
         (
             self.comment("Join Output")
@@ -709,7 +709,6 @@ impl Builder {
         rhs_blocks: impl AsRef<[CiphertextBlock]>,
         cin: Option<&CiphertextBlock>,
         par_w: usize,
-        clean: bool,
     ) -> (Vec<CiphertextBlock>, CiphertextBlock) {
         let sums = self.comment("Raw sum").vector_add(
             &lhs_blocks,
@@ -755,16 +754,6 @@ impl Builder {
         // Carry-out: the final PG entry spans cin through all blocks.
         // Because it is a PG carry the carry is really in bit 1
         let carry_out = cin_pg_kogge_entry.fresh;
-
-        if clean {
-            self.push_comment("Cleanup");
-            result = result
-                .into_iter()
-                .map(|ct| self.block_lookup(&ct, Lut1Def::MsgOnly))
-                .collect();
-            self.pop_comment();
-        }
-
         (result, carry_out)
     }
 
@@ -1015,7 +1004,7 @@ mod test {
             let a_blocks = builder.ciphertext_split(&a);
             let b_blocks = builder.ciphertext_split(&b);
             let (res, _carry_out) =
-                builder.iop_add_kogge_stone_raw(a_blocks, b_blocks, None, par_w, true);
+                builder.iop_add_kogge_stone_raw(a_blocks, b_blocks, None, par_w);
             let out = builder.ciphertext_join(res, None);
             builder.ciphertext_output(out);
             builder.test_random(100, semantic);
