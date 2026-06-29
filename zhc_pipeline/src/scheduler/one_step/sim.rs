@@ -66,12 +66,12 @@ impl Dumpable for ValState {
     }
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Events {
     Start,
+    LandPea,
     ReadyPep,
     LandPep,
-    LandPea,
     LandPem,
     LandCtl,
 }

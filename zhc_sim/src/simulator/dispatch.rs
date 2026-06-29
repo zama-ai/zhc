@@ -1,18 +1,18 @@
-use std::{collections::BinaryHeap, marker::PhantomData};
+use std::{cmp::Reverse, collections::BinaryHeap, marker::PhantomData};
 
 use super::*;
 
 /// Event dispatcher managing scheduled events using a priority queue.
 pub struct Dispatcher<E: Event> {
     now: Cycle,
-    triggers: BinaryHeap<Trigger<E>>,
+    triggers: BinaryHeap<Reverse<Trigger<E>>>,
 }
 
 impl<E: Event> Dispatcher<E> {
     pub fn from_raw_parts(now: Cycle, triggers: impl Iterator<Item = Trigger<E>>) -> Self {
         Dispatcher {
             now,
-            triggers: triggers.collect(),
+            triggers: triggers.map(Reverse).collect(),
         }
     }
 }
@@ -33,12 +33,12 @@ impl<E: Event> Dispatch for Dispatcher<E> {
         if let Some(filter_at) = filter.as_ref() {
             self.triggers
                 .iter()
-                .find(|Trigger { at, event: e }| (e == event) && (at == filter_at))
+                .find(|Reverse(Trigger { at, event: e })| (e == event) && (at == filter_at))
                 .is_some()
         } else {
             self.triggers
                 .iter()
-                .map(|trigger| &trigger.event)
+                .map(|trigger| &trigger.0.event)
                 .find(|e| *e == event)
                 .is_some()
         }
@@ -47,10 +47,10 @@ impl<E: Event> Dispatch for Dispatcher<E> {
         let dispatch_cycle = self.now + delay.unwrap_or(Cycle::ZERO);
         // NB: Discard event dispach in the current cycle if already present
         if !self.contains_event(&event, Some(dispatch_cycle)) {
-            self.triggers.push(Trigger {
+            self.triggers.push(Reverse(Trigger {
                 at: dispatch_cycle,
                 event,
-            });
+            }));
         }
     }
 }
@@ -69,7 +69,7 @@ impl<E: Event> Dispatcher<E> {
     /// Advances the simulation time to the next scheduled event.
     pub fn advance(&mut self) {
         if let Some(trigger) = self.triggers.peek() {
-            self.now = trigger.at
+            self.now = trigger.0.at
         }
     }
 
@@ -78,9 +78,9 @@ impl<E: Event> Dispatcher<E> {
     /// Returns `None` if no events are scheduled for the current cycle.
     pub fn pop_now(&mut self) -> Option<Trigger<E>> {
         if let Some(trigger) = self.triggers.peek()
-            && trigger.at == self.now
+            && trigger.0.at == self.now
         {
-            self.triggers.pop()
+            self.triggers.pop().map(|a| a.0)
         } else {
             None
         }

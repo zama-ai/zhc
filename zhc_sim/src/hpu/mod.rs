@@ -1,5 +1,5 @@
 use crate::TracingLevel;
-
+use serde::Serialize;
 use super::{Cycle, Dispatch, Simulatable, Tracer, Trigger};
 
 mod config;
@@ -11,23 +11,27 @@ mod pe_alu;
 mod pe_ctl;
 mod pe_mem;
 mod pe_pbs;
+mod ucore;
 mod statistics;
-#[cfg(test)]
-pub mod test;
+
 pub use config::*;
 pub use dops::*;
 pub use events::*;
 pub use isc::*;
 pub use latencies::*;
-use pe_alu::PeAlu;
+pub use pe_alu::*;
 pub use pe_ctl::*;
-use pe_mem::PeMem;
+pub use pe_mem::*;
 pub use pe_pbs::*;
-use serde::Serialize;
+pub use ucore::*;
 pub use statistics::*;
+
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Copy)]
 pub struct HpuId(pub usize);
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct TransferId(pub u8);
 
 /// HPU simulator containing all processing elements and scheduling logic.
 #[derive(Debug, Serialize)]
@@ -37,6 +41,7 @@ pub struct Hpu {
     pub pe_pbs: PePbs,
     pub pe_alu: PeAlu,
     pub pe_ctl: PeCtl,
+    pub ucore: UCore,
     pub statistics: Statistics,
     pub config: HpuConfig,
     pub id: HpuId
@@ -55,6 +60,7 @@ impl Simulatable for Hpu {
         self.pe_pbs.handle(dispatcher, trigger.clone());
         self.pe_alu.handle(dispatcher, trigger.clone());
         self.pe_ctl.handle(dispatcher, trigger.clone());
+        self.ucore.handle(dispatcher, trigger.clone());
         self.statistics.handle(dispatcher, trigger.clone());
     }
 
@@ -64,6 +70,7 @@ impl Simulatable for Hpu {
         self.pe_pbs.power_up(dispatcher);
         self.pe_alu.power_up(dispatcher);
         self.pe_ctl.power_up(dispatcher);
+        self.ucore.power_up(dispatcher);
         self.statistics.power_up(dispatcher);
     }
 
@@ -73,6 +80,7 @@ impl Simulatable for Hpu {
         tracer.add_state(tracing_level, at, Some(self.id.0), self.pe_pbs.name(), &self.pe_pbs);
         tracer.add_state(tracing_level, at, Some(self.id.0), self.pe_alu.name(), &self.pe_alu);
         tracer.add_state(tracing_level, at, Some(self.id.0), self.pe_ctl.name(), &self.pe_ctl);
+        tracer.add_state(tracing_level, at, Some(self.id.0), self.ucore.name(), &self.ucore);
         tracer.add_state(tracing_level, at, Some(self.id.0), self.statistics.name(), &self.statistics);
 
         // PE loading counters
@@ -131,9 +139,13 @@ impl Hpu {
                 ),
             ),
             pe_ctl: PeCtl,
+            ucore: UCore,
             statistics: Statistics::default(),
             config: config.clone(),
             id
         }
     }
 }
+
+#[cfg(test)]
+pub mod test;

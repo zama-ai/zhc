@@ -2,7 +2,7 @@ use crate::hpulang::LutId;
 
 use super::type_system::DopTypeSystem;
 use serde::Serialize;
-use std::fmt::{Debug, Display};
+use std::{fmt::{Debug, Display}, ops::Mul};
 use zhc_ir::{DialectInstructionSet, Format, FormatContext, Signature, sig};
 
 pub(crate) const LUT_ALIASES: [&str; 76] = [
@@ -324,6 +324,8 @@ pub enum Affinity {
     Pbs,
     /// Control: synchronization and initialization.
     Ctl,
+    /// Multi: multi-hpu support.
+    Multi,
 }
 
 impl Display for Affinity {
@@ -333,6 +335,7 @@ impl Display for Affinity {
             Affinity::Mem => write!(f, "Mem"),
             Affinity::Pbs => write!(f, "Pbs"),
             Affinity::Ctl => write!(f, "Ctl"),
+            Affinity::Multi => write!(f, "Multi")
         }
     }
 }
@@ -561,9 +564,9 @@ impl DopInstructionSet {
             PBS_ML8_F { .. } => Pbs,
             _INIT => Ctl,
             SYNC => Ctl,
-            NOTIFY { .. } => Ctl,
-            WAIT { .. } => Ctl,
-            LD_B2B { .. } => Ctl,
+            NOTIFY { .. } => Multi,
+            WAIT { .. } => Multi,
+            LD_B2B { .. } => Multi,
         }
     }
 

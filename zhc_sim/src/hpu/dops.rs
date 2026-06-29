@@ -5,7 +5,7 @@ use std::fmt::Display;
 pub type RawDOp = zhc_langs::doplang::DopInstructionSet;
 
 /// Unique identifier for a DOp operation within the simulation.
-#[derive(Debug, Clone, PartialEq, Eq, Copy, Hash, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Copy, Hash, serde::Deserialize)]
 pub struct DOpId(pub usize);
 
 impl Display for DOpId {
@@ -44,5 +44,17 @@ impl Serialize for DOp {
         S: serde::Serializer,
     {
         serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl PartialOrd for DOp {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.id.partial_cmp(&other.id)
+    }
+}
+
+impl Ord for DOp {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.id.cmp(&other.id)
     }
 }

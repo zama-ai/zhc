@@ -368,6 +368,7 @@ pub struct AffinityFilter {
     alu: bool,
     pbs: bool,
     ctl: bool,
+    multi: bool,
 }
 
 impl AffinityFilter {
@@ -377,6 +378,7 @@ impl AffinityFilter {
             Affinity::Mem => self.mem,
             Affinity::Pbs => self.pbs,
             Affinity::Ctl => self.ctl,
+            Affinity::Multi => self.multi
         }
     }
 }
@@ -441,6 +443,7 @@ impl InstructionScheduler {
             alu: self.tracker_alu.available,
             pbs: self.tracker_pbs.available,
             ctl: true,
+            multi: true,
         }
     }
     pub fn get_slot_properties(&self, dop_id: DOpId) -> Option<SlotProperties> {
@@ -466,9 +469,9 @@ impl Simulatable for InstructionScheduler {
     ) {
         // NB: Each event that triggered side effect rearm IscQuery if none is already pending
         match trigger.event {
-            Events::IscPushDOps(small_vec) => {
-                self.dop_target += small_vec.len();
-                self.front_buffer.extend(small_vec.into_iter());
+            Events::IscPushDOp(dop) => {
+                self.dop_target += 1;
+                self.front_buffer.push_back(dop);
                 dispatcher.dispatch_after_if_no_there(self.query_period, Events::IscQuery);
             }
             Events::IscUnlockWrite(dopid) => {

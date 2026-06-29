@@ -10,10 +10,12 @@ use super::{DOp, DOpId, IscCommand};
 pub type BatchSize = usize;
 
 /// Simulation events representing state changes and operations within HPU components.
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Events {
+    UCorePushDOps(Vec<DOp>),
+
     /// Instruction scheduler receives new operations to schedule.
-    IscPushDOps(Vec<DOp>),
+    IscPushDOp(DOp),
     /// Instruction scheduler issues an operation to a processing element.
     IscIssueDOp(DOp),
     /// Unlocks read access for the specified operation.
@@ -77,7 +79,7 @@ pub enum Events {
 impl Display for Events {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Events::IscPushDOps(_) => write!(f, "IscPushDOps"),
+            Events::IscPushDOp(_) => write!(f, "IscPushDOp"),
             Events::IscIssueDOp(_) => write!(f, "IscIssueDOp"),
             Events::IscUnlockRead(_) => write!(f, "IscUnlockRead"),
             Events::IscUnlockWrite(_) => write!(f, "IscUnlockWrite"),
@@ -105,6 +107,7 @@ impl Display for Events {
             Events::PeMemUnavailable => write!(f, "PeMemUnavailable"),
             Events::NotifyIsc(_, _) => write!(f, "NotifyIsc"),
             Events::NotifyStartOnTimeout { .. } => write!(f, "NotifyStartOnTimeout"),
+            Events::UCorePushDOps(_) => write!(f, "UCorePushDOps"),
         }
     }
 }

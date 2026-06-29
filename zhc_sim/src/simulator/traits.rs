@@ -6,7 +6,7 @@ use zhc_utils::type_name_of_val;
 use super::*;
 
 /// Represents simulation events that can be dispatched and handled.
-pub trait Event: Display + Clone + Serialize + PartialEq {}
+pub trait Event: Display + Clone + Serialize + PartialEq + PartialOrd + Ord {}
 
 /// Manages event scheduling and delivery within the simulation.
 pub trait Dispatch {

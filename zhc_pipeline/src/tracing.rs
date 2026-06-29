@@ -18,7 +18,7 @@ pub fn trace_execution(ir: &IR<DopLang>, config: &HpuConfig, path: impl AsRef<Pa
             id: DOpId(a.get_id().into()),
         })
         .collect();
-    let event = Events::IscPushDOps(dops);
+    let event = Events::UCorePushDOps(dops);
     simulator.dispatch(event);
     simulator.play_until_event(Events::IscProcessOver);
     simulator.dump_trace(path.as_ref());

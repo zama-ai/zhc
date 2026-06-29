@@ -16,7 +16,7 @@ macro_rules! test_hpu_simulation {
             config.pbs_timeout = Cycle(100_000);
             let mut sim = Simulator::from_simulatable(config.freq, Hpu::new(&config, HpuId(0)), TracingLevel::None);
             let (stream, leg_lat) = legacy::$name();
-            sim.dispatch(Events::IscPushDOps(stream.collect()));
+            sim.dispatch(Events::UCorePushDOps(stream.collect()));
             sim.play_until_event(Events::IscProcessOver);
             // sim.dump_trace("test.json");
 
