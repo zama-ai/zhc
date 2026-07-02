@@ -6,6 +6,8 @@
 //! operation scheduling, register allocation, and final code generation.
 
 use allocator::allocate_registers;
+use std::f64;
+use std::path::Path;
 use zhc_builder::Builder;
 use zhc_ir::IR;
 use zhc_langs::doplang::DopLang;
@@ -13,12 +15,8 @@ use zhc_langs::hpulang::{HpuLang, get_batch_statistics};
 use zhc_langs::ioplang::IopLang;
 use zhc_sim::MHz;
 use zhc_sim::hpu::HpuConfig;
-use std::f64;
-use std::path::Path;
-
 
 use crate::scheduler::SchedPolicy;
-
 
 pub mod allocator;
 pub mod compat;
@@ -122,11 +120,20 @@ pub fn alternative_pipeline(ir: IR<IopLang>, config: &HpuConfig) -> (IR<HpuLang>
 mod test;
 
 #[cfg(test)]
-mod test_mh{
+mod test_mh {
+    use crate::{
+        allocator::allocate_registers,
+        scheduler::{SchedPolicy, one_step_mh},
+        translation::lower_iop_to_multi_hpu,
+    };
     use zhc_builder::{Builder, CiphertextSpec, mh_mul};
     use zhc_ir::{AnnIR, partition::PartitionId};
-    use zhc_sim::{Simulator, hpu::{DOp, DOpId, MultiHpuConfig}, multi_hpu::{Events, MultiHpu}};
-    use crate::{allocator::allocate_registers, scheduler::{SchedPolicy, one_step_mh}, translation::lower_iop_to_multi_hpu};
+    use zhc_langs::doplang::emit_assembly;
+    use zhc_sim::{
+        Simulator,
+        hpu::{DOp, DOpId, MultiHpuConfig},
+        multi_hpu::{Events, MultiHpu},
+    };
 
     #[test]
     fn pipeline_mh_dbg() {
@@ -230,9 +237,11 @@ mod test_mh{
 
         let (mhir, localities) = lower_iop_to_multi_hpu(&ir, &partitions);
 
-        AnnIR::new(&mhir, localities.clone(), mhir.filled_valmap(())).draw_ann_to_html(None, "hfdsah.html");
+        AnnIR::new(&mhir, localities.clone(), mhir.filled_valmap(()))
+            .draw_ann_to_html(None, "hfdsah.html");
 
-        let scheds = one_step_mh::schedule(&mhir, localities, &config, SchedPolicy::AsLateAsPossible);
+        let scheds =
+            one_step_mh::schedule(&mhir, localities, &config, SchedPolicy::AsLateAsPossible);
 
         let mut streams = Vec::new();
         for scheduled in scheds.into_iter() {
@@ -255,23 +264,31 @@ mod test_mh{
         let event = zhc_sim::multi_hpu::Events::PushDOps(streams);
         simulator.dispatch(event);
         simulator.play_until_event(Events::ProcessOver);
-        simulator.dump_trace("brrrrrrrrr.json");
+        simulator.dump_trace("mh_dbg_trace.json");
     }
 
     #[test]
     fn pipeline_mh_mul() {
         const INT_SIZE: u16 = 16;
         const MH_FACTOR: u8 = 4;
+        const DEBUG: bool = true;
+        const DEBUG_SIM: bool = false;
 
-        let config = MultiHpuConfig{n_hpus: 5, ..Default::default()};
+        let config = MultiHpuConfig {
+            n_hpus: 5,
+            ..Default::default()
+        };
         let builder = mh_mul(CiphertextSpec::new(INT_SIZE, 2, 2), MH_FACTOR);
 
-        // let mut ir = builder.ir().clone();
+        if DEBUG {
+            builder.draw("mh_mul_ir.html");
+            builder.draw_partitions_optim("mh_mul_ir_raw_part.html");
+        }
         let ir = builder.optimize_ir().clone();
 
         // Hpu 0
         builder.merge_partition_group(
-            &[0, 17, 18, 19, 21]
+            &[0, 1, 17, 18, 19, 21]
                 .iter()
                 .map(|x| PartitionId(*x))
                 .collect::<Vec<_>>(),
@@ -294,17 +311,24 @@ mod test_mh{
                 .map(|x| PartitionId(*x))
                 .collect::<Vec<_>>(),
         );
+        if DEBUG {
+            builder.draw_partitions_optim("mh_mul_ir_grp_part.html");
+        }
 
         let partitions = builder.partitions();
 
         let (mhir, localities) = lower_iop_to_multi_hpu(&ir, &partitions);
 
-        AnnIR::new(&mhir, localities.clone(), mhir.filled_valmap(())).draw_ann_to_html(None, "hfdsah.html");
+        if DEBUG {
+            AnnIR::new(&mhir, localities.clone(), mhir.filled_valmap(()))
+                .draw_ann_to_html(None, "mh_mul_ir_flat.html");
+        }
 
-        let scheds = one_step_mh::schedule(&mhir, localities, &config, SchedPolicy::AsLateAsPossible);
+        let scheds =
+            one_step_mh::schedule(&mhir, localities, &config, SchedPolicy::AsLateAsPossible);
 
         let mut streams = Vec::new();
-        for scheduled in scheds.into_iter() {
+        for (hid, scheduled) in scheds.into_iter().enumerate() {
             let allocated = allocate_registers(&scheduled, &config.hpu_config);
             let dops: Vec<DOp> = allocated
                 .walk_ops_linear()
@@ -313,18 +337,29 @@ mod test_mh{
                     id: DOpId(a.get_id().into()),
                 })
                 .collect();
+
+            // TODO clean this part
+            use std::fs::File;
+            use std::io::Write;
+            let filename = format!("mhmul{INT_SIZE}f{MH_FACTOR}_v{hid}.asm");
+            let mut file = File::create(&filename).expect("Failed to create .asm file");
+            file.write_all(emit_assembly(&allocated).as_bytes())
+                .expect("Failed to write to .asm file");
+
             streams.push(dops);
         }
 
-        let mut simulator = Simulator::from_simulatable(
-            config.hpu_config.freq,
-            MultiHpu::new(&config),
-            zhc_sim::TracingLevel::Events,
-        );
-        let event = zhc_sim::multi_hpu::Events::PushDOps(streams);
-        simulator.dispatch(event);
-        simulator.play_until_event(Events::ProcessOver);
-        simulator.dump_trace("brrrrrrrrr.json");
+        if DEBUG_SIM {
+            let mut simulator = Simulator::from_simulatable(
+                config.hpu_config.freq,
+                MultiHpu::new(&config),
+                // zhc_sim::TracingLevel::Events,
+                zhc_sim::TracingLevel::Load,
+            );
+            let event = zhc_sim::multi_hpu::Events::PushDOps(streams);
+            simulator.dispatch(event);
+            simulator.play_until_event(Events::ProcessOver);
+            simulator.dump_trace("mh_mul_trace.json");
+        }
     }
-
 }

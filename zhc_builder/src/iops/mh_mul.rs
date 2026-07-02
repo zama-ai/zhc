@@ -85,18 +85,18 @@ fn mh_mul_with_opt(spec: CiphertextSpec, mh_factor: u8, gen_overflow: bool) -> B
         builder.ciphertext_output(flag);
     }
     // View output as one
-    // // let pack_output = outputs.into_iter().flatten().collect::<Vec<_>>();
-    // // let output = builder.join_ciphertext(&pack_output, Some(spec.int_size()));
-    // builder.output_ciphertext(output);
+    let pack_output = outputs.into_iter().flatten().collect::<Vec<_>>();
+    let output = builder.ciphertext_join(&pack_output, Some(spec.int_size()));
+    builder.ciphertext_output(output);
 
-    // View output as mh_factor sub-part
-    for out in outputs.into_iter() {
-        let output = builder.ciphertext_join(
-            &out,
-            Some(out.len() as u16 * spec.block_spec().message_size() as u16),
-        );
-        builder.ciphertext_output(output);
-    }
+    // // View output as mh_factor sub-part
+    // for out in outputs.into_iter() {
+    //     let output = builder.ciphertext_join(
+    //         &out,
+    //         Some(out.len() as u16 * spec.block_spec().message_size() as u16),
+    //     );
+    //     builder.ciphertext_output(output);
+    // }
 
     builder
 }

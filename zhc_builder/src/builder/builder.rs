@@ -32,13 +32,15 @@ use zhc_crypto::integer_semantics::{
     CiphertextBlockSpec, CiphertextSpec, PlaintextBlockSpec, PlaintextSpec, lut::LookupCheck,
 };
 use zhc_ir::{
-    AnnIR, IR, OpId, OpMap, PrintWalker, Signature, cse::eliminate_common_subexpressions, dce::eliminate_dead_code, partition::PartitionId, visualization::{
-        Hierarchy,
-        draw_ann_ir_to_html, draw_ir_to_html,
-    }
+    AnnIR, IR, OpId, OpMap, PrintWalker, Signature,
+    cse::eliminate_common_subexpressions,
+    dce::eliminate_dead_code,
+    partition::PartitionId,
+    visualization::{Hierarchy, draw_ann_ir_to_html, draw_ir_to_html},
 };
 use zhc_langs::ioplang::{
-    IopInstructionSet, IopLang, IopTypeSystem, IopValue, Lut1Def, Lut2Def, eliminate_aliases, skip_redundant_stores, skip_store_load
+    IopInstructionSet, IopLang, IopTypeSystem, IopValue, Lut1Def, Lut2Def, eliminate_aliases,
+    skip_redundant_stores, skip_store_load,
 };
 use zhc_utils::{
     Dumpable, SafeAs, Store,
@@ -92,8 +94,6 @@ impl Debug for Type {
         }
     }
 }
-
-
 
 #[derive(Debug)]
 pub(super) struct InnerBuilder {
@@ -382,6 +382,24 @@ impl Builder {
     pub fn draw_partitions(&self, path: impl AsRef<Path>) {
         let partitions = &self.inner().partitions;
         let ir = &self.ir();
+        let ann_ir = AnnIR::new(
+            ir,
+            ir.totally_mapped_opmap(|op| partitions[*op]),
+            ir.filled_valmap(()),
+        );
+        draw_ann_ir_to_html(
+            &ann_ir,
+            Some(
+                self.ir()
+                    .partially_mapped_opmap(|op| self.inner().hierarchies.get(*op).cloned()),
+            ),
+            path,
+        );
+    }
+    pub fn draw_partitions_optim(&self, path: impl AsRef<Path>) {
+        let partitions = &self.inner().partitions;
+        let ir = &self.optimize_ir();
+
         let ann_ir = AnnIR::new(
             ir,
             ir.totally_mapped_opmap(|op| partitions[*op]),
