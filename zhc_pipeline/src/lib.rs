@@ -226,3 +226,142 @@ fn pipeline_mh_mul() {
             .expect("Failed to write to .asm file");
     }
 }
+
+#[test]
+fn pipeline_mh_dbg() {
+    // Configuration
+    const INT_SIZE: u16 = 16;
+    const MH_FACTOR: u8 = 4;
+
+    let mut hpu_config = HpuConfig::from(PhysicalConfig::tuniform_64b_pfail128_psi64());
+    hpu_config.pbs_min_batch_size = 12;
+
+    // Build simple circuit
+    // (ra, rb) <= f(a,b,c,d)
+    // ra <= (a + b) - (c + d)
+    // rb <= (a + b) + (c + d)
+    fn mh_dbg(spec: CiphertextSpec) -> Builder {
+        let builder = Builder::new(spec.block_spec());
+        // Define inputs
+        let src_a = builder.ciphertext_input(spec.int_size());
+        let src_b = builder.ciphertext_input(spec.int_size());
+        let src_c = builder.ciphertext_input(spec.int_size());
+        let src_d = builder.ciphertext_input(spec.int_size());
+
+        // extract inputs as array of blk
+        let src_a_blocks = builder.ciphertext_split(&src_a);
+        let src_b_blocks = builder.ciphertext_split(&src_b);
+        let src_c_blocks = builder.ciphertext_split(&src_c);
+        let src_d_blocks = builder.ciphertext_split(&src_d);
+
+        // Partition A
+        let cur_partition = builder.new_partition();
+        println!("Partition A: (a+b) => {cur_partition:?}");
+        let (apb, _) = builder.comment(format!("apb")).iop_add_raw(
+            spec.int_size(),
+            src_a_blocks,
+            src_b_blocks,
+            None,
+        );
+
+        // Partition B
+        let cur_partition = builder.new_partition();
+        println!("Partition B: (c+d) => {cur_partition:?}");
+        let (cpd, _) = builder.comment(format!("cpd")).iop_add_raw(
+            spec.int_size(),
+            src_c_blocks,
+            src_d_blocks,
+            None,
+        );
+
+        // Partition C
+        let cur_partition = builder.new_partition();
+        println!("Partition C: A + B => {cur_partition:?}");
+        let (ApB, _) =
+            builder
+                .comment(format!("ApB"))
+                .iop_add_raw(spec.int_size(), &apb, &cpd, None);
+
+        // Partition D
+        // Output on hpu A
+        let cur_partition = builder.new_partition();
+        println!("Partition D: Output hpu_A => {cur_partition:?}");
+        builder.ciphertext_output(builder.ciphertext_join(ApB, Some(spec.int_size())));
+
+        // // Partition E
+        // // NB: Tricky part reintroduce ciphertext_join
+        // // WARN: Not supported yet, must rely on _raw version of iop
+        // let cur_partition = builder.new_partition();
+        // println!("Partition E: A - B => {cur_partition:?}");
+        // let AmB = builder.comment(format!("A&B")).iop_sub(
+        //     &builder.ciphertext_join(apb, Some(spec.int_size())),
+        //     &builder.ciphertext_join(cpd, Some(spec.int_size())),
+        // );
+
+        // // Partition F
+        // // Output on hpu B
+        // let cur_partition = builder.new_partition();
+        // println!("Partition E: Output hpu_B => {cur_partition:?}");
+        // builder.ciphertext_output(AmB);
+
+        builder
+    }
+
+    let builder = mh_dbg(CiphertextSpec::new(INT_SIZE, 2, 2));
+
+    builder.draw("mh_dbg_ir.html");
+    builder.draw_partitions("mh_dbg_ir_raw_part.html");
+
+    // Hpu 0
+    builder.merge_partition_group(
+        &[0, 1, 3, 4]
+            .iter()
+            .map(|x| PartitionId(*x))
+            .collect::<Vec<_>>(),
+    );
+    builder.merge_partition_group(
+        // &[2, 5, 6]
+        &[2].iter().map(|x| PartitionId(*x)).collect::<Vec<_>>(),
+    );
+    builder.draw_partitions("mh_dbg_ir_grp_part.html");
+
+    let mut ir = builder.ir().clone();
+    insert_transfers(&mut ir, builder.partitions());
+    cut_transfers(&mut ir);
+    // ir.dump_and_wait();
+
+    let components = isolate_subgraphs(&ir, |op| {
+        use IopInstructionSet::*;
+        match op {
+            InputCiphertext { .. }
+            | InputPlaintext { .. }
+            | ExtractCtBlock { .. }
+            | ExtractPtBlock { .. }
+            | DeclareCiphertext { .. }
+            | LetCiphertextBlock { .. }
+            | LetPlaintextBlock { .. } => true,
+            _ => false,
+        }
+    });
+
+    for (i, mut comp) in components.into_iter().rev().enumerate() {
+        eliminate_aliases(&mut comp);
+        skip_store_load(&mut comp);
+        eliminate_dead_code(&mut comp);
+        skip_redundant_stores(&mut comp);
+        eliminate_dead_code(&mut comp);
+        eliminate_common_subexpressions(&mut comp);
+        eliminate_dead_code(&mut comp);
+
+        let unscheduled = translation::lower_iop_to_hpu(&comp);
+        let scheduled =
+            one_step::schedule(&unscheduled, &hpu_config, SchedPolicy::AsLateAsPossible);
+        let allocated = allocate_registers(&scheduled, &hpu_config);
+        use std::fs::File;
+        use std::io::Write;
+        let filename = format!("mh_dbg_hid{}.asm", i);
+        let mut file = File::create(&filename).expect("Failed to create .asm file");
+        file.write_all(emit_assembly(&allocated).as_bytes())
+            .expect("Failed to write to .asm file");
+    }
+}
