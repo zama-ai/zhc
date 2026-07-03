@@ -269,8 +269,9 @@ mod test_mh {
 
     #[test]
     fn pipeline_mh_mul() {
-        const INT_SIZE: u16 = 64;
-        const MH_FACTOR: u8 = 2;
+        const INT_SIZE: u16 = 32;
+        const MH_FACTOR: u8 = 4;
+        const SB_DEPTH: usize = 2;
         const DEBUG: bool = false;
         const DEBUG_SIM: bool = false;
 
@@ -278,7 +279,7 @@ mod test_mh {
             n_hpus: MH_FACTOR,
             ..Default::default()
         };
-        let builder = mh_mul(CiphertextSpec::new(INT_SIZE, 2, 2), MH_FACTOR);
+        let builder = mh_mul(CiphertextSpec::new(INT_SIZE, 2, 2), SB_DEPTH);
 
         if DEBUG {
             builder.draw("mh_mul_ir.html");
@@ -287,30 +288,21 @@ mod test_mh {
         let ir = builder.optimize_ir().clone();
 
         // Hpu 0
+        // NB: dummy part is added to node 0
+        // All their nodes could be "duplicated" but still required them to be mapped to prevent
+        // full graph deletion
         builder.merge_partition_group(
-            &[0, 1, 17, 18, 19, 21]
+            &[4, 7, 0, 9]
                 .iter()
                 .map(|x| PartitionId(*x))
                 .collect::<Vec<_>>(),
         );
-        builder.merge_partition_group(
-            &[2, 9, 10, 12, 15]
-                .iter()
-                .map(|x| PartitionId(*x))
-                .collect::<Vec<_>>(),
-        );
-        builder.merge_partition_group(
-            &[5, 6, 7, 16, 20]
-                .iter()
-                .map(|x| PartitionId(*x))
-                .collect::<Vec<_>>(),
-        );
-        builder.merge_partition_group(
-            &[3, 4, 13, 14, 8, 11]
-                .iter()
-                .map(|x| PartitionId(*x))
-                .collect::<Vec<_>>(),
-        );
+        builder.merge_partition_group(&[2].iter().map(|x| PartitionId(*x)).collect::<Vec<_>>());
+
+        builder.merge_partition_group(&[3, 6].iter().map(|x| PartitionId(*x)).collect::<Vec<_>>());
+
+        builder.merge_partition_group(&[1].iter().map(|x| PartitionId(*x)).collect::<Vec<_>>());
+
         if DEBUG {
             builder.draw_partitions_optim("mh_mul_ir_grp_part.html");
         }

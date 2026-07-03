@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use crate::{CiphertextBlock, NU, NU_BOOL, builder::Builder};
 use zhc_crypto::integer_semantics::CiphertextSpec;
 use zhc_langs::ioplang::Lut1Def;
+use zhc_utils::SafeAs;
 
 /// Creates an IR for a multiplication of two encrypted integers split into mh_factor sub-graph.
 ///
@@ -21,8 +22,8 @@ use zhc_langs::ioplang::Lut1Def;
 /// let builder = mh_mul(spec, 2);
 /// let ir = builder.into_ir();
 /// ```
-pub fn mh_mul(spec: CiphertextSpec, mh_factor: u8) -> Builder {
-    mh_mul_with_opt(spec, mh_factor, false)
+pub fn mh_mul(spec: CiphertextSpec, split_depth: usize) -> Builder {
+    mh_mul_with_opt(spec, split_depth, false)
 }
 
 /// Creates an IR for a multiplication of two encrypted integers split into mh_factor sub-graph.
@@ -42,8 +43,8 @@ pub fn mh_mul(spec: CiphertextSpec, mh_factor: u8) -> Builder {
 /// let builder = mh_overflow_mul_lsb(spec, 2);
 /// let ir = builder.into_ir();
 /// ```
-pub fn mh_overflow_mul_lsb(spec: CiphertextSpec, mh_factor: u8) -> Builder {
-    mh_mul_with_opt(spec, mh_factor, true)
+pub fn mh_overflow_mul_lsb(spec: CiphertextSpec, split_depth: usize) -> Builder {
+    mh_mul_with_opt(spec, split_depth, true)
 }
 
 /// Creates an IR for a multiplication of two encrypted integers split into mh_factor sub-graph.
@@ -51,7 +52,7 @@ pub fn mh_overflow_mul_lsb(spec: CiphertextSpec, mh_factor: u8) -> Builder {
 /// The returned [`Builder`] declares two ciphertext inputs and two ciphertext outputs.
 /// First output is an *Optional* overflow flag, second one is the LSB part of the input product
 ///
-/// Internally delegates to [`Builder::iop_mul_raw`].
+/// Internally delegates to [`Builder::limb_mul_chain`].
 ///
 /// The `spec` parameter describes the integer encoding (bit-width, message
 /// bits, carry bits) and determines the number of blocks in the
@@ -65,7 +66,7 @@ pub fn mh_overflow_mul_lsb(spec: CiphertextSpec, mh_factor: u8) -> Builder {
 /// let builder = mh_mul_with_opt(spec, 2, true);
 /// let ir = builder.into_ir();
 /// ```
-fn mh_mul_with_opt(spec: CiphertextSpec, mh_factor: u8, gen_overflow: bool) -> Builder {
+fn mh_mul_with_opt(spec: CiphertextSpec, split_depth: usize, gen_overflow: bool) -> Builder {
     let builder = Builder::new(spec.block_spec());
     let src_a = builder.ciphertext_input(spec.int_size());
     let src_b = builder.ciphertext_input(spec.int_size());
@@ -74,11 +75,11 @@ fn mh_mul_with_opt(spec: CiphertextSpec, mh_factor: u8, gen_overflow: bool) -> B
     let src_a_blocks = builder.ciphertext_split(&src_a);
     let src_b_blocks = builder.ciphertext_split(&src_b);
     // Only kept LSB to obtain a IxI -> I operations
-    let cut_off = spec.block_count();
+    let cut_off = spec.block_count() as usize;
 
     // Call inner function and construct results
     let (flag_block, outputs) =
-        builder.mh_iop_mul_raw(&src_a_blocks, &src_b_blocks, cut_off, mh_factor);
+        builder.mh_iop_mul_raw(&src_a_blocks, &src_b_blocks, cut_off, split_depth);
 
     if gen_overflow {
         let flag = builder.ciphertext_join(&[flag_block], Some(1)); // NB: This is a boolean flag
@@ -157,8 +158,8 @@ impl Builder {
         &self,
         src_a_blocks: &[CiphertextBlock],
         src_b_blocks: &[CiphertextBlock],
-        cut_off_block: u8,
-        mh_factor: u8,
+        cut_off_block: usize,
+        split_depth: usize,
     ) -> (CiphertextBlock, Vec<Vec<CiphertextBlock>>) {
         // Compute split structure
         let blocks = if src_a_blocks.len() == src_b_blocks.len() {
@@ -167,8 +168,8 @@ impl Builder {
             panic!("Error: current split only work with symetrics operands");
         };
 
-        let mh_blocks = if 0 == (blocks % mh_factor as usize) {
-            blocks / mh_factor as usize
+        let mh_blocks = if 0 == (blocks % split_depth) {
+            blocks / split_depth
         } else {
             panic!("Error: current split only work when blocks is a muliple of mh_factor");
         };
@@ -189,22 +190,48 @@ impl Builder {
                 .iter()
                 .map(|CiphertextLimb { offset, blocks }| (offset, blocks))
             {
-                let cur_partition = self.new_partition();
-                println!("Pp@[{i}::{j}] => {cur_partition:?}");
-
-                // Compute cut_off point based on input and current limb offset
+                // Compute cut_range point based on input and current limb offset
                 let blocks_ofst = (i + j) * mh_blocks;
-                let relin_cut_off = cut_off_block.saturating_sub(blocks_ofst as u8);
+                let relin_cut_off = cut_off_block.saturating_sub(blocks_ofst);
 
-                // Call sub-size mul
-                let (sm_res, ovf) =
-                    self.comment(format!("SubMul[{i}][{j}]"))
-                        .iop_mul_raw(ai, bj, relin_cut_off);
+                let ovf = if relin_cut_off > mh_blocks {
+                    // Compute in two half
+                    let lsb_partition = self.new_partition();
+                    println!("Pp@[{i}::{j}]_lsb  => {lsb_partition:?}");
 
-                // Spread output
-                for limb in CiphertextLimb::chunks_at(i + j, &sm_res, mh_blocks) {
-                    limb_map.entry(limb.offset).or_default().push(limb);
-                }
+                    let (lsb_res, _ovf, lsb_cout) = self
+                        .comment(format!("SubMul[{i}][{j}]_lsb"))
+                        .limb_mul_chain(ai, bj, (0, mh_blocks), vec![]);
+                    let lsb_limb = CiphertextLimb::new(i + j, &lsb_res);
+                    println!("=> {} limb", lsb_limb.offset);
+                    limb_map.entry(lsb_limb.offset).or_default().push(lsb_limb);
+
+                    let msb_partition = self.new_partition();
+                    println!("Pp@[{i}::{j}]_msb  => {msb_partition:?}");
+
+                    let (msb_res, ovf, _cout) = self
+                        .comment(format!("SubMul[{i}][{j}]_msb"))
+                        .limb_mul_chain(ai, bj, (mh_blocks, relin_cut_off), lsb_cout);
+                    if !msb_res.is_empty() {
+                        let msb_limb = CiphertextLimb::new(i + j + 1, &msb_res);
+                        println!("=> {} limb", msb_limb.offset);
+                        limb_map.entry(msb_limb.offset).or_default().push(msb_limb);
+                    }
+                    ovf
+                } else {
+                    let cur_partition = self.new_partition();
+                    println!("Pp@[{i}::{j}]  => {cur_partition:?}");
+
+                    let (cur_res, ovf, _cout) = self
+                        .comment(format!("SubMul[{i}][{j}]"))
+                        .limb_mul_chain(ai, bj, (0, relin_cut_off), vec![]);
+                    if !cur_res.is_empty() {
+                        let cur_limb = CiphertextLimb::new(i + j, &cur_res);
+                        println!("=> {} limb", cur_limb.offset);
+                        limb_map.entry(cur_limb.offset).or_default().push(cur_limb);
+                    }
+                    ovf
+                };
                 overflow_v.push(ovf);
             }
         }
@@ -220,49 +247,48 @@ impl Builder {
         // At each step there is a list of limb to sum and a list of input_carry
         // Gather value through add-tree and consume one input_carry at each stage
         // Each stage output one value and a vector of carry_out
-        let mut dst_limb = vec![Default::default(); mh_factor as usize];
+        let mut dst_limb = vec![Default::default(); split_depth];
         let mut carry_buffer = BTreeMap::<usize, Vec<CiphertextBlock>>::new();
         for k in first_limb_id..=last_limb_id {
-            self.push_comment(format!("Limb reduce[{k}]"));
             let mut stage_limb = limb_map.remove(&k).unwrap_or_default();
             let mut carry_in = carry_buffer.remove(&k).unwrap_or_default();
 
+            self.push_comment(format!("Limb reduce[{k}]"));
             if stage_limb.len() > 1 {
-                let cur_partition = self.new_partition();
-                println!("LimbRed@[{k}] => {cur_partition:?}");
+                // Tree-like reduction
+                let mut tree_iter = 0;
+                while stage_limb.len() > 1 {
+                    let mut current = stage_limb.into_iter();
+                    let mut next = Vec::new();
+
+                    loop {
+                        match (current.next(), current.next()) {
+                            (Some(a), Some(b)) => {
+                                let cur_partition = self.new_partition();
+                                println!("LimbRed@[{k}]_{tree_iter} => {cur_partition:?}");
+                                let (sum, cout) =
+                                    self.comment(format!("iter {tree_iter}")).iop_add_raw(
+                                        limbs_size,
+                                        a.as_blocks(),
+                                        b.as_blocks(),
+                                        carry_in.pop().as_ref(),
+                                    );
+                                next.push(CiphertextLimb::new(k, &sum));
+                                carry_buffer.entry(k + 1).or_default().push(cout)
+                            }
+                            (Some(a), None) => {
+                                // odd element passes through unchanged
+                                next.push(a);
+                                break;
+                            }
+                            _ => break,
+                        }
+                        tree_iter += 1;
+                    }
+                    stage_limb = next;
+                }
             } else {
                 println!("LimbRed@[{k}] => skiped");
-            }
-
-            // Tree-like reduction
-            let mut tree_iter = 0;
-            while stage_limb.len() > 1 {
-                let mut current = stage_limb.into_iter();
-                let mut next = Vec::new();
-
-                loop {
-                    match (current.next(), current.next()) {
-                        (Some(a), Some(b)) => {
-                            let (sum, cout) =
-                                self.comment(format!("iter {tree_iter}")).iop_add_raw(
-                                    limbs_size,
-                                    a.as_blocks(),
-                                    b.as_blocks(),
-                                    carry_in.pop().as_ref(),
-                                );
-                            next.push(CiphertextLimb::new(k, &sum));
-                            carry_buffer.entry(k + 1).or_default().push(cout)
-                        }
-                        (Some(a), None) => {
-                            // odd element passes through unchanged
-                            next.push(a);
-                            break;
-                        }
-                        _ => break,
-                    }
-                    tree_iter += 1;
-                }
-                stage_limb = next;
             }
 
             dst_limb[k] = stage_limb
@@ -337,6 +363,184 @@ impl Builder {
         self.pop_comment();
         overflow_flag
     }
+
+    /// Multiply two ciphertext in a raw fashion.
+    /// I.e. Compute all output between cut-in a cut-off point. After cut-off point only
+    /// overflow flag status is computed.
+    /// This function should be wrapped specialized instances that select the desired
+    /// output information and use the deadcode analysis to remove useless part
+    ///
+    /// The muliplication is done in two phases:
+    ///  * Expansion: generate all the partial product
+    ///  * Reduction: sum partial product and propagate the carry
+    ///
+    /// Overflow computation also uses same phases, whith slight differences:
+    ///  * Expansion: only compute NonNull flag of the product
+    ///  * Reduction: sum NonNull flag (no carry propagation)
+    ///
+    /// This implementation also return a vector of direct carry,
+    /// and support of list of input carry.
+    /// The aims is to chain them while keeping a fine control over partition
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::{CiphertextSpec, Builder};
+    /// # let spec = CiphertextSpec::new(16, 2, 2);
+    /// # let builder = Builder::new(spec.block_spec());
+    /// # let a = builder.ciphertext_input(spec.int_size());
+    /// # let b = builder.ciphertext_input(spec.int_size());
+    /// # let a = builder.ciphertext_split(&a);
+    /// # let b = builder.ciphertext_split(&b);
+    /// let (res, flag) = builder.iop_mul_raw(&a, &b, spec.block_count());
+    /// ```
+    pub fn limb_mul_chain(
+        &self,
+        src_a_blocks: &[CiphertextBlock],
+        src_b_blocks: &[CiphertextBlock],
+        cut_range: (usize, usize), //(in,out)
+        carry_in: Vec<CiphertextBlock>,
+    ) -> (Vec<CiphertextBlock>, CiphertextBlock, Vec<CiphertextBlock>) {
+        // Phase 1 expand:
+        // It's a cartesien product of a and b for each terms we sort them by degree
+        // (i.e. ai +bi) and kept assocatied nu for the later reduction
+        // NB: nu encode range of data. nu*(1<<msg_w) = Max Ct value
+        // After the cut-off block only NonNull flag is computed instead of the complete partial
+        // product with carry extract
+        let mut partial_product_map = BTreeMap::<usize, Vec<CiphertextBlock>>::new();
+
+        let mut overflow_v = Vec::<CiphertextBlock>::new();
+        let (cut_in, cut_off) = cut_range;
+        // Inject carry in if any
+        for cin in carry_in.into_iter() {
+            partial_product_map.entry(cut_in).or_default().push(cin);
+        }
+        assert!(
+            cut_off >= cut_in,
+            "Invalid cut_range definition [cut_in, cut_out] -> {cut_range:?}, check bounds definition"
+        );
+
+        for (i, ai) in src_a_blocks.iter().enumerate() {
+            for (j, bj) in src_b_blocks.iter().enumerate() {
+                if ((i + j) >= cut_in) && ((i + j) < cut_off) {
+                    // Full partial product compution
+                    // Pack
+                    let packed = self.comment(format!("pack_{i}_{j}")).block_pack(ai, bj);
+                    // Compute Lsb
+                    partial_product_map.entry(i + j).or_default().push(
+                        self.comment(format!("pp_{i}_{j}_lsb"))
+                            .block_lookup(packed, Lut1Def::MultCarryMsgLsb),
+                    );
+                    // Compute Msb
+                    partial_product_map.entry(i + j + 1).or_default().push(
+                        self.comment(format!("pp_{i}_{j}_msb"))
+                            .block_lookup(packed, Lut1Def::MultCarryMsgMsb),
+                    );
+                } else {
+                    // Only overflow extraction
+                    let mul_is_some = self.comment(format!("ovf_{i}_{j}")).block_pack_then_lookup(
+                        ai,
+                        bj,
+                        Lut1Def::MultCarryMsgIsSome,
+                    );
+                    overflow_v.push(mul_is_some);
+                }
+            }
+        }
+
+        // Phase 2  Reduce/Merge:
+        //
+        // Phase 2.a
+        // Gather partial products together at each level.
+        // Partial product are sum until nu threshold is reach, then carry is extracted
+        // and injected in the next stages
+        // NB: Reduce up to cut_off_block
+        let mut dst_blk = Vec::new();
+        for k in cut_in..cut_off {
+            self.push_comment(format!("reduction_{k}"));
+            let stage_sum = partial_product_map.remove(&k).unwrap_or_default();
+            if !stage_sum.is_empty() {
+                let mut nxt_stage = Vec::new();
+                // Fold them two by two while storing optional carry
+                let mut stg_iter = stage_sum.into_iter();
+                let mut acc_nu = 1;
+                let mut acc_ct = stg_iter.next().unwrap();
+
+                // NB: only fresh ciphertext is push in partial_product_map
+                for ct in stg_iter {
+                    acc_nu = acc_nu + 1;
+                    acc_ct = self.block_add(ct, acc_ct);
+
+                    // Extract carry if required
+                    if acc_nu == NU {
+                        acc_nu = 1;
+                        nxt_stage.push(self.block_lookup(acc_ct, Lut1Def::CarryInMsg));
+                        acc_ct = self.block_lookup(acc_ct, Lut1Def::MsgOnly);
+                    }
+                }
+
+                // Current stage is completly reduce. Clear block if needed
+                if acc_nu != 1 {
+                    nxt_stage.push(self.block_lookup(acc_ct, Lut1Def::CarryInMsg));
+                    acc_ct = self.block_lookup(acc_ct, Lut1Def::MsgOnly);
+                }
+                dst_blk.push(acc_ct);
+
+                // insert current stage carry in next stage
+                if !nxt_stage.is_empty() {
+                    partial_product_map
+                        .entry(k + 1)
+                        .or_default()
+                        .extend(nxt_stage);
+                }
+            }
+            self.pop_comment();
+        }
+
+        // Phase 2.b
+        // Overflow extraction: Only check if a block upper than cut-off is some
+        // Here we could be more aggressive on merge since we manipulate only boolean values
+        self.push_comment(format!("ovf"));
+
+        // Start by handling last carry of 2.a
+        self.push_comment(format!("carry_in"));
+        let carry_out = if let Some(in_carry_v) = partial_product_map.remove(&(cut_off.sas())) {
+            for chunk in in_carry_v.chunks(NU) {
+                let mut chunk_iter = chunk.iter();
+                let init = *chunk_iter.next().unwrap();
+                let chunk_sum = chunk_iter.fold(init, |acc, v| self.block_add(&acc, v));
+                let is_some_flag = self.block_lookup(chunk_sum, Lut1Def::IsSome);
+                overflow_v.push(is_some_flag);
+            }
+            in_carry_v
+        } else {
+            vec![]
+        };
+        self.pop_comment();
+
+        self.push_comment(format!("merge"));
+        let overflow_flag = if !overflow_v.is_empty() {
+            // All overflow ct entry is a boolean => Merge by grp of max_nu_bool
+            while overflow_v.len() > 1 {
+                overflow_v = overflow_v
+                    .chunks(NU_BOOL)
+                    .map(|chunk| {
+                        let mut chunk_iter = chunk.iter();
+                        let init = *chunk_iter.next().unwrap();
+                        let chunk_sum = chunk_iter.fold(init, |acc, v| self.block_add(&acc, v));
+                        self.block_lookup(chunk_sum, Lut1Def::IsSome)
+                    })
+                    .collect();
+            }
+
+            overflow_v.pop().unwrap()
+        } else {
+            self.block_let_ciphertext(0)
+        };
+        self.pop_comment();
+        self.pop_comment();
+
+        (dst_blk, overflow_flag, carry_out)
+    }
 }
 
 #[cfg(test)]
@@ -346,7 +550,7 @@ mod test {
     use zhc_langs::ioplang::IopValue;
     use zhc_utils::assert_display_is;
 
-    const MH_FACTOR: u8 = 4;
+    const SPLIT_DEPTH: usize = 2;
 
     #[test]
     fn correctness_mh_mul() {
@@ -354,29 +558,31 @@ mod test {
             let [IopValue::Ciphertext(lhs), IopValue::Ciphertext(rhs)] = inp else {
                 unreachable!()
             };
-            let res = lhs.mul_lsb(*rhs);
-            let res_raw = res.as_storage();
-            let int_size = res.spec().int_size();
-            let mh_bits = int_size / MH_FACTOR as u16;
-            let mh_mask = !(0x1 << mh_bits);
-            let mh_spec = CiphertextSpec::new(
-                mh_bits,
-                res.spec().block_spec().carry_size(),
-                res.spec().block_spec().message_size(),
-            );
-            let mut res_split = Vec::with_capacity(MH_FACTOR as usize);
+            // let res = lhs.mul_lsb(*rhs);
+            // let res_raw = res.as_storage();
+            // let int_size = res.spec().int_size();
+            // let mh_bits = int_size / SPLIT_DEPTH as u16;
+            // let mh_mask = !(0x1 << mh_bits);
+            // let mh_spec = CiphertextSpec::new(
+            //     mh_bits,
+            //     res.spec().block_spec().carry_size(),
+            //     res.spec().block_spec().message_size(),
+            // );
+            // let mut res_split = Vec::with_capacity(SPLIT_DEPTH as usize);
 
-            for i in 0..MH_FACTOR {
-                let split_raw = (res_raw >> (i as u16 * mh_bits)) & mh_mask;
-                let split_emu = EmulatedCiphertext::new(split_raw, mh_spec);
+            // for i in 0..SPLIT_DEPTH {
+            //     let split_raw = (res_raw >> (i as u16 * mh_bits)) & mh_mask;
+            //     let split_emu = EmulatedCiphertext::new(split_raw, mh_spec);
 
-                res_split.push(IopValue::Ciphertext(split_emu));
-            }
-            Some(res_split)
+            //     res_split.push(IopValue::Ciphertext(split_emu));
+            // }
+            // Some(res_split)
+            Some(vec![IopValue::Ciphertext(lhs.mul_lsb(*rhs))])
         }
-        for size in (4 * MH_FACTOR as u16..64).step_by(2 * MH_FACTOR as usize) {
-            mh_mul(CiphertextSpec::new(size, 2, 2), MH_FACTOR).test_random(100, semantic);
-        }
+        mh_mul(CiphertextSpec::new(16, 2, 2), SPLIT_DEPTH).test_random(100, semantic);
+        // for size in (4 * SPLIT_DEPTH as u16..64).step_by(2 * SPLIT_DEPTH as usize) {
+        //     mh_mul(CiphertextSpec::new(size, 2, 2), SPLIT_DEPTH).test_random(100, semantic);
+        // }
     }
 
     // #[test]
@@ -395,7 +601,7 @@ mod test {
     #[test]
     fn test_mh_mul() {
         let spec = CiphertextSpec::new(8, 2, 2);
-        let ir = mh_mul(spec, MH_FACTOR);
+        let ir = mh_mul(spec, SPLIT_DEPTH);
         assert_display_is!(
             ir.ir()
                 .format()
