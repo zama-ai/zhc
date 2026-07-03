@@ -269,13 +269,13 @@ mod test_mh {
 
     #[test]
     fn pipeline_mh_mul() {
-        const INT_SIZE: u16 = 16;
-        const MH_FACTOR: u8 = 4;
-        const DEBUG: bool = true;
+        const INT_SIZE: u16 = 64;
+        const MH_FACTOR: u8 = 2;
+        const DEBUG: bool = false;
         const DEBUG_SIM: bool = false;
 
         let config = MultiHpuConfig {
-            n_hpus: 5,
+            n_hpus: MH_FACTOR,
             ..Default::default()
         };
         let builder = mh_mul(CiphertextSpec::new(INT_SIZE, 2, 2), MH_FACTOR);
