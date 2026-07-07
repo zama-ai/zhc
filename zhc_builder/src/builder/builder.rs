@@ -35,7 +35,7 @@ use zhc_ir::{
     AnnIR, IR, OpId, OpMap, PrintWalker, Signature,
     cse::eliminate_common_subexpressions,
     dce::eliminate_dead_code,
-    partition::PartitionId,
+    partition::{PartitionId, PartitionTable},
     visualization::{Hierarchy, draw_ann_ir_to_html, draw_ir_to_html},
 };
 use zhc_langs::ioplang::{
@@ -225,7 +225,7 @@ impl Builder {
                 sig: Signature::empty(),
             })),
             hierarchy: RefCell::new(Hierarchy::new()),
-            partition: RefCell::new(PartitionId(0)),
+            partition: RefCell::new(PartitionId::new(0, "Inputs")),
         }
     }
 
@@ -384,7 +384,7 @@ impl Builder {
         let ir = &self.ir();
         let ann_ir = AnnIR::new(
             ir,
-            ir.totally_mapped_opmap(|op| partitions[*op]),
+            ir.totally_mapped_opmap(|op| partitions[*op].clone()),
             ir.filled_valmap(()),
         );
         draw_ann_ir_to_html(
@@ -402,7 +402,7 @@ impl Builder {
 
         let ann_ir = AnnIR::new(
             ir,
-            ir.totally_mapped_opmap(|op| partitions[*op]),
+            ir.totally_mapped_opmap(|op| partitions[*op].clone()),
             ir.filled_valmap(()),
         );
         draw_ann_ir_to_html(
@@ -445,42 +445,45 @@ impl Builder {
         }
     }
 
-    pub fn new_partition(&self) -> PartitionId {
+    pub fn new_partition(&self, metadata: impl Into<std::sync::Arc<str>>) -> PartitionId {
         let mut partition = self.partition.borrow_mut();
-        partition.0 += 1;
-        *partition
+        let new_partition_id = partition.id + 1;
+        *partition = PartitionId::new(new_partition_id, metadata);
+        partition.clone()
     }
 
     pub fn merge_partitions(&self, ping: PartitionId, pong: PartitionId) -> PartitionId {
-        if ping != pong {
-            let (new, old) = if ping.0 > pong.0 {
-                (ping, pong)
-            } else {
-                (pong, ping)
-            };
-            self.inner_mut().partitions.iter_mut().for_each(|p| {
-                if *p == old {
-                    *p = new
-                }
-            });
-            new
-        } else {
-            ping
-        }
+        let fused = PartitionId::fuse(&ping, &pong);
+
+        self.inner_mut().partitions.iter_mut().for_each(|p| {
+            if (*p == ping) || (*p == pong) {
+                *p = fused.clone()
+            }
+        });
+        fused
     }
 
     pub fn merge_partition_group(&self, group: impl AsRef<[PartitionId]>) -> PartitionId {
         group
             .as_ref()
             .iter()
-            .map(|x| *x)
+            .map(|x| x.clone())
             .reduce(|acc, p| self.merge_partitions(acc, p))
             .expect("Expect an NonEmpty group")
     }
 
     pub fn partitions(&self) -> OpMap<PartitionId> {
         self.ir()
-            .totally_mapped_opmap(|op| self.inner().partitions[*op])
+            .totally_mapped_opmap(|op| self.inner().partitions[*op].clone())
+    }
+
+    pub fn partitions_table(&self) -> PartitionTable {
+        PartitionTable::from(
+            self.partitions()
+                .into_iter()
+                .map(|(_k, v)| v)
+                .collect::<std::collections::BTreeSet<_>>(),
+        )
     }
 
     /// Pushes a comment onto the annotation stack.

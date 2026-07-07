@@ -196,38 +196,32 @@ impl Builder {
 
                 let ovf = if relin_cut_off > mh_blocks {
                     // Compute in two half
-                    let lsb_partition = self.new_partition();
-                    println!("Pp@[{i}::{j}]_lsb  => {lsb_partition:?}");
+                    self.new_partition(format!("Pp[{i}::{j}]_lsb @{{{}}}", i + j));
 
                     let (lsb_res, _ovf, lsb_cout) = self
                         .comment(format!("SubMul[{i}][{j}]_lsb"))
                         .limb_mul_chain(ai, bj, (0, mh_blocks), vec![]);
                     let lsb_limb = CiphertextLimb::new(i + j, &lsb_res);
-                    println!("=> {} limb", lsb_limb.offset);
                     limb_map.entry(lsb_limb.offset).or_default().push(lsb_limb);
 
-                    let msb_partition = self.new_partition();
-                    println!("Pp@[{i}::{j}]_msb  => {msb_partition:?}");
+                    self.new_partition(format!("Pp[{i}::{j}]_msb @{{{}}}", i + j + 1));
 
                     let (msb_res, ovf, _cout) = self
                         .comment(format!("SubMul[{i}][{j}]_msb"))
                         .limb_mul_chain(ai, bj, (mh_blocks, relin_cut_off), lsb_cout);
                     if !msb_res.is_empty() {
                         let msb_limb = CiphertextLimb::new(i + j + 1, &msb_res);
-                        println!("=> {} limb", msb_limb.offset);
                         limb_map.entry(msb_limb.offset).or_default().push(msb_limb);
                     }
                     ovf
                 } else {
-                    let cur_partition = self.new_partition();
-                    println!("Pp@[{i}::{j}]  => {cur_partition:?}");
+                    self.new_partition(format!("Pp[{i}::{j}] @{{{}}}", i + j));
 
                     let (cur_res, ovf, _cout) = self
                         .comment(format!("SubMul[{i}][{j}]"))
                         .limb_mul_chain(ai, bj, (0, relin_cut_off), vec![]);
                     if !cur_res.is_empty() {
                         let cur_limb = CiphertextLimb::new(i + j, &cur_res);
-                        println!("=> {} limb", cur_limb.offset);
                         limb_map.entry(cur_limb.offset).or_default().push(cur_limb);
                     }
                     ovf
@@ -264,8 +258,7 @@ impl Builder {
                     loop {
                         match (current.next(), current.next()) {
                             (Some(a), Some(b)) => {
-                                let cur_partition = self.new_partition();
-                                println!("LimbRed@[{k}]_{tree_iter} => {cur_partition:?}");
+                                self.new_partition(format!("LimbRed[{tree_iter}] @{{{k}}}"));
                                 let (sum, cout) =
                                     self.comment(format!("iter {tree_iter}")).iop_add_raw(
                                         limbs_size,
@@ -287,10 +280,7 @@ impl Builder {
                     }
                     stage_limb = next;
                 }
-            } else {
-                println!("LimbRed@[{k}] => skiped");
             }
-
             dst_limb[k] = stage_limb
                 .pop()
                 .expect("A stage must contain at least 1 limb")
@@ -307,12 +297,10 @@ impl Builder {
             .collect::<Vec<_>>();
         let post_carry = carry_buffer.into_values().flatten().collect::<Vec<_>>();
 
-        let cur_partition = self.new_partition();
-        println!("OvfRed => {cur_partition:?}");
+        self.new_partition("OverflowReduction");
         let ovf_flag = self.merge_overflow_flag(out_of_range_limb, post_carry);
 
-        let cur_partition = self.new_partition();
-        println!("Output => {cur_partition:?}");
+        self.new_partition("Outputs");
         (ovf_flag, dst_limb)
     }
 

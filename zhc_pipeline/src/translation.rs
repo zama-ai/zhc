@@ -623,7 +623,7 @@ pub fn lower_iop_to_multi_hpu<'a>(
     let partition_to_hid: SmallMap<PartitionId, HpuId> = partitions
         .iter()
         .map(|a| a.1.clone())
-        .dedup_by_key(|a| *a)
+        .dedup_by_key(|a| a.clone())
         .enumerate()
         .map(|(i, p)| (p, HpuId(i.sas())))
         .collect();

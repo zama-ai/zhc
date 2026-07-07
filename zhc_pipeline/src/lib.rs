@@ -134,6 +134,7 @@ mod test_mh {
         hpu::{DOp, DOpId, MultiHpuConfig},
         multi_hpu::{Events, MultiHpu},
     };
+    use zhc_utils::Dumpable;
 
     #[test]
     fn pipeline_mh_dbg() {
@@ -162,8 +163,7 @@ mod test_mh {
             let src_d_blocks = builder.ciphertext_split(&src_d);
 
             // Partition A
-            let cur_partition = builder.new_partition();
-            println!("Partition A: (a+b) => {cur_partition:?}");
+            builder.new_partition("A: (a+b)");
             let (apb, _) = builder.comment(format!("apb")).iop_add_raw(
                 spec.int_size(),
                 src_a_blocks,
@@ -172,8 +172,7 @@ mod test_mh {
             );
 
             // Partition B
-            let cur_partition = builder.new_partition();
-            println!("Partition B: (c+d) => {cur_partition:?}");
+            builder.new_partition("B: (c+d)");
             let (cpd, _) = builder.comment(format!("cpd")).iop_add_raw(
                 spec.int_size(),
                 src_c_blocks,
@@ -182,8 +181,7 @@ mod test_mh {
             );
 
             // Partition C
-            let cur_partition = builder.new_partition();
-            println!("Partition C: A + B => {cur_partition:?}");
+            builder.new_partition("C: A+B");
             let (ap_b, _) =
                 builder
                     .comment(format!("ApB"))
@@ -191,15 +189,13 @@ mod test_mh {
 
             // Partition D
             // Output on hpu A
-            let cur_partition = builder.new_partition();
-            println!("Partition D: Output hpu_A => {cur_partition:?}");
+            builder.new_partition("D: Out_A");
             builder.ciphertext_output(builder.ciphertext_join(ap_b, Some(spec.int_size())));
 
             // // Partition E
             // // NB: Tricky part reintroduce ciphertext_join
             // // WARN: Not supported yet, must rely on _raw version of iop
-            // let cur_partition = builder.new_partition();
-            // println!("Partition E: A - B => {cur_partition:?}");
+            // builder.new_partition("E: A - B");
             // let AmB = builder.comment(format!("A&B")).iop_sub(
             //     &builder.ciphertext_join(apb, Some(spec.int_size())),
             //     &builder.ciphertext_join(cpd, Some(spec.int_size())),
@@ -207,8 +203,7 @@ mod test_mh {
 
             // // Partition F
             // // Output on hpu B
-            // let cur_partition = builder.new_partition();
-            // println!("Partition E: Output hpu_B => {cur_partition:?}");
+            // builder.new_partition("E: Out_B");
             // builder.ciphertext_output(AmB);
 
             builder
@@ -223,12 +218,14 @@ mod test_mh {
         builder.merge_partition_group(
             &[0, 1, 3, 4]
                 .iter()
-                .map(|x| PartitionId(*x))
+                .map(|x| PartitionId::new(*x, ""))
                 .collect::<Vec<_>>(),
         );
         builder.merge_partition_group(
             // &[2, 5, 6]
-            &[2].iter().map(|x| PartitionId(*x)).collect::<Vec<_>>(),
+            &[2].iter()
+                .map(|x| PartitionId::new(*x, ""))
+                .collect::<Vec<_>>(),
         );
         builder.draw_partitions("mh_dbg_ir_grp_part.html");
 
@@ -269,39 +266,86 @@ mod test_mh {
 
     #[test]
     fn pipeline_mh_mul() {
-        const INT_SIZE: u16 = 32;
+        const INT_SIZE: u16 = 64;
         const MH_FACTOR: u8 = 4;
-        const SB_DEPTH: usize = 2;
         const DEBUG: bool = false;
         const DEBUG_SIM: bool = false;
+
+        let ct_spec = CiphertextSpec::new(INT_SIZE, 2, 2);
+        let schoolbook_depth = std::cmp::max(2, MH_FACTOR / 2) as usize;
 
         let config = MultiHpuConfig {
             n_hpus: MH_FACTOR,
             ..Default::default()
         };
-        let builder = mh_mul(CiphertextSpec::new(INT_SIZE, 2, 2), SB_DEPTH);
+        let builder = mh_mul(ct_spec, schoolbook_depth);
 
+        println!("Dump RAW partition table");
+        builder.partitions_table().dump_and_wait();
         if DEBUG {
             builder.draw("mh_mul_ir.html");
             builder.draw_partitions_optim("mh_mul_ir_raw_part.html");
         }
         let ir = builder.optimize_ir().clone();
 
-        // Hpu 0
-        // NB: dummy part is added to node 0
-        // All their nodes could be "duplicated" but still required them to be mapped to prevent
-        // full graph deletion
-        builder.merge_partition_group(
-            &[4, 7, 0, 9]
-                .iter()
-                .map(|x| PartitionId(*x))
-                .collect::<Vec<_>>(),
-        );
-        builder.merge_partition_group(&[2].iter().map(|x| PartitionId(*x)).collect::<Vec<_>>());
+        // Partition gathering is currently a hand-made process
+        match MH_FACTOR {
+            2 => {
+                // Hpu 0
+                // NB: dummy part is added to node 0
+                builder.merge_partition_group(
+                    &[1, 2, 7, 0, 9]
+                        .iter()
+                        .map(|x| PartitionId::new(*x, ""))
+                        .collect::<Vec<_>>(),
+                );
+                builder.merge_partition_group(
+                    &[3, 4, 6, 7]
+                        .iter()
+                        .map(|x| PartitionId::new(*x, ""))
+                        .collect::<Vec<_>>(),
+                );
+            }
+            4 => {
+                // Hpu 0
+                // NB: dummy part is added to node 0
+                builder.merge_partition_group(
+                    &[4, 7, 0, 9]
+                        .iter()
+                        .map(|x| PartitionId::new(*x, ""))
+                        .collect::<Vec<_>>(),
+                );
+                builder.merge_partition_group(
+                    &[2].iter()
+                        .map(|x| PartitionId::new(*x, ""))
+                        .collect::<Vec<_>>(),
+                );
 
-        builder.merge_partition_group(&[3, 6].iter().map(|x| PartitionId(*x)).collect::<Vec<_>>());
+                builder.merge_partition_group(
+                    &[3, 6]
+                        .iter()
+                        .map(|x| PartitionId::new(*x, ""))
+                        .collect::<Vec<_>>(),
+                );
 
-        builder.merge_partition_group(&[1].iter().map(|x| PartitionId(*x)).collect::<Vec<_>>());
+                builder.merge_partition_group(
+                    &[1].iter()
+                        .map(|x| PartitionId::new(*x, ""))
+                        .collect::<Vec<_>>(),
+                );
+            }
+            8 => {
+                todo!()
+            }
+            _ => {
+                panic!(
+                    "MH_FACTOR {MH_FACTOR} is out-of-range. Frogs only contains up to 8
+        nodes"
+                );
+            }
+        }
+        println!("Dump MERGED partition table");
+        builder.partitions_table().dump_and_wait();
 
         if DEBUG {
             builder.draw_partitions_optim("mh_mul_ir_grp_part.html");
@@ -351,7 +395,8 @@ mod test_mh {
             let event = zhc_sim::multi_hpu::Events::PushDOps(streams);
             simulator.dispatch(event);
             simulator.play_until_event(Events::ProcessOver);
-            simulator.dump_trace("mh_mul_trace.json");
+            simulator.now_us().dump_and_wait();
+            // simulator.dump_trace("mh_mul_trace.json");
         }
     }
 }
