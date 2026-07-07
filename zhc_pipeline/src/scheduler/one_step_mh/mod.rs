@@ -33,7 +33,7 @@ pub fn schedule<'a>(
         .walk_ops_linear()
         .filter(|a| a.get_instruction().is_transfer())
         .enumerate()
-        .map(|(i, op)| (op.get_id(), TransferId(i.sas())))
+        .map(|(i, op)| (op.get_id(), TransferId((i+1).sas())))
         .collect();
     sim.into_simulatable()
         .hpus
