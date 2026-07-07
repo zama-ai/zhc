@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use serde::Serialize;
 use zhc_ir::visualization::VisualAnnotation;
-use zhc_utils::small::SmallSet;
+use zhc_utils::{Dumpable, small::SmallSet};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Copy, Hash)]
 pub struct HpuId(pub u8);
@@ -13,12 +13,24 @@ impl Display for HpuId {
     }
 }
 
+impl Dumpable for HpuId {
+    fn dump_to_string(&self) -> String {
+        format!("{:?}", self)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, PartialEq, Eq, PartialOrd, Ord, Copy, Hash)]
 pub struct TransferId(pub u8);
 
 impl Display for TransferId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "#!{}", self.0)
+    }
+}
+
+impl Dumpable for TransferId {
+    fn dump_to_string(&self) -> String {
+        format!("{:?}", self)
     }
 }
 
@@ -40,3 +52,9 @@ impl HpuLocality {
 }
 
 impl VisualAnnotation for HpuLocality {}
+
+impl Dumpable for HpuLocality {
+    fn dump_to_string(&self) -> String {
+        format!("{:?}", self)
+    }
+}

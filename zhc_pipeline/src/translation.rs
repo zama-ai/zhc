@@ -21,7 +21,12 @@ use zhc_langs::{
     },
     ioplang::{IopInstructionSet, IopLang, Lut1Def, Lut2Def},
 };
-use zhc_utils::{FastMap, SafeAs, iter::{Deduped, DedupedByKey}, small::SmallMap, svec};
+use zhc_utils::{
+    FastMap, SafeAs,
+    iter::{Deduped, DedupedByKey},
+    small::SmallMap,
+    svec,
+};
 
 pub(crate) static GIDS1: LazyLock<FastMap<Lut1, LutId>> = LazyLock::new(|| {
     HashMap::from([
@@ -625,7 +630,14 @@ pub fn lower_iop_to_multi_hpu<'a>(
     let hid_map: OpMap<HpuId> = partitions
         .clone()
         .map(|a| partition_to_hid.get(&a).unwrap().clone());
-    let hid_map = op_provenance_map.project_opmap(&hid_map);
+    let mut hid_map = op_provenance_map.project_opmap(&hid_map);
+    ir.walk_ops_linear()
+        .filter(|a| matches!(a.get_instruction(), HpuInstructionSet::DstSt { .. }))
+        .for_each(|op| {
+            *hid_map.get_mut(op).unwrap() = *hid_map
+                .get(op.get_predecessors_iter().next().unwrap())
+                .unwrap();
+        });
     insert_transfers(&mut ir, &hid_map);
     let localities = ir.totally_mapped_opmap(|opref| {
         use HpuInstructionSet::*;
