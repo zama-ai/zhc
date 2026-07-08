@@ -192,7 +192,10 @@ impl Builder {
             {
                 // Compute cut_range point based on input and current limb offset
                 let blocks_ofst = (i + j) * mh_blocks;
-                let relin_cut_off = cut_off_block.saturating_sub(blocks_ofst);
+                let relin_cut_off = std::cmp::min(
+                    2 * mh_blocks, // mul generate at most 2x input_width,
+                    cut_off_block.saturating_sub(blocks_ofst),
+                );
 
                 let ovf = if relin_cut_off > mh_blocks {
                     // Compute in two half
@@ -276,8 +279,8 @@ impl Builder {
                             }
                             _ => break,
                         }
-                        tree_iter += 1;
                     }
+                    tree_iter += 1;
                     stage_limb = next;
                 }
             }
@@ -538,7 +541,7 @@ mod test {
     use zhc_langs::ioplang::IopValue;
     use zhc_utils::assert_display_is;
 
-    const SPLIT_DEPTH: usize = 2;
+    const SPLIT_DEPTH: [usize; 2] = [2, 4];
 
     #[test]
     fn correctness_mh_mul() {
@@ -546,31 +549,13 @@ mod test {
             let [IopValue::Ciphertext(lhs), IopValue::Ciphertext(rhs)] = inp else {
                 unreachable!()
             };
-            // let res = lhs.mul_lsb(*rhs);
-            // let res_raw = res.as_storage();
-            // let int_size = res.spec().int_size();
-            // let mh_bits = int_size / SPLIT_DEPTH as u16;
-            // let mh_mask = !(0x1 << mh_bits);
-            // let mh_spec = CiphertextSpec::new(
-            //     mh_bits,
-            //     res.spec().block_spec().carry_size(),
-            //     res.spec().block_spec().message_size(),
-            // );
-            // let mut res_split = Vec::with_capacity(SPLIT_DEPTH as usize);
-
-            // for i in 0..SPLIT_DEPTH {
-            //     let split_raw = (res_raw >> (i as u16 * mh_bits)) & mh_mask;
-            //     let split_emu = EmulatedCiphertext::new(split_raw, mh_spec);
-
-            //     res_split.push(IopValue::Ciphertext(split_emu));
-            // }
-            // Some(res_split)
             Some(vec![IopValue::Ciphertext(lhs.mul_lsb(*rhs))])
         }
-        mh_mul(CiphertextSpec::new(16, 2, 2), SPLIT_DEPTH).test_random(100, semantic);
-        // for size in (4 * SPLIT_DEPTH as u16..64).step_by(2 * SPLIT_DEPTH as usize) {
-        //     mh_mul(CiphertextSpec::new(size, 2, 2), SPLIT_DEPTH).test_random(100, semantic);
-        // }
+        for split_depth in SPLIT_DEPTH.iter() {
+            for size in (4 * *split_depth as u16..64).step_by(2 * *split_depth as usize) {
+                mh_mul(CiphertextSpec::new(size, 2, 2), *split_depth).test_random(100, semantic);
+            }
+        }
     }
 
     // #[test]
@@ -589,7 +574,7 @@ mod test {
     #[test]
     fn test_mh_mul() {
         let spec = CiphertextSpec::new(8, 2, 2);
-        let ir = mh_mul(spec, SPLIT_DEPTH);
+        let ir = mh_mul(spec, 2);
         assert_display_is!(
             ir.ir()
                 .format()
