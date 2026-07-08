@@ -211,31 +211,21 @@ mod test_mh {
 
         let builder = mh_dbg(CiphertextSpec::new(INT_SIZE, 2, 2));
 
-        builder.draw("mh_dbg_ir.html");
-        builder.draw_partitions("mh_dbg_ir_raw_part.html");
+        // Draw unoptimized ir without partitions
+        builder.draw("mh_dbg_ir_raw.html");
 
-        // Hpu 0
-        builder.merge_partition_group(
-            &[0, 1, 3, 4]
-                .iter()
-                .map(|x| PartitionId::new(*x, ""))
-                .collect::<Vec<_>>(),
-        );
-        builder.merge_partition_group(
-            // &[2, 5, 6]
-            &[2].iter()
-                .map(|x| PartitionId::new(*x, ""))
-                .collect::<Vec<_>>(),
-        );
-        builder.draw_partitions("mh_dbg_ir_grp_part.html");
-
-        let partitions = builder.partitions();
+        // Draw optimized ir with raw partitions (no manual grouping)
         let ir = builder.optimize_ir();
+        builder.draw_partitions(&ir, "mh_dbg_ir_part.html");
 
+        // Group partitions
+        // Hpu 0
+        builder.group_partitions_id(&[0, 1, 3, 4]);
+        builder.group_partitions_id(&[2]);
+        builder.draw_partitions(&ir, "mh_dbg_ir_part_grp.html");
+
+        let partitions = builder.partitions(&ir);
         let (mhir, localities) = lower_iop_to_multi_hpu(&ir, &partitions);
-
-        AnnIR::new(&mhir, localities.clone(), mhir.filled_valmap(()))
-            .draw_ann_to_html(None, "hfdsah.html");
 
         let scheds =
             one_step_mh::schedule(&mhir, localities, &config, SchedPolicy::AsLateAsPossible);
@@ -280,59 +270,38 @@ mod test_mh {
         };
         let builder = mh_mul(ct_spec, schoolbook_depth);
 
-        println!("Dump RAW partition table");
-        builder.partitions_table().dump_and_wait();
         if DEBUG {
-            builder.draw("mh_mul_ir.html");
-            builder.draw_partitions_optim("mh_mul_ir_raw_part.html");
+            let ir = builder.ir();
+            println!("Dump RAW partition table");
+            builder.partitions_table(&ir).dump_and_wait();
+            builder.draw("mh_mul_ir_raw.html");
         }
+
         let ir = builder.optimize_ir().clone();
+
+        println!("Dump partition table");
+        builder.partitions_table(&ir).dump();
+        if DEBUG {
+            builder.draw_partitions(&ir, "mh_mul_ir_part.html");
+        }
 
         // Partition gathering is currently a hand-made process
         match MH_FACTOR {
             2 => {
                 // Hpu 0
                 // NB: dummy part is added to node 0
-                builder.merge_partition_group(
-                    &[1, 2, 7, 0, 9]
-                        .iter()
-                        .map(|x| PartitionId::new(*x, ""))
-                        .collect::<Vec<_>>(),
-                );
-                builder.merge_partition_group(
-                    &[3, 4, 6, 7]
-                        .iter()
-                        .map(|x| PartitionId::new(*x, ""))
-                        .collect::<Vec<_>>(),
-                );
+                builder.group_partitions_id(&[1, 2, 7, 0, 9]);
+                builder.group_partitions_id(&[3, 4, 6, 7]);
             }
             4 => {
                 // Hpu 0
                 // NB: dummy part is added to node 0
-                builder.merge_partition_group(
-                    &[4, 7, 0, 9]
-                        .iter()
-                        .map(|x| PartitionId::new(*x, ""))
-                        .collect::<Vec<_>>(),
-                );
-                builder.merge_partition_group(
-                    &[2].iter()
-                        .map(|x| PartitionId::new(*x, ""))
-                        .collect::<Vec<_>>(),
-                );
+                builder.group_partitions_id(&[4, 7, 0, 9]);
+                builder.group_partitions_id(&[2]);
 
-                builder.merge_partition_group(
-                    &[3, 6]
-                        .iter()
-                        .map(|x| PartitionId::new(*x, ""))
-                        .collect::<Vec<_>>(),
-                );
+                builder.group_partitions_id(&[3, 6]);
 
-                builder.merge_partition_group(
-                    &[1].iter()
-                        .map(|x| PartitionId::new(*x, ""))
-                        .collect::<Vec<_>>(),
-                );
+                builder.group_partitions_id(&[1]);
             }
             8 => {
                 todo!()
@@ -344,21 +313,15 @@ mod test_mh {
                 );
             }
         }
-        println!("Dump MERGED partition table");
-        builder.partitions_table().dump_and_wait();
+        println!("Dump group partition table");
+        builder.partitions_table(&ir).dump_and_wait();
 
         if DEBUG {
-            builder.draw_partitions_optim("mh_mul_ir_grp_part.html");
+            builder.draw_partitions(&ir, "mh_mul_ir_part_grp.html");
         }
 
-        let partitions = builder.partitions();
-
+        let partitions = builder.partitions(&ir);
         let (mhir, localities) = lower_iop_to_multi_hpu(&ir, &partitions);
-
-        if DEBUG {
-            AnnIR::new(&mhir, localities.clone(), mhir.filled_valmap(()))
-                .draw_ann_to_html(None, "mh_mul_ir_flat.html");
-        }
 
         let scheds =
             one_step_mh::schedule(&mhir, localities, &config, SchedPolicy::AsLateAsPossible);

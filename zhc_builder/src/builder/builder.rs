@@ -23,6 +23,7 @@ use crate::{
 };
 use std::{
     cell::{Ref, RefCell, RefMut},
+    collections::HashSet,
     fmt::Debug,
     iter::repeat_n,
     path::Path,
@@ -379,32 +380,21 @@ impl Builder {
         );
     }
 
-    pub fn draw_partitions(&self, path: impl AsRef<Path>) {
-        let partitions = &self.inner().partitions;
-        let ir = &self.ir();
-        let ann_ir = AnnIR::new(
-            ir,
-            ir.totally_mapped_opmap(|op| partitions[*op].clone()),
-            ir.filled_valmap(()),
-        );
-        draw_ann_ir_to_html(
-            &ann_ir,
-            Some(
-                self.ir()
-                    .partially_mapped_opmap(|op| self.inner().hierarchies.get(*op).cloned()),
-            ),
-            path,
-        );
-    }
-    pub fn draw_partitions_optim(&self, path: impl AsRef<Path>) {
-        let partitions = &self.inner().partitions;
-        let ir = &self.optimize_ir();
-
-        let ann_ir = AnnIR::new(
-            ir,
-            ir.totally_mapped_opmap(|op| partitions[*op].clone()),
-            ir.filled_valmap(()),
-        );
+    /// Renders the given IR with partition annotations
+    ///
+    /// Cf. [draw] for details information about rendering
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// # let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// # let ct = builder.ciphertext_input(4);
+    /// let ir = self.ir();
+    /// builder.draw(&ir, "debug.html");
+    /// ```
+    pub fn draw_partitions(&self, ir: &IR<IopLang>, path: impl AsRef<Path>) {
+        let ann_ir = AnnIR::new(ir, self.partitions(ir), ir.filled_valmap(()));
         draw_ann_ir_to_html(
             &ann_ir,
             Some(
@@ -445,6 +435,7 @@ impl Builder {
         }
     }
 
+    /// Create a new partition with associated metadata
     pub fn new_partition(&self, metadata: impl Into<std::sync::Arc<str>>) -> PartitionId {
         let mut partition = self.partition.borrow_mut();
         let new_partition_id = partition.id + 1;
@@ -452,34 +443,54 @@ impl Builder {
         partition.clone()
     }
 
-    pub fn merge_partitions(&self, ping: PartitionId, pong: PartitionId) -> PartitionId {
-        let fused = PartitionId::fuse(&ping, &pong);
+    /// Retrieved PartitionId associated with RawId if any
+    pub fn get_partition_by_id(&self, id: zhc_ir::OpIdRaw) -> Option<PartitionId> {
+        let mut part_set = self
+            .partitions(&self.ir())
+            .into_iter()
+            .map(|p| p.1)
+            .filter(|p| p.id == id)
+            .collect::<HashSet<_>>();
+        assert!(
+            part_set.len() <= 1,
+            "PartitionId shared same Id with differentes metadata"
+        );
+
+        part_set.drain().next()
+    }
+
+    /// Merged two PartitionId
+    /// Returned PartitionId kept lowest id of tuple and a fused metadata field
+    pub fn merge_partitions(&self, part_a: PartitionId, part_b: PartitionId) -> PartitionId {
+        let fused = PartitionId::fuse(&part_a, &part_b);
 
         self.inner_mut().partitions.iter_mut().for_each(|p| {
-            if (*p == ping) || (*p == pong) {
+            if (*p == part_a) || (*p == part_b) {
                 *p = fused.clone()
             }
         });
         fused
     }
 
-    pub fn merge_partition_group(&self, group: impl AsRef<[PartitionId]>) -> PartitionId {
-        group
-            .as_ref()
+    /// Group all partitions based on a list of id.
+    /// Return the created macro partition if any id match real partition
+    pub fn group_partitions_id(&self, ids: impl AsRef<[zhc_ir::OpIdRaw]>) -> Option<PartitionId> {
+        ids.as_ref()
             .iter()
-            .map(|x| x.clone())
+            .filter_map(|id| self.get_partition_by_id(*id))
             .reduce(|acc, p| self.merge_partitions(acc, p))
-            .expect("Expect an NonEmpty group")
     }
 
-    pub fn partitions(&self) -> OpMap<PartitionId> {
-        self.ir()
-            .totally_mapped_opmap(|op| self.inner().partitions[*op].clone())
+    /// Return partition map for a given IR
+    pub fn partitions(&self, ir: &IR<IopLang>) -> OpMap<PartitionId> {
+        ir.totally_mapped_opmap(|op| self.inner().partitions[*op].clone())
     }
 
-    pub fn partitions_table(&self) -> PartitionTable {
+    /// Return partition table for a given IR
+    /// Usefull for user inspection of the graph available partitions
+    pub fn partitions_table(&self, ir: &IR<IopLang>) -> PartitionTable {
         PartitionTable::from(
-            self.partitions()
+            self.partitions(ir)
                 .into_iter()
                 .map(|(_k, v)| v)
                 .collect::<std::collections::BTreeSet<_>>(),
