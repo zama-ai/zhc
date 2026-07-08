@@ -127,7 +127,6 @@ mod test_mh {
         translation::lower_iop_to_multi_hpu,
     };
     use zhc_builder::{Builder, CiphertextSpec, mh_mul};
-    use zhc_ir::{AnnIR, partition::PartitionId};
     use zhc_langs::doplang::emit_assembly;
     use zhc_sim::{
         Simulator,
@@ -257,9 +256,9 @@ mod test_mh {
     #[test]
     fn pipeline_mh_mul() {
         const INT_SIZE: u16 = 64;
-        const MH_FACTOR: u8 = 4;
+        const MH_FACTOR: u8 = 8;
         const DEBUG: bool = false;
-        const DEBUG_SIM: bool = false;
+        const DEBUG_SIM: bool = true;
 
         let ct_spec = CiphertextSpec::new(INT_SIZE, 2, 2);
         let schoolbook_depth = std::cmp::max(2, MH_FACTOR / 2) as usize;
@@ -286,16 +285,13 @@ mod test_mh {
         }
 
         // Partition gathering is currently a hand-made process
+        // NB: dummy part (i.e. inputs/outputs) are added to first grp
         match MH_FACTOR {
             2 => {
-                // Hpu 0
-                // NB: dummy part is added to node 0
                 builder.group_partitions_id(&[1, 2, 7, 0, 9]);
                 builder.group_partitions_id(&[3, 4, 6, 7]);
             }
             4 => {
-                // Hpu 0
-                // NB: dummy part is added to node 0
                 builder.group_partitions_id(&[4, 7, 0, 9]);
                 builder.group_partitions_id(&[2]);
 
@@ -304,7 +300,14 @@ mod test_mh {
                 builder.group_partitions_id(&[1]);
             }
             8 => {
-                todo!()
+                builder.group_partitions_id(&[1, 8, 24, 0, 36]);
+                builder.group_partitions_id(&[2, 3, 23]);
+                builder.group_partitions_id(&[4, 5, 25, 27, 28]);
+                builder.group_partitions_id(&[9, 10, 26]);
+                builder.group_partitions_id(&[14, 19, 33, 34]);
+                builder.group_partitions_id(&[15, 16, 31]);
+                builder.group_partitions_id(&[11, 12, 30, 32]);
+                builder.group_partitions_id(&[6, 7, 29]);
             }
             _ => {
                 panic!(
@@ -314,7 +317,7 @@ mod test_mh {
             }
         }
         println!("Dump group partition table");
-        builder.partitions_table(&ir).dump_and_wait();
+        builder.partitions_table(&ir).dump();
 
         if DEBUG {
             builder.draw_partitions(&ir, "mh_mul_ir_part_grp.html");
