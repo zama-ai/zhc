@@ -23,16 +23,16 @@ pub fn adds(spec: CiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
     let src_c = builder.ciphertext_input(spec.int_size());
     let src_p = builder.plaintext_input(spec.int_size());
-    // let par_w = match spec.int_size() {
-    //     8..16 => 1,
-    //     16..24 => 7,
-    //     24..256 => 12,
-    //     _ => 1,
-    // };
+    let par_w = match spec.int_size() {
+        8..16 => 1,
+        16..24 => 7,
+        24..256 => 12,
+        _ => 1,
+    };
     let res = match spec.int_size() {
-        0..8 => builder.iop_adds_ripple_carry(&src_c, &src_p, None),
-        8..17 => builder.iop_adds_hillis_steele(&src_c, &src_p, None),
-        17..256 => builder.iop_adds_hillis_steele(&src_c, &src_p, None),
+        0..8 => builder.iop_adds_ripple_carry(&src_c, &src_p, None).0,
+        8..17 => builder.iop_adds_hillis_steele(&src_c, &src_p, None).0,
+        17..256 => builder.iop_adds_kogge_stone(&src_c, &src_p, None, par_w).0,
         _ => todo!(),
     };
     builder.ciphertext_output(res);
@@ -59,7 +59,7 @@ pub fn adds_hillis_steele(spec: CiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
     let src_c = builder.ciphertext_input(spec.int_size());
     let src_p = builder.plaintext_input(spec.int_size());
-    let res = builder.iop_adds_hillis_steele(&src_c, &src_p, None);
+    let res = builder.iop_adds_hillis_steele(&src_c, &src_p, None).0;
     builder.ciphertext_output(res);
     builder
 }
@@ -68,7 +68,7 @@ pub fn adds_ripple_carry(spec: CiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
     let src_c = builder.ciphertext_input(spec.int_size());
     let src_p = builder.plaintext_input(spec.int_size());
-    let res  = builder.iop_adds_ripple_carry(&src_c, &src_p, None);
+    let res  = builder.iop_adds_ripple_carry(&src_c, &src_p, None).0;
     builder.ciphertext_output(res);
     builder
 }
@@ -77,11 +77,49 @@ pub fn adds_kogge_stone(spec: CiphertextSpec, par_w: usize) -> Builder {
     let builder = Builder::new(spec.block_spec());
     let src_c = builder.ciphertext_input(spec.int_size());
     let src_p = builder.plaintext_input(spec.int_size());
-    let (res, _)  = builder.iop_adds_kogge_stone(&src_c, &src_p, None, par_w);
+    let res  = builder.iop_adds_kogge_stone(&src_c, &src_p, None, par_w).0;
     builder.ciphertext_output(res);
     builder
 }
 impl Builder {
+
+    /// Adds an encrypted integer with an immediate, automatically selecting the best algorithm.
+    ///
+    /// Chooses between ripple-carry, Hillis-Steele, and Kogge-Stone based on the
+    /// operand bit-width: ripple-carry for small integers (< 8 bits), Hillis-Steele
+    /// for medium (8–16 bits), and Kogge-Stone for larger widths. The result is the
+    /// wrapping sum of the two operands.
+    ///
+    /// Both operands must have the same [`CiphertextSpec`]. For explicit algorithm
+    /// selection, use [`iop_add_ripple_carry`](Self::iop_add_ripple_carry),
+    /// [`iop_add_hillis_steele`](Self::iop_add_hillis_steele), or
+    /// [`iop_add_kogge_stone`](Self::iop_add_kogge_stone).
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::{CiphertextSpec, Builder};
+    /// # let spec = CiphertextSpec::new(32, 2, 2);
+    /// # let builder = Builder::new(spec.block_spec());
+    /// # let a = builder.ciphertext_input(spec.int_size());
+    /// # let b = builder.plaintext_input(spec.int_size());
+    /// let sum = builder.iop_add(&a, &b);
+    /// ```
+    pub fn iop_adds(&self, lhs: &Ciphertext, rhs: &Plaintext) -> Ciphertext {
+        let par_w = match lhs.spec().int_size() {
+            8..16 => 1,
+            16..24 => 7,
+            24..256 => 12,
+            _ => 1,
+        };
+        match lhs.spec().int_size() {
+            0..8 => self.iop_adds_ripple_carry(&lhs, &rhs, None).0,
+            8..17 => self.iop_adds_hillis_steele(&lhs, &rhs, None).0,
+            17..256 => self.iop_adds_kogge_stone(&lhs, &rhs, None, par_w).0,
+            _ => todo!(),
+        }
+    }
+
     /// Adds two encrypted integers using sequential ripple-carry propagation.
     ///
     /// Processes blocks from LSB to MSB, computing each block's sum and carry in turn.
@@ -104,7 +142,7 @@ impl Builder {
         lhs: &Ciphertext,
         rhs: &Plaintext,
         cin: Option<&CiphertextBlock>,
-    ) -> Ciphertext {
+    ) -> (Ciphertext, Ciphertext) {
         let lhs_blocks = self.ciphertext_split(lhs);
         let rhs_blocks = self.plaintext_split(rhs);
 
@@ -112,7 +150,7 @@ impl Builder {
         let mut output_blocks = Vec::new();
         for i in 0..lhs_blocks.iter().len() {
             self.push_comment(format!("{i}-th"));
-            let raw_sum = self.block_adds(lhs_blocks[i], rhs_blocks[i]);
+            let raw_sum = self.block_add_plaintext(lhs_blocks[i], rhs_blocks[i]);
             let sum = self.block_add(raw_sum, carry);
             let message = self.block_lookup(sum, Lut1Def::MsgOnly);
             carry = self.block_lookup(sum, Lut1Def::CarryInMsg);
@@ -120,7 +158,12 @@ impl Builder {
             self.pop_comment();
         }
 
-        self.comment("Join").ciphertext_join(output_blocks, None)
+        // carry is now the carry-out of the last block (clean 0/1 via CarryInMsg)
+        (
+            self.comment("Join Output")
+                .ciphertext_join(output_blocks, None),
+            self.comment("Join Carry").ciphertext_join([carry], None),
+        )
     }
 
     /// Adds two encrypted integers using Hillis-Steele carry propagation.
@@ -145,13 +188,19 @@ impl Builder {
         lhs: &Ciphertext,
         rhs: &Plaintext,
         cin: Option<&CiphertextBlock>,
-    ) -> Ciphertext {
+    ) -> (Ciphertext, Ciphertext) {
         let lhs_blocks = self.ciphertext_split(lhs);
         let rhs_blocks = self.plaintext_split(rhs);
 
-        let output_blocks = self.iop_adds_hillis_steele_raw(lhs_blocks, rhs_blocks, cin, true);
+        let (output_blocks, carry_out) =
+          self.iop_adds_hillis_steele_raw(lhs_blocks, rhs_blocks, cin, true);
 
-        self.comment("Join").ciphertext_join(output_blocks, None)
+        (
+          self.comment("Join Output")
+              .ciphertext_join(output_blocks, None),
+          self.comment("Join Carry")
+              .ciphertext_join([carry_out], None),
+        )
     }
 
     pub(super) fn iop_adds_hillis_steele_raw(
@@ -160,7 +209,7 @@ impl Builder {
         rhs_blocks: impl AsRef<[PlaintextBlock]>,
         cin: Option<&CiphertextBlock>,
         clean: bool,
-    ) -> Vec<CiphertextBlock> {
+    ) -> (Vec<CiphertextBlock>, CiphertextBlock) {
         // Implements the addition with carry-propagation using the hillis-steele resolution and
         // group of size 4. The encoding of propagation status is the same as the one used
         // in TFHE-RS. The carry is resolved as soon as possible.
@@ -177,7 +226,7 @@ impl Builder {
         // the computation in a larger, more favorable case, and let DCE cut the un-necessary
         // computation. This improves code readability.
 
-        let mut sums = self.comment("Raw sum").vector_adds(
+        let mut sums = self.comment("Raw sum").vector_add_plaintext(
             &lhs_blocks,
             &rhs_blocks,
             ExtensionBehavior::Passthrough,
@@ -360,6 +409,8 @@ impl Builder {
         );
         self.pop_comment();
 
+        let carry_out = self.block_lookup(&result[output_size - 1], Lut1Def::CarryIsSome);
+
         if clean {
             self.push_comment("Cleanup");
             result = result
@@ -369,7 +420,7 @@ impl Builder {
             self.pop_comment();
         }
 
-        result.as_slice()[..output_size].into()
+        (result.as_slice()[..output_size].into(), carry_out)
     }
 }
 
@@ -426,7 +477,7 @@ impl Builder {
         par_w: usize,
         clean: bool,
     ) -> (Vec<CiphertextBlock>, CiphertextBlock) {
-        let sums = self.comment("Raw sum").vector_adds(
+        let sums = self.comment("Raw sum").vector_add_plaintext(
             &lhs_blocks,
             &rhs_blocks,
             ExtensionBehavior::Passthrough,
@@ -542,21 +593,21 @@ mod test {
 
     #[test]
     fn adds_ripple_comment() {
-      let size = 16;
+      let size = 4;
       let bd = adds_ripple_carry(CiphertextSpec::new(size, 2, 2));
       println!("{}", bd.dump_to_string());
     }
 
     #[test]
     fn adds_hillis_steele_comment() {
-      let size = 16;
+      let size = 8;
       let bd = adds_hillis_steele(CiphertextSpec::new(size, 2, 2));
       println!("{}", bd.dump_to_string());
     }
 
     #[test]
     fn adds_kogge_comment() {
-      let size = 16;
+      let size = 17;
       let bd = adds_kogge_stone(CiphertextSpec::new(size, 2, 2), 12);
       println!("{}", bd.dump_to_string());
     }
