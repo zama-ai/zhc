@@ -255,114 +255,116 @@ mod test_mh {
 
     #[test]
     fn pipeline_mh_mul() {
-        const INT_SIZE: u16 = 64;
+        const INT_SIZE: [u16; 5] = [8, 16, 32, 64, 128];
         const MH_FACTOR: u8 = 8;
         const DEBUG: bool = false;
-        const DEBUG_SIM: bool = true;
+        const DEBUG_SIM: bool = false;
 
-        let ct_spec = CiphertextSpec::new(INT_SIZE, 2, 2);
-        let schoolbook_depth = std::cmp::max(2, MH_FACTOR / 2) as usize;
+        for int_size in INT_SIZE.iter() {
+            let ct_spec = CiphertextSpec::new(*int_size, 2, 2);
+            let schoolbook_depth = std::cmp::max(2, MH_FACTOR / 2) as usize;
 
-        let config = MultiHpuConfig {
-            n_hpus: MH_FACTOR,
-            ..Default::default()
-        };
-        let builder = mh_mul(ct_spec, schoolbook_depth);
+            let config = MultiHpuConfig {
+                n_hpus: MH_FACTOR,
+                ..Default::default()
+            };
+            let builder = mh_mul(ct_spec, schoolbook_depth);
 
-        if DEBUG {
-            let ir = builder.ir();
-            println!("Dump RAW partition table");
-            builder.partitions_table(&ir).dump_and_wait();
-            builder.draw("mh_mul_ir_raw.html");
-        }
-
-        let ir = builder.optimize_ir().clone();
-
-        println!("Dump partition table");
-        builder.partitions_table(&ir).dump();
-        if DEBUG {
-            builder.draw_partitions(&ir, "mh_mul_ir_part.html");
-        }
-
-        // Partition gathering is currently a hand-made process
-        // NB: dummy part (i.e. inputs/outputs) are added to first grp
-        match MH_FACTOR {
-            2 => {
-                builder.group_partitions_id(&[1, 2, 7, 0, 9]);
-                builder.group_partitions_id(&[3, 4, 6, 7]);
+            if DEBUG {
+                let ir = builder.ir();
+                println!("Dump RAW partition table");
+                builder.partitions_table(&ir).dump_and_wait();
+                builder.draw("mh_mul_ir_raw.html");
             }
-            4 => {
-                builder.group_partitions_id(&[4, 7, 0, 9]);
-                builder.group_partitions_id(&[2]);
 
-                builder.group_partitions_id(&[3, 6]);
+            let ir = builder.optimize_ir().clone();
 
-                builder.group_partitions_id(&[1]);
+            println!("Dump partition table");
+            builder.partitions_table(&ir).dump();
+            if DEBUG {
+                builder.draw_partitions(&ir, "mh_mul_ir_part.html");
             }
-            8 => {
-                builder.group_partitions_id(&[1, 8, 24, 0, 36]);
-                builder.group_partitions_id(&[2, 3, 23]);
-                builder.group_partitions_id(&[4, 5, 25, 27, 28]);
-                builder.group_partitions_id(&[9, 10, 26]);
-                builder.group_partitions_id(&[14, 19, 33, 34]);
-                builder.group_partitions_id(&[15, 16, 31]);
-                builder.group_partitions_id(&[11, 12, 30, 32]);
-                builder.group_partitions_id(&[6, 7, 29]);
-            }
-            _ => {
-                panic!(
-                    "MH_FACTOR {MH_FACTOR} is out-of-range. Frogs only contains up to 8
+
+            // Partition gathering is currently a hand-made process
+            // NB: dummy part (i.e. inputs/outputs) are added to first grp
+            match MH_FACTOR {
+                2 => {
+                    builder.group_partitions_id(&[1, 2, 0, 9]);
+                    builder.group_partitions_id(&[3, 4, 6, 7]);
+                }
+                4 => {
+                    builder.group_partitions_id(&[4, 6, 7, 0, 9]);
+                    builder.group_partitions_id(&[2]);
+
+                    builder.group_partitions_id(&[3]);
+
+                    builder.group_partitions_id(&[1]);
+                }
+                8 => {
+                    builder.group_partitions_id(&[1, 8, 24, 0, 36]);
+                    builder.group_partitions_id(&[2, 3, 23]);
+                    builder.group_partitions_id(&[4, 5, 25, 27, 28]);
+                    builder.group_partitions_id(&[6, 7, 29]);
+                    builder.group_partitions_id(&[9, 10, 26]);
+                    builder.group_partitions_id(&[11, 12, 30, 32, 34]);
+                    builder.group_partitions_id(&[14, 19]);
+                    builder.group_partitions_id(&[15, 16, 31, 33]);
+                }
+                _ => {
+                    panic!(
+                        "MH_FACTOR {MH_FACTOR} is out-of-range. Frogs only contains up to 8
         nodes"
-                );
+                    );
+                }
             }
-        }
-        println!("Dump group partition table");
-        builder.partitions_table(&ir).dump();
+            println!("Dump group partition table");
+            builder.partitions_table(&ir).dump();
 
-        if DEBUG {
-            builder.draw_partitions(&ir, "mh_mul_ir_part_grp.html");
-        }
+            if DEBUG {
+                builder.draw_partitions(&ir, "mh_mul_ir_part_grp.html");
+            }
 
-        let partitions = builder.partitions(&ir);
-        let (mhir, localities) = lower_iop_to_multi_hpu(&ir, &partitions);
+            let partitions = builder.partitions(&ir);
+            let (mhir, localities) = lower_iop_to_multi_hpu(&ir, &partitions);
 
-        let scheds =
-            one_step_mh::schedule(&mhir, localities, &config, SchedPolicy::AsLateAsPossible);
+            let scheds =
+                one_step_mh::schedule(&mhir, localities, &config, SchedPolicy::AsLateAsPossible);
 
-        let mut streams = Vec::new();
-        for (hid, scheduled) in scheds.into_iter().enumerate() {
-            let allocated = allocate_registers(&scheduled, &config.hpu_config);
-            let dops: Vec<DOp> = allocated
-                .walk_ops_linear()
-                .map(|a| DOp {
-                    raw: a.get_instruction(),
-                    id: DOpId(a.get_id().into()),
-                })
-                .collect();
+            let mut streams = Vec::new();
+            for (hid, scheduled) in scheds.into_iter().enumerate() {
+                let allocated = allocate_registers(&scheduled, &config.hpu_config);
+                let dops: Vec<DOp> = allocated
+                    .walk_ops_linear()
+                    .map(|a| DOp {
+                        raw: a.get_instruction(),
+                        id: DOpId(a.get_id().into()),
+                    })
+                    .collect();
 
-            // TODO clean this part
-            use std::fs::File;
-            use std::io::Write;
-            let filename = format!("mhmul{INT_SIZE}f{MH_FACTOR}_v{hid}.asm");
-            let mut file = File::create(&filename).expect("Failed to create .asm file");
-            file.write_all(emit_assembly(&allocated).as_bytes())
-                .expect("Failed to write to .asm file");
+                // TODO clean this part
+                use std::fs::File;
+                use std::io::Write;
+                let filename = format!("mhmul{int_size}f{MH_FACTOR}_v{hid}.asm");
+                let mut file = File::create(&filename).expect("Failed to create .asm file");
+                file.write_all(emit_assembly(&allocated).as_bytes())
+                    .expect("Failed to write to .asm file");
 
-            streams.push(dops);
-        }
+                streams.push(dops);
+            }
 
-        if DEBUG_SIM {
-            let mut simulator = Simulator::from_simulatable(
-                config.hpu_config.freq,
-                MultiHpu::new(&config),
-                // zhc_sim::TracingLevel::Events,
-                zhc_sim::TracingLevel::Load,
-            );
-            let event = zhc_sim::multi_hpu::Events::PushDOps(streams);
-            simulator.dispatch(event);
-            simulator.play_until_event(Events::ProcessOver);
-            simulator.now_us().dump_and_wait();
-            // simulator.dump_trace("mh_mul_trace.json");
+            if DEBUG_SIM {
+                let mut simulator = Simulator::from_simulatable(
+                    config.hpu_config.freq,
+                    MultiHpu::new(&config),
+                    // zhc_sim::TracingLevel::Events,
+                    zhc_sim::TracingLevel::Load,
+                );
+                let event = zhc_sim::multi_hpu::Events::PushDOps(streams);
+                simulator.dispatch(event);
+                simulator.play_until_event(Events::ProcessOver);
+                simulator.now_us().dump_and_wait();
+                // simulator.dump_trace("mh_mul_trace.json");
+            }
         }
     }
 }
