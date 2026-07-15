@@ -1,3 +1,5 @@
+use crate::scheduler::utils::Affinity;
+
 use super::*;
 use serde::Serialize;
 use std::{collections::VecDeque, fmt::Display};
@@ -243,7 +245,7 @@ impl<'a, 'b> LightHpu<'a, 'b> {
         self.op_states
             .iter()
             .filter(move |(opid, state)| {
-                **state == OpState::Ready && Affinity::extract(&self.ir.get_op(*opid)) == affinity
+                **state == OpState::Ready && Affinity::extract(&self.ir.get_op(*opid).get_instruction()) == affinity
             })
             .map(|(opid, _)| self.ir.get_op(opid).into())
     }
@@ -269,7 +271,7 @@ impl<'a, 'b> LightHpu<'a, 'b> {
                         OpState::Waiting(0) => {
                             unreachable!()
                         }
-                        OpState::Waiting(1) => match Affinity::extract(&user) {
+                        OpState::Waiting(1) => match Affinity::extract(&user.get_instruction()) {
                             Affinity::Pea => {
                                 self.pe_alu_ready.push_front(user.into());
                                 OpState::Ready

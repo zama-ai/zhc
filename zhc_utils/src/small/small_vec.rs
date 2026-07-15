@@ -2,6 +2,7 @@ use std::fmt::{Debug, Display};
 use std::ops::{Deref, DerefMut};
 use std::{hash::Hash, usize};
 
+use crate::Dumpable;
 use crate::iter::CollectInVec;
 use crate::small::stack_vec::{STACK_BYTES, StackVec, StackVecIntoIter};
 
@@ -380,6 +381,19 @@ impl<A, const N: usize> TryInto<[A; N]> for SmallVec<A> {
         }
     }
 }
+
+impl<A: Dumpable> Dumpable for SmallVec<A> {
+    fn dump_to_string(&self) -> String {
+        format!(
+            "[{}]",
+            self.iter()
+                .map(|a| a.dump_to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    }
+}
+
 
 /// Creates a `SmallVec` containing the provided elements.
 ///

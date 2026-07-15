@@ -40,7 +40,7 @@ fn op_active<'a, D: Dialect>(op: &OpRef<'a, D>) -> bool {
 /// and hashing are based on identity (pointer equality).
 #[derive(Clone)]
 pub struct IR<D: Dialect> {
-    pub(super) op_operations: Store<OpId, D::InstructionSet>,
+    pub op_operations: Store<OpId, D::InstructionSet>,
     pub(super) op_signatures: Store<OpId, Signature<D::TypeSystem>>,
     pub(super) op_arguments: Store<OpId, SmallVec<ValId>>,
     pub(super) op_returns: Store<OpId, SmallVec<ValId>>,
@@ -309,6 +309,10 @@ impl<D: Dialect> IR<D> {
     /// Returns the total number of active operations in the IR.
     pub fn n_ops(&self) -> OpIdRaw {
         self.op_count
+    }
+
+    pub fn has_inactive_ops(&self) -> bool {
+        self.op_count != self.op_operations.len()
     }
 
     /// Returns `true` if the specified operation ID exists and is active.

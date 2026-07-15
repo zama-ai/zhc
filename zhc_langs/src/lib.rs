@@ -9,5 +9,6 @@
 //! binding a type system and instruction set together.
 
 pub mod doplang;
+pub mod vmlang;
 pub mod hpulang;
 pub mod ioplang;

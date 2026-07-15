@@ -295,3 +295,17 @@ impl<T: Dumpable> Dumpable for ValMap<T> {
             .join("\n")
     }
 }
+
+impl<T: serde::Serialize> serde::Serialize for ValMap<T> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(Some(self.n_stored as usize))?;
+        for (id, value) in self.iter() {
+            map.serialize_entry(&id, value)?;
+        }
+        map.end()
+    }
+}

@@ -1,5 +1,6 @@
 use std::{fmt::Debug, ops::Deref};
 
+use serde::Serialize;
 use zhc_utils::Dumpable;
 
 use crate::{
@@ -188,5 +189,15 @@ impl<D: Dialect, OpAnn: Annotation, ValAnn: Annotation> Dumpable
 {
     fn dump_to_string(&self) -> String {
         self.format().dump_to_string()
+    }
+}
+
+impl<'ir, 'ann, D: Dialect, OpAnn: Annotation, ValAnn: Annotation>
+    Serialize for AnnOpRef<'ir, 'ann, D, OpAnn, ValAnn>
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer {
+        self.dump_to_string().serialize(serializer)
     }
 }

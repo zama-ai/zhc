@@ -2,12 +2,10 @@ use zhc_ir::IR;
 use zhc_langs::hpulang::HpuLang;
 use zhc_sim::{MHz, Simulator, hpu::HpuConfig};
 
-mod affinity;
 mod analyze;
 mod batcher;
 mod sim;
 
-pub use affinity::*;
 pub use analyze::*;
 pub use batcher::*;
 pub use sim::*;

@@ -1,0 +1,33 @@
+[package]
+name = "zhc_vm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+
+[dependencies]
+zhc.workspace = true
+zhc_crypto.workspace = true
+zhc_ir.workspace = true
+zhc_langs.workspace = true
+zhc_utils.workspace = true
+core_affinity = "0.8"
+libc = "0.2"
+tfhe = { git = "https://github.com/zama-ai/tfhe-rs.git", branch="alex/stuffs", features =["integer"]}
+tracy-client = {version = "0.18.4", optional = true}
+
+[dev-dependencies]
+criterion = "0.8"
+rand.workspace = true
+
+[features]
+profiling = ["dep:tracy-client"]
+
+[[bench]]
+name = "vm"
+harness = false
+
+[[bench]]
+name = "throughput"
+harness = false

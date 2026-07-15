@@ -26,11 +26,11 @@ pub struct EmulatedPlaintextBlock {
 }
 
 impl EmulatedPlaintextBlock {
-    pub(crate) fn raw_message_bits(&self) -> EmulatedPlaintextBlockStorage {
+    pub fn raw_message_bits(&self) -> EmulatedPlaintextBlockStorage {
         self.raw_mask_message()
     }
 
-    pub(crate) fn raw_mask_message(&self) -> EmulatedPlaintextBlockStorage {
+    pub fn raw_mask_message(&self) -> EmulatedPlaintextBlockStorage {
         self.storage & self.spec.message_mask()
     }
 

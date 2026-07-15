@@ -6,7 +6,10 @@
 //! operation scheduling, register allocation, and final code generation.
 
 use crate::scheduler::SchedPolicy;
+use crate::scheduler::vm::VmExecutionPlan;
 use allocator::allocate_registers;
+use zhc_ir::cse::eliminate_common_subexpressions;
+
 use std::f64;
 use std::path::Path;
 use zhc_builder::Builder;
@@ -101,6 +104,12 @@ pub fn regular_pipeline(ir: IR<IopLang>, config: &HpuConfig) -> (IR<HpuLang>, IR
         scheduler::one_step::schedule(&unscheduled, config, SchedPolicy::AsLateAsPossible);
     let allocated = allocate_registers(&scheduled, config);
     (scheduled, allocated)
+}
+
+pub fn vm_pipeline(ir: IR<IopLang>, n_threads: u8) -> VmExecutionPlan {
+    let mut vmir = translation::lower_iop_to_vm(&ir);
+    eliminate_common_subexpressions(&mut vmir);
+    scheduler::vm::schedule(&vmir, n_threads, SchedPolicy::AsSoonAsPossible)
 }
 
 pub fn alternative_pipeline(ir: IR<IopLang>, config: &HpuConfig) -> (IR<HpuLang>, IR<DopLang>) {

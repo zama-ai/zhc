@@ -1,5 +1,7 @@
 use std::collections::BinaryHeap;
 
+use crate::scheduler::utils::Affinity;
+
 use super::*;
 use zhc_ir::{AnnIR, AnnOpRef, IR, OpId, OpIdRaw, scheduler::reschedule};
 use zhc_langs::hpulang::HpuLang;
@@ -52,14 +54,6 @@ fn analyze_prio<'a>(ir: &'a IR<HpuLang>, policy: SchedPolicy) -> PrioIR<'a> {
             }
         }),
     }
-}
-
-#[derive(Debug, PartialEq, Eq)]
-enum Affinity {
-    Pea,
-    Pem,
-    Pep,
-    Ctl,
 }
 
 #[fsm]

@@ -26,9 +26,7 @@
 //! points.dump();                    // prints "[(0, 0), (1, 1)]"
 //! ```
 
-use std::{collections::VecDeque, io::Write, path::Path};
-
-use crate::small::SmallVec;
+use std::{collections::VecDeque, io::Write, path::Path, sync::atomic::{AtomicU8, AtomicU16, AtomicU32, AtomicU64}};
 
 /// A type that can render itself as a human-readable string for debugging.
 ///
@@ -164,6 +162,12 @@ pub trait Dumpable {
     }
 }
 
+impl<E: Dumpable> Dumpable for &E {
+    fn dump_to_string(&self) -> String {
+        (*self).dump_to_string()
+    }
+}
+
 impl<E: Dumpable> Dumpable for [E] {
     fn dump_to_string(&self) -> String {
         let elements: Vec<String> = self.iter().map(|e| e.dump_to_string()).collect();
@@ -178,13 +182,6 @@ impl Dumpable for str {
 }
 
 impl<E: Dumpable> Dumpable for VecDeque<E> {
-    fn dump_to_string(&self) -> String {
-        let elements: Vec<String> = self.iter().map(|e| e.dump_to_string()).collect();
-        format!("[{}]", elements.join(", "))
-    }
-}
-
-impl<E: Dumpable> Dumpable for SmallVec<E> {
     fn dump_to_string(&self) -> String {
         let elements: Vec<String> = self.iter().map(|e| e.dump_to_string()).collect();
         format!("[{}]", elements.join(", "))
@@ -241,7 +238,13 @@ macro_rules! impl_dumpable_via_debug {
     };
 }
 
-impl_dumpable_via_debug!(());
+impl_dumpable_via_debug!(
+    (),
+    AtomicU8,
+    AtomicU16,
+    AtomicU32,
+    AtomicU64,
+);
 
 impl_dumpable_via_display!(
     u8,

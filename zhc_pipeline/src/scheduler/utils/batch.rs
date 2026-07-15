@@ -3,7 +3,7 @@ use std::rc::Rc;
 use zhc_ir::{AsOpRef, IR, OpId, ValRef};
 use zhc_langs::hpulang::{HpuInstructionSet, HpuLang};
 use zhc_utils::{
-    FastMap,
+    Dumpable, FastMap,
     iter::{CollectInVec, DedupedByKey, MultiZip},
     small::SmallMap,
     svec,
@@ -23,7 +23,7 @@ fn flush_pbs(instruction: HpuInstructionSet) -> HpuInstructionSet {
         HpuInstructionSet::Pbs8 { lut } | HpuInstructionSet::Pbs8F { lut } => {
             HpuInstructionSet::Pbs8F { lut }
         }
-        _ => unreachable!(),
+        a => a,
     }
 }
 
@@ -47,7 +47,6 @@ impl<T: AsOpRef<Dialect = HpuLang>> Batch<T> {
     }
 
     pub fn push<'a>(&mut self, op: T) {
-        assert!(op.op_ref().get_instruction().is_pbs());
         if self.is_full() {
             panic!()
         }
@@ -173,5 +172,38 @@ impl<T: AsOpRef<Dialect = HpuLang>> Batches<T> {
                 (0..batch.len()).map(move |i| (batch.ops[i].op_ref().get_id(), batch.clone()))
             })
             .collect()
+    }
+}
+
+impl<T: AsOpRef<Dialect = HpuLang>> Dumpable for Batch<T> {
+    fn dump_to_string(&self) -> String {
+        let (ir, inputs, outputs) = self.gen_batch_ir();
+        format!(
+            "Batch [{}/{}] · {} in · {} out\n{}",
+            self.ops.len(),
+            self.cap,
+            inputs.len(),
+            outputs.len(),
+            ir.dump_to_string(),
+        )
+    }
+}
+
+impl<T: AsOpRef<Dialect = HpuLang>> Dumpable for Batches<T> {
+    fn dump_to_string(&self) -> String {
+        self.0
+            .iter()
+            .enumerate()
+            .map(|(i, batch)| {
+                let body = batch
+                    .dump_to_string()
+                    .lines()
+                    .map(|line| format!("  {line}"))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                format!("#{i}\n{body}")
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 }

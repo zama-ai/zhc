@@ -15,14 +15,16 @@ pub mod prelude {
 
     pub use zhc_builder::Builder;
     pub use zhc_crypto::integer_semantics::CiphertextBlockSpec;
+    use zhc_ir::IR;
+    use zhc_langs::doplang::DopLang;
     pub use zhc_langs::ioplang::IopValue;
     pub use zhc_langs::ioplang::{Lut1Def, Lut2Def};
     use zhc_pipeline::gpu_metrics::GpuMetrics;
     use zhc_pipeline::hpu_metrics::HpuMetrics;
     use zhc_pipeline::pbs_metrics::PbsMetrics;
+    use zhc_pipeline::scheduler::vm::VmExecutionPlan;
     use zhc_pipeline::{
-        compute_gpu_metrics, compute_hpu_metrics, compute_latency, compute_pbs_metrics, draw_slack,
-        trace_execution,
+        compute_gpu_metrics, compute_hpu_metrics, compute_latency, compute_pbs_metrics, draw_slack, regular_pipeline, trace_execution, vm_pipeline
     };
     use zhc_sim::MHz;
     use zhc_sim::hpu::HpuConfig;
@@ -51,6 +53,10 @@ pub mod prelude {
         ///
         /// See [`draw_slack()`] for details.
         fn draw_slack(&self, path: impl AsRef<Path>);
+
+        fn get_doplang(&self, config: Option<HpuConfig>) -> IR<DopLang>;
+
+        fn get_vm_plan(&self, n_threads: u8) -> VmExecutionPlan;
     }
 
     impl BuilderExt for Builder {
@@ -76,6 +82,16 @@ pub mod prelude {
 
         fn draw_slack(&self, path: impl AsRef<Path>) {
             draw_slack(self, path);
+        }
+
+        fn get_doplang(&self, config: Option<HpuConfig>) -> IR<DopLang> {
+            let ir = self.optimize_ir();
+            regular_pipeline(ir, &config.unwrap_or_default()).1
+        }
+
+        fn get_vm_plan(&self, n_threads: u8) -> VmExecutionPlan {
+            let ir = self.optimize_ir();
+            vm_pipeline(ir, n_threads)
         }
     }
 }

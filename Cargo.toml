@@ -10,6 +10,7 @@ members = [
     "zhc_builder",
     "zhc_crypto",
     "zhc_bench",
+    "zhc_vm",
 ]
 resolver = "3"
 
@@ -21,6 +22,7 @@ repository = "https://github.com/zama-ai/zhc"
 readme = "README.md"
 
 [workspace.dependencies]
+zhc = { path = "zhc", version = "0.8.3" }
 zhc_ir = { path = "zhc_ir", version = "0.8.3" }
 zhc_langs = { path = "zhc_langs", version = "0.8.3" }
 zhc_pipeline = { path = "zhc_pipeline", version = "0.8.3" }
@@ -29,6 +31,8 @@ zhc_utils = { path = "zhc_utils", version = "0.8.3" }
 zhc_utils_macro = { path = "zhc_utils_macro", version = "0.8.3" }
 zhc_builder = { path = "zhc_builder", version = "0.8.3" }
 zhc_crypto = { path = "zhc_crypto", version = "0.8.3" }
+zhc_bench = {path = "zhc_bench", version = "0.8.3" }
+zhc_vm = {path = "zhc_vm", version = "0.8.3" }
 
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -48,3 +52,7 @@ inherits = "dev"
 opt-level = 3
 lto = "off"
 debug-assertions = false
+
+[profile.profiling]
+inherits = "release"
+debug = true

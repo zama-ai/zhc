@@ -1,6 +1,5 @@
-use zhc_ir::OpRef;
+use zhc_langs::hpulang::HpuInstructionSet;
 use zhc_langs::hpulang::HpuInstructionSet::*;
-use zhc_langs::hpulang::HpuLang;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Affinity {
@@ -11,8 +10,8 @@ pub enum Affinity {
 }
 
 impl Affinity {
-    pub fn extract<'a>(op: &OpRef<'a, HpuLang>) -> Self {
-        match op.get_instruction() {
+    pub fn extract(op: &HpuInstructionSet) -> Self {
+        match op {
             AddCt
             | SubCt
             | Mac { .. }

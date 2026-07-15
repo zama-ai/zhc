@@ -9,6 +9,7 @@ use zhc_builder::{
 use zhc_ir::IR;
 use zhc_langs::{doplang::DopLang, hpulang::HpuLang};
 use zhc_sim::{MHz, hpu::HpuConfig};
+use zhc_utils::Dumpable;
 
 use crate::{
     alternative_pipeline, latency, regular_pipeline,
@@ -296,5 +297,11 @@ impl Iop {
             }
             _ => regular_pipeline(ir, hpu_config),
         }
+    }
+}
+
+impl Dumpable for Iop {
+    fn dump_to_string(&self) -> String {
+        format!("{:?}", self)
     }
 }

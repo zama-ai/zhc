@@ -82,19 +82,6 @@ fn analyze<'a>(ir: &'a IR<HpuLang>) -> CritIR<'a> {
     })
 }
 
-impl Dumpable for Batch<CritOpRef<'_, '_>> {
-    fn dump_to_string(&self) -> String {
-        let mut result = format!("[{}/{}", self.ops.len(), self.cap);
-        let mut slacks = self.ops.iter().map(|op| op.get_annotation().slack).cosvec();
-        slacks.as_mut_slice().sort();
-        for slack in slacks.into_iter() {
-            result.push_str(&format!(" {}", slack));
-        }
-        result.push(']');
-        result
-    }
-}
-
 impl<'a, 'b> Batch<CritOpRef<'a, 'b>> {
     #[allow(unused)]
     pub fn slacks(&self) -> SmallVec<OpIdRaw> {
@@ -107,16 +94,6 @@ impl<'a, 'b> Batch<CritOpRef<'a, 'b>> {
             .map(|a| a.get_annotation().slack)
             .min()
             .unwrap()
-    }
-}
-
-impl Dumpable for Batches<CritOpRef<'_, '_>> {
-    fn dump_to_string(&self) -> String {
-        let mut result = String::new();
-        for (i, batch) in self.0.iter().enumerate() {
-            result.push_str(&format!("{}: {}\n", i + 1, batch.dump_to_string()));
-        }
-        result
     }
 }
 
