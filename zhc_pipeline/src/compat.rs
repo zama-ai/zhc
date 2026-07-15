@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{fmt::Display, str::FromStr};
 
 use zhc_builder::{
     Builder, CiphertextSpec, add, add_simd, bitwise_and, bitwise_inv, bitwise_or, bitwise_xor,
@@ -295,6 +295,49 @@ impl Iop {
                 alternative_pipeline(ir, hpu_config)
             }
             _ => regular_pipeline(ir, hpu_config),
+        }
+    }
+}
+
+
+impl Display for Iop {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Iop::CmpGt => write!(f, "cmp_gt"),
+            Iop::CmpGte => write!(f, "cmp_gte"),
+            Iop::CmpLt => write!(f, "cmp_lt"),
+            Iop::CmpLte => write!(f, "cmp_lte"),
+            Iop::CmpEq => write!(f, "cmp_eq"),
+            Iop::CmpNeq => write!(f, "cmp_neq"),
+            Iop::IfThenElse => write!(f, "if_then_else"),
+            Iop::IfThenZero => write!(f, "if_then_zero"),
+            Iop::Add => write!(f, "add"),
+            Iop::Sub => write!(f, "sub"),
+            Iop::Mul => write!(f, "mul"),
+            Iop::Ilog2 => write!(f, "ilog2"),
+            Iop::CountZeros => write!(f, "count_zeros"),
+            Iop::CountOnes => write!(f, "count_ones"),
+            Iop::LeadingZeros => write!(f, "leading_zeros"),
+            Iop::LeadingOnes => write!(f, "leading_ones"),
+            Iop::TrailingZeros => write!(f, "trailing_zeros"),
+            Iop::TrailingOnes => write!(f, "trailing_ones"),
+            Iop::Div => write!(f, "div"),
+            Iop::Mod => write!(f, "mod"),
+            Iop::OvfAdd => write!(f, "ovf_add"),
+            Iop::OvfSub => write!(f, "ovf_sub"),
+            Iop::OvfMul => write!(f, "ovf_mul"),
+            Iop::BwAnd => write!(f, "bw_and"),
+            Iop::BwOr => write!(f, "bw_or"),
+            Iop::BwXor => write!(f, "bw_xor"),
+            Iop::BwNot => write!(f, "bw_not"),
+            Iop::RightShift => write!(f, "right_shift"),
+            Iop::LeftShift => write!(f, "left_shift"),
+            Iop::RightRot => write!(f, "right_rot"),
+            Iop::LeftRot => write!(f, "left_rot"),
+            Iop::Erc7984 => write!(f, "erc7984"),
+            Iop::Erc7984Simd => write!(f, "erc7984_simd"),
+            Iop::AddSimd => write!(f, "add_simd"),
+
         }
     }
 }

@@ -11,3 +11,4 @@ readme.workspace = true
 zhc_utils.workspace = true
 zhc_utils_macro.workspace = true
 serde.workspace = true
+serde_json.workspace = true

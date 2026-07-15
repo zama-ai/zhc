@@ -136,13 +136,16 @@ pub mod prelude {
 mod test {
     use zhc_builder::CiphertextSpec;
     use zhc_pipeline::compat::Iop;
+
     use crate::prelude::BuilderExt;
 
     #[test]
-    fn testngjdsabngkjdsa() {
-        Iop::Mul
-            .to_builder(CiphertextSpec::new(8, 2, 2))
-            .draw_affinity("affinity.html");
-
+    fn generate_graphs() {
+        let spec = CiphertextSpec::new(64, 2, 2);
+        for iop in Iop::ALL {
+            let bldr = iop.to_builder(spec);
+            // bldr.draw_affinity(format!("export/{}_{}.html", iop, spec.int_size()));
+            bldr.optimize_ir().write_node_link_json(format!("export/{}_{}.json", iop, spec.int_size()));
+        }
     }
 }
