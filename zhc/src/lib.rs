@@ -15,6 +15,7 @@ pub mod prelude {
 
     pub use zhc_builder::Builder;
     pub use zhc_crypto::integer_semantics::CiphertextBlockSpec;
+    use zhc_ir::visualization::{StyleModifier, VisualAnnotation};
     pub use zhc_langs::ioplang::IopValue;
     pub use zhc_langs::ioplang::{Lut1Def, Lut2Def};
     use zhc_pipeline::gpu_metrics::GpuMetrics;
@@ -27,6 +28,8 @@ pub mod prelude {
     use zhc_sim::MHz;
     use zhc_sim::hpu::HpuConfig;
     pub use zhc_utils::Dumpable;
+    use zhc_utils::graphics::ColorScale;
+    use zhc_utils::svec;
 
     /// Extension trait providing HPU analysis methods on [`Builder`].
     ///
@@ -51,6 +54,8 @@ pub mod prelude {
         ///
         /// See [`draw_slack()`] for details.
         fn draw_slack(&self, path: impl AsRef<Path>);
+
+        fn draw_affinity(&self, path: impl AsRef<Path>);
     }
 
     impl BuilderExt for Builder {
@@ -77,5 +82,67 @@ pub mod prelude {
         fn draw_slack(&self, path: impl AsRef<Path>) {
             draw_slack(self, path);
         }
+
+        fn draw_affinity(&self, path: impl AsRef<Path>) {
+            #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+            enum Affinity {
+                PBS = 0,
+                MEM = 1,
+                ALU = 2,
+                CTL = 3,
+            }
+            impl VisualAnnotation for Affinity {
+                fn style_modifier(&self) -> Option<StyleModifier> {
+                    Some(StyleModifier {
+                        fill_color: Some(ColorScale::RAINBOW.interpolate(*self as u32 as f64 / 4.)),
+                        ..Default::default()
+                    })
+                }
+            }
+            use zhc_langs::ioplang::IopInstructionSet::*;
+            self.ir().backward_dataflow_analysis(|op| {
+                let aff = match op.get_instruction() {
+                    InputCiphertext { .. }
+                    | InputPlaintext { .. }
+                    | OutputCiphertext { .. }
+                    | _Consume { .. }
+                    | Inspect { .. }
+                    | DeclareCiphertext { .. }
+                    | LetPlaintextBlock { .. }
+                    | LetCiphertextBlock { .. } => Affinity::CTL,
+                    AddCt
+                    | WrappingAddCt
+                    | TemperAddCt
+                    | SubCt
+                    | WrappingSubCt
+                    | PackCt { .. }
+                    | AddPt
+                    | WrappingAddPt
+                    | SubPt
+                    | PtSub
+                    | MulPt => Affinity::ALU,
+                    ExtractCtBlock { .. } | ExtractPtBlock { .. } | StoreCtBlock { .. } => {
+                        Affinity::MEM
+                    }
+                    Pbs { .. } | Pbs2 { .. } => Affinity::PBS,
+                };
+                (aff, svec![(); op.get_return_arity()])
+            }).draw_to_html(Some(self.hierarchy()), path);
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use zhc_builder::CiphertextSpec;
+    use zhc_pipeline::compat::Iop;
+    use crate::prelude::BuilderExt;
+
+    #[test]
+    fn testngjdsabngkjdsa() {
+        Iop::Mul
+            .to_builder(CiphertextSpec::new(8, 2, 2))
+            .draw_affinity("affinity.html");
+
     }
 }
