@@ -273,7 +273,7 @@ impl Builder {
                                         carry_in.pop().as_ref(),
                                     );
                                 next.push(CiphertextLimb::new(k, &sum));
-                                carry_buffer.entry(k + 1).or_default().push(cout)
+                                carry_buffer.entry(k + 1).or_default().push(cout.block())
                             }
                             (Some(a), None) => {
                                 // odd element passes through unchanged

@@ -12,6 +12,66 @@ use crate::{
     builder::{Builder, Ciphertext, ExtensionBehavior},
 };
 
+/// The native encoding of an adder's carry-out block.
+///
+/// A carry-out is not always a 0/1 flag.
+/// Ripple and Hillis-Steele end on a LUT that already yields 0/1;
+/// Kogge-Stone prefix network yields a PG status, in which a carry reads as `2`.
+///
+/// Both encodings are a single `CiphertextBlock` holding an encrypted value, so nothing can recover which one it is:
+/// the encoding has to travel alongside the block, which is what this tag does.
+/// Read a PG carry as a flag and you get `2` where `1` was expected, with nothing to signal it.
+/// [`Builder::resolve_carry`] converts a carry of either encoding into a 0/1 flag.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CarryEncoding {
+    /// Already a clean 0/1 block (Needs no further LUT):
+    /// ripple (`ManyCarryMsg`) and Hillis-Steele (`CarryIsSome`).
+    Clean,
+
+    /// PG (propagate/generate) carry status :
+    /// `0` kill, `1` propagate, `2` generate. Must be Cleaned to a 0/1 flag with `IsSome` LUT.
+    Pg,
+}
+
+/// An adder carry-out block tagged with its [`CarryEncoding`].
+///
+/// Produced by every `_raw` adder in its native encoding.
+/// Consumers call [`Builder::resolve_carry`] for a clean 0/1 flag, or read [`block`](Self::block) directly when
+/// they deliberately consume the native encoding, as `iop_overflow_sub` does by feeding a PG carry to `IsNull`.
+#[derive(Debug, Clone, Copy)]
+pub struct CarryOut {
+    block: CiphertextBlock,
+    encoding: CarryEncoding,
+}
+
+impl CarryOut {
+    /// Tag `block` as an already clean 0/1 carry.
+    pub fn clean(block: CiphertextBlock) -> Self {
+        Self {
+            block,
+            encoding: CarryEncoding::Clean,
+        }
+    }
+
+    /// Tag `block` as a PG-encoded carry status.
+    pub fn pg(block: CiphertextBlock) -> Self {
+        Self {
+            block,
+            encoding: CarryEncoding::Pg,
+        }
+    }
+
+    /// The raw carry block in its native encoding (see [`Self::encoding`]).
+    pub fn block(&self) -> CiphertextBlock {
+        self.block
+    }
+
+    /// The carry block's native encoding.
+    pub fn encoding(&self) -> CarryEncoding {
+        self.encoding
+    }
+}
+
 /// Creates an IR for addition of two encrypted integers.
 ///
 /// Convenience wrapper that declares inputs/outputs and calls [`Builder::iop_add`].
@@ -175,7 +235,7 @@ impl Builder {
             self.comment("Join Output")
                 .ciphertext_join(output_blocks, None),
             self.comment("Join Carry")
-                .ciphertext_join([carry_out], None),
+                .ciphertext_join([carry_out.block()], None),
         )
     }
 
@@ -185,7 +245,7 @@ impl Builder {
         lhs_blocks: impl AsRef<[CiphertextBlock]>,
         rhs_blocks: impl AsRef<[CiphertextBlock]>,
         cin: Option<&CiphertextBlock>,
-    ) -> (Vec<CiphertextBlock>, CiphertextBlock) {
+    ) -> (Vec<CiphertextBlock>, CarryOut) {
         match int_size {
             0..8 => self.iop_add_ripple_carry_raw(&lhs_blocks, &rhs_blocks, cin),
             8..17 => self.iop_add_hillis_steele_raw(&lhs_blocks, &rhs_blocks, cin, true),
@@ -199,6 +259,29 @@ impl Builder {
                 self.iop_add_kogge_stone_raw(&lhs_blocks, &rhs_blocks, cin, par_w)
             }
             _ => todo!(),
+        }
+    }
+
+    /// Encode an optional carry-in as a PG (propagate/generate) block for the prefix networks.
+    /// `ManyGenProp` places generate in bit 1, so the `*2` turns a plaintext 0/1 carry-in into a "generate" PG value.
+    /// With no carry-in, the neutral value is a fresh zero ciphertext.
+    fn cin_to_pg(&self, cin: Option<&CiphertextBlock>) -> CiphertextBlock {
+        match cin {
+            Some(c) => {
+                // this is only working if carry is in fact a plaintext block which is the case for subtraction
+                // TODO: find a way to support ciphertext carry in if needed
+                let two = self.block_let_plaintext(2);
+                self.block_mul_plaintext(c, &two)
+            }
+            None => self.block_let_ciphertext(0),
+        }
+    }
+
+    /// Normalize an adder carry-out to a clean 0/1 block.
+    pub fn resolve_carry(&self, c: CarryOut) -> CiphertextBlock {
+        match c.encoding {
+            CarryEncoding::Clean => c.block,
+            CarryEncoding::Pg => self.block_lookup(&c.block, Lut1Def::IsSome),
         }
     }
 
@@ -235,16 +318,19 @@ impl Builder {
             self.comment("Join Output")
                 .ciphertext_join(output_blocks, None),
             self.comment("Join Carry")
-                .ciphertext_join([carry_out], None),
+                .ciphertext_join([carry_out.block()], None),
         )
     }
 
+    /// Raw ripple-carry addition on block slices.
+    ///
+    /// The carry-out is [`CarryEncoding::Clean`]: it comes out of `ManyCarryMsg` and is already a 0/1 block.
     pub fn iop_add_ripple_carry_raw(
         &self,
         lhs_blocks: impl AsRef<[CiphertextBlock]>,
         rhs_blocks: impl AsRef<[CiphertextBlock]>,
         cin: Option<&CiphertextBlock>,
-    ) -> (Vec<CiphertextBlock>, CiphertextBlock) {
+    ) -> (Vec<CiphertextBlock>, CarryOut) {
         let mut carry = cin.cloned().unwrap_or_else(|| self.block_let_ciphertext(0));
         let mut output_blocks = Vec::new();
         let wider_inputs = lhs_blocks
@@ -267,8 +353,8 @@ impl Builder {
             self.pop_comment();
         }
 
-        // carry is now the carry-out of the last block (clean 0/1 via CarryInMsg)
-        (output_blocks, carry)
+        // carry is now the carry-out of the last block (clean 0/1 via ManyCarryMsg)
+        (output_blocks, CarryOut::clean(carry))
     }
 
     /// Adds two encrypted integers using Hillis-Steele carry propagation.
@@ -305,7 +391,7 @@ impl Builder {
             self.comment("Join Output")
                 .ciphertext_join(output_blocks, None),
             self.comment("Join Carry")
-                .ciphertext_join([carry_out], None),
+                .ciphertext_join([carry_out.block()], None),
         )
     }
 
@@ -315,7 +401,7 @@ impl Builder {
         rhs_blocks: impl AsRef<[CiphertextBlock]>,
         cin: Option<&CiphertextBlock>,
         clean: bool,
-    ) -> (Vec<CiphertextBlock>, CiphertextBlock) {
+    ) -> (Vec<CiphertextBlock>, CarryOut) {
         // Implements the addition with carry-propagation using the hillis-steele resolution and
         // group of size 4. The encoding of propagation status is the same as the one used
         // in TFHE-RS. The carry is resolved as soon as possible.
@@ -528,7 +614,10 @@ impl Builder {
             self.pop_comment();
         }
 
-        (result.as_slice()[..output_size].into(), carry_out)
+        (
+            result.as_slice()[..output_size].into(),
+            CarryOut::clean(carry_out),
+        )
     }
 }
 
@@ -692,7 +781,7 @@ impl Builder {
         let rhs_blocks = self.ciphertext_split(rhs);
         let (output_blocks, carry_out) =
             self.iop_add_kogge_stone_raw(lhs_blocks, rhs_blocks, cin, par_w);
-        let co_issome = self.block_lookup(&carry_out, Lut1Def::IsSome);
+        let co_issome = self.resolve_carry(carry_out);
         (
             self.comment("Join Output")
                 .ciphertext_join(output_blocks, None),
@@ -703,13 +792,16 @@ impl Builder {
 
     /// Raw Kogge-Stone addition on block slices, with optional carry-in and
     /// parallel-width chunking.
+    ///
+    /// The carry-out is [`CarryEncoding::Pg`]: it is the full-span prefix entry,
+    /// still in PG form, so it needs `IsSome` before it can be read as a 0/1 flag.
     pub(crate) fn iop_add_kogge_stone_raw(
         &self,
         lhs_blocks: impl AsRef<[CiphertextBlock]>,
         rhs_blocks: impl AsRef<[CiphertextBlock]>,
         cin: Option<&CiphertextBlock>,
         par_w: usize,
-    ) -> (Vec<CiphertextBlock>, CiphertextBlock) {
+    ) -> (Vec<CiphertextBlock>, CarryOut) {
         let sums = self.comment("Raw sum").vector_add(
             &lhs_blocks,
             &rhs_blocks,
@@ -717,16 +809,7 @@ impl Builder {
         );
 
         // Convert cin to PG encoding (or zero if absent).
-        let cin_pg = match cin {
-            Some(c) => {
-                // this is only working if carry is in fact a plaintext block
-                // which is the case for subtraction
-                // TODO: find a way to support ciphertext carry in if needed
-                let two = self.block_let_plaintext(2);
-                self.block_mul_plaintext(c, &two)
-            }
-            None => self.block_let_ciphertext(0),
-        };
+        let cin_pg = self.cin_to_pg(cin);
         let mut cin_pg_kogge_entry = KoggeEntry {
             block: cin_pg,
             cpos: 1,
@@ -754,7 +837,7 @@ impl Builder {
         // Carry-out: the final PG entry spans cin through all blocks.
         // Because it is a PG carry the carry is really in bit 1
         let carry_out = cin_pg_kogge_entry.fresh;
-        (result, carry_out)
+        (result, CarryOut::pg(carry_out))
     }
 
     /// Propagates carries through a slice of carry-save sums using a Kogge

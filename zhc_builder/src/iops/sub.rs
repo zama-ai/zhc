@@ -95,9 +95,11 @@ impl Builder {
                 let lhs = self.ciphertext_split(&lhs);
                 let rhs = self.ciphertext_split(&b_inv);
                 let (blocks, co) = self.iop_add_kogge_stone_raw(lhs, rhs, Some(&one), par_w);
+                // `co` stays PG-encoded: the `IsNull` below reads it directly, so resolving would add an `IsSome` PBS.
                 (
                     self.comment("Join Output").ciphertext_join(blocks, None),
-                    self.comment("Join Carry").ciphertext_join([co], None),
+                    self.comment("Join Carry")
+                        .ciphertext_join([co.block()], None),
                 )
             }
             _ => todo!(),
