@@ -4,6 +4,7 @@ use zhc_crypto::integer_semantics::CiphertextSpec;
 use zhc_langs::ioplang::{Lut1Def, Lut2Def};
 use zhc_utils::{
     iter::{ChunkIt, CollectInSmallVec, IterMapFirst, MultiZip, ReconcilerOf2, Slide, SliderExt},
+    small::SmallVec,
     svec,
 };
 
@@ -395,6 +396,10 @@ impl Builder {
         )
     }
 
+    /// Raw Hillis-Steele addition on block slices.
+    ///
+    /// Carry-out `Clean`, the carry-out is cleaned to a 0/1 flag by `CarryIsSome` inside
+    /// [`grouped_finalize`](Self::grouped_finalize) (independent of the `clean` message flag).
     pub(crate) fn iop_add_hillis_steele_raw(
         &self,
         lhs_blocks: impl AsRef<[CiphertextBlock]>,
@@ -418,6 +423,102 @@ impl Builder {
         // the computation in a larger, more favorable case, and let DCE cut the un-necessary
         // computation. This improves code readability.
 
+        let (sums, output_size) = self.grouped_extend_sums(lhs_blocks, rhs_blocks, cin);
+        let group_states = self.grouped_states(&sums);
+
+        self.push_comment("Group carries");
+        let mut group_carries = group_states.iter().map(|group| group[3]).cosvec();
+        let nb_groups = group_carries.len();
+        let nb_stages = (nb_groups as f32).log2().ceil() as usize;
+        for stage in 0..nb_stages {
+            self.push_comment(format!("HS {stage}-th stage"));
+            let stride = 1usize << stage;
+            group_carries = group_carries
+                .into_iter()
+                // We chunk by increasing stride, and assume complete chunks.
+                .chunk(stride)
+                .map(|c| c.unwrap_complete())
+                // We need to assemble data from two chunks later down the pipe.
+                // Prelude will be useful for the first chunk, as we will see,
+                // but Postlude is not needed.
+                .slide::<2>()
+                .skip_postludes()
+                // The first chunk of the result is already solved at the previous level.
+                // We get it from the prelude of the slide, and call it a day.
+                .map_first(|slider| {
+                    let sv = slider.unwrap_prelude();
+                    sv[0].clone().into_iter().reconcile_1_of_2()
+                })
+                // The next chunk combines two chunks of the previous stage with the carry lut.
+                .map_first(|slider| {
+                    let [prev_carry, status] = slider.unwrap_complete().into_array();
+                    self.vector_zip_then_lookup(
+                        status,
+                        prev_carry,
+                        Lut1Def::SolvePropCarry,
+                        ExtensionBehavior::Panic,
+                    )
+                    .into_iter()
+                    .reconcile_2_of_2()
+                })
+                // The rest of the chunks combine chunks of the previous stage with the prop lut.
+                .map_rest(|slider| {
+                    let [prev_carry, status] = slider.unwrap_complete().into_array();
+                    self.vector_zip_then_lookup(
+                        status,
+                        prev_carry,
+                        Lut1Def::SolveProp,
+                        ExtensionBehavior::Panic,
+                    )
+                    .into_iter()
+                    .reconcile_2_of_2()
+                })
+                .flatten()
+                // We only take enough to build the new iterate.
+                .take(nb_groups)
+                .collect();
+            assert_eq!(group_carries.len(), nb_groups);
+            self.pop_comment();
+        }
+        self.pop_comment();
+
+        let carries = self.grouped_final_resolution(group_states, group_carries);
+        let (result, carry_out) = self.grouped_finalize(sums, carries, output_size, clean);
+        (
+            result.as_slice()[..output_size].into(),
+            CarryOut::clean(carry_out),
+        )
+    }
+
+    // ----------------------------------------------------------------------------------------------------------------
+    // Shared phases of the grouped carry adders
+    // ----------------------------------------------------------------------------------------------------------------
+    //
+    // A "grouped" adder works on groups of 4 blocks.
+    // `ExtractPropGroup` packs the 1-bit carry-propagation statuses of 4 consecutive blocks into a
+    // single block for free (it is an arithmetic add, not a PBS), one PBS per group then summarises all 4.
+    // Carry propagation over n blocks becomes a prefix problem over n/4 group carries.
+    //
+    // Every adder in the family runs the same five phases:
+    //   1. `grouped_extend_sums`      block-wise sum, fold cin, 0-extend to a workable size
+    //   2. `grouped_states`           per-block statuses -> [b0, b1, b2, group_carry] per group
+    //   3. the inter-group prefix     resolve each group's incoming carry from the n/4 carries
+    //   4. `grouped_final_resolution` group summary + incoming carry -> per-block carries
+    //   5. `grouped_finalize`         carries into the messages, carry-out, optional cleanup
+    //
+    // Phase 3 is the only one they differ in, so it stays with each adder while 1, 2, 4 and 5
+    // live here.
+
+    /// First phase of the grouped carry adders:
+    /// - raw block-wise sum, fold the optional carry-in into block 0,
+    /// - 0-extend to next 4-multiple pow2 so the 4-grouping/prefix are on favorable size (+dead-code).
+    /// Returns the extended sums and the original (pre-extension) output width.
+    fn grouped_extend_sums(
+        &self,
+        lhs_blocks: impl AsRef<[CiphertextBlock]>,
+        rhs_blocks: impl AsRef<[CiphertextBlock]>,
+        cin: Option<&CiphertextBlock>,
+    ) -> (Vec<CiphertextBlock>, usize) {
         let mut sums = self.comment("Raw sum").vector_add(
             &lhs_blocks,
             &rhs_blocks,
@@ -432,7 +533,14 @@ impl Builder {
         let sums = self
             .comment("Extend sum")
             .vector_unsigned_extension(sums, compute_size);
+        (sums, output_size)
+    }
 
+    /// Block-status + group-status computation shared by the grouped carry adders.
+    /// Packs each 4-block group's carry-propagation statuses (tfhe-rs encoding) into per-block states,
+    /// then reduces each group to a `[b0, b1, b2, group_carry]` summary.
+    /// The adder-specific inter-group carry prefix then consumes `group[3]`.
+    fn grouped_states(&self, sums: &[CiphertextBlock]) -> SmallVec<[CiphertextBlock; 4]> {
         self.push_comment("Block States");
         let block_states = sums
             .iter()
@@ -500,63 +608,17 @@ impl Builder {
             })
             .cosvec();
         self.pop_comment();
+        group_states
+    }
 
-        self.push_comment("Group carries");
-        let mut group_carries = group_states.iter().map(|group| group[3]).cosvec();
-        let nb_groups = group_carries.len();
-        let nb_stages = (nb_groups as f32).log2().ceil() as usize;
-        for stage in 0..nb_stages {
-            self.push_comment(format!("HS {stage}-th stage"));
-            let stride = 1usize << stage;
-            group_carries = group_carries
-                .into_iter()
-                // We chunk by increasing stride, and assume complete chunks.
-                .chunk(stride)
-                .map(|c| c.unwrap_complete())
-                // We need to assemble data from two chunks later down the pipe.
-                // Prelude will be useful for the first chunk, as we will see,
-                // but Postlude is not needed.
-                .slide::<2>()
-                .skip_postludes()
-                // The first chunk of the result is already solved at the previous level.
-                // We get it from the prelude of the slide, and call it a day.
-                .map_first(|slider| {
-                    let sv = slider.unwrap_prelude();
-                    sv[0].clone().into_iter().reconcile_1_of_2()
-                })
-                // The next chunk combines two chunks of the previous stage with the carry lut.
-                .map_first(|slider| {
-                    let [prev_carry, status] = slider.unwrap_complete().into_array();
-                    self.vector_zip_then_lookup(
-                        status,
-                        prev_carry,
-                        Lut1Def::SolvePropCarry,
-                        ExtensionBehavior::Panic,
-                    )
-                    .into_iter()
-                    .reconcile_2_of_2()
-                })
-                // The rest of the chunks combine chunks of the previous stage with the prop lut.
-                .map_rest(|slider| {
-                    let [prev_carry, status] = slider.unwrap_complete().into_array();
-                    self.vector_zip_then_lookup(
-                        status,
-                        prev_carry,
-                        Lut1Def::SolveProp,
-                        ExtensionBehavior::Panic,
-                    )
-                    .into_iter()
-                    .reconcile_2_of_2()
-                })
-                .flatten()
-                // We only take enough to build the new iterate.
-                .take(nb_groups)
-                .collect();
-            assert_eq!(group_carries.len(), nb_groups);
-            self.pop_comment();
-        }
-        self.pop_comment();
-
+    /// Final per-block resolution shared by the grouped carry adders:
+    /// given the per-group summaries and the resolved inter-group carries,
+    /// produce the per-block carries used during carry propagation.
+    fn grouped_final_resolution(
+        &self,
+        group_states: SmallVec<[CiphertextBlock; 4]>,
+        group_carries: SmallVec<CiphertextBlock>,
+    ) -> SmallVec<CiphertextBlock> {
         self.push_comment("Final resolution");
         let carries = (group_states.into_iter(), group_carries.into_iter())
             .mzip()
@@ -591,7 +653,21 @@ impl Builder {
             .flatten()
             .cosvec();
         self.pop_comment();
+        carries
+    }
 
+    /// Shared tail of the grouped carry adders:
+    /// - carry propagation into the message blocks
+    /// - carry-out extraction (from the last block before cleanup)
+    /// - optional cleanup to message-only blocks
+    /// Returns the (possibly extended) result blocks and carry-out.
+    fn grouped_finalize(
+        &self,
+        sums: Vec<CiphertextBlock>,
+        carries: SmallVec<CiphertextBlock>,
+        output_size: usize,
+        clean: bool,
+    ) -> (SmallVec<CiphertextBlock>, CiphertextBlock) {
         self.push_comment("Carry propagation");
         let mut result = svec![self.block_lookup2(&sums[0], Lut2Def::ManyCarryMsg).0];
         result.extend(
@@ -614,10 +690,7 @@ impl Builder {
             self.pop_comment();
         }
 
-        (
-            result.as_slice()[..output_size].into(),
-            CarryOut::clean(carry_out),
-        )
+        (result, carry_out)
     }
 }
 
