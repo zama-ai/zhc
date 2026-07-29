@@ -541,6 +541,7 @@ pub fn generate_translation_table(ir: &IR<DopLang>) -> Vec<DOpRepr> {
                         .with_mode(mode_hex)
                         .with_flag(flag)
                         .with_hid(has_data)
+                        .with_opcode(DOpCode::WAIT as u8)
                         .0,
                 );
             }
@@ -561,6 +562,7 @@ pub fn generate_translation_table(ir: &IR<DopLang>) -> Vec<DOpRepr> {
                         .with_mode(mode)
                         .with_flag(flag)
                         .with_hid(vid)
+                        .with_opcode(DOpCode::NOTIFY as u8)
                         .0,
                 );
             }
@@ -579,6 +581,7 @@ pub fn generate_translation_table(ir: &IR<DopLang>) -> Vec<DOpRepr> {
                         .with_mode(mode)
                         .with_flag(flag)
                         .with_hid(0) // Unused
+                        .with_opcode(DOpCode::LD_B2B as u8)
                         .0,
                 );
             }
