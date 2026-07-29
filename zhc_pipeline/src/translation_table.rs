@@ -22,9 +22,13 @@ enum DOpCode {
     SUBS = 0b00_1010,
     SSUB = 0b00_1011,
     MULS = 0b00_1100,
-    SYNC = 0b01_0000,
     LD = 0b10_0000,
     ST = 0b10_0001,
+    SYNC = 0b10_1111,
+    NOTIFY = 0b01_0000,
+    WAIT = 0b01_0001,
+    LD_B2B = 0b01_1000,
+    EXTEND = 0b01_1111,
     PBS = 0b11_0000,
     PBS_ML2 = 0b11_0001,
     PBS_ML4 = 0b11_0010,
@@ -116,11 +120,31 @@ pub struct PePbsHex {
     opcode: u8,
 }
 
+/// PeUcore instructions
+#[bitfield(u32)]
+pub struct PeUcoreHex {
+    #[bits(16)]
+    slot: u16,
+    #[bits(1)]
+    mode: u8,
+    #[bits(6)]
+    flag: u8,
+    #[bits(3)]
+    hid: u8,
+    #[bits(6)]
+    opcode: u8,
+}
+
 /// PeSync instructions
 #[bitfield(u32)]
 pub struct PeSyncHex {
-    #[bits(26)]
-    sid: u32,
+    #[bits(11)]
+    _pad: u32,
+    #[bits(6)]
+    flag: u8,
+    is_inner_sync: bool,
+    #[bits(8)]
+    iid: u8,
     #[bits(6)]
     opcode: u8,
 }
@@ -496,6 +520,65 @@ pub fn generate_translation_table(ir: &IR<DopLang>) -> Vec<DOpRepr> {
                         .with_src_rid(src.sas())
                         .with_gid(gid.sas())
                         .with_opcode(DOpCode::PBS_ML8_F as u8)
+                        .0,
+                );
+            }
+
+            // Multi-hpu related DOp
+            WAIT {
+                slot,
+                flag: UserFlag { flag },
+            } => {
+                let (has_data, mode_hex, slot_hex) = match slot {
+                    Some(CtIo { addr }) => (1, MEM_ADDR, addr as u16),
+                    Some(CtHeap { addr }) => (1, MEM_HEAP, addr as u16),
+                    Some(_) => panic!("Unexpected slot argument in WAIT"),
+                    None => (0, 0, 0),
+                };
+                output.push(
+                    PeUcoreHex::new()
+                        .with_slot(slot_hex)
+                        .with_mode(mode_hex)
+                        .with_flag(flag)
+                        .with_hid(has_data)
+                        .0,
+                );
+            }
+            NOTIFY {
+                virt_id: VirtId { id: vid },
+                flag: UserFlag { flag },
+                slot,
+            } => {
+                let (mode, slot_hex) = match slot {
+                    CtIo { addr } => (MEM_ADDR, addr as u16),
+                    CtHeap { addr } => (MEM_HEAP, addr as u16),
+                    CtSrcVar { id, block } => (MEM_HEAP, ((id as u16) << 8) + block as u16),
+                    _ => panic!("Unexpected slot argument in NOTIFY"),
+                };
+                output.push(
+                    PeUcoreHex::new()
+                        .with_slot(slot_hex as u16)
+                        .with_mode(mode)
+                        .with_flag(flag)
+                        .with_hid(vid)
+                        .0,
+                );
+            }
+            LD_B2B {
+                flag: UserFlag { flag },
+                slot,
+            } => {
+                let (mode, slot_hex) = match slot {
+                    CtIo { addr } => (MEM_ADDR, addr as u16),
+                    CtHeap { addr } => (MEM_HEAP, addr as u16),
+                    _ => panic!("Unexpected slot argument in LD_B2B"),
+                };
+                output.push(
+                    PeUcoreHex::new()
+                        .with_slot(slot_hex as u16)
+                        .with_mode(mode)
+                        .with_flag(flag)
+                        .with_hid(0) // Unused
                         .0,
                 );
             }

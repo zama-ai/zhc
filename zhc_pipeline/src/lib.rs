@@ -121,10 +121,13 @@ mod test;
 
 #[cfg(test)]
 mod test_mh {
+    use std::io::BufWriter;
+
     use crate::{
         allocator::allocate_registers,
         scheduler::{SchedPolicy, one_step_mh},
         translation::lower_iop_to_multi_hpu,
+        translation_table::generate_translation_table,
     };
     use zhc_builder::{Builder, CiphertextSpec, mh_mul};
     use zhc_langs::doplang::emit_assembly;
@@ -333,6 +336,7 @@ mod test_mh {
             let mut streams = Vec::new();
             for (hid, scheduled) in scheds.into_iter().enumerate() {
                 let allocated = allocate_registers(&scheduled, &config.hpu_config);
+                // Generate DOp stream for simulation
                 let dops: Vec<DOp> = allocated
                     .walk_ops_linear()
                     .map(|a| DOp {
@@ -340,16 +344,23 @@ mod test_mh {
                         id: DOpId(a.get_id().into()),
                     })
                     .collect();
+                streams.push(dops);
 
                 // TODO clean this part
                 use std::fs::File;
                 use std::io::Write;
-                let filename = format!("mhmul{int_size}f{MH_FACTOR}_v{hid}.asm");
-                let mut file = File::create(&filename).expect("Failed to create .asm file");
-                file.write_all(emit_assembly(&allocated).as_bytes())
+                let asm_filename = format!("mhmul{int_size}f{MH_FACTOR}_v{hid}.asm");
+                let hex_filename = format!("mhmul{int_size}f{MH_FACTOR}_v{hid}.hex");
+                let mut asm_file = File::create(&asm_filename).expect("Failed to create .asm file");
+                asm_file
+                    .write_all(emit_assembly(&allocated).as_bytes())
                     .expect("Failed to write to .asm file");
-
-                streams.push(dops);
+                let hex_file = File::create(&hex_filename).expect("Failed to create .hex file");
+                let mut hex_wr = BufWriter::new(hex_file);
+                for dop in generate_translation_table(&allocated) {
+                    writeln!(hex_wr, "{dop:08x}").expect("Failed to write to .hex file");
+                }
+                hex_wr.flush().expect("Failed to write to .hex file");
             }
 
             if DEBUG_SIM {
