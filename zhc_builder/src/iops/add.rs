@@ -966,6 +966,23 @@ mod test {
     use zhc_langs::ioplang::IopValue;
     use zhc_utils::assert_display_is;
 
+    /// Expected sum of a wrapping add.
+    fn add_semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
+        let [IopValue::Ciphertext(lhs), IopValue::Ciphertext(rhs)] = inp else {
+            unreachable!()
+        };
+        Some(vec![IopValue::Ciphertext(lhs.add(*rhs))])
+    }
+
+    /// Expected sum and overflow flag.
+    fn overflow_add_semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
+        let [IopValue::Ciphertext(lhs), IopValue::Ciphertext(rhs)] = inp else {
+            unreachable!()
+        };
+        let (sum, flag) = lhs.overflow_add(*rhs);
+        Some(vec![IopValue::Ciphertext(sum), IopValue::Ciphertext(flag)])
+    }
+
     #[test]
     fn test_add() {
         let spec = CiphertextSpec::new(18, 2, 2);
@@ -1076,40 +1093,22 @@ mod test {
 
     #[test]
     fn correctness_add_hillis_steele() {
-        fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::Ciphertext(lhs), IopValue::Ciphertext(rhs)] = inp else {
-                unreachable!()
-            };
-            Some(vec![IopValue::Ciphertext(lhs.add(*rhs))])
-        }
         for size in (2..128).step_by(2) {
-            add_hillis_steele(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+            add_hillis_steele(CiphertextSpec::new(size, 2, 2)).test_random(100, add_semantic);
         }
     }
 
     #[test]
     fn correctness_add_ripple() {
-        fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::Ciphertext(lhs), IopValue::Ciphertext(rhs)] = inp else {
-                unreachable!()
-            };
-            Some(vec![IopValue::Ciphertext(lhs.add(*rhs))])
-        }
         for size in (2..128).step_by(2) {
-            add_ripple_carry(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+            add_ripple_carry(CiphertextSpec::new(size, 2, 2)).test_random(100, add_semantic);
         }
     }
 
     #[test]
     fn correctness_add() {
-        fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::Ciphertext(lhs), IopValue::Ciphertext(rhs)] = inp else {
-                unreachable!()
-            };
-            Some(vec![IopValue::Ciphertext(lhs.add(*rhs))])
-        }
         for size in (2..128).step_by(2) {
-            add(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+            add(CiphertextSpec::new(size, 2, 2)).test_random(100, add_semantic);
         }
     }
 
@@ -1133,25 +1132,13 @@ mod test {
 
     #[test]
     fn correctness_add_kogge_stone() {
-        fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::Ciphertext(lhs), IopValue::Ciphertext(rhs)] = inp else {
-                unreachable!()
-            };
-            Some(vec![IopValue::Ciphertext(lhs.add(*rhs))])
-        }
         for size in (2..128).step_by(2) {
-            add_kogge_stone(CiphertextSpec::new(size, 2, 2), 12).test_random(100, semantic);
+            add_kogge_stone(CiphertextSpec::new(size, 2, 2), 12).test_random(100, add_semantic);
         }
     }
 
     #[test]
     fn correctness_add_kogge_stone_par_w() {
-        fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::Ciphertext(lhs), IopValue::Ciphertext(rhs)] = inp else {
-                unreachable!()
-            };
-            Some(vec![IopValue::Ciphertext(lhs.add(*rhs))])
-        }
         for par_w in [1, 2, 4, 8, 10, 12] {
             let spec = CiphertextSpec::new(32, 2, 2);
             let builder = Builder::new(spec.block_spec());
@@ -1163,21 +1150,14 @@ mod test {
                 builder.iop_add_kogge_stone_raw(a_blocks, b_blocks, None, par_w);
             let out = builder.ciphertext_join(res, None);
             builder.ciphertext_output(out);
-            builder.test_random(100, semantic);
+            builder.test_random(100, add_semantic);
         }
     }
 
     #[test]
     fn correctness_overflow_add() {
-        fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::Ciphertext(lhs), IopValue::Ciphertext(rhs)] = inp else {
-                unreachable!()
-            };
-            let (sum, flag) = lhs.overflow_add(*rhs);
-            Some(vec![IopValue::Ciphertext(sum), IopValue::Ciphertext(flag)])
-        }
         for size in (2..128).step_by(2) {
-            overflow_add(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+            overflow_add(CiphertextSpec::new(size, 2, 2)).test_random(100, overflow_add_semantic);
         }
     }
 }
