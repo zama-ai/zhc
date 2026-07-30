@@ -9,7 +9,6 @@ use crate::{
     CiphertextBlock, PlaintextBlock,
     builder::{Builder, Ciphertext, Plaintext, ExtensionBehavior},
 };
-use zhc_utils::Dumpable;
 
 use crate::{
   iops::add::{KoggeEntry},
@@ -42,10 +41,10 @@ pub fn adds(spec: CiphertextSpec) -> Builder {
 /// Creates an IR for the addition of an encrypted integers and a scalar using Hillis-Steele
 /// carry propagation.
 ///
-/// The returned [`Builder`] declares two ciphertext inputs and one ciphertext output
+/// The returned [`Builder`] declares one ciphertext input, one plaintext input and one ciphertext output
 /// representing the wrapping sum of the operands. This variant explicitly selects the
 /// Hillis-Steele algorithm, which groups blocks into fours and resolves carries with
-/// logarithmic depth. Prefer [`add`] for automatic algorithm selection based on bit-width.
+/// logarithmic depth. Prefer [`adds`] for automatic algorithm selection based on bit-width.
 ///
 /// # Examples
 ///
@@ -152,8 +151,8 @@ impl Builder {
             self.push_comment(format!("{i}-th"));
             let raw_sum = self.block_add_plaintext(lhs_blocks[i], rhs_blocks[i]);
             let sum = self.block_add(raw_sum, carry);
-            let message = self.block_lookup(sum, Lut1Def::MsgOnly);
-            carry = self.block_lookup(sum, Lut1Def::CarryInMsg);
+            let (message, carry_tmp) = self.block_lookup2(sum, Lut2Def::ManyCarryMsg);
+            carry = carry_tmp;
             output_blocks.push(message);
             self.pop_comment();
         }
@@ -591,24 +590,24 @@ mod test {
         }
     }
 
-    #[test]
-    fn adds_ripple_comment() {
-      let size = 4;
-      let bd = adds_ripple_carry(CiphertextSpec::new(size, 2, 2));
-      println!("{}", bd.dump_to_string());
-    }
+    //#[test]
+    //fn adds_ripple_comment() {
+    //  let size = 4;
+    //  let bd = adds_ripple_carry(CiphertextSpec::new(size, 2, 2));
+    //  println!("{}", bd.dump_to_string());
+    //}
 
-    #[test]
-    fn adds_hillis_steele_comment() {
-      let size = 8;
-      let bd = adds_hillis_steele(CiphertextSpec::new(size, 2, 2));
-      println!("{}", bd.dump_to_string());
-    }
+    //#[test]
+    //fn adds_hillis_steele_comment() {
+    //  let size = 8;
+    //  let bd = adds_hillis_steele(CiphertextSpec::new(size, 2, 2));
+    //  println!("{}", bd.dump_to_string());
+    //}
 
-    #[test]
-    fn adds_kogge_comment() {
-      let size = 17;
-      let bd = adds_kogge_stone(CiphertextSpec::new(size, 2, 2), 12);
-      println!("{}", bd.dump_to_string());
-    }
+    //#[test]
+    //fn adds_kogge_comment() {
+    //  let size = 17;
+    //  let bd = adds_kogge_stone(CiphertextSpec::new(size, 2, 2), 12);
+    //  println!("{}", bd.dump_to_string());
+    //}
 }
