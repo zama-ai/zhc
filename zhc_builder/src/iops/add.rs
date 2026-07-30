@@ -124,6 +124,20 @@ pub fn add_beaumont_smith(spec: CiphertextSpec) -> Builder {
     builder
 }
 
+/// Creates an IR for addition using the grouped Beaumont-Smith adder.
+pub fn add_bs_grouped(spec: CiphertextSpec) -> Builder {
+    let builder = Builder::new(spec.block_spec());
+    let src_a = builder.ciphertext_input(spec.int_size());
+    let src_b = builder.ciphertext_input(spec.int_size());
+    let (a_b, b_b) = (
+        builder.ciphertext_split(&src_a),
+        builder.ciphertext_split(&src_b),
+    );
+    let (res, _) = builder.iop_add_bs_grouped_raw(a_b, b_b, None);
+    builder.ciphertext_output(builder.ciphertext_join(res, Some(spec.int_size())));
+    builder
+}
+
 /// Creates an IR for addition using Hillis-Steele carry propagation.
 ///
 /// Convenience wrapper that calls [`Builder::iop_add_hillis_steele`]. Prefer [`add`]
@@ -701,6 +715,58 @@ impl Builder {
         }
 
         (result, carry_out)
+    }
+
+    /// Grouped Beaumont-Smith: `ExtractPropGroup` packs 4 blocks' statuses into one (~free),
+    /// a Sklansky prefix runs over the `n/4` group carries, `SolvePropGroupFinal` resolves each block.
+    /// Same grouping/resolve as iop_add_hillis_steele_raw; only the inter-group prefix differs
+    /// (Sklansky vs HS scan): fewer PBS, and it partitions cleanly across boards.
+    pub(crate) fn iop_add_bs_grouped_raw(
+        &self,
+        lhs_blocks: impl AsRef<[CiphertextBlock]>,
+        rhs_blocks: impl AsRef<[CiphertextBlock]>,
+        cin: Option<&CiphertextBlock>,
+    ) -> (Vec<CiphertextBlock>, CarryOut) {
+        let (sums, output_size) = self.grouped_extend_sums(lhs_blocks, rhs_blocks, cin);
+        let group_states = self.grouped_states(&sums);
+
+        // Sklansky prefix over the group-carry statuses (`SolveProp`), then resolve each
+        // group against group 0's resolved seed (`SolvePropCarry`).
+        self.push_comment("Group carries");
+        let mut group_carries = group_states.iter().map(|group| group[3]).cosvec();
+        let nb_groups = group_carries.len();
+        if nb_groups > 1 {
+            let seed = group_carries[0];
+            let mut ps: Vec<CiphertextBlock> = group_carries.iter().skip(1).copied().collect(); // statuses of groups 1+
+            let m = ps.len();
+            let mut d = 1usize;
+            while d < m {
+                let prev = ps.clone();
+                let block = d * 2;
+                self.push_comment(format!("Sklansky d{d}"));
+                for q in 0..m {
+                    let bs = (q / block) * block;
+                    if q >= bs + d {
+                        let pivot = prev[bs + d - 1];
+                        ps[q] = self.block_pack_then_lookup(&prev[q], &pivot, Lut1Def::SolveProp);
+                    }
+                }
+                self.pop_comment();
+                d = block;
+            }
+            for g in 1..nb_groups {
+                group_carries[g] =
+                    self.block_pack_then_lookup(&ps[g - 1], &seed, Lut1Def::SolvePropCarry);
+            }
+        }
+        self.pop_comment();
+
+        let carries = self.grouped_final_resolution(group_states, group_carries);
+        let (result, carry_out) = self.grouped_finalize(sums, carries, output_size, true);
+        (
+            result.as_slice()[..output_size].into(),
+            CarryOut::clean(carry_out),
+        )
     }
 }
 
@@ -1418,6 +1484,14 @@ mod test {
             builder.ciphertext_output(sum);
             builder.ciphertext_output(carry);
             builder.test_random(50, overflow_add_semantic);
+        }
+    }
+
+    #[test]
+    fn correctness_add_bs_grouped() {
+        // Sweep widths incl. non-multiple-of-4 and non-power-of-2 group counts (DCE pads).
+        for size in (2..128).step_by(2) {
+            add_bs_grouped(CiphertextSpec::new(size, 2, 2)).test_random(50, add_semantic);
         }
     }
 }
