@@ -22,16 +22,21 @@ use crate::{
 /// Both encodings are a single `CiphertextBlock` holding an encrypted value, so nothing can recover which one it is:
 /// the encoding has to travel alongside the block, which is what this tag does.
 /// Read a PG carry as a flag and you get `2` where `1` was expected, with nothing to signal it.
-/// [`Builder::resolve_carry`] converts a carry of either encoding into a 0/1 flag.
+/// [`Builder::resolve_carry`] converts a carry of any encoding into a 0/1 flag.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CarryEncoding {
     /// Already a clean 0/1 block (Needs no further LUT):
-    /// ripple (`ManyCarryMsg`) and Hillis-Steele (`CarryIsSome`).
+    /// ripple (`ManyCarryMsg`), Hillis-Steele and single-board grouped-BS (`CarryIsSome`).
     Clean,
 
     /// PG (propagate/generate) carry status :
     /// `0` kill, `1` propagate, `2` generate. Must be Cleaned to a 0/1 flag with `IsSome` LUT.
+    /// Kogge-Stone, Beaumont-Smith, and grouped-BS v2 (single- and multi-board).
     Pg,
+
+    /// Already 0/1 because the adder resolved it itself (Needs no further LUT):
+    /// CCS (single- and multi-board) and grouped-BS multi-board. Like `Clean` for `resolve_carry`.
+    Resolved,
 }
 
 /// An adder carry-out block tagged with its [`CarryEncoding`].
@@ -59,6 +64,14 @@ impl CarryOut {
         Self {
             block,
             encoding: CarryEncoding::Pg,
+        }
+    }
+
+    /// Tag `block` as a 0/1 carry the adder resolved itself.
+    pub fn resolved(block: CiphertextBlock) -> Self {
+        Self {
+            block,
+            encoding: CarryEncoding::Resolved,
         }
     }
 
@@ -148,6 +161,20 @@ pub fn add_bs_grouped_v2(spec: CiphertextSpec) -> Builder {
         builder.ciphertext_split(&src_b),
     );
     let (res, _) = builder.iop_add_bs_grouped_v2_raw(a_b, b_b, None);
+    builder.ciphertext_output(builder.ciphertext_join(res, Some(spec.int_size())));
+    builder
+}
+
+/// Creates an IR for addition using the Compressed-Carry-State (CCS) prefix.
+pub fn add_ccs(spec: CiphertextSpec) -> Builder {
+    let builder = Builder::new(spec.block_spec());
+    let src_a = builder.ciphertext_input(spec.int_size());
+    let src_b = builder.ciphertext_input(spec.int_size());
+    let (a_b, b_b) = (
+        builder.ciphertext_split(&src_a),
+        builder.ciphertext_split(&src_b),
+    );
+    let (res, _) = builder.iop_add_ccs_raw(a_b, b_b, None);
     builder.ciphertext_output(builder.ciphertext_join(res, Some(spec.int_size())));
     builder
 }
@@ -317,9 +344,12 @@ impl Builder {
     }
 
     /// Normalize an adder carry-out to a clean 0/1 block.
+    ///
+    /// `Clean` and `Resolved` carries pass through untouched, emitting nothing;
+    /// a `Pg` carry is cleaned with the `IsSome` LUT.
     pub fn resolve_carry(&self, c: CarryOut) -> CiphertextBlock {
         match c.encoding {
-            CarryEncoding::Clean => c.block,
+            CarryEncoding::Clean | CarryEncoding::Resolved => c.block,
             CarryEncoding::Pg => self.block_lookup(&c.block, Lut1Def::IsSome),
         }
     }
@@ -1313,6 +1343,191 @@ impl Builder {
         }
         v
     }
+
+    // ===== Compressed-Carry-State (CCS) adder =====
+    // Digits by msg_len: Block=2, CCS=1, CCS_bar=0. A prop_step MAC-packs a strided window and
+    // applies `ccs` (-> carry-state) or `ccs_bar` (-> resolved carry);
+    // radix grows as digits compress.
+    // Early-merge stops the scan short, then a 2-PBS resolve finishes each block.
+
+    /// `ccs`: reduce a packed window (msg-width `width`) to a carry-state {kill=0,prop=1,gen=2}.
+    /// The CCS state is exactly BS's PG encoding, so the standard `ReduceCarry{k}` LUTs already
+    /// compute it (widths 0|1 identity, 2/3 -> `ReduceCarry2`/`3`, >=4 -> `ReduceCarryPad` +1).
+    fn ccs_state_apply(&self, packed: &CiphertextBlock, width: u32) -> CiphertextBlock {
+        match width {
+            0 | 1 => *packed,
+            2 => self.block_lookup(packed, Lut1Def::ReduceCarry2),
+            3 => self.block_lookup(packed, Lut1Def::ReduceCarry3),
+            _ => {
+                let r = self.block_wrapping_lookup(packed, Lut1Def::ReduceCarryPad);
+                self.block_wrapping_add_plaintext(&r, &self.block_let_plaintext(1))
+            }
+        }
+    }
+
+    /// `ccs_bar`: resolve a packed window (msg-width `width`) to a carry {0,1} using existing LUTs.
+    /// Width-`k` extracts bit `k`, which `SolvePropGroupFinal{k-1}` reads (widths 0 identity,
+    /// 1/2/3 -> `SolvePropGroupFinal0`/`1`/`2`). Width >=4: bit 4 is in the pad bit, so two PBS
+    /// (`ReduceCarryPad`+1 then `SolvePropGroupFinal0`) on the off-critical-path low block.
+    fn ccs_bar_apply(&self, packed: &CiphertextBlock, width: u32) -> CiphertextBlock {
+        match width {
+            // A width-0 window is a lone already-resolved carry, so `packed` is the 0/1 value
+            // itself: masking it again would only spend a PBS to reproduce it.
+            0 => *packed,
+            1 => self.block_lookup(packed, Lut1Def::SolvePropGroupFinal0),
+            2 => self.block_lookup(packed, Lut1Def::SolvePropGroupFinal1),
+            3 => self.block_lookup(packed, Lut1Def::SolvePropGroupFinal2),
+            _ => {
+                let status = self.ccs_state_apply(packed, width);
+                self.block_lookup(&status, Lut1Def::SolvePropGroupFinal0)
+            }
+        }
+    }
+
+    /// Pack a window (low..high) into one block by MAC-shifting each digit by its msg_len.
+    /// Returns (packed, total_width).
+    fn ccs_pack(&self, window: &[(CiphertextBlock, u8)]) -> (CiphertextBlock, u32) {
+        let mut acc = self.block_let_ciphertext(0);
+        let mut shift = 0u32;
+        for (blk, ml) in window {
+            acc = self.block_mac(blk, &acc, 1u8 << shift);
+            shift += *ml as u32;
+        }
+        (acc, shift)
+    }
+
+    /// Strided window of up to `n` digits ending at index `i` (i, i-step, ...), low..high.
+    fn ccs_window(_state: &[(CiphertextBlock, u8)], i: usize, n: usize, step: usize) -> Vec<usize> {
+        let mut idxs = Vec::with_capacity(n);
+        let mut idx = i as isize;
+        while idxs.len() < n && idx >= 0 {
+            idxs.push(idx as usize);
+            idx -= step as isize;
+        }
+        idxs.reverse();
+        idxs
+    }
+
+    /// One position of a prop step: pack its strided window and reduce to a resolved carry
+    /// (`msg_len` 0) or a carry-state (`msg_len` 1).
+    /// Shared with the multi-board prefix, which visits only its board's positions.
+    fn ccs_prop_position(
+        &self,
+        state: &[(CiphertextBlock, u8)],
+        i: usize,
+        n_inputs: usize,
+        step: usize,
+    ) -> (CiphertextBlock, u8) {
+        let idxs = Self::ccs_window(state, i, n_inputs, step);
+        let window: Vec<(CiphertextBlock, u8)> = idxs.iter().map(|&j| state[j]).collect();
+        let (packed, width) = self.ccs_pack(&window);
+        let lowest_ml = window.first().unwrap().1;
+        // ccs_bar (resolved) if the lowest digit is CCS_bar, or a Block at a low
+        // position whose window already reaches the LSB.
+        let use_bar = lowest_ml == 0 || (lowest_ml == 2 && i < n_inputs);
+        if use_bar {
+            (self.ccs_bar_apply(&packed, width), 0u8)
+        } else {
+            (self.ccs_state_apply(&packed, width), 1u8)
+        }
+    }
+
+    /// One growing-radix prop step. Returns (next state, radix used).
+    fn ccs_prop_step(
+        &self,
+        state: &[(CiphertextBlock, u8)],
+        step: usize,
+    ) -> (Vec<(CiphertextBlock, u8)>, usize) {
+        let in_msg_len = state.last().unwrap().1 as usize; // 2 (Block) or 1 (CCS)
+        let n_inputs = 4 / in_msg_len;
+        let n = state.len();
+        let mut res = Vec::with_capacity(n);
+        for i in 0..n {
+            res.push(self.ccs_prop_position(state, i, n_inputs, step));
+        }
+        (res, n_inputs)
+    }
+
+    fn ccs_merge_needed(state: &[(CiphertextBlock, u8)], step: usize) -> bool {
+        let last_ml = state.last().unwrap().1 as usize;
+        if last_ml == 0 {
+            return false; // everything resolved
+        }
+        let first_ml = state.first().unwrap().1 as usize;
+        // (plaintext_len - (Block.msg_len + 1)) / last_ml + (first is CCS_bar ? 1 : 0)
+        let n_ccs = (4 - (2 + 1)) / last_ml + usize::from(first_ml == 0);
+        step * n_ccs + 1 < state.len()
+    }
+
+    /// Single-board CCS adder.
+    ///
+    /// Precondition: `cin` must be `None`. With a carry-in, block 0's sum can reach 7, the width-4
+    /// pack hits `complete_mask` (31), and the carry-out resolves to 0 instead of 1.
+    ///
+    /// Carry-out `Resolved` (`ccs_bar` resolves the top window directly).
+    pub(crate) fn iop_add_ccs_raw(
+        &self,
+        lhs_blocks: impl AsRef<[CiphertextBlock]>,
+        rhs_blocks: impl AsRef<[CiphertextBlock]>,
+        cin: Option<&CiphertextBlock>,
+    ) -> (Vec<CiphertextBlock>, CarryOut) {
+        debug_assert!(
+            cin.is_none(),
+            "iop_add_ccs_raw is correct only for cin=None (width-4 carry-out edge case)"
+        );
+        let sums = self.comment("Raw sum").vector_add(
+            &lhs_blocks,
+            &rhs_blocks,
+            ExtensionBehavior::Passthrough,
+        );
+        let mut sums: Vec<CiphertextBlock> = sums.into_iter().collect();
+        if let Some(c) = cin {
+            sums[0] = self.block_add(&sums[0], c);
+        }
+        let n = sums.len();
+
+        // Prefix over carry states.
+        self.push_comment("CCS prefix");
+        let mut state: Vec<(CiphertextBlock, u8)> = sums.iter().map(|s| (*s, 2u8)).collect();
+        let mut step = 1usize;
+        let mut level = 0u32;
+        while Self::ccs_merge_needed(&state, step) {
+            self.push_comment(format!("prop {level}"));
+            let (next, l) = self.ccs_prop_step(&state, step);
+            self.pop_comment();
+            state = next;
+            step *= l;
+            level += 1;
+        }
+        self.pop_comment();
+
+        self.push_comment("CCS resolve");
+        let mut out = Vec::with_capacity(n);
+        out.push(self.block_lookup(&sums[0], Lut1Def::MsgOnly));
+        for b in 1..n {
+            let top = state[b - 1];
+            let carry = if top.1 == 0 {
+                top.0
+            } else {
+                let idxs = Self::ccs_window(&state, b - 1, 2, step);
+                let window: Vec<(CiphertextBlock, u8)> = idxs.iter().map(|&j| state[j]).collect();
+                let (packed, width) = self.ccs_pack(&window);
+                self.ccs_bar_apply(&packed, width)
+            };
+            out.push(self.block_lookup(&self.block_add(&sums[b], &carry), Lut1Def::MsgOnly));
+        }
+        let top = state[n - 1];
+        let carry_out = if top.1 == 0 {
+            top.0
+        } else {
+            let idxs = Self::ccs_window(&state, n - 1, 3, step);
+            let window: Vec<(CiphertextBlock, u8)> = idxs.iter().map(|&j| state[j]).collect();
+            let (packed, width) = self.ccs_pack(&window);
+            self.ccs_bar_apply(&packed, width)
+        };
+        self.pop_comment();
+        (out, CarryOut::resolved(carry_out))
+    }
 }
 
 #[cfg(test)]
@@ -1366,7 +1581,7 @@ mod test {
                     IopValue::Ciphertext(EmulatedCiphertext::new(av, spec)),
                     IopValue::Ciphertext(EmulatedCiphertext::new(bv, spec)),
                 ];
-                let out = builder.eval().with_inputs(&inputs).get_outputs();
+                let out = builder.interpret().with_inputs(&inputs).get_outputs();
                 let IopValue::Ciphertext(res) = &out[0] else {
                     unreachable!()
                 };
@@ -1581,6 +1796,41 @@ mod test {
             builder.ciphertext_output(carry);
             builder.test_random(50, overflow_add_semantic);
         }
+    }
+
+    #[test]
+    fn correctness_add_ccs() {
+        use zhc_crypto::integer_semantics::EmulatedCiphertext;
+        // Emit an explicit carry-out flag alongside the sum so the single-board CCS carry-out is checked:
+        // it is easy to return the carry *into* the top block instead of out of it, and return a dummy 0 when n == 1
+        let build = |spec: CiphertextSpec| {
+            let builder = Builder::new(spec.block_spec());
+            let a = builder.ciphertext_input(spec.int_size());
+            let b = builder.ciphertext_input(spec.int_size());
+            let (a_b, b_b) = (builder.ciphertext_split(&a), builder.ciphertext_split(&b));
+            let (res, cout) = builder.iop_add_ccs_raw(a_b, b_b, None);
+            let flag = builder.resolve_carry(cout);
+            builder.ciphertext_output(builder.ciphertext_join(res, Some(spec.int_size())));
+            builder.ciphertext_output(builder.ciphertext_join([flag], None));
+            builder
+        };
+        for size in (2..128).step_by(2) {
+            build(CiphertextSpec::new(size, 2, 2)).test_random(50, overflow_add_semantic);
+        }
+
+        // Deterministic edge case: 4-bit 12 + 4 = 16 wraps to 0 with carry-out 1.
+        // Before the C1 fix this returned carry-out 0.
+        let spec = CiphertextSpec::new(4, 2, 2);
+        let inputs = vec![
+            IopValue::Ciphertext(EmulatedCiphertext::new(12, spec)),
+            IopValue::Ciphertext(EmulatedCiphertext::new(4, spec)),
+        ];
+        let out = build(spec).interpret().with_inputs(&inputs).get_outputs();
+        let (IopValue::Ciphertext(sum), IopValue::Ciphertext(flag)) = (&out[0], &out[1]) else {
+            unreachable!()
+        };
+        assert_eq!(sum.as_storage() & 0xF, 0, "4b 12+4 sum should wrap to 0");
+        assert_eq!(flag.as_storage(), 1, "4b 12+4 carry-out must be 1");
     }
 
     #[test]
