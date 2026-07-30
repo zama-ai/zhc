@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use zhc_crypto::integer_semantics::CiphertextSpec;
+use zhc_ir::partition::PartitionId;
 use zhc_langs::ioplang::{Lut1Def, Lut2Def};
 use zhc_utils::{
     iter::{ChunkIt, CollectInSmallVec, IterMapFirst, MultiZip, ReconcilerOf2, Slide, SliderExt},
@@ -176,6 +177,19 @@ pub fn add_ccs(spec: CiphertextSpec) -> Builder {
     );
     let (res, _) = builder.iop_add_ccs_raw(a_b, b_b, None);
     builder.ciphertext_output(builder.ciphertext_join(res, Some(spec.int_size())));
+    builder
+}
+
+/// Creates an IR for a Beaumont-Smith addition partitioned across `n_boards`.
+pub fn add_beaumont_smith_mh(spec: CiphertextSpec, n_boards: usize) -> Builder {
+    let builder = Builder::new(spec.block_spec());
+    let src_a = builder.ciphertext_input(spec.int_size());
+    let src_b = builder.ciphertext_input(spec.int_size());
+    let a_blocks = builder.ciphertext_split(&src_a);
+    let b_blocks = builder.ciphertext_split(&src_b);
+    let (res, _cout) = builder.iop_add_beaumont_smith_mh_raw(&a_blocks, &b_blocks, None, n_boards);
+    let out = builder.ciphertext_join(res, Some(spec.int_size()));
+    builder.ciphertext_output(out);
     builder
 }
 
@@ -1166,7 +1180,59 @@ impl Builder {
 // Beaumont-Smith carry propagation (radix-4 Sklansky parallel prefix)
 // ---------------------------------------------------------------------------
 
+/// Per-board partition bookkeeping for a multi-board operation.
+///
+/// Each board-phase is emitted into its own partition (`mh_phase`); `mh_merge` collapses each
+/// board's phases into one, so `partitions` yields exactly `n_boards`. Threading one `MhBoards`
+/// through several ops keeps board `j` on the same partition throughout.
+pub(crate) struct MhBoards {
+    n_boards: usize,
+    /// Number of carry positions (`n_blocks + 1`), used for balanced placement.
+    n_pos: usize,
+    board_parts: Vec<Vec<PartitionId>>,
+}
+
+impl MhBoards {
+    pub(crate) fn new(n_boards: usize, n_blocks: usize) -> Self {
+        assert!(n_boards >= 1, "n_boards must be >= 1");
+        assert!(
+            n_boards <= n_blocks,
+            "cannot split {n_blocks} blocks across {n_boards} boards"
+        );
+        // Input / split ops precede any new_partition and live in partition 0 ->
+        // attribute them to board 0.
+        let mut board_parts = vec![Vec::new(); n_boards];
+        board_parts[0].push(PartitionId::new(0, "Inputs"));
+        Self {
+            n_boards,
+            n_pos: n_blocks + 1,
+            board_parts,
+        }
+    }
+
+    /// Board owning carry position `q` (balanced contiguous ranges over `0..=n`).
+    fn board_of(&self, q: usize) -> usize {
+        (q * self.n_boards / self.n_pos).min(self.n_boards - 1)
+    }
+}
+
 impl Builder {
+    /// Opens a fresh partition for board `j`'s next phase and makes it current.
+    fn mh_phase(&self, boards: &mut MhBoards, j: usize) {
+        boards.board_parts[j].push(self.new_partition(format!("mh_b{j}")));
+    }
+
+    /// Merges every board's phase-partitions into a single group -> `n_boards`
+    /// distinct partitions.
+    pub(crate) fn mh_merge(&self, boards: &MhBoards) {
+        for parts in &boards.board_parts {
+            parts
+                .iter()
+                .cloned()
+                .reduce(|acc, p| self.merge_partitions(acc, p));
+        }
+    }
+
     /// Adds two encrypted integers using a Beaumont-Smith parallel prefix.
     ///
     /// Radix-4 Sklansky prefix network over the same PG encoding as
@@ -1342,6 +1408,132 @@ impl Builder {
             level += 1;
         }
         v
+    }
+
+    /// Multi-board Beaumont-Smith: the single-board `iop_add_beaumont_smith_raw` value graph,
+    /// each carry position placed on the board owning it (contiguous ranges), so correctness is
+    /// inherited. A prefix level reads only prior-level summaries, so cross-board reads are one
+    /// wave old (cheap transfers, not serial deps).
+    ///
+    /// Critical path `1 + ceil(log4(n+1)) + 1` PBS levels (5 at 64-bit), independent of `n_boards`;
+    /// cross-board reads grow with board count, so past a few boards transfers dominate. Emits
+    /// `n_boards` partitions.
+    ///
+    /// Carry-out `Pg` (`v[n]`); clean with `IsSome`.
+    pub(crate) fn iop_add_beaumont_smith_mh_raw(
+        &self,
+        lhs_blocks: impl AsRef<[CiphertextBlock]>,
+        rhs_blocks: impl AsRef<[CiphertextBlock]>,
+        cin: Option<&CiphertextBlock>,
+        n_boards: usize,
+    ) -> (Vec<CiphertextBlock>, CarryOut) {
+        let lhs = lhs_blocks.as_ref();
+        let rhs = rhs_blocks.as_ref();
+        let mut boards = MhBoards::new(n_boards, lhs.len());
+        let out = self.bs_mh_add_shared(&mut boards, lhs, rhs, cin, true);
+        self.mh_merge(&boards);
+        out
+    }
+
+    /// One multi-board Beaumont-Smith add sharing an `MhBoards` context; appends per-board phases
+    /// but does not merge, so a caller can thread `boards` through several adds and merge once.
+    ///
+    /// `want_sum == false` skips the finals (empty sum, only the carry-out meaningful, for a
+    /// comparison); `optimize_ir` drops the dead prefix positions.
+    ///
+    /// Carry-out `Pg` (`v[n]`); clean with `IsSome`.
+    fn bs_mh_add_shared(
+        &self,
+        boards: &mut MhBoards,
+        lhs: &[CiphertextBlock],
+        rhs: &[CiphertextBlock],
+        cin: Option<&CiphertextBlock>,
+        want_sum: bool,
+    ) -> (Vec<CiphertextBlock>, CarryOut) {
+        let n = lhs.len();
+        assert_eq!(rhs.len(), n, "operands must have equal block counts");
+        assert_eq!(
+            boards.n_pos,
+            n + 1,
+            "board context sized for a different width"
+        );
+        let n_boards = boards.n_boards;
+
+        let cin_pg = self.cin_to_pg(cin);
+
+        // ---- GenProp: block b (-> pg[b] = e[b+1], msg[b]) on board_of(b) ----
+        let mut pg: Vec<Option<CiphertextBlock>> = vec![None; n];
+        let mut msg: Vec<Option<CiphertextBlock>> = vec![None; n];
+        for j in 0..n_boards {
+            self.mh_phase(boards, j);
+            self.push_comment(format!("board{j} genprop"));
+            for b in 0..n {
+                if boards.board_of(b) != j {
+                    continue;
+                }
+                let raw = self.block_add(&lhs[b], &rhs[b]);
+                let (g, m) = self.block_lookup2(&raw, Lut2Def::ManyGenProp);
+                pg[b] = Some(g);
+                msg[b] = Some(m);
+            }
+            self.pop_comment();
+        }
+
+        // Carry entries e[0..=n]: e[0] = cin, e[q] = pg[q-1].
+        let mut v: Vec<CiphertextBlock> = Vec::with_capacity(n + 1);
+        v.push(cin_pg);
+        v.extend((0..n).map(|b| pg[b].unwrap()));
+
+        // ---- Global radix-4 Sklansky prefix, each position on board_of(q) ----
+        let m = n; // highest position (carry-out)
+        let mut level = 0u32;
+        loop {
+            let sub = 4usize.pow(level);
+            if sub > m {
+                break; // one block spans every position -> prefix is global
+            }
+            let block = sub * 4;
+            let prev = v.clone(); // level l reads only level l-1 values
+            for j in 0..n_boards {
+                self.mh_phase(boards, j);
+                self.push_comment(format!("board{j} L{level}"));
+                for q in 0..=m {
+                    if boards.board_of(q) != j {
+                        continue;
+                    }
+                    if let Some(parts) = Self::bs_prefix_gather(&prev, q, sub, block) {
+                        v[q] = self.beaumont_smith_combine(&parts);
+                    }
+                }
+                self.pop_comment();
+            }
+            level += 1;
+        }
+
+        // ---- Finals: result block b = GenPropAdd(pack(v[b], msg[b])) on board_of(b) ----
+        let outputs = if want_sum {
+            let mut outputs: Vec<Option<CiphertextBlock>> = vec![None; n];
+            for j in 0..n_boards {
+                self.mh_phase(boards, j);
+                self.push_comment(format!("board{j} final"));
+                for b in 0..n {
+                    if boards.board_of(b) != j {
+                        continue;
+                    }
+                    outputs[b] = Some(self.block_pack_then_lookup(
+                        &v[b],
+                        &msg[b].unwrap(),
+                        Lut1Def::GenPropAdd,
+                    ));
+                }
+                self.pop_comment();
+            }
+            outputs.into_iter().map(|x| x.unwrap()).collect()
+        } else {
+            Vec::new()
+        };
+
+        (outputs, CarryOut::pg(v[n])) // v[n] = carry-out (PG-encoded)
     }
 
     // ===== Compressed-Carry-State (CCS) adder =====
@@ -1799,6 +1991,25 @@ mod test {
     }
 
     #[test]
+    fn correctness_add_beaumont_smith_mh() {
+        // Partitioning is placement only, so the sum must be correct for any board
+        // count. Covers even and uneven segment splits (e.g. 32 blocks / 3 boards).
+        // (int_size_bits, n_boards); blocks = bits / 2.
+        for (size, boards) in [
+            (16u16, 2usize),
+            (24, 3),
+            (32, 4),
+            (64, 3),
+            (64, 4),
+            (128, 7),
+            (8, 4),
+        ] {
+            add_beaumont_smith_mh(CiphertextSpec::new(size, 2, 2), boards)
+                .test_random(50, add_semantic);
+        }
+    }
+
+    #[test]
     fn correctness_add_ccs() {
         use zhc_crypto::integer_semantics::EmulatedCiphertext;
         // Emit an explicit carry-out flag alongside the sum so the single-board CCS carry-out is checked:
@@ -1846,6 +2057,26 @@ mod test {
         // Sweep widths incl. non-multiple-of-4 and non-power-of-2 group counts.
         for size in (2..128).step_by(2) {
             add_bs_grouped_v2(CiphertextSpec::new(size, 2, 2)).test_random(50, add_semantic);
+        }
+    }
+
+    #[test]
+    fn correctness_beaumont_smith_mh_carry() {
+        // Validates the multi-board sum and carry-out together.
+        for (size, boards) in [(16u16, 2usize), (64, 3), (64, 4)] {
+            let spec = CiphertextSpec::new(size, 2, 2);
+            let builder = Builder::new(spec.block_spec());
+            let a = builder.ciphertext_input(spec.int_size());
+            let b = builder.ciphertext_input(spec.int_size());
+            let a_blocks = builder.ciphertext_split(&a);
+            let b_blocks = builder.ciphertext_split(&b);
+            let (sum, carry) =
+                builder.iop_add_beaumont_smith_mh_raw(&a_blocks, &b_blocks, None, boards);
+            // carry is PG-encoded; resolve_carry applies the same IsSome clean.
+            let flag = builder.resolve_carry(carry);
+            builder.ciphertext_output(builder.ciphertext_join(sum, Some(spec.int_size())));
+            builder.ciphertext_output(builder.ciphertext_join([flag], None));
+            builder.test_random(50, overflow_add_semantic);
         }
     }
 }
