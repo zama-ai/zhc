@@ -114,6 +114,16 @@ pub fn add_kogge_stone(spec: CiphertextSpec, par_w: usize) -> Builder {
     builder
 }
 
+/// Creates an IR for addition using a Beaumont-Smith parallel prefix.
+pub fn add_beaumont_smith(spec: CiphertextSpec) -> Builder {
+    let builder = Builder::new(spec.block_spec());
+    let src_a = builder.ciphertext_input(spec.int_size());
+    let src_b = builder.ciphertext_input(spec.int_size());
+    let (res, _) = builder.iop_add_beaumont_smith(&src_a, &src_b, None);
+    builder.ciphertext_output(res);
+    builder
+}
+
 /// Creates an IR for addition using Hillis-Steele carry propagation.
 ///
 /// Convenience wrapper that calls [`Builder::iop_add_hillis_steele`]. Prefer [`add`]
@@ -960,6 +970,189 @@ impl Builder {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Beaumont-Smith carry propagation (radix-4 Sklansky parallel prefix)
+// ---------------------------------------------------------------------------
+
+impl Builder {
+    /// Adds two encrypted integers using a Beaumont-Smith parallel prefix.
+    ///
+    /// Radix-4 Sklansky prefix network over the same PG encoding as
+    /// [`iop_add_kogge_stone`](Self::iop_add_kogge_stone).
+    /// Sklansky trades fanout for depth, and fanout is free in TFHE (a ciphertext is just read again),
+    /// so the network reaches its minimum depth of `1 + ceil(log4(n+1)) + 1` PBS levels for `n` blocks
+    /// (5 levels for 64-bit).
+    ///
+    /// Every level is a set of independent per-position PBS that partition cleanly by block range,
+    /// which is what makes this the adder to use when the work is spread over several HPU boards.
+    /// On a single board prefer [`iop_add`](Self::iop_add).
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::{CiphertextSpec, Builder};
+    /// # let spec = CiphertextSpec::new(64, 2, 2);
+    /// # let builder = Builder::new(spec.block_spec());
+    /// # let a = builder.ciphertext_input(spec.int_size());
+    /// # let b = builder.ciphertext_input(spec.int_size());
+    /// let (sum, carry_out) = builder.iop_add_beaumont_smith(&a, &b, None);
+    /// ```
+    pub fn iop_add_beaumont_smith(
+        &self,
+        lhs: &Ciphertext,
+        rhs: &Ciphertext,
+        cin: Option<&CiphertextBlock>,
+    ) -> (Ciphertext, Ciphertext) {
+        let lhs_blocks = self.ciphertext_split(lhs);
+        let rhs_blocks = self.ciphertext_split(rhs);
+        let (output_blocks, carry_out) =
+            self.iop_add_beaumont_smith_raw(lhs_blocks, rhs_blocks, cin);
+        let co_clean = self.resolve_carry(carry_out);
+        (
+            self.comment("Join Output")
+                .ciphertext_join(output_blocks, None),
+            self.comment("Join Carry").ciphertext_join([co_clean], None),
+        )
+    }
+
+    /// Raw Beaumont-Smith addition on block slices, with optional carry-in.
+    ///
+    /// Carry-out `Pg`, returns `v[n]`, the PG-encoded carry-out (`IsSome` yields a clean 0/1 flag).
+    pub(crate) fn iop_add_beaumont_smith_raw(
+        &self,
+        lhs_blocks: impl AsRef<[CiphertextBlock]>,
+        rhs_blocks: impl AsRef<[CiphertextBlock]>,
+        cin: Option<&CiphertextBlock>,
+    ) -> (Vec<CiphertextBlock>, CarryOut) {
+        let sums = self.comment("Raw sum").vector_add(
+            &lhs_blocks,
+            &rhs_blocks,
+            ExtensionBehavior::Passthrough,
+        );
+        let n = sums.len();
+
+        // Split each raw sum into (pg, msg) via ManyGenProp.
+        self.push_comment("GenProp");
+        let mut pg = Vec::with_capacity(n);
+        let mut msg = Vec::with_capacity(n);
+        for (i, sum) in sums.iter().enumerate() {
+            let (g, m) = self
+                .comment(format!("{i}"))
+                .block_lookup2(sum, Lut2Def::ManyGenProp);
+            pg.push(g);
+            msg.push(m);
+        }
+        self.pop_comment();
+
+        // Carry entries e[0..=n]: e[0] = cin (PG-encoded), e[q] = pg[q-1].
+        // The prefix combine is delegated to beaumont_smith_prefix below.
+        let cin_pg = self.cin_to_pg(cin);
+        let mut entries: Vec<CiphertextBlock> = Vec::with_capacity(n + 1);
+        entries.push(cin_pg);
+        entries.extend(pg.iter().copied());
+
+        // v[q] = combine(e[0..=q]) = carry into block q; v[n] = carry-out.
+        self.push_comment("Prefix");
+        let v = self.beaumont_smith_prefix(entries);
+        self.pop_comment();
+
+        // Final: result block b = GenPropAdd(pack(carry = v[b], msg = msg[b])).
+        self.push_comment("Carry propagation");
+        let outputs: Vec<CiphertextBlock> = (0..n)
+            .map(|b| {
+                self.comment(format!("{b}")).block_pack_then_lookup(
+                    &v[b],
+                    &msg[b],
+                    Lut1Def::GenPropAdd,
+                )
+            })
+            .collect();
+        self.pop_comment();
+
+        // Carry-out is the prefix over every entry (PG-encoded).
+        (outputs, CarryOut::pg(v[n]))
+    }
+
+    /// Combine 1..=`data_size` fresh PG carries (low..high) into one, via MAC-pack + one
+    /// `ReduceCarry` PBS (a single input passes through). Radix-`data_size` prefix primitive.
+    fn beaumont_smith_combine(&self, parts: &[CiphertextBlock]) -> CiphertextBlock {
+        let total_width = self.spec().data_size() as usize;
+        debug_assert!(
+            (1..=total_width).contains(&parts.len()),
+            "radix-{total_width} combine expects 1..={total_width} fresh PG values, got {}",
+            parts.len()
+        );
+        if parts.len() == 1 {
+            return parts[0];
+        }
+        // acc = parts[0] + 2*parts[1] + 4*parts[2] + ... (each fresh value occupies one
+        // "position"); cpos tracks how many positions are now packed into acc.
+        let mut acc = parts[0];
+        let mut cpos = 1u8;
+        for p in &parts[1..] {
+            acc = self.block_mac(p, &acc, 1u8 << cpos);
+            cpos += 1;
+        }
+        match cpos as usize {
+            2 => self.block_lookup(&acc, Lut1Def::ReduceCarry2),
+            3 => self.block_lookup(&acc, Lut1Def::ReduceCarry3),
+            tw if tw == total_width => {
+                let r = self.block_wrapping_lookup(&acc, Lut1Def::ReduceCarryPad);
+                self.block_wrapping_add_plaintext(&r, &self.block_let_plaintext(1))
+            }
+            _ => unreachable!("cpos {cpos} out of range for data_size {total_width}"),
+        }
+    }
+
+    /// Radix-4 Sklansky prefix gather: pure index math, emits no ops.
+    ///
+    /// At sub-block size `sub` (`block = 4*sub`), returns the PG values position `q` combines
+    /// (preceding sub-block summaries + its running prefix), or `None` if `q` is already its
+    /// sub-block's prefix. Pure, so BS and grouped-BS-mh share it while keeping their own placement.
+    fn bs_prefix_gather(
+        prev: &[CiphertextBlock],
+        q: usize,
+        sub: usize,
+        block: usize,
+    ) -> Option<Vec<CiphertextBlock>> {
+        let bs = (q / block) * block; // block start
+        let s_count = (q - bs) / sub; // number of preceding sub-blocks (0..=3)
+        if s_count == 0 {
+            return None; // v[q] already the prefix within its sub-block
+        }
+        let mut parts: Vec<CiphertextBlock> = (0..s_count)
+            .map(|s| prev[bs + s * sub + sub - 1]) // summary = last of sub-block s
+            .collect();
+        parts.push(prev[q]);
+        Some(parts)
+    }
+
+    /// Radix-4 Sklansky parallel prefix over `entries` (low..high): `prefix[q] = combine(entries[0..=q])`.
+    /// One MAC + one `ReduceCarry` PBS per non-trivial position/level; depth `ceil(log4(n))` levels.
+    fn beaumont_smith_prefix(&self, entries: Vec<CiphertextBlock>) -> Vec<CiphertextBlock> {
+        let mut v = entries;
+        let m = v.len().saturating_sub(1); // highest index
+        let mut level = 0u32;
+        loop {
+            let sub = 4usize.pow(level); // sub-block size at this level
+            if sub > m {
+                break; // one block already spans every entry -> prefix is global
+            }
+            let block = sub * 4;
+            let prev = v.clone();
+            self.push_comment(format!("L{level}"));
+            for q in 0..=m {
+                if let Some(parts) = Self::bs_prefix_gather(&prev, q, sub, block) {
+                    v[q] = self.comment(format!("{q}")).beaumont_smith_combine(&parts);
+                }
+            }
+            self.pop_comment();
+            level += 1;
+        }
+        v
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -981,6 +1174,49 @@ mod test {
         };
         let (sum, flag) = lhs.overflow_add(*rhs);
         Some(vec![IopValue::Ciphertext(sum), IopValue::Ciphertext(flag)])
+    }
+
+    #[test]
+    fn beaumont_smith_edge_cases() {
+        use zhc_crypto::integer_semantics::EmulatedCiphertext;
+        for bits in [8u16, 16, 32, 64, 128] {
+            let spec = CiphertextSpec::new(bits, 2, 2);
+            let mask: u128 = if bits == 128 {
+                u128::MAX
+            } else {
+                (1u128 << bits) - 1
+            };
+            let alt = 0xAAAA_AAAA_AAAA_AAAA_AAAA_AAAA_AAAA_AAAAu128 & mask;
+            let alt2 = 0x5555_5555_5555_5555_5555_5555_5555_5555u128 & mask;
+            // worst-case carry patterns: full propagation, MSB carry, propagate-no-generate
+            let cases: &[(u128, u128)] = &[
+                (mask, 1),      // all-ones + 1 -> 0, carry through EVERY block
+                (mask, mask),   // all-ones + all-ones
+                (mask >> 1, 1), // 0x7f..f + 1 -> carry into top bit
+                (alt, alt2),    // 0b1010.. + 0b0101.. = all-ones, pure propagate
+                (alt, 1),
+                (0, 0),
+                (mask, 0),
+            ];
+            let builder = add_beaumont_smith(spec);
+            for &(av, bv) in cases {
+                let inputs = vec![
+                    IopValue::Ciphertext(EmulatedCiphertext::new(av, spec)),
+                    IopValue::Ciphertext(EmulatedCiphertext::new(bv, spec)),
+                ];
+                let out = builder.eval().with_inputs(&inputs).get_outputs();
+                let IopValue::Ciphertext(res) = &out[0] else {
+                    unreachable!()
+                };
+                let want = av.wrapping_add(bv) & mask;
+                assert_eq!(
+                    res.as_storage() & mask,
+                    want,
+                    "BS {bits}b wrong: {av:#x} + {bv:#x} = {:#x}, want {want:#x}",
+                    res.as_storage() & mask
+                );
+            }
+        }
     }
 
     #[test]
@@ -1158,6 +1394,30 @@ mod test {
     fn correctness_overflow_add() {
         for size in (2..128).step_by(2) {
             overflow_add(CiphertextSpec::new(size, 2, 2)).test_random(100, overflow_add_semantic);
+        }
+    }
+
+    #[test]
+    fn correctness_add_beaumont_smith() {
+        // Cover non-power-of-4 block counts and level boundaries (block counts
+        // straddling 4, 16, 64) so the radix-4 prefix termination is exercised.
+        for size in (2..128).step_by(2) {
+            add_beaumont_smith(CiphertextSpec::new(size, 2, 2)).test_random(100, add_semantic);
+        }
+    }
+
+    #[test]
+    fn correctness_beaumont_smith_carry() {
+        // Validates both the sum and the PG-derived carry-out flag.
+        for size in (2..128).step_by(2) {
+            let spec = CiphertextSpec::new(size, 2, 2);
+            let builder = Builder::new(spec.block_spec());
+            let a = builder.ciphertext_input(spec.int_size());
+            let b = builder.ciphertext_input(spec.int_size());
+            let (sum, carry) = builder.iop_add_beaumont_smith(&a, &b, None);
+            builder.ciphertext_output(sum);
+            builder.ciphertext_output(carry);
+            builder.test_random(50, overflow_add_semantic);
         }
     }
 }
