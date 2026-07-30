@@ -2560,4 +2560,139 @@ mod test {
             builder.test_random(50, overflow_add_semantic);
         }
     }
+
+    /// Checks every `_raw` adder's resolved carry-out against the true overflow bit, over
+    /// worst-case carry vectors and widths {8,10,16,32,34,64,128} (10 and 34 pin the CCS
+    /// n = 2*step+1 carry-out edge case).
+    /// Routing each carry through `resolve_carry` means a wrong `CarryEncoding` tag (a PG carry
+    /// mislabelled `Clean`, say) fails here rather than downstream.
+    #[test]
+    fn carry_out_contract() {
+        use zhc_crypto::integer_semantics::EmulatedCiphertext;
+
+        // True carry-out = arithmetic overflow bit, guarding the 128-bit u128-overflow case.
+        fn ref_carry(a: u128, b: u128, bits: u16) -> u128 {
+            if bits >= 128 {
+                u128::from(a.overflowing_add(b).1)
+            } else {
+                ((a) + (b)) >> bits & 1
+            }
+        }
+
+        // Build one adder into a fresh builder, output only its resolved carry-out, then
+        // evaluate it against each worst-case (a, b) pair.
+        let run = |name: &str,
+                   spec: CiphertextSpec,
+                   mk: &dyn Fn(
+            &Builder,
+            Vec<CiphertextBlock>,
+            Vec<CiphertextBlock>,
+        ) -> CarryOut| {
+            let bits = spec.int_size();
+            let mask: u128 = if bits >= 128 {
+                u128::MAX
+            } else {
+                (1u128 << bits) - 1
+            };
+            let alt = 0xAAAA_AAAA_AAAA_AAAA_AAAA_AAAA_AAAA_AAAAu128 & mask;
+            let alt2 = 0x5555_5555_5555_5555_5555_5555_5555_5555u128 & mask;
+            // Worst-case carry vectors (mirror `beaumont_smith_edge_cases`): full
+            // propagation, MSB carry, pure propagate, no carry, etc.
+            let cases: &[(u128, u128)] = &[
+                (mask, 1),              // all-ones + 1 -> carry through EVERY block
+                (mask, mask),           // all-ones + all-ones
+                (mask >> 1, 1),         // 0x7f..f + 1 -> carry into top bit (no carry-out)
+                (alt, alt2),            // 0b1010.. + 0b0101.. = all-ones, pure propagate, no cout
+                (alt, 1),               // sparse
+                (0, 0),                 // no carry
+                (mask, 0),              // no carry
+                (mask >> 1, mask >> 1), // 0x7f..f + 0x7f..f -> no carry-out
+                (mask, mask >> 1),      // carry-out
+            ];
+
+            let builder = Builder::new(spec.block_spec());
+            let a = builder.ciphertext_input(bits);
+            let b = builder.ciphertext_input(bits);
+            let a_b = builder.ciphertext_split(&a);
+            let b_b = builder.ciphertext_split(&b);
+            let cout = mk(&builder, a_b, b_b);
+            let flag = builder.resolve_carry(cout);
+            builder.ciphertext_output(builder.ciphertext_join([flag], None));
+
+            for &(av, bv) in cases {
+                let inputs = vec![
+                    IopValue::Ciphertext(EmulatedCiphertext::new(av, spec)),
+                    IopValue::Ciphertext(EmulatedCiphertext::new(bv, spec)),
+                ];
+                let out = builder.interpret().with_inputs(&inputs).get_outputs();
+                let IopValue::Ciphertext(res) = &out[0] else {
+                    unreachable!()
+                };
+                let got = res.as_storage();
+                let want = ref_carry(av, bv, bits);
+                assert_eq!(
+                    got, want,
+                    "{name} {bits}b carry-out wrong: {av:#x} + {bv:#x} -> got {got}, want {want}"
+                );
+            }
+        };
+
+        let widths = [8u16, 10, 16, 32, 34, 64, 128];
+
+        // ---- single-board adders ----
+        for bits in widths {
+            let spec = CiphertextSpec::new(bits, 2, 2);
+            run("ripple", spec, &|bld, a, b| {
+                bld.iop_add_ripple_carry_raw(a, b, None).1
+            });
+            run("hillis_steele", spec, &|bld, a, b| {
+                bld.iop_add_hillis_steele_raw(a, b, None, true).1
+            });
+            run("kogge_stone", spec, &|bld, a, b| {
+                bld.iop_add_kogge_stone_raw(a, b, None, bits as usize).1
+            });
+            run("beaumont_smith", spec, &|bld, a, b| {
+                bld.iop_add_beaumont_smith_raw(a, b, None).1
+            });
+            run("bs_grouped", spec, &|bld, a, b| {
+                bld.iop_add_bs_grouped_raw(a, b, None).1
+            });
+            run("bs_grouped_v2", spec, &|bld, a, b| {
+                bld.iop_add_bs_grouped_v2_raw(a, b, None).1
+            });
+            // ccs is correct only for cin=None (which is what we use here).
+            run("ccs", spec, &|bld, a, b| bld.iop_add_ccs_raw(a, b, None).1);
+        }
+
+        // ---- multi-board adders: only placeable (blocks, boards) configs ----
+        // Predicates mirror the `can_place` closures in zhc_pipeline::compare_mh_adders
+        // (and each adder's constructor asserts).
+        let can_bs = |blocks: usize, nb: usize| nb >= 1 && nb <= blocks;
+        let can_grouped = |blocks: usize, nb: usize| {
+            nb >= 1 && blocks % 4 == 0 && blocks / 4 >= nb && (blocks / 4) % nb == 0
+        };
+        let board_candidates = [1usize, 2, 3, 4, 5, 6, 7, 8];
+        for bits in widths {
+            let spec = CiphertextSpec::new(bits, 2, 2);
+            let blocks = (bits / 2) as usize;
+            for nb in board_candidates {
+                if can_bs(blocks, nb) {
+                    run("beaumont_smith_mh", spec, &move |bld, a, b| {
+                        bld.iop_add_beaumont_smith_mh_raw(&a, &b, None, nb).1
+                    });
+                    run("ccs_mh", spec, &move |bld, a, b| {
+                        bld.iop_add_ccs_mh_raw(&a, &b, nb).1
+                    });
+                }
+                if can_grouped(blocks, nb) {
+                    run("bs_grouped_mh", spec, &move |bld, a, b| {
+                        bld.iop_add_bs_grouped_mh_raw(&a, &b, nb).1
+                    });
+                    run("bs_grouped_v2_mh", spec, &move |bld, a, b| {
+                        bld.iop_add_bs_grouped_v2_mh_raw(&a, &b, nb).1
+                    });
+                }
+            }
+        }
+    }
 }
