@@ -138,6 +138,20 @@ pub fn add_bs_grouped(spec: CiphertextSpec) -> Builder {
     builder
 }
 
+/// Creates an IR for addition using the depth-reduced grouped Beaumont-Smith (v2).
+pub fn add_bs_grouped_v2(spec: CiphertextSpec) -> Builder {
+    let builder = Builder::new(spec.block_spec());
+    let src_a = builder.ciphertext_input(spec.int_size());
+    let src_b = builder.ciphertext_input(spec.int_size());
+    let (a_b, b_b) = (
+        builder.ciphertext_split(&src_a),
+        builder.ciphertext_split(&src_b),
+    );
+    let (res, _) = builder.iop_add_bs_grouped_v2_raw(a_b, b_b, None);
+    builder.ciphertext_output(builder.ciphertext_join(res, Some(spec.int_size())));
+    builder
+}
+
 /// Creates an IR for addition using Hillis-Steele carry propagation.
 ///
 /// Convenience wrapper that calls [`Builder::iop_add_hillis_steele`]. Prefer [`add`]
@@ -767,6 +781,88 @@ impl Builder {
             result.as_slice()[..output_size].into(),
             CarryOut::clean(carry_out),
         )
+    }
+
+    /// Grouped Beaumont-Smith v2: depth-reduced `iop_add_bs_grouped_raw`.
+    /// Removes two serial levels of v1 by folding cin into the group prefix (no separate seed-resolve)
+    /// and fusing the resolve/clean tail into one `GenPropAdd` (as plain BS).
+    /// Depth 8 -> 6 at 64-bit, ~same PBS.
+    ///
+    /// Carry-out `Pg` (`v[n_groups]`); clean with `IsSome`.
+    pub(crate) fn iop_add_bs_grouped_v2_raw(
+        &self,
+        lhs_blocks: impl AsRef<[CiphertextBlock]>,
+        rhs_blocks: impl AsRef<[CiphertextBlock]>,
+        cin: Option<&CiphertextBlock>,
+    ) -> (Vec<CiphertextBlock>, CarryOut) {
+        let sums = self.comment("Raw sum").vector_add(
+            &lhs_blocks,
+            &rhs_blocks,
+            ExtensionBehavior::Passthrough,
+        );
+        let n = sums.len();
+        let group = 4usize;
+
+        // L1: ManyGenProp per block -> (PG carry-status, clean message).
+        self.push_comment("GenProp");
+        let mut pg = Vec::with_capacity(n);
+        let mut msg = Vec::with_capacity(n);
+        for (i, sum) in sums.iter().enumerate() {
+            let (g, m) = self
+                .comment(format!("{i}"))
+                .block_lookup2(sum, Lut2Def::ManyGenProp);
+            pg.push(g);
+            msg.push(m);
+        }
+        self.pop_comment();
+
+        // L2: per-group carry-out status = combine of the group's block PG values.
+        self.push_comment("Group status");
+        let n_groups = n.div_ceil(group);
+        let mut group_status = Vec::with_capacity(n_groups);
+        for j in 0..n_groups {
+            let lo = j * group;
+            let hi = (lo + group).min(n);
+            let parts: Vec<CiphertextBlock> = pg[lo..hi].to_vec();
+            group_status.push(self.comment(format!("{j}")).beaumont_smith_combine(&parts));
+        }
+        self.pop_comment();
+
+        // Inclusive Sklansky prefix over [cin, group_status...]; `v[j]` = carry into group j.
+        let cin_pg = self.cin_to_pg(cin);
+        let mut entries = Vec::with_capacity(n_groups + 1);
+        entries.push(cin_pg);
+        entries.extend(group_status.iter().copied());
+        self.push_comment("Group prefix");
+        let v = self.beaumont_smith_prefix(entries);
+        self.pop_comment();
+
+        // Per-block carry = combine(carry-into-group, preceding block statuses), then fused GenPropAdd.
+        self.push_comment("Expand + add");
+        let mut outputs = Vec::with_capacity(n);
+        for j in 0..n_groups {
+            let lo = j * group;
+            let hi = (lo + group).min(n);
+            for b in lo..hi {
+                let k = b - lo;
+                let carry_pg = if k == 0 {
+                    v[j]
+                } else {
+                    let mut parts = Vec::with_capacity(k + 1);
+                    parts.push(v[j]);
+                    parts.extend(pg[lo..b].iter().copied());
+                    self.beaumont_smith_combine(&parts)
+                };
+                outputs.push(self.comment(format!("{b}")).block_pack_then_lookup(
+                    &carry_pg,
+                    &msg[b],
+                    Lut1Def::GenPropAdd,
+                ));
+            }
+        }
+        self.pop_comment();
+
+        (outputs, CarryOut::pg(v[n_groups]))
     }
 }
 
@@ -1492,6 +1588,14 @@ mod test {
         // Sweep widths incl. non-multiple-of-4 and non-power-of-2 group counts (DCE pads).
         for size in (2..128).step_by(2) {
             add_bs_grouped(CiphertextSpec::new(size, 2, 2)).test_random(50, add_semantic);
+        }
+    }
+
+    #[test]
+    fn correctness_add_bs_grouped_v2() {
+        // Sweep widths incl. non-multiple-of-4 and non-power-of-2 group counts.
+        for size in (2..128).step_by(2) {
+            add_bs_grouped_v2(CiphertextSpec::new(size, 2, 2)).test_random(50, add_semantic);
         }
     }
 }
