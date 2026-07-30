@@ -179,6 +179,33 @@ pub fn add_ccs(spec: CiphertextSpec) -> Builder {
     builder.ciphertext_output(builder.ciphertext_join(res, Some(spec.int_size())));
     builder
 }
+/// Creates an IR for a grouped Beaumont-Smith addition partitioned across `n_boards`.
+pub fn add_bs_grouped_mh(spec: CiphertextSpec, n_boards: usize) -> Builder {
+    let builder = Builder::new(spec.block_spec());
+    let src_a = builder.ciphertext_input(spec.int_size());
+    let src_b = builder.ciphertext_input(spec.int_size());
+    let (a_b, b_b) = (
+        builder.ciphertext_split(&src_a),
+        builder.ciphertext_split(&src_b),
+    );
+    let (res, _) = builder.iop_add_bs_grouped_mh_raw(a_b, b_b, n_boards);
+    builder.ciphertext_output(builder.ciphertext_join(res, Some(spec.int_size())));
+    builder
+}
+
+/// Creates an IR for a grouped Beaumont-Smith v2 addition partitioned across `n_boards`.
+pub fn add_bs_grouped_v2_mh(spec: CiphertextSpec, n_boards: usize) -> Builder {
+    let builder = Builder::new(spec.block_spec());
+    let src_a = builder.ciphertext_input(spec.int_size());
+    let src_b = builder.ciphertext_input(spec.int_size());
+    let (a_b, b_b) = (
+        builder.ciphertext_split(&src_a),
+        builder.ciphertext_split(&src_b),
+    );
+    let (res, _) = builder.iop_add_bs_grouped_v2_mh_raw(a_b, b_b, n_boards);
+    builder.ciphertext_output(builder.ciphertext_join(res, Some(spec.int_size())));
+    builder
+}
 
 /// Creates an IR for a Beaumont-Smith addition partitioned across `n_boards`.
 pub fn add_beaumont_smith_mh(spec: CiphertextSpec, n_boards: usize) -> Builder {
@@ -1720,6 +1747,320 @@ impl Builder {
         self.pop_comment();
         (out, CarryOut::resolved(carry_out))
     }
+
+    /// Multi-board grouped Beaumont-Smith: each board owns contiguous 4-block groups; grouping
+    /// and within-group resolve are board-local, only the Sklansky prefix over the `n/4` group
+    /// carries crosses boards (4x narrower than plain BS-mh, so fewer transfers and PBS).
+    /// Requires `n` a multiple of 4 and `n/4` groups divisible across the boards.
+    ///
+    /// Carry-out `Resolved` (`group_carry[ng-1]`, or the group-0 seed when `ng == 1`).
+    pub(crate) fn iop_add_bs_grouped_mh_raw(
+        &self,
+        lhs_blocks: impl AsRef<[CiphertextBlock]>,
+        rhs_blocks: impl AsRef<[CiphertextBlock]>,
+        n_boards: usize,
+    ) -> (Vec<CiphertextBlock>, CarryOut) {
+        let lhs = lhs_blocks.as_ref();
+        let rhs = rhs_blocks.as_ref();
+        let n = lhs.len();
+        assert_eq!(
+            n % 4,
+            0,
+            "grouped-mh needs a block count multiple of 4 (got {n})"
+        );
+        let ng = n / 4;
+        assert!(
+            ng >= n_boards && ng % n_boards == 0,
+            "groups ({ng}) must split evenly across {n_boards} boards"
+        );
+        let gpb = ng / n_boards; // groups per board
+        let board_of_group = |g: usize| (g / gpb).min(n_boards - 1);
+        let mut boards = MhBoards::new(n_boards, n);
+
+        // ---- Phase A (per board, parallel): group states + carry-out status ----
+        let mut within: Vec<Option<[CiphertextBlock; 3]>> = vec![None; ng];
+        let mut status: Vec<Option<CiphertextBlock>> = vec![None; ng];
+        for j in 0..n_boards {
+            self.mh_phase(&mut boards, j);
+            self.push_comment(format!("board{j} group states"));
+            for g in (0..ng).filter(|&g| board_of_group(g) == j) {
+                let base = g * 4;
+                // per-block 1-bit carry status at its in-group position
+                let (s0, s1, s2, s3) = if g == 0 {
+                    (
+                        self.block_lookup2(
+                            &self.block_add(&lhs[0], &rhs[0]),
+                            Lut2Def::ManyCarryMsg,
+                        )
+                        .1,
+                        self.block_lookup(
+                            &self.block_add(&lhs[1], &rhs[1]),
+                            Lut1Def::ExtractPropGroup0,
+                        ),
+                        self.block_lookup(
+                            &self.block_add(&lhs[2], &rhs[2]),
+                            Lut1Def::ExtractPropGroup1,
+                        ),
+                        self.block_lookup(
+                            &self.block_add(&lhs[3], &rhs[3]),
+                            Lut1Def::ExtractPropGroup2,
+                        ),
+                    )
+                } else {
+                    (
+                        self.block_lookup(
+                            &self.block_add(&lhs[base], &rhs[base]),
+                            Lut1Def::ExtractPropGroup0,
+                        ),
+                        self.block_lookup(
+                            &self.block_add(&lhs[base + 1], &rhs[base + 1]),
+                            Lut1Def::ExtractPropGroup1,
+                        ),
+                        self.block_lookup(
+                            &self.block_add(&lhs[base + 2], &rhs[base + 2]),
+                            Lut1Def::ExtractPropGroup2,
+                        ),
+                        self.block_padding_lookup(
+                            &self.block_add(&lhs[base + 3], &rhs[base + 3]),
+                            Lut1Def::ExtractPropGroup3,
+                        ),
+                    )
+                };
+                let b0 = s0;
+                let b1 = self.block_add(&b0, &s1);
+                let b2 = self.block_add(&b1, &s2);
+                let b3 = self.block_temper_add(&b2, &s3);
+                let carry = if g == 0 {
+                    self.block_lookup(&b3, Lut1Def::SolvePropGroupFinal2)
+                } else {
+                    let r = self.block_wrapping_lookup(&b3, Lut1Def::ReduceCarryPad);
+                    self.block_wrapping_add_plaintext(&r, &self.block_let_plaintext(1))
+                };
+                within[g] = Some([b0, b1, b2]);
+                status[g] = Some(carry);
+            }
+            self.pop_comment();
+        }
+        let within: Vec<[CiphertextBlock; 3]> = within.into_iter().map(|x| x.unwrap()).collect();
+        let status: Vec<CiphertextBlock> = status.into_iter().map(|x| x.unwrap()).collect();
+
+        // ---- Phase B: Sklansky prefix over the group carry-out statuses ----
+        let seed = status[0];
+        let mut ps: Vec<CiphertextBlock> = status[1..].to_vec();
+        let m = ps.len();
+        let mut d = 1usize;
+        let mut level = 0u32;
+        while d < m {
+            let prev = ps.clone();
+            let block = d * 2;
+            for j in 0..n_boards {
+                self.mh_phase(&mut boards, j);
+                self.push_comment(format!("board{j} Sklansky L{level}"));
+                for q in 0..m {
+                    // status index q corresponds to group q+1
+                    if board_of_group(q + 1) != j {
+                        continue;
+                    }
+                    let bs = (q / block) * block;
+                    if q >= bs + d {
+                        let pivot = prev[bs + d - 1];
+                        ps[q] = self.block_pack_then_lookup(&prev[q], &pivot, Lut1Def::SolveProp);
+                    }
+                }
+                self.pop_comment();
+            }
+            d = block;
+            level += 1;
+        }
+        // Resolve each group's cumulative carry vs the seed (placed on the group's board;
+        // seed is read cross-board -> a cheap broadcast).
+        let mut group_carry: Vec<Option<CiphertextBlock>> = vec![None; ng];
+        group_carry[0] = Some(seed);
+        for j in 0..n_boards {
+            self.mh_phase(&mut boards, j);
+            self.push_comment(format!("board{j} group carries"));
+            for g in (1..ng).filter(|&g| board_of_group(g) == j) {
+                group_carry[g] =
+                    Some(self.block_pack_then_lookup(&ps[g - 1], &seed, Lut1Def::SolvePropCarry));
+            }
+            self.pop_comment();
+        }
+        let group_carry: Vec<CiphertextBlock> =
+            group_carry.into_iter().map(|x| x.unwrap()).collect();
+
+        // ---- Phase C (per board): carry into each block, then MsgOnly(sum[b] + carry) ----
+        let msg_only = |me: &Self, b: usize, carry: Option<&CiphertextBlock>| -> CiphertextBlock {
+            let raw = me.block_add(&lhs[b], &rhs[b]);
+            let with_carry = match carry {
+                Some(c) => me.block_add(&raw, c),
+                None => raw,
+            };
+            me.block_lookup(&with_carry, Lut1Def::MsgOnly)
+        };
+        let mut out: Vec<Option<CiphertextBlock>> = vec![None; n];
+        for j in 0..n_boards {
+            self.mh_phase(&mut boards, j);
+            self.push_comment(format!("board{j} resolve"));
+            for g in (0..ng).filter(|&g| board_of_group(g) == j) {
+                let base = g * 4;
+                let [w0, w1, w2] = within[g];
+                if g == 0 {
+                    // block 0: no incoming carry (message only)
+                    out[0] = Some(
+                        self.block_lookup(
+                            &self
+                                .block_lookup2(
+                                    &self.block_add(&lhs[0], &rhs[0]),
+                                    Lut2Def::ManyCarryMsg,
+                                )
+                                .0,
+                            Lut1Def::MsgOnly,
+                        ),
+                    );
+                    let c1 = w0; // carry into block 1 = block 0's status
+                    let c2 = self.block_lookup(&w1, Lut1Def::SolvePropGroupFinal0);
+                    let c3 = self.block_lookup(&w2, Lut1Def::SolvePropGroupFinal1);
+                    out[1] = Some(msg_only(self, 1, Some(&c1)));
+                    out[2] = Some(msg_only(self, 2, Some(&c2)));
+                    out[3] = Some(msg_only(self, 3, Some(&c3)));
+                } else {
+                    let pc = group_carry[g - 1]; // carry into block `base`
+                    let c1 =
+                        self.block_lookup(&self.block_add(&w0, &pc), Lut1Def::SolvePropGroupFinal0);
+                    let c2 =
+                        self.block_lookup(&self.block_add(&w1, &pc), Lut1Def::SolvePropGroupFinal1);
+                    let c3 =
+                        self.block_lookup(&self.block_add(&w2, &pc), Lut1Def::SolvePropGroupFinal2);
+                    out[base] = Some(msg_only(self, base, Some(&pc)));
+                    out[base + 1] = Some(msg_only(self, base + 1, Some(&c1)));
+                    out[base + 2] = Some(msg_only(self, base + 2, Some(&c2)));
+                    out[base + 3] = Some(msg_only(self, base + 3, Some(&c3)));
+                }
+            }
+            self.pop_comment();
+        }
+        self.mh_merge(&boards);
+        let out: Vec<CiphertextBlock> = out.into_iter().map(|x| x.unwrap()).collect();
+        let carry_out = group_carry[ng - 1];
+        (out, CarryOut::resolved(carry_out))
+    }
+
+    /// Multi-board grouped Beaumont-Smith v2:
+    /// the depth-reduced `iop_add_bs_grouped_v2_raw` partitioned across boards.
+    /// Grouping, within-group expand and the fused final add are board-local;
+    /// only the inclusive Sklansky over the `n/4` group carries crosses boards (same footprint as
+    ///  `iop_add_bs_grouped_mh_raw`, two levels shallower, no resolve/clean tail).
+    ///
+    /// Carry-out `Pg` (`v[ng]`); clean with `IsSome`.
+    pub(crate) fn iop_add_bs_grouped_v2_mh_raw(
+        &self,
+        lhs_blocks: impl AsRef<[CiphertextBlock]>,
+        rhs_blocks: impl AsRef<[CiphertextBlock]>,
+        n_boards: usize,
+    ) -> (Vec<CiphertextBlock>, CarryOut) {
+        let lhs = lhs_blocks.as_ref();
+        let rhs = rhs_blocks.as_ref();
+        let n = lhs.len();
+        assert_eq!(
+            n % 4,
+            0,
+            "grouped-mh needs a block count multiple of 4 (got {n})"
+        );
+        let ng = n / 4;
+        assert!(
+            ng >= n_boards && ng % n_boards == 0,
+            "groups ({ng}) must split evenly across {n_boards} boards"
+        );
+        let gpb = ng / n_boards;
+        let board_of_group = |g: usize| (g / gpb).min(n_boards - 1);
+        let mut boards = MhBoards::new(n_boards, n);
+
+        // ---- Phase A (per board): ManyGenProp -> (pg, msg); group carry-out status ----
+        let mut pg: Vec<Option<CiphertextBlock>> = vec![None; n];
+        let mut msg: Vec<Option<CiphertextBlock>> = vec![None; n];
+        let mut status: Vec<Option<CiphertextBlock>> = vec![None; ng];
+        for j in 0..n_boards {
+            self.mh_phase(&mut boards, j);
+            self.push_comment(format!("board{j} genprop+status"));
+            for g in (0..ng).filter(|&g| board_of_group(g) == j) {
+                let base = g * 4;
+                let mut group_pg = Vec::with_capacity(4);
+                for b in base..base + 4 {
+                    let (gp, m) =
+                        self.block_lookup2(&self.block_add(&lhs[b], &rhs[b]), Lut2Def::ManyGenProp);
+                    pg[b] = Some(gp);
+                    msg[b] = Some(m);
+                    group_pg.push(gp);
+                }
+                status[g] = Some(self.beaumont_smith_combine(&group_pg));
+            }
+            self.pop_comment();
+        }
+        let status: Vec<CiphertextBlock> = status.into_iter().map(|x| x.unwrap()).collect();
+
+        // ---- Phase B: inclusive Sklansky prefix over [cin=0, status0..] ----
+        let mut v: Vec<CiphertextBlock> = Vec::with_capacity(ng + 1);
+        v.push(self.block_let_ciphertext(0)); // cin = kill
+        v.extend(status.iter().copied());
+        let m = ng; // highest index
+        let mut sub = 1usize;
+        let mut level = 0u32;
+        while sub <= m {
+            let block = sub * 4;
+            let prev = v.clone();
+            for j in 0..n_boards {
+                self.mh_phase(&mut boards, j);
+                self.push_comment(format!("board{j} prefix L{level}"));
+                for q in 0..=m {
+                    let owner = if q == 0 {
+                        0
+                    } else {
+                        board_of_group(q.min(ng - 1))
+                    };
+                    if owner != j {
+                        continue;
+                    }
+                    if let Some(parts) = Self::bs_prefix_gather(&prev, q, sub, block) {
+                        v[q] = self.beaumont_smith_combine(&parts);
+                    }
+                }
+                self.pop_comment();
+            }
+            sub = block;
+            level += 1;
+        }
+
+        // ---- Phase C (per board): per-block PG carry + fused GenPropAdd ----
+        let mut out: Vec<Option<CiphertextBlock>> = vec![None; n];
+        for j in 0..n_boards {
+            self.mh_phase(&mut boards, j);
+            self.push_comment(format!("board{j} expand+add"));
+            for g in (0..ng).filter(|&g| board_of_group(g) == j) {
+                let base = g * 4;
+                for k in 0..4 {
+                    let b = base + k;
+                    let carry_pg = if k == 0 {
+                        v[g]
+                    } else {
+                        let mut parts = Vec::with_capacity(k + 1);
+                        parts.push(v[g]);
+                        parts.extend((base..b).map(|i| pg[i].unwrap()));
+                        self.beaumont_smith_combine(&parts)
+                    };
+                    out[b] = Some(self.block_pack_then_lookup(
+                        &carry_pg,
+                        msg[b].as_ref().unwrap(),
+                        Lut1Def::GenPropAdd,
+                    ));
+                }
+            }
+            self.pop_comment();
+        }
+        self.mh_merge(&boards);
+        let out: Vec<CiphertextBlock> = out.into_iter().map(|x| x.unwrap()).collect();
+        let carry_out = v[ng];
+        (out, CarryOut::pg(carry_out))
+    }
 }
 
 #[cfg(test)]
@@ -2057,6 +2398,25 @@ mod test {
         // Sweep widths incl. non-multiple-of-4 and non-power-of-2 group counts.
         for size in (2..128).step_by(2) {
             add_bs_grouped_v2(CiphertextSpec::new(size, 2, 2)).test_random(50, add_semantic);
+        }
+    }
+
+    #[test]
+    fn correctness_add_bs_grouped_mh() {
+        // Multi-board grouped BS must equal a+b; covers groups-per-board splits.
+        // (bits, boards): blocks=bits/2 must be mult of 4 and (blocks/4) mult of boards.
+        for (size, boards) in [(16u16, 2usize), (32, 2), (32, 4), (64, 2), (64, 4), (64, 8)] {
+            add_bs_grouped_mh(CiphertextSpec::new(size, 2, 2), boards)
+                .test_random(50, add_semantic);
+        }
+    }
+
+    #[test]
+    fn correctness_add_bs_grouped_v2_mh() {
+        // Depth-reduced multi-board grouped BS must equal a+b for every group/board split.
+        for (size, boards) in [(16u16, 2usize), (32, 2), (32, 4), (64, 2), (64, 4), (64, 8)] {
+            add_bs_grouped_v2_mh(CiphertextSpec::new(size, 2, 2), boards)
+                .test_random(50, add_semantic);
         }
     }
 
