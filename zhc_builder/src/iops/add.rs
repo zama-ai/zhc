@@ -220,6 +220,20 @@ pub fn add_beaumont_smith_mh(spec: CiphertextSpec, n_boards: usize) -> Builder {
     builder
 }
 
+/// Creates an IR for a CCS addition partitioned across `n_boards`.
+pub fn add_ccs_mh(spec: CiphertextSpec, n_boards: usize) -> Builder {
+    let builder = Builder::new(spec.block_spec());
+    let src_a = builder.ciphertext_input(spec.int_size());
+    let src_b = builder.ciphertext_input(spec.int_size());
+    let (a_b, b_b) = (
+        builder.ciphertext_split(&src_a),
+        builder.ciphertext_split(&src_b),
+    );
+    let (res, _) = builder.iop_add_ccs_mh_raw(a_b, b_b, n_boards);
+    builder.ciphertext_output(builder.ciphertext_join(res, Some(spec.int_size())));
+    builder
+}
+
 /// Creates an IR for addition using Hillis-Steele carry propagation.
 ///
 /// Convenience wrapper that calls [`Builder::iop_add_hillis_steele`]. Prefer [`add`]
@@ -1748,6 +1762,88 @@ impl Builder {
         (out, CarryOut::resolved(carry_out))
     }
 
+    /// Multi-board CCS: growing-radix prefix, each position on its board. It recomputes every
+    /// position at every level (Hillis-Steele style), so cross-board reads are frequent - this
+    /// measures whether the shallow CCS prefix still wins once transfers count.
+    ///
+    /// Carry-out `Resolved` (`ccs_bar` of the top window).
+    pub(crate) fn iop_add_ccs_mh_raw(
+        &self,
+        lhs_blocks: impl AsRef<[CiphertextBlock]>,
+        rhs_blocks: impl AsRef<[CiphertextBlock]>,
+        n_boards: usize,
+    ) -> (Vec<CiphertextBlock>, CarryOut) {
+        let lhs = lhs_blocks.as_ref();
+        let rhs = rhs_blocks.as_ref();
+        let n = lhs.len();
+        let mut boards = MhBoards::new(n_boards, n);
+        let board_of = |pos: usize| (pos * n_boards / n).min(n_boards - 1);
+
+        let mut sums: Vec<Option<CiphertextBlock>> = vec![None; n];
+        for j in 0..n_boards {
+            self.mh_phase(&mut boards, j);
+            for b in (0..n).filter(|&b| board_of(b) == j) {
+                sums[b] = Some(self.block_add(&lhs[b], &rhs[b]));
+            }
+        }
+        let sums: Vec<CiphertextBlock> = sums.into_iter().map(|x| x.unwrap()).collect();
+
+        let mut state: Vec<(CiphertextBlock, u8)> = sums.iter().map(|s| (*s, 2u8)).collect();
+        let mut step = 1usize;
+        while Self::ccs_merge_needed(&state, step) {
+            let in_msg_len = state.last().unwrap().1 as usize;
+            let n_inputs = 4 / in_msg_len;
+            let mut res: Vec<Option<(CiphertextBlock, u8)>> = vec![None; n];
+            for j in 0..n_boards {
+                self.mh_phase(&mut boards, j);
+                for i in (0..n).filter(|&i| board_of(i) == j) {
+                    res[i] = Some(self.ccs_prop_position(&state, i, n_inputs, step));
+                }
+            }
+            state = res.into_iter().map(|x| x.unwrap()).collect();
+            step *= n_inputs;
+        }
+
+        let mut out: Vec<Option<CiphertextBlock>> = vec![None; n];
+        for j in 0..n_boards {
+            self.mh_phase(&mut boards, j);
+            for b in (0..n).filter(|&b| board_of(b) == j) {
+                if b == 0 {
+                    out[0] = Some(self.block_lookup(&sums[0], Lut1Def::MsgOnly));
+                    continue;
+                }
+                let top = state[b - 1];
+                let carry = if top.1 == 0 {
+                    top.0
+                } else {
+                    let idxs = Self::ccs_window(&state, b - 1, 2, step);
+                    let window: Vec<(CiphertextBlock, u8)> =
+                        idxs.iter().map(|&k| state[k]).collect();
+                    let (packed, width) = self.ccs_pack(&window);
+                    self.ccs_bar_apply(&packed, width)
+                };
+                out[b] =
+                    Some(self.block_lookup(&self.block_add(&sums[b], &carry), Lut1Def::MsgOnly));
+            }
+        }
+        // Carry-out: `ccs_bar` of the 3-window ending at n-1 (3 digits reach block 0), placed on
+        // the top block's board. A real value, not a dummy: overflow/comparison callers rely on it.
+        self.mh_phase(&mut boards, board_of(n - 1));
+        let top = state[n - 1];
+        let carry_out = if top.1 == 0 {
+            top.0
+        } else {
+            let idxs = Self::ccs_window(&state, n - 1, 3, step);
+            let window: Vec<(CiphertextBlock, u8)> = idxs.iter().map(|&k| state[k]).collect();
+            let (packed, width) = self.ccs_pack(&window);
+            self.ccs_bar_apply(&packed, width)
+        };
+
+        self.mh_merge(&boards);
+        let out: Vec<CiphertextBlock> = out.into_iter().map(|x| x.unwrap()).collect();
+        (out, CarryOut::resolved(carry_out))
+    }
+
     /// Multi-board grouped Beaumont-Smith: each board owns contiguous 4-block groups; grouping
     /// and within-group resolve are board-local, only the Sklansky prefix over the `n/4` group
     /// carries crosses boards (4x narrower than plain BS-mh, so fewer transfers and PBS).
@@ -2347,6 +2443,31 @@ mod test {
         ] {
             add_beaumont_smith_mh(CiphertextSpec::new(size, 2, 2), boards)
                 .test_random(50, add_semantic);
+        }
+    }
+
+    #[test]
+    fn correctness_add_ccs_mh() {
+        for (size, boards) in [(16u16, 2usize), (32, 4), (64, 2), (64, 4), (64, 8)] {
+            add_ccs_mh(CiphertextSpec::new(size, 2, 2), boards).test_random(40, add_semantic);
+        }
+    }
+
+    #[test]
+    fn correctness_add_ccs_mh_carry() {
+        // The multi-board CCS carry-out must be the true overflow flag, not a placeholder:
+        // the sum can be right while the carry-out is silently wrong, so check it explicitly.
+        for (size, boards) in [(16u16, 2usize), (32, 4), (64, 2), (64, 4)] {
+            let spec = CiphertextSpec::new(size, 2, 2);
+            let builder = Builder::new(spec.block_spec());
+            let a = builder.ciphertext_input(spec.int_size());
+            let b = builder.ciphertext_input(spec.int_size());
+            let (a_b, b_b) = (builder.ciphertext_split(&a), builder.ciphertext_split(&b));
+            let (res, cout) = builder.iop_add_ccs_mh_raw(a_b, b_b, boards);
+            let flag = builder.resolve_carry(cout);
+            builder.ciphertext_output(builder.ciphertext_join(res, Some(spec.int_size())));
+            builder.ciphertext_output(builder.ciphertext_join([flag], None));
+            builder.test_random(40, overflow_add_semantic);
         }
     }
 
