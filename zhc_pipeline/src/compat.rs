@@ -40,7 +40,7 @@ pub enum Iop {
     Div,
     /// Unsigned remainder of two encrypted integers.
     Mod,
-    AddPt,
+    Adds,
     // SubPt,
     // PtSub,
     // MulPt,
@@ -96,7 +96,7 @@ impl FromStr for Iop {
             "TRAIL1" => Ok(Iop::TrailingOnes),
             "DIV" => Ok(Iop::Div),
             "MOD" => Ok(Iop::Mod),
-            "ADDS" => Ok(Iop::AddPt),
+            "ADDS" => Ok(Iop::Adds),
             // "SUBS" => Ok(Iop::SubPt),
             // "SSUB" => Ok(Iop::PtSub),
             // "MULS" => Ok(Iop::MulPt),
@@ -153,7 +153,7 @@ impl Iop {
         Iop::TrailingOnes,
         Iop::Div,
         Iop::Mod,
-        Iop::AddPt,
+        Iop::Adds,
         Iop::BwAnd,
         Iop::BwOr,
         Iop::BwXor,
@@ -193,7 +193,7 @@ impl Iop {
             Iop::TrailingOnes => trail1(spec),
             Iop::Div => div(spec),
             Iop::Mod => rem(spec),
-            Iop::AddPt => adds(spec),
+            Iop::Adds => adds(spec),
             Iop::BwAnd => bitwise_and(spec),
             Iop::BwOr => bitwise_or(spec),
             Iop::BwXor => bitwise_xor(spec),
@@ -244,7 +244,6 @@ impl Iop {
         pipeline.get_hpu_metrics().latency
     }
 
-<<<<<<< HEAD
     pub fn get_builder(&self, spec: CiphertextSpec) -> Builder {
         match self {
             Iop::CmpGt => cmp_gt(spec),
