@@ -64,6 +64,7 @@ mod mh_mul;
 mod mul;
 mod shiftrot;
 mod sub;
+mod subs;
 mod trivial_encrypt;
 
 pub use add::*;
@@ -80,4 +81,5 @@ pub use mh_mul::*;
 pub use mul::*;
 pub use shiftrot::*;
 pub use sub::*;
+pub use subs::*;
 pub use trivial_encrypt::*;
