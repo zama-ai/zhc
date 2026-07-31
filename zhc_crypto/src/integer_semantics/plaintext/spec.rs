@@ -72,7 +72,13 @@ impl PlaintextSpec {
     }
 
     pub fn int_mask(&self) -> EmulatedPlaintextStorage {
-        (1 << (self.block_count() * self.block.message_size())) - 1
+        // NB: shift the all-ones pattern down rather than `(1 << width) - 1`, which would
+        // overflow the shift for a full-width (128 bit) integer.
+        let width = (self.block_count() * self.block.message_size()).sas::<u32>();
+        if width == 0 {
+            return 0;
+        }
+        EmulatedPlaintextStorage::MAX >> (EmulatedPlaintextStorage::BITS - width)
     }
 
     /// Returns the block specification shared by all blocks in this integer.
@@ -162,7 +168,8 @@ impl PlaintextSpec {
     ///
     /// Returns true if `storage >= 2^int_size`.
     pub fn overflows_int(&self, storage: EmulatedPlaintextStorage) -> bool {
-        let shift = self.int_size();
-        storage >= (1 << shift)
+        let shift = self.int_size().sas::<u32>();
+        // A full-width integer can never overflow, and `1 << 128` is not representable.
+        shift < EmulatedPlaintextStorage::BITS && storage >= (1 << shift)
     }
 }
