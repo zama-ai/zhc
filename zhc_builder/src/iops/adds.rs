@@ -102,7 +102,7 @@ impl Builder {
     /// # let builder = Builder::new(spec.block_spec());
     /// # let a = builder.ciphertext_input(spec.int_size());
     /// # let b = builder.plaintext_input(spec.int_size());
-    /// let sum = builder.iop_add(&a, &b);
+    /// let sum = builder.iop_adds(&a, &b);
     /// ```
     pub fn iop_adds(&self, lhs: &Ciphertext, rhs: &Plaintext) -> Ciphertext {
         let par_w = match lhs.spec().int_size() {
@@ -133,8 +133,8 @@ impl Builder {
     /// # let spec = CiphertextSpec::new(8, 2, 2);
     /// # let builder = Builder::new(spec.block_spec());
     /// # let a = builder.ciphertext_input(spec.int_size());
-    /// # let b = builder.ciphertext_input(spec.int_size());
-    /// let sum = builder.iop_ripple_carry_add(&a, &b, None);
+    /// # let b = builder.plaintext_input(spec.int_size());
+    /// let (sum, carry_out) = builder.iop_adds_ripple_carry(&a, &b, None);
     /// ```
     pub fn iop_adds_ripple_carry(
         &self,
@@ -179,8 +179,8 @@ impl Builder {
     /// # let spec = CiphertextSpec::new(16, 2, 2);
     /// # let builder = Builder::new(spec.block_spec());
     /// # let a = builder.ciphertext_input(spec.int_size());
-    /// # let b = builder.ciphertext_input(spec.int_size());
-    /// let sum = builder.iop_add_hillis_steele(&a, &b, None);
+    /// # let b = builder.plaintext_input(spec.int_size());
+    /// let (sum, carry_out) = builder.iop_adds_hillis_steele(&a, &b, None);
     /// ```
     pub fn iop_adds_hillis_steele(
         &self,
@@ -443,7 +443,7 @@ impl Builder {
     /// # let spec = CiphertextSpec::new(32, 2, 2);
     /// # let builder = Builder::new(spec.block_spec());
     /// # let a = builder.ciphertext_input(spec.int_size());
-    /// # let b = builder.ciphertext_input(spec.int_size());
+    /// # let b = builder.plaintext_input(spec.int_size());
     /// let (sum, carry_out) = builder.iop_adds_kogge_stone(&a, &b, None, 12);
     /// ```
     pub fn iop_adds_kogge_stone(
