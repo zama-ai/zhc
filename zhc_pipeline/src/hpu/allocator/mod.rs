@@ -37,7 +37,8 @@ pub fn allocate_registers(
 #[cfg(test)]
 mod test {
     use zhc_builder::{
-        Builder, CiphertextSpec, add, adds, bitwise_and, bitwise_or, bitwise_xor, cmp_gt, div, if_then_else, if_then_zero, mul
+        Builder, CiphertextSpec, add, adds, bitwise_and, bitwise_or, bitwise_xor, cmp_gt, div,
+        if_then_else, if_then_zero, mul, overflow_ssub, overflow_subs, ssub, subs
     };
     use zhc_config::hpu::{HpuConfig, PhysicalConfig};
     use zhc_ir::{IR, PrintWalker};
@@ -220,6 +221,10 @@ mod test {
             let spec = CiphertextSpec::new(size, 2, 2);
             check(add(spec));
             check(adds(spec));
+            check(subs(spec));
+            check(ssub(spec));
+            check(overflow_subs(spec));
+            check(overflow_ssub(spec));
             check(bitwise_and(spec));
             check(bitwise_or(spec));
             check(bitwise_xor(spec));
