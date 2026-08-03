@@ -94,7 +94,10 @@ impl Builder {
     /// Kogge-Stone) and the PBS count are exactly those of a scalar addition. The two
     /// complements are plaintext-minus-ciphertext operations, which need no PBS.
     ///
-    /// The result is the wrapping difference.
+    /// It is costing 1 block_plaintext_sub per block before & after adds so in TFHE-rs we are
+    /// not using it and perfer inverting constant at runtime which we cannot do in ZHC.
+    /// It will have to be improved when we give ucore a few DOp instructions to manipulate
+    /// immediate on its own.
     ///
     /// # Examples
     ///
