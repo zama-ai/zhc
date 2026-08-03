@@ -70,6 +70,7 @@ mod muls;
 mod shiftrot;
 mod sub;
 mod subs;
+mod sum;
 mod trivial_encrypt;
 
 pub use add::*;
@@ -92,4 +93,5 @@ pub use muls::*;
 pub use shiftrot::*;
 pub use sub::*;
 pub use subs::*;
+pub use sum::*;
 pub use trivial_encrypt::*;
