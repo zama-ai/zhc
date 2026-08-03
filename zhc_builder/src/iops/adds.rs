@@ -38,6 +38,20 @@ pub fn adds(spec: CiphertextSpec) -> Builder {
     builder
 }
 
+/// Creates an IR for `ct + imm` with overflow (carry) detection.
+///
+/// Convenience wrapper that calls [`Builder::iop_overflow_adds`]. Returns two outputs:
+/// the wrapping sum and a single-block carry flag.
+pub fn overflow_adds(spec: CiphertextSpec) -> Builder {
+    let builder = Builder::new(spec.block_spec());
+    let src_c = builder.ciphertext_input(spec.int_size());
+    let src_p = builder.plaintext_input(spec.int_size());
+    let (res, flag) = builder.iop_overflow_adds(&src_c, &src_p);
+    builder.ciphertext_output(res);
+    builder.ciphertext_output(flag);
+    builder
+}
+
 /// Creates an IR for the addition of an encrypted integers and a scalar using Hillis-Steele
 /// carry propagation.
 ///
@@ -115,6 +129,41 @@ impl Builder {
             0..8 => self.iop_adds_ripple_carry(&lhs, &rhs, None).0,
             8..17 => self.iop_adds_hillis_steele(&lhs, &rhs, None).0,
             17..256 => self.iop_adds_kogge_stone(&lhs, &rhs, None, par_w).0,
+            _ => todo!(),
+        }
+    }
+
+    /// Adds an encrypted integer and an immediate with overflow (carry) detection.
+    ///
+    /// Returns `(sum, overflow)` where `sum` is `lhs + rhs` (wrapping) and `overflow` is a
+    /// single-block ciphertext: 1 if the unsigned sum does not fit in the operand width, 0
+    /// otherwise.
+    ///
+    /// The carry-out of the adder *is* the overflow flag, so this costs exactly the same as
+    /// [`iop_adds`](Self::iop_adds) -- the flag comes for free, and dead code elimination is
+    /// what makes it disappear from [`iop_adds`](Self::iop_adds).
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::{CiphertextSpec, Builder};
+    /// # let spec = CiphertextSpec::new(32, 2, 2);
+    /// # let builder = Builder::new(spec.block_spec());
+    /// # let a = builder.ciphertext_input(spec.int_size());
+    /// # let b = builder.plaintext_input(spec.int_size());
+    /// let (sum, overflow) = builder.iop_overflow_adds(&a, &b);
+    /// ```
+    pub fn iop_overflow_adds(&self, lhs: &Ciphertext, rhs: &Plaintext) -> (Ciphertext, Ciphertext) {
+        let par_w = match lhs.spec().int_size() {
+            8..16 => 1,
+            16..24 => 7,
+            24..256 => 12,
+            _ => 1,
+        };
+        match lhs.spec().int_size() {
+            0..8 => self.iop_adds_ripple_carry(lhs, rhs, None),
+            8..17 => self.iop_adds_hillis_steele(lhs, rhs, None),
+            17..256 => self.iop_adds_kogge_stone(lhs, rhs, None, par_w),
             _ => todo!(),
         }
     }
@@ -587,6 +636,20 @@ mod test {
         }
         for size in (2..128).step_by(2) {
             adds_kogge_stone(CiphertextSpec::new(size, 2, 2), 12).test_random(100, semantic);
+        }
+    }
+
+    #[test]
+    fn correctness_overflow_adds() {
+        fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
+            let [IopValue::Ciphertext(lhs), IopValue::Plaintext(rhs)] = inp else {
+                unreachable!()
+            };
+            let (sum, flag) = lhs.overflow_adds(*rhs);
+            Some(vec![IopValue::Ciphertext(sum), IopValue::Ciphertext(flag)])
+        }
+        for size in (2..128).step_by(2) {
+            overflow_adds(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
         }
     }
 
