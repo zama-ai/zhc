@@ -17,15 +17,14 @@ impl FileHandle {
         FileHandle(random_path(ext))
     }
 
-    pub fn move_to(&mut self, path: impl AsRef<Path>) -> io::Result<()> {
+    pub fn move_to(&mut self, path: impl AsRef<Path>){
         let path = path.as_ref();
-        fs::rename(&self.0, path)?;
+        fs::rename(&self.0, path).unwrap();
         self.0 = path.to_path_buf();
-        Ok(())
     }
 
-    pub fn open(&self) -> io::Result<()> {
-        let path = self.0.canonicalize()?;
+    pub fn open(&self) {
+        let path = self.0.canonicalize().unwrap();
 
         let launcher = if cfg!(target_os = "macos") {
             "open"
@@ -38,16 +37,15 @@ impl FileHandle {
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
-            .status()?;
+            .status()
+            .unwrap();
 
         if !status.success() {
-            return Err(io::Error::other(format!(
+            panic!(
                 "`{launcher}` failed to open {}: {status}",
                 path.display()
-            )));
+            );
         }
-
-        Ok(())
     }
 }
 

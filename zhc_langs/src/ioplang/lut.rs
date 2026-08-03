@@ -70,6 +70,10 @@ pub enum Lut1Def {
 }
 
 impl Lut1Def {
+    pub fn custom(name: impl AsRef<str>, f: fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock) -> Self {
+        Self::Custom { name: name.as_ref().to_string(), f }
+    }
+
     fn name(&self) -> String {
         match self {
             Lut1Def::None => "None".to_string(),
@@ -234,6 +238,14 @@ pub enum Lut2Def {
 }
 
 impl Lut2Def {
+    pub fn custom(
+        name: impl AsRef<str>,
+        f1: fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
+        f2: fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
+    ) -> Self {
+        Self::Custom { name: name.as_ref().to_string(), f1, f2 }
+    }
+
     fn name(&self) -> String {
         match self {
             Lut2Def::ManyGenProp => "ManyGenProp".to_string(),

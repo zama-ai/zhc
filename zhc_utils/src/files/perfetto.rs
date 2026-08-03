@@ -66,9 +66,9 @@ impl PerfettoTrace {
         PerfettoTrace(random_path(super::Extension::Json))
     }
 
-    pub fn open(&self) -> io::Result<()> {
+    pub fn open(&self) {
         let shim_file = FileHandle::random(super::Extension::Html);
-        fs::write(&shim_file, self.shim()?)?;
+        fs::write(&shim_file, self.shim().unwrap()).unwrap();
         shim_file.open()
     }
 
