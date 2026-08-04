@@ -329,14 +329,14 @@ mod test {
                 let ct = spec.from_int(a);
                 let pt = pt_spec.from_int(c);
 
-                let got = subs(spec).eval().with_inputs(&inputs).get_outputs();
+                let got = subs(spec).interpret().with_inputs(&inputs).get_outputs();
                 assert_eq!(
                     got,
                     vec![IopValue::Ciphertext(ct.subs(pt))],
                     "subs failed for size={size} a={a} c={c}"
                 );
 
-                let got = ssub(spec).eval().with_inputs(&inputs).get_outputs();
+                let got = ssub(spec).interpret().with_inputs(&inputs).get_outputs();
                 assert_eq!(
                     got,
                     vec![IopValue::Ciphertext(ct.ssub(pt))],
@@ -344,7 +344,7 @@ mod test {
                 );
 
                 let (diff, flag) = ct.overflow_subs(pt);
-                let got = overflow_subs(spec).eval().with_inputs(&inputs).get_outputs();
+                let got = overflow_subs(spec).interpret().with_inputs(&inputs).get_outputs();
                 assert_eq!(
                     got,
                     vec![IopValue::Ciphertext(diff), IopValue::Ciphertext(flag)],
@@ -352,7 +352,7 @@ mod test {
                 );
 
                 let (diff, flag) = ct.overflow_ssub(pt);
-                let got = overflow_ssub(spec).eval().with_inputs(&inputs).get_outputs();
+                let got = overflow_ssub(spec).interpret().with_inputs(&inputs).get_outputs();
                 assert_eq!(
                     got,
                     vec![IopValue::Ciphertext(diff), IopValue::Ciphertext(flag)],
