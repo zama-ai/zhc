@@ -67,6 +67,10 @@ pub enum Lut1Def {
         name: String,
         f: fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
     },
+    Table {
+        name: String,
+        table: Vec<u8>,
+    },
 }
 
 impl Lut1Def {
@@ -134,6 +138,7 @@ impl Lut1Def {
             Lut1Def::IfPos0FalseZeroed => "IfPos0FalseZeroed".to_string(),
             Lut1Def::IfPos1TrueZeroed => "IfPos1TrueZeroed".to_string(),
             Lut1Def::Custom { name, .. } => name.clone(),
+            Lut1Def::Table { name, .. } => name.clone(),
         }
     }
 
@@ -201,11 +206,19 @@ impl Lut1Def {
             Lut1Def::IfPos0FalseZeroed => IfPos0FalseZeroed_0,
             Lut1Def::IfPos1TrueZeroed => IfPos1TrueZeroed_0,
             Lut1Def::Custom { f, .. } => *f,
+            Lut1Def::Table { .. } => panic!("Table LUTs are data, use into_lut."),
         }
     }
 
     pub fn into_lut(&self, spec: CiphertextBlockSpec) -> Lut1 {
-        Lut1::from_fn(self.name(), spec, self.func())
+        match self {
+            Lut1Def::Table { name, table } => Lut1::from_fn(name, spec, |block| {
+                block
+                    .spec()
+                    .from_message(table[block.raw_data_bits() as usize].into())
+            }),
+            _ => Lut1::from_fn(self.name(), spec, self.func()),
+        }
     }
 }
 
