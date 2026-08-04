@@ -3,8 +3,8 @@ use std::str::FromStr;
 use zhc_builder::{
     Builder, CiphertextSpec, add, add_simd, adds, bitwise_and, bitwise_inv, bitwise_or,
     bitwise_xor, cmp_eq, cmp_gt, cmp_gte, cmp_lt, cmp_lte, cmp_neq, count_0, count_1, div, divs,
-    erc7984, erc7984_simd, if_then_else, if_then_zero, ilog2, lead0, lead1, mods, mul, muls,
-    overflow_add, overflow_adds, overflow_mul, overflow_muls, overflow_ssub, overflow_sub,
+    erc7984, erc7984_simd, if_then_else, if_then_zero, ilog2, lead0, lead1, memcpy, mods, mul,
+    muls, overflow_add, overflow_adds, overflow_mul, overflow_muls, overflow_ssub, overflow_sub,
     overflow_subs, rem, rotate_left, rotate_right, rots_left, rots_right, shift_left, shift_right,
     shifts_left, shifts_right, ssub, sub, subs, trail0, trail1,
 };
@@ -82,7 +82,8 @@ pub enum Iop {
     Erc7984,
     Erc7984Simd,
     AddSimd,
-    // MemCpy,
+    /// Block for block copy of an encrypted integer (`dst = src`).
+    MemCpy,
 }
 
 impl FromStr for Iop {
@@ -138,7 +139,7 @@ impl FromStr for Iop {
             "ERC_7984" => Ok(Iop::Erc7984),
             "ERC_7984_SIMD" => Ok(Iop::Erc7984Simd),
             "ADD_SIMD" => Ok(Iop::AddSimd),
-            // "MEMCPY" => Ok(Iop::MemCpy),
+            "MEMCPY" => Ok(Iop::MemCpy),
             _ => Err(()),
         }
     }
@@ -194,6 +195,7 @@ impl Iop {
         Iop::OvfMul,
         Iop::Erc7984,
         Iop::Erc7984Simd,
+        Iop::MemCpy,
     ];
 
     /// Returns the builder for this operation with the given ciphertext spec.
@@ -247,6 +249,7 @@ impl Iop {
             Iop::OvfMul => overflow_mul(spec),
             Iop::Erc7984 => erc7984(spec),
             Iop::Erc7984Simd => erc7984_simd(spec),
+            Iop::MemCpy => memcpy(spec),
         }
     }
 
@@ -334,7 +337,7 @@ impl Iop {
             Iop::Erc7984 => erc7984(spec),
             Iop::Erc7984Simd => erc7984_simd(spec),
             Iop::AddSimd => add_simd(spec),
-            // Iop::MemCpy => todo!(),
+            Iop::MemCpy => memcpy(spec),
         }
     }
 }
