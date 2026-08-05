@@ -15,10 +15,16 @@ pub fn lower_iop_to_multi_hpu<'a>(
     ir: &IR<IopLang>,
     partitions: &OpMap<PartitionId>,
 ) -> (IR<HpuLang>, OpMap<HpuLocality>) {
+    let lowered = lower_iop_to_hpu(ir);
+    // TODO: thread the LUT payload through the multi-HPU artifacts.
+    assert!(
+        lowered.lut_payload.is_empty(),
+        "LUT payload is not plumbed through the multi-HPU pipeline yet."
+    );
     let Translation {
         output: mut ir,
         provenance_map,
-    } = lower_iop_to_hpu(ir);
+    } = lowered.translation;
     let partition_to_hid: SmallMap<PartitionId, HpuId> = partitions
         .iter()
         .map(|a| a.1.clone())

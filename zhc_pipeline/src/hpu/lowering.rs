@@ -321,8 +321,23 @@ pub(crate) static GIDS2: LazyLock<FastMap<Lut2, LutId>> = LazyLock::new(|| {
     ])
 });
 
-pub(crate) fn lower_iop_to_hpu(ir: &IR<IopLang>) -> Translation<HpuLang> {
+/// A lowered circuit:
+/// HPU IR plus the tables of the non-builtin LUTs it references, keyed by gid allocated to each.
+pub(crate) struct HpuLowered {
+    pub translation: Translation<HpuLang>,
+    pub lut_payload: Vec<(LutId, Vec<u8>)>,
+}
+
+// Magic numbers for non-builtin gids
+/// First gid the compiler may allocate.
+pub(crate) const FIRST_NON_BUILTIN_GID: usize = 131;
+/// LUT slots in the board's memory.
+pub(crate) const LUT_MEM_CAPACITY: usize = 256;
+
+pub(crate) fn lower_iop_to_hpu(ir: &IR<IopLang>) -> HpuLowered {
     use IopInstructionSet::*;
+    // Non-builtin LUTs get gids at first encounter; deterministic linear walk
+    let non_builtin_luts: std::cell::RefCell<FastMap<Lut1, LutId>> = Default::default();
     let remap = ir
         .walk_ops_linear()
         .filter(|op| {
@@ -381,7 +396,7 @@ pub(crate) fn lower_iop_to_hpu(ir: &IR<IopLang>) -> Translation<HpuLang> {
             let valanns = svec![(); a.get_return_arity()];
             (opann, valanns)
         });
-    translate_ann(ann_ir.view(), Order::Linear, |op, translator| {
+    let translation = translate_ann(ann_ir.view(), Order::Linear, |op, translator| {
         match op.get_instruction() {
             IopInstructionSet::_Consume { .. } => {
                 panic!("Tried to translate a _consume op");
@@ -571,10 +586,20 @@ pub(crate) fn lower_iop_to_hpu(ir: &IR<IopLang>) -> Translation<HpuLang> {
                 let lut = match GIDS1.get(&lut) {
                     Some(v) => *v,
                     None => {
-                        eprintln!(
-                            "Warning: Failed to lookup the gid for key: {lut:?}. Custom LUT loading is not yet implemented. This can run on simulator but would fail on board."
-                        );
-                        LutId(76)
+                        let mut non_builtin_luts = non_builtin_luts.borrow_mut();
+                        match non_builtin_luts.get(&lut) {
+                            Some(gid) => *gid,
+                            None => {
+                                let gid = LutId(FIRST_NON_BUILTIN_GID + non_builtin_luts.len());
+                                assert!(
+                                    gid.0 < LUT_MEM_CAPACITY,
+                                    "LUT memory exhausted allocating {}.",
+                                    lut.name()
+                                );
+                                non_builtin_luts.insert(lut.clone(), gid);
+                                gid
+                            }
+                        }
                     }
                 };
                 translator.direct_translation(&op, HpuInstructionSet::Pbs { lut });
@@ -582,24 +607,34 @@ pub(crate) fn lower_iop_to_hpu(ir: &IR<IopLang>) -> Translation<HpuLang> {
             IopInstructionSet::Pbs2 { lut, .. } => {
                 let lut = match GIDS2.get(&lut) {
                     Some(v) => *v,
-                    None => {
-                        eprintln!(
-                            "Warning: Failed to lookup the gid for key: {lut:?}. Custom LUT loading is not yet implemented. This can run on simulator but would fail on board."
-                        );
-                        LutId(76)
-                    }
+                    None => panic!(
+                        "Non-builtin Lut2 {} has no gid, non-builtin gid allocation only covers Lut1.",
+                        lut.name()
+                    ),
                 };
                 translator.direct_translation(&op, HpuInstructionSet::Pbs2 { lut });
             }
         }
-    })
+    });
+
+    let mut lut_payload: Vec<(LutId, Vec<u8>)> = non_builtin_luts
+        .into_inner()
+        .into_iter()
+        .map(|(lut, gid)| (gid, lut.data_table()))
+        .collect();
+    lut_payload.sort_by_key(|(gid, _)| gid.0);
+    HpuLowered {
+        translation,
+        lut_payload,
+    }
 }
 
 #[cfg(test)]
 mod test {
     use zhc_builder::{
         Builder, CiphertextSpec, add, adds, bitwise_and, bitwise_or, bitwise_xor, cmp_gt, count_0,
-        count_1, if_then_else, if_then_zero, mul, overflow_ssub, overflow_subs, ssub, subs,
+        count_1, if_then_else, if_then_zero, match_value, mul, overflow_ssub, overflow_subs, ssub,
+        subs,
     };
     use zhc_ir::IR;
     use zhc_langs::{hpulang::HpuLang, ioplang::IopLang};
@@ -608,7 +643,7 @@ mod test {
     use crate::test::check_iop_hpu_equivalence;
 
     fn pipeline(ir: &IR<IopLang>) -> IR<HpuLang> {
-        super::lower_iop_to_hpu(&ir).output
+        super::lower_iop_to_hpu(&ir).translation.output
     }
 
     #[test]
@@ -777,5 +812,55 @@ mod test {
                 check(count_1(spec));
             }
         }
+    }
+
+    /// Non-builtin LUTs get deterministic gids above the builtins, deduplicated by content across
+    /// the whole circuit.
+    #[test]
+    fn non_builtin_lut_allocation() {
+        let table: Vec<(u128, u128)> = (0..16).map(|k| (k, 15 - k)).collect();
+        let spec = CiphertextSpec::new(4, 2, 2);
+
+        // Two identical lookups in one circuit share one gid set.
+        let builder = Builder::new(spec.block_spec());
+        let x = builder.ciphertext_input(spec.int_size());
+        let (a, _) = builder.iop_match_value(&x, &table, 4);
+        let (b, _) = builder.iop_match_value(&x, &table, 4);
+        let sum = builder.iop_add(&a, &b, None);
+        builder.ciphertext_output(sum);
+
+        let lowered = super::lower_iop_to_hpu(&builder.optimize_ir());
+        // 4-bit input: no high bits, one candidate per output column.
+        // The unused flag columns are dead-code eliminated before lowering.
+        let gids: Vec<usize> = lowered
+            .lut_payload
+            .iter()
+            .map(|(gid, t)| {
+                assert_eq!(t.len(), 16);
+                gid.0
+            })
+            .collect();
+        assert_eq!(gids, vec![131, 132]);
+
+        // The same circuit lowers to the same assignment.
+        let rerun = super::lower_iop_to_hpu(&builder.optimize_ir());
+        assert_eq!(lowered.lut_payload, rerun.lut_payload);
+
+        // A different table in another circuit allocates from the start again.
+        let other = match_value(spec, &[(3, 9)], 4).optimize_ir();
+        let other = super::lower_iop_to_hpu(&other);
+        assert_eq!(other.lut_payload.first().map(|(g, _)| g.0), Some(131));
+    }
+
+    /// Adding a builtin LUT must not collide with the non-builtin gid range.
+    #[test]
+    fn builtin_gids_below_non_builtin_range() {
+        let max_builtin = super::GIDS1
+            .values()
+            .chain(super::GIDS2.values())
+            .map(|gid| gid.0)
+            .max()
+            .unwrap();
+        assert!(max_builtin < super::FIRST_NON_BUILTIN_GID);
     }
 }

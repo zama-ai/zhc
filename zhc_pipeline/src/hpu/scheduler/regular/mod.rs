@@ -42,7 +42,7 @@ mod test {
     use super::*;
 
     fn pipeline(ir: &IR<IopLang>) -> IR<HpuLang> {
-        let ir = lower_iop_to_hpu(&ir).output;
+        let ir = lower_iop_to_hpu(&ir).translation.output;
         let config = HpuConfig::from(PhysicalConfig::gaussian_64b());
         let scheduled = schedule(&ir, &config, SchedPolicy::AsLateAsPossible);
         scheduled

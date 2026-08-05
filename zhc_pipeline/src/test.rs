@@ -4,11 +4,11 @@ use zhc_ir::IR;
 use zhc_langs::{
     doplang::{DopInterpreterContext, DopLang, DopValue},
     hpulang::{HpuInterpreterContext, HpuLang, HpuValue, LutId, TDstId, TImmId, TSrcId},
-    ioplang::{IopInstructionSet, IopInterepreterContext, IopLang, IopValue},
+    ioplang::{IopInstructionSet, IopInterepreterContext, IopLang, IopValue, Lut1Def},
 };
 use zhc_utils::{Dumpable, FastMap, SafeAs};
 
-use crate::hpu::lowering::{GIDS1, GIDS2};
+use crate::hpu::lowering::{GIDS1, GIDS2, lower_iop_to_hpu};
 
 pub fn check_iop_hpu_equivalence(
     iop_ir: &IR<IopLang>,
@@ -16,8 +16,16 @@ pub fn check_iop_hpu_equivalence(
     spec: CiphertextBlockSpec,
     nreps: usize,
 ) {
-    // Build reverse LUT tables.
-    let lut1: FastMap<LutId, Lut1> = GIDS1.iter().map(|(k, v)| (*v, k.clone())).collect();
+    // Build reverse LUT tables, builtins plus the non-builtin ones lowering allocated.
+    // Re-lowering assigns the same gids, so they match the stream.
+    let mut lut1: FastMap<LutId, Lut1> = GIDS1.iter().map(|(k, v)| (*v, k.clone())).collect();
+    for (gid, table) in lower_iop_to_hpu(iop_ir).lut_payload {
+        let def = Lut1Def::Table {
+            name: format!("dyn_{}", gid.0),
+            table,
+        };
+        lut1.insert(gid, def.into_lut(spec));
+    }
     let lut2: FastMap<LutId, Lut2> = GIDS2.iter().map(|(k, v)| (*v, k.clone())).collect();
 
     // Discover input slots from the IOP IR.
@@ -135,8 +143,16 @@ pub fn check_iop_dop_equivalence(
     num_registers: usize,
     nreps: usize,
 ) {
-    // Build reverse LUT tables.
-    let lut1: FastMap<LutId, Lut1> = GIDS1.iter().map(|(k, v)| (*v, k.clone())).collect();
+    // Build reverse LUT tables, builtins plus the non-builtin ones lowering allocated.
+    // Re-lowering assigns the same gids, so they match the stream.
+    let mut lut1: FastMap<LutId, Lut1> = GIDS1.iter().map(|(k, v)| (*v, k.clone())).collect();
+    for (gid, table) in lower_iop_to_hpu(iop_ir).lut_payload {
+        let def = Lut1Def::Table {
+            name: format!("dyn_{}", gid.0),
+            table,
+        };
+        lut1.insert(gid, def.into_lut(spec));
+    }
     let lut2: FastMap<LutId, Lut2> = GIDS2.iter().map(|(k, v)| (*v, k.clone())).collect();
 
     // Discover input slots from the IOP IR.

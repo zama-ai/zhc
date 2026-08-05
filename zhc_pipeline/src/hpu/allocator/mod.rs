@@ -43,7 +43,7 @@ mod test {
     use super::allocate_registers;
 
     fn pipeline(ir: &IR<IopLang>) -> IR<DopLang> {
-        let ir = lower_iop_to_hpu(&ir).output;
+        let ir = lower_iop_to_hpu(&ir).translation.output;
         let config = HpuConfig::from(PhysicalConfig::gaussian_64b());
         let scheduled = schedule(
             &ir,

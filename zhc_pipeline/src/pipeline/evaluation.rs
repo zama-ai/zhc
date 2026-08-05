@@ -22,6 +22,7 @@ impl EvaluatesTo<PipelineArtifact> for PipelineTypeSystem {
             PipelineArtifact::IopLang(_) => PipelineTypeSystem::IopLang,
             PipelineArtifact::HpuConfig(_) => PipelineTypeSystem::HpuConfig,
             PipelineArtifact::HpuLangTranslated(_) => PipelineTypeSystem::HpuLangTranslated,
+            PipelineArtifact::HpuLutPayload(_) => PipelineTypeSystem::HpuLutPayload,
             PipelineArtifact::HpuLangScheduled(_) => PipelineTypeSystem::HpuLangScheduled,
             PipelineArtifact::DopLang(_) => PipelineTypeSystem::DopLang,
             PipelineArtifact::HpuStream(_) => PipelineTypeSystem::HpuStream,
@@ -100,10 +101,11 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
             PipelineInstructionSet::IopLangToHpuLang => {
                 interval_begin(c"IopLangToHpuLang", 0);
                 let ioplang = arguments[0].unwrap_iop_lang_ref();
-                let hpulang = hpu::lowering::lower_iop_to_hpu(ioplang);
-                let result = svec![PipelineArtifact::HpuLangTranslated(hpulang.output)];
-                interval_end(c"IopLangToHpuLang", 0);
-                result
+                let lowered = hpu::lowering::lower_iop_to_hpu(ioplang);
+                svec![
+                    PipelineArtifact::HpuLangTranslated(lowered.translation.output),
+                    PipelineArtifact::HpuLutPayload(lowered.lut_payload),
+                ]
             }
             PipelineInstructionSet::ScheduleHpuLang => {
                 interval_begin(c"ScheduleHpuLang", 0);
