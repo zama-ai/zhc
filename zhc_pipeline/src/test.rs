@@ -136,12 +136,77 @@ pub fn check_iop_hpu_equivalence(
     }
 }
 
+/// Checks IOP/DOP equivalence on `nreps` random input sets.
 pub fn check_iop_dop_equivalence(
     iop_ir: &IR<IopLang>,
     dop_ir: &IR<DopLang>,
     spec: CiphertextBlockSpec,
     num_registers: usize,
     nreps: usize,
+) {
+    let slots = input_slots(iop_ir);
+    let random_inputs = (0..nreps).map(|_| {
+        slots
+            .iter()
+            .map(|(_, is_ct, int_size)| {
+                if *is_ct {
+                    IopValue::Ciphertext(spec.ciphertext_spec(*int_size).random())
+                } else {
+                    IopValue::Plaintext(
+                        spec.matching_plaintext_block_spec()
+                            .plaintext_spec(*int_size)
+                            .random(),
+                    )
+                }
+            })
+            .collect()
+    });
+    check_iop_dop_equivalence_on(iop_ir, dop_ir, spec, num_registers, random_inputs);
+}
+
+/// Like [`check_iop_dop_equivalence`], but runs every possible input value instead of sampling.
+/// The circuit must have a single ciphertext input.
+pub fn check_iop_dop_equivalence_exhaustive(
+    iop_ir: &IR<IopLang>,
+    dop_ir: &IR<DopLang>,
+    spec: CiphertextBlockSpec,
+    num_registers: usize,
+) {
+    let [(_, true, int_size)] = input_slots(iop_ir)[..] else {
+        panic!("Exhaustive equivalence needs a single ciphertext input.");
+    };
+    let all_inputs = (0..1u128 << int_size).map(|int| {
+        vec![IopValue::Ciphertext(
+            spec.ciphertext_spec(int_size).from_int(int),
+        )]
+    });
+    check_iop_dop_equivalence_on(iop_ir, dop_ir, spec, num_registers, all_inputs);
+}
+
+/// `(pos, is_ct, int_size)` of every circuit input, in position order.
+fn input_slots(iop_ir: &IR<IopLang>) -> Vec<(usize, bool, u16)> {
+    let mut slots = Vec::new();
+    for op in iop_ir.walk_ops_linear() {
+        match op.get_instruction() {
+            IopInstructionSet::InputCiphertext { pos, int_size } => {
+                slots.push((*pos, true, *int_size));
+            }
+            IopInstructionSet::InputPlaintext { pos, int_size } => {
+                slots.push((*pos, false, *int_size));
+            }
+            _ => {}
+        }
+    }
+    slots.sort_by_key(|(pos, _, _)| *pos);
+    slots
+}
+
+fn check_iop_dop_equivalence_on(
+    iop_ir: &IR<IopLang>,
+    dop_ir: &IR<DopLang>,
+    spec: CiphertextBlockSpec,
+    num_registers: usize,
+    input_sets: impl Iterator<Item = Vec<IopValue>>,
 ) {
     // Build reverse LUT tables, builtins plus the non-builtin ones lowering allocated.
     // Re-lowering assigns the same gids, so they match the stream.
@@ -155,38 +220,7 @@ pub fn check_iop_dop_equivalence(
     }
     let lut2: FastMap<LutId, Lut2> = GIDS2.iter().map(|(k, v)| (*v, k.clone())).collect();
 
-    // Discover input slots from the IOP IR.
-    let mut input_slots: Vec<(usize, bool, u16)> = Vec::new();
-    for op in iop_ir.walk_ops_linear() {
-        match op.get_instruction() {
-            IopInstructionSet::InputCiphertext { pos, int_size } => {
-                input_slots.push((*pos, true, *int_size));
-            }
-            IopInstructionSet::InputPlaintext { pos, int_size } => {
-                input_slots.push((*pos, false, *int_size));
-            }
-            _ => {}
-        }
-    }
-    input_slots.sort_by_key(|(pos, _, _)| *pos);
-
-    for _ in 0..nreps {
-        // Generate random IOP inputs.
-        let iop_inputs: Vec<IopValue> = input_slots
-            .iter()
-            .map(|(_, is_ct, int_size)| {
-                if *is_ct {
-                    IopValue::Ciphertext(spec.ciphertext_spec(*int_size).random())
-                } else {
-                    IopValue::Plaintext(
-                        spec.matching_plaintext_block_spec()
-                            .plaintext_spec(*int_size)
-                            .random(),
-                    )
-                }
-            })
-            .collect();
-
+    for iop_inputs in input_sets {
         // Interpret IOP.
         let mut iop_ctx = IopInterepreterContext {
             spec,
