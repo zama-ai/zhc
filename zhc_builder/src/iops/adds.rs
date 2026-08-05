@@ -649,7 +649,43 @@ mod test {
             Some(vec![IopValue::Ciphertext(sum), IopValue::Ciphertext(flag)])
         }
         for size in (2..128).step_by(2) {
-            overflow_adds(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+            //overflow_adds(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+            let spec = CiphertextSpec::new(size, 2, 2);
+            let builder = Builder::new(spec.block_spec());
+            let src_c = builder.ciphertext_input(spec.int_size());
+            let src_p = builder.plaintext_input(spec.int_size());
+            let (res, flag) = builder.iop_overflow_adds(&src_c, &src_p);
+            builder.ciphertext_output(res);
+            builder.ciphertext_output(flag);
+
+            builder.test_random(100, semantic);
+
+            // `test_random` on its own only ever observes the flag at 0: `CiphertextSpec::random`
+            // draws its bit-window bounds from `1..int_size`, so the top bit of an operand is
+            // never set and the sum can never carry out. Stimulate both answers explicitly.
+            let max = spec.int_mask();
+            let half = max / 2;
+            let msb = half + 1;
+            for (a, b) in [
+                (max, 1),    // wraps around to 0
+                (max, max),  // widest overflow
+                (msb, msb),  // sum is exactly 2^int_size
+                (msb, half), // largest sum that does not overflow
+                (max, 0),    // no overflow
+                (0, 0),      // no overflow
+            ] {
+                let src_p_value = src_p.make_value(b);
+                let inputs = vec![
+                    IopValue::Ciphertext(spec.from_int(a)),
+                    src_p_value.clone(),
+                ];
+                let outputs = builder.interpret().with_inputs(&inputs).get_outputs();
+                assert_eq!(
+                    outputs,
+                    semantic(&inputs).unwrap(),
+                    "overflow_adds({a:#x}, {b:#x}) on {size} bits"
+                );
+            }
         }
     }
 
