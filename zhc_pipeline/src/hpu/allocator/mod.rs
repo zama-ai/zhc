@@ -215,7 +215,7 @@ mod test {
             check(if_then_else(spec));
             check(if_then_zero(spec));
             check(flip(spec));
-            check(sum(spec, 5));
+            check(sum(spec, 6));
             check(mul(spec));
             check(div(spec));
             check(cast(spec, 2));
