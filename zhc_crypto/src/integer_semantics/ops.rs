@@ -607,8 +607,16 @@ impl EmulatedCiphertext {
     }
 
     pub fn adds(self, other: EmulatedPlaintext) -> EmulatedCiphertext {
-        assert_eq!(self.spec.int_size(), other.spec().int_size(), "Spec mismatch.");
-        assert_eq!(self.spec.block_count(), other.spec().block_count(), "Spec mismatch.");
+        assert_eq!(
+            self.spec.int_size(),
+            other.spec().int_size(),
+            "Spec mismatch."
+        );
+        assert_eq!(
+            self.spec.block_count(),
+            other.spec().block_count(),
+            "Spec mismatch."
+        );
         let storage = (self.storage + other.storage) & self.spec.int_mask();
         EmulatedCiphertext {
             storage,
@@ -618,8 +626,16 @@ impl EmulatedCiphertext {
 
     /// Subtracts a scalar from an encrypted integer: `self - other` (wrapping).
     pub fn subs(self, other: EmulatedPlaintext) -> EmulatedCiphertext {
-        assert_eq!(self.spec.int_size(), other.spec().int_size(), "Spec mismatch.");
-        assert_eq!(self.spec.block_count(), other.spec().block_count(), "Spec mismatch.");
+        assert_eq!(
+            self.spec.int_size(),
+            other.spec().int_size(),
+            "Spec mismatch."
+        );
+        assert_eq!(
+            self.spec.block_count(),
+            other.spec().block_count(),
+            "Spec mismatch."
+        );
         let storage = self.storage.wrapping_sub(other.raw_mask_int()) & self.spec.int_mask();
         EmulatedCiphertext {
             storage,
@@ -629,8 +645,16 @@ impl EmulatedCiphertext {
 
     /// Subtracts an encrypted integer from a scalar: `other - self` (wrapping).
     pub fn ssub(self, other: EmulatedPlaintext) -> EmulatedCiphertext {
-        assert_eq!(self.spec.int_size(), other.spec().int_size(), "Spec mismatch.");
-        assert_eq!(self.spec.block_count(), other.spec().block_count(), "Spec mismatch.");
+        assert_eq!(
+            self.spec.int_size(),
+            other.spec().int_size(),
+            "Spec mismatch."
+        );
+        assert_eq!(
+            self.spec.block_count(),
+            other.spec().block_count(),
+            "Spec mismatch."
+        );
         let storage = other.raw_mask_int().wrapping_sub(self.storage) & self.spec.int_mask();
         EmulatedCiphertext {
             storage,
@@ -768,8 +792,16 @@ impl EmulatedCiphertext {
         self,
         other: EmulatedPlaintext,
     ) -> (EmulatedCiphertext, EmulatedCiphertext) {
-        assert_eq!(self.spec.int_size(), other.spec().int_size(), "Spec mismatch.");
-        assert_eq!(self.spec.block_count(), other.spec().block_count(), "Spec mismatch.");
+        assert_eq!(
+            self.spec.int_size(),
+            other.spec().int_size(),
+            "Spec mismatch."
+        );
+        assert_eq!(
+            self.spec.block_count(),
+            other.spec().block_count(),
+            "Spec mismatch."
+        );
         let (raw_sum, wrapped) = self.storage.overflowing_add(other.raw_mask_int());
         let overflow: u128 = (wrapped || raw_sum > self.spec.int_mask()).sas();
         (
@@ -793,8 +825,16 @@ impl EmulatedCiphertext {
         self,
         other: EmulatedPlaintext,
     ) -> (EmulatedCiphertext, EmulatedCiphertext) {
-        assert_eq!(self.spec.int_size(), other.spec().int_size(), "Spec mismatch.");
-        assert_eq!(self.spec.block_count(), other.spec().block_count(), "Spec mismatch.");
+        assert_eq!(
+            self.spec.int_size(),
+            other.spec().int_size(),
+            "Spec mismatch."
+        );
+        assert_eq!(
+            self.spec.block_count(),
+            other.spec().block_count(),
+            "Spec mismatch."
+        );
         let rhs = other.raw_mask_int();
         let diff = self.storage.wrapping_sub(rhs) & self.spec.int_mask();
         let overflow: u128 = if rhs > self.storage { 1 } else { 0 };
@@ -819,8 +859,16 @@ impl EmulatedCiphertext {
         self,
         other: EmulatedPlaintext,
     ) -> (EmulatedCiphertext, EmulatedCiphertext) {
-        assert_eq!(self.spec.int_size(), other.spec().int_size(), "Spec mismatch.");
-        assert_eq!(self.spec.block_count(), other.spec().block_count(), "Spec mismatch.");
+        assert_eq!(
+            self.spec.int_size(),
+            other.spec().int_size(),
+            "Spec mismatch."
+        );
+        assert_eq!(
+            self.spec.block_count(),
+            other.spec().block_count(),
+            "Spec mismatch."
+        );
         let lhs = other.raw_mask_int();
         let diff = lhs.wrapping_sub(self.storage) & self.spec.int_mask();
         let overflow: u128 = if self.storage > lhs { 1 } else { 0 };
@@ -871,8 +919,16 @@ impl EmulatedCiphertext {
     }
     /// Describe scalar multiplication behavior when MSB are dropped
     pub fn muls_lsb(self, other: EmulatedPlaintext) -> EmulatedCiphertext {
-        assert_eq!(self.spec.int_size(), other.spec().int_size(), "Spec mismatch.");
-        assert_eq!(self.spec.block_count(), other.spec().block_count(), "Spec mismatch.");
+        assert_eq!(
+            self.spec.int_size(),
+            other.spec().int_size(),
+            "Spec mismatch."
+        );
+        assert_eq!(
+            self.spec.block_count(),
+            other.spec().block_count(),
+            "Spec mismatch."
+        );
         let storage = self.storage.wrapping_mul(other.raw_mask_int()) & self.spec.int_mask();
         EmulatedCiphertext {
             storage,
@@ -885,8 +941,16 @@ impl EmulatedCiphertext {
         self,
         other: EmulatedPlaintext,
     ) -> (EmulatedCiphertext, EmulatedCiphertext) {
-        assert_eq!(self.spec.int_size(), other.spec().int_size(), "Spec mismatch.");
-        assert_eq!(self.spec.block_count(), other.spec().block_count(), "Spec mismatch.");
+        assert_eq!(
+            self.spec.int_size(),
+            other.spec().int_size(),
+            "Spec mismatch."
+        );
+        assert_eq!(
+            self.spec.block_count(),
+            other.spec().block_count(),
+            "Spec mismatch."
+        );
         let (raw_mul, overflow_u128) = self.storage.overflowing_mul(other.raw_mask_int());
         let int_size = self.spec.int_size();
         let overflow_flag = overflow_u128 || (int_size < 128 && (raw_mul >> int_size) != 0);

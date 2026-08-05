@@ -1,19 +1,16 @@
 use zhc_crypto::integer_semantics::CiphertextSpec;
 
+use crate::{
+    CiphertextBlock, PlaintextBlock,
+    builder::{Builder, Ciphertext, ExtensionBehavior, Plaintext},
+};
 use zhc_langs::ioplang::{Lut1Def, Lut2Def};
 use zhc_utils::{
     iter::{ChunkIt, CollectInSmallVec, IterMapFirst, MultiZip, ReconcilerOf2, Slide, SliderExt},
     svec,
 };
-use crate::{
-    CiphertextBlock, PlaintextBlock,
-    builder::{Builder, Ciphertext, Plaintext, ExtensionBehavior},
-};
 
 /// Creates an IR for the addition of 1 encrypted integer and a scalar.
-///
-///
-
 pub fn adds(spec: CiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
     let src_c = builder.ciphertext_input(spec.int_size());
@@ -44,8 +41,8 @@ pub fn overflow_adds(spec: CiphertextSpec) -> Builder {
 /// Creates an IR for the addition of an encrypted integers and a scalar using Hillis-Steele
 /// carry propagation.
 ///
-/// The returned [`Builder`] declares one ciphertext input, one plaintext input and one ciphertext output
-/// representing the wrapping sum of the operands. This variant explicitly selects the
+/// The returned [`Builder`] declares one ciphertext input, one plaintext input and one ciphertext
+/// output representing the wrapping sum of the operands. This variant explicitly selects the
 /// Hillis-Steele algorithm, which groups blocks into fours and resolves carries with
 /// logarithmic depth. Prefer [`adds`] for automatic algorithm selection based on bit-width.
 ///
@@ -70,13 +67,12 @@ pub fn adds_ripple_carry(spec: CiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
     let src_c = builder.ciphertext_input(spec.int_size());
     let src_p = builder.plaintext_input(spec.int_size());
-    let res  = builder.iop_adds_ripple_carry(&src_c, &src_p, None).0;
+    let res = builder.iop_adds_ripple_carry(&src_c, &src_p, None).0;
     builder.ciphertext_output(res);
     builder
 }
 
 impl Builder {
-
     /// Adds an encrypted integer with an immediate, automatically selecting the best algorithm.
     ///
     /// Chooses between ripple-carry, Hillis-Steele, and Kogge-Stone based on the
@@ -207,13 +203,13 @@ impl Builder {
         let rhs_blocks = self.plaintext_split(rhs);
 
         let (output_blocks, carry_out) =
-          self.iop_adds_hillis_steele_raw(lhs_blocks, rhs_blocks, cin, true);
+            self.iop_adds_hillis_steele_raw(lhs_blocks, rhs_blocks, cin, true);
 
         (
-          self.comment("Join Output")
-              .ciphertext_join(output_blocks, None),
-          self.comment("Join Carry")
-              .ciphertext_join([carry_out], None),
+            self.comment("Join Output")
+                .ciphertext_join(output_blocks, None),
+            self.comment("Join Carry")
+                .ciphertext_join([carry_out], None),
         )
     }
 
@@ -448,11 +444,13 @@ mod test {
     fn test_adds() {
         let spec = CiphertextSpec::new(18, 2, 2);
         let ir = adds(spec).optimize_ir();
-        println!("{}",
-                  ir.format()
-                    .with_walker(zhc_ir::PrintWalker::Linear)
-                    .show_comments(true)
-                    .show_types(false));
+        println!(
+            "{}",
+            ir.format()
+                .with_walker(zhc_ir::PrintWalker::Linear)
+                .show_comments(true)
+                .show_types(false)
+        );
     }
 
     #[test]
@@ -464,7 +462,7 @@ mod test {
             Some(vec![IopValue::Ciphertext(lhs.adds(*rhs))])
         }
         for size in (2..128).step_by(2) {
-          adds_hillis_steele(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+            adds_hillis_steele(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
         }
     }
 
@@ -478,6 +476,53 @@ mod test {
         }
         for size in (2..128).step_by(2) {
             adds_ripple_carry(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+        }
+    }
+
+    #[test]
+    fn correctness_overflow_adds() {
+        fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
+            let [IopValue::Ciphertext(lhs), IopValue::Plaintext(rhs)] = inp else {
+                unreachable!()
+            };
+            let (sum, flag) = lhs.overflow_adds(*rhs);
+            Some(vec![IopValue::Ciphertext(sum), IopValue::Ciphertext(flag)])
+        }
+        for size in (2..128).step_by(2) {
+            // overflow_adds(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+            let spec = CiphertextSpec::new(size, 2, 2);
+            let builder = Builder::new(spec.block_spec());
+            let src_c = builder.ciphertext_input(spec.int_size());
+            let src_p = builder.plaintext_input(spec.int_size());
+            let (res, flag) = builder.iop_overflow_adds(&src_c, &src_p);
+            builder.ciphertext_output(res);
+            builder.ciphertext_output(flag);
+
+            builder.test_random(100, semantic);
+
+            // `test_random` on its own only ever observes the flag at 0: `CiphertextSpec::random`
+            // draws its bit-window bounds from `1..int_size`, so the top bit of an operand is
+            // never set and the sum can never carry out. Stimulate both answers explicitly.
+            let max = spec.int_mask();
+            let half = max / 2;
+            let msb = half + 1;
+            for (a, b) in [
+                (max, 1),    // wraps around to 0
+                (max, max),  // widest overflow
+                (msb, msb),  // sum is exactly 2^int_size
+                (msb, half), // largest sum that does not overflow
+                (max, 0),    // no overflow
+                (0, 0),      // no overflow
+            ] {
+                let src_p_value = src_p.make_value(b);
+                let inputs = vec![IopValue::Ciphertext(spec.from_int(a)), src_p_value.clone()];
+                let outputs = builder.interpret().with_inputs(&inputs).get_outputs();
+                assert_eq!(
+                    outputs,
+                    semantic(&inputs).unwrap(),
+                    "overflow_adds({a:#x}, {b:#x}) on {size} bits"
+                );
+            }
         }
     }
 }

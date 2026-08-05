@@ -46,10 +46,10 @@ impl Builder {
     /// Splitting then joining is the whole operation: the extracts read the source and the stores
     /// fill a fresh ciphertext, which lowers to `LD` then `ST` per block.
     ///
-    /// A one-block integer would yield a two-DOp stream, one word short of the minimum stream length, so
-    /// that case is padded with a null plaintext addition: one linear DOp, no PBS, and neutral on
-    /// both the value and the degree of the block. The padding has to sit on the data path, as a
-    /// dangling constant would simply be dropped by dead code elimination.
+    /// A one-block integer would yield a two-DOp stream, one word short of the minimum stream
+    /// length, so that case is padded with a null plaintext addition: one linear DOp, no PBS,
+    /// and neutral on both the value and the degree of the block. The padding has to sit on the
+    /// data path, as a dangling constant would simply be dropped by dead code elimination.
     ///
     /// # Examples
     ///

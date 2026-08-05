@@ -1,8 +1,8 @@
 //! Scalar division IOps, i.e. `ct / imm` and `ct % imm`.
 //!
-//! Both are the `ct x ct` [`div`](super::div::div) datapath with the divisor lifted out of the plaintext
-//! domain by [`Builder::iop_trivial_encrypt`] — one `let_ct<0>` shared by every digit plus one
-//! `add_pt` per digit, so a linear DOp per block and **no PBS**.
+//! Both are the `ct x ct` [`div`](super::div::div) datapath with the divisor lifted out of the
+//! plaintext domain by [`Builder::iop_trivial_encrypt`] — one `let_ct<0>` shared by every digit
+//! plus one `add_pt` per digit, so a linear DOp per block and **no PBS**.
 //!
 //! Contrary to [`subs`](super::subs) and [`muls`](super::muls), the scalar operand buys no
 //! algorithmic saving here, hence the plain lift:
@@ -11,9 +11,9 @@
 //!   `LetPlaintextBlock` (a compile-time constant) or `ExtractPtBlock`, and every op consuming one
 //!   lands straight in the ciphertext domain. So `2*C`, `3*C` or `!C` cannot be formed from a
 //!   *runtime* immediate, which is precisely what the division init phase needs.
-//! * A division costs `block_count` iterations of three carry propagations, and a propagation
-//!   costs the same whether its second operand is a ciphertext or an immediate. The dominant term
-//!   is therefore untouched by a scalar divisor.
+//! * A division costs `block_count` iterations of three carry propagations, and a propagation costs
+//!   the same whether its second operand is a ciphertext or an immediate. The dominant term is
+//!   therefore untouched by a scalar divisor.
 //!
 //! The legacy reference streams agree: `DIVS` weighs exactly as many PBS as `DIV` (182 + 17
 //! many-luts, `MODS` and `MOD` 174 + 17) and differs only by a score of linear DOps — see
