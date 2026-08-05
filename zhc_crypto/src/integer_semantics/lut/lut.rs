@@ -79,6 +79,14 @@ impl Lut1 {
         &self.spec
     }
 
+    /// Returns the LUT content as a plain table
+    pub fn data_table(&self) -> Vec<u8> {
+        self.lut
+            .iter()
+            .map(|block| u8::try_from(block.raw_data_bits()).expect("LUT data value exceeds u8"))
+            .collect()
+    }
+
     /// Constructs a LUT by evaluating a function over the entire data space.
     ///
     /// The function `f` is called once for each of the `2^data_size()` possible input values
