@@ -3,7 +3,7 @@ use zhc_langs::ioplang::Lut1Def;
 use zhc_utils::SafeAs;
 
 use crate::{
-    CiphertextBlock, PlaintextBlock, NU, NU_BOOL,
+    CiphertextBlock, NU, NU_BOOL, PlaintextBlock,
     builder::{Builder, Ciphertext, Plaintext},
 };
 
@@ -65,7 +65,7 @@ pub fn shiftrot_ctrl_size(spec: CiphertextSpec) -> u16 {
 
 /// Encodes a clear shift/rotate amount into the control word expected by
 /// [`Builder::iop_shiftrots`].
- ///
+///
 /// The datapath selects with plaintext multiplications, which need one *digit* per control bit —
 /// and the IOp language cannot slice a digit out of a packed immediate. The amount is therefore
 /// advertised bit per bit, which is free for the host since it holds it in the clear:
