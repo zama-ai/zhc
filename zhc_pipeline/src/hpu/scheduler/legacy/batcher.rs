@@ -383,7 +383,8 @@ pub fn batch<'a, 'b>(
 mod test {
     use crate::{hpu::lowering::lower_iop_to_hpu, test::check_iop_hpu_equivalence};
     use zhc_builder::{
-        Builder, CiphertextSpec, add, adds, bitwise_and, bitwise_or, bitwise_xor, div, if_then_else, if_then_zero, mul
+        Builder, CiphertextSpec, add, adds, bitwise_and, bitwise_or, bitwise_xor, div,
+        if_then_else, if_then_zero, mul,
     };
     use zhc_config::hpu::PhysicalConfig;
     use zhc_ir::IR;

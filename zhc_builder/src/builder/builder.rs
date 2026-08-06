@@ -1903,9 +1903,9 @@ impl Builder {
 
     /// Adds a cyphertext block slices and a plaintext block slices element-wise.
     ///
-    /// For each position, calls [`block_add_plaintext`](Self::block_add_plaintext) on the corresponding pair.
-    /// When the two slices have different lengths, `extension` controls the behavior (see
-    /// [`ExtensionBehavior`]).
+    /// For each position, calls [`block_add_plaintext`](Self::block_add_plaintext) on the
+    /// corresponding pair. When the two slices have different lengths, `extension` controls the
+    /// behavior (see [`ExtensionBehavior`]).
     ///
     /// # Panics
     ///

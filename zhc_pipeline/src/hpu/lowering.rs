@@ -593,7 +593,7 @@ pub(crate) fn lower_iop_to_hpu(ir: &IR<IopLang>) -> Translation<HpuLang> {
 mod test {
     use zhc_builder::{
         Builder, CiphertextSpec, add, adds, bitwise_and, bitwise_or, bitwise_xor, cmp_gt, count_0,
-        count_1, if_then_else, if_then_zero, mul, overflow_ssub, overflow_subs, ssub, subs
+        count_1, if_then_else, if_then_zero, mul, overflow_ssub, overflow_subs, ssub, subs,
     };
     use zhc_ir::IR;
     use zhc_langs::{hpulang::HpuLang, ioplang::IopLang};
