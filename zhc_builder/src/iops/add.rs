@@ -196,7 +196,8 @@ impl Builder {
                     24..256 => 12,
                     _ => 1,
                 };
-                let (res, cout_bit1) = self.iop_add_kogge_stone_raw(&lhs_blocks, &rhs_blocks, cin, par_w);
+                let (res, cout_bit1) =
+                    self.iop_add_kogge_stone_raw(&lhs_blocks, &rhs_blocks, cin, par_w);
                 let cout_bit0 = self.block_lookup(&cout_bit1, Lut1Def::IsSome);
                 (res, cout_bit0)
             }

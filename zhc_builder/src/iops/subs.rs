@@ -142,9 +142,10 @@ impl Builder {
         match int_size {
             0..8 => self.iop_adds_ripple_carry(&b_inv, lhs, Some(&one)).0,
             8..17 => self.iop_adds_hillis_steele(&b_inv, lhs, Some(&one)).0,
-            17..256 => self
-                .iop_adds_kogge_stone(&b_inv, lhs, Some(&one), par_w(int_size))
-                .0,
+            17..256 => {
+                self.iop_adds_kogge_stone(&b_inv, lhs, Some(&one), par_w(int_size))
+                    .0
+            }
             _ => todo!(),
         }
     }
@@ -156,8 +157,8 @@ impl Builder {
     /// occurred), 0 otherwise.
     ///
     /// Because the sum computed under the hood is `!lhs + rhs`, its carry-out is set exactly
-    /// when `rhs > lhs` — it *is* the borrow, so unlike [`iop_overflow_sub`](Self::iop_overflow_sub)
-    /// no inversion PBS is needed on the flag.
+    /// when `rhs > lhs` — it *is* the borrow, so unlike
+    /// [`iop_overflow_sub`](Self::iop_overflow_sub) no inversion PBS is needed on the flag.
     ///
     /// # Examples
     ///
@@ -169,11 +170,7 @@ impl Builder {
     /// # let b = builder.plaintext_input(spec.int_size());
     /// let (diff, borrow) = builder.iop_overflow_subs(&a, &b);
     /// ```
-    pub fn iop_overflow_subs(
-        &self,
-        lhs: &Ciphertext,
-        rhs: &Plaintext,
-    ) -> (Ciphertext, Ciphertext) {
+    pub fn iop_overflow_subs(&self, lhs: &Ciphertext, rhs: &Plaintext) -> (Ciphertext, Ciphertext) {
         // lhs - rhs == !(!lhs + rhs), and carry_out(!lhs + rhs) == 1 iff rhs > lhs.
         let int_size = lhs.spec().int_size();
         let a_inv = self.comment("Invert Input").iop_bitwise_inv(lhs);
@@ -205,11 +202,7 @@ impl Builder {
     /// # let b = builder.ciphertext_input(spec.int_size());
     /// let (diff, borrow) = builder.iop_overflow_ssub(&a, &b);
     /// ```
-    pub fn iop_overflow_ssub(
-        &self,
-        lhs: &Plaintext,
-        rhs: &Ciphertext,
-    ) -> (Ciphertext, Ciphertext) {
+    pub fn iop_overflow_ssub(&self, lhs: &Plaintext, rhs: &Ciphertext) -> (Ciphertext, Ciphertext) {
         // lhs - rhs == !rhs + lhs + 1, whose carry-out is set iff lhs >= rhs.
         let int_size = rhs.spec().int_size();
         let one = self.block_let_ciphertext(1);
@@ -344,7 +337,10 @@ mod test {
                 );
 
                 let (diff, flag) = ct.overflow_subs(pt);
-                let got = overflow_subs(spec).interpret().with_inputs(&inputs).get_outputs();
+                let got = overflow_subs(spec)
+                    .interpret()
+                    .with_inputs(&inputs)
+                    .get_outputs();
                 assert_eq!(
                     got,
                     vec![IopValue::Ciphertext(diff), IopValue::Ciphertext(flag)],
@@ -352,7 +348,10 @@ mod test {
                 );
 
                 let (diff, flag) = ct.overflow_ssub(pt);
-                let got = overflow_ssub(spec).interpret().with_inputs(&inputs).get_outputs();
+                let got = overflow_ssub(spec)
+                    .interpret()
+                    .with_inputs(&inputs)
+                    .get_outputs();
                 assert_eq!(
                     got,
                     vec![IopValue::Ciphertext(diff), IopValue::Ciphertext(flag)],
