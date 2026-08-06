@@ -13,7 +13,6 @@ use zhc_utils::{
 use crate::iops::add::KoggeEntry;
 
 /// Creates an IR for the addition of 1 encrypted integer and a scalar.
-///
 
 pub fn adds(spec: CiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
