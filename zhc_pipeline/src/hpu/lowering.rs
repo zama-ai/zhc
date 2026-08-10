@@ -852,6 +852,52 @@ mod test {
         assert_eq!(other.lut_payload.first().map(|(g, _)| g.0), Some(131));
     }
 
+    /// Every declared output must be stored, including one that is a bare input,
+    /// as AES round key 0 is: the device leaves an unstored destination slot
+    /// unwritten and its teardown then waits on it forever.
+    #[test]
+    fn every_output_is_stored() {
+        use zhc_langs::hpulang::HpuInstructionSet;
+
+        let spec = CiphertextSpec::new(8, 2, 2);
+        let blocks = usize::from(spec.block_count());
+        let builder = Builder::new(spec.block_spec());
+        let x = builder.ciphertext_input(spec.int_size());
+        let y = builder.ciphertext_input(spec.int_size());
+        let sum = builder.iop_add(&x, &y, None);
+        builder.ciphertext_output(x); // bare input
+        builder.ciphertext_output(sum); // computed
+
+        let hpu_ir = super::lower_iop_to_hpu(&builder.optimize_ir())
+            .translation
+            .output;
+        let mut stored = vec![0usize; 2];
+        for op in hpu_ir.walk_ops_linear() {
+            if let HpuInstructionSet::DstSt { to } = op.get_instruction() {
+                stored[to.dst_pos as usize] += 1;
+            }
+        }
+        assert_eq!(
+            stored,
+            vec![blocks; 2],
+            "every output needs one store per block"
+        );
+    }
+
+    /// Outputting the same value twice is unsupported (CSE merges the two
+    /// store chains and the one-chain-per-output invariant breaks); it must
+    /// fail with the builder's clear message, even for a bare input, rather
+    /// than the opaque dataflow assert below.
+    #[test]
+    #[should_panic(expected = "Tried to output the same ciphertext twice")]
+    fn double_output_asserts_clearly_even_for_a_bare_input() {
+        let spec = CiphertextSpec::new(8, 2, 2);
+        let builder = Builder::new(spec.block_spec());
+        let x = builder.ciphertext_input(spec.int_size());
+        builder.ciphertext_output(x);
+        builder.ciphertext_output(x);
+    }
+
     /// Adding a builtin LUT must not collide with the non-builtin gid range.
     #[test]
     fn builtin_gids_below_non_builtin_range() {
