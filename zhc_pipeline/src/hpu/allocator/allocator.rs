@@ -283,9 +283,13 @@ impl<'ir> Allocator<'ir> {
                 eprintln!("  : Heap size: {}", self.heap.size());
             }
 
+            let (map, heap) = (&mut self.map, &mut self.heap);
             self.register_file.iter_registers_mut().for_each(|(_, rs)| {
                 match rs.stabilize(op.get_id()) {
-                    Some(valid) => self.map[valid].retire(),
+                    Some(valid) => {
+                        map[valid].retire();
+                        heap.release(valid);
+                    }
                     None => {}
                 }
             });

@@ -159,6 +159,7 @@ pub struct HpuConfig {
     pub pbs_processing_latency_b: usize,
     pub pbs_processing_latency_m: usize,
     pub regf_size: usize,
+    pub heap_size: usize,
 }
 
 impl From<PhysicalConfig> for HpuConfig {
@@ -199,6 +200,8 @@ impl From<PhysicalConfig> for HpuConfig {
             pbs_processing_latency_b: kspbs_cnst_cost,
             pbs_processing_latency_m: phy.ntt_params.min_pbs_nb,
             regf_size: phy.regf_params.reg_nb,
+            // heap size is "total - user region - b2b pool.
+            heap_size: 32768 - 12288 - 4096,
         }
     }
 }

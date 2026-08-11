@@ -20,7 +20,39 @@ pub fn allocate_registers(ir: &IR<HpuLang>, config: &HpuConfig) -> IR<DopLang> {
     let allocator = allocator::Allocator::init(ir, config.regf_size);
     let allocation = allocator.allocate_registers();
     let annir = AnnIR::new(ir, allocation, ir.filled_valmap(()));
-    translator::translate(&annir)
+    let output = translator::translate(&annir);
+    check_heap_usage(&output, config.heap_size);
+    output
+}
+
+/// Panics if the program needs more heap slots than the device reserves.
+///
+/// The heap grows down from the top of ciphertext memory, so past its band a
+/// spill overwrites the b2b pool and the user ciphertexts, and eventually
+/// wraps to unmapped addresses and hangs the device.
+fn check_heap_usage(ir: &IR<DopLang>, heap_size: usize) {
+    use zhc_langs::doplang::{Argument, DopInstructionSet};
+
+    let mut high_water = 0;
+    for op in ir.walk_ops_linear() {
+        let slot = match op.get_instruction() {
+            DopInstructionSet::LD {
+                src: Argument::CtHeap { addr },
+                ..
+            }
+            | DopInstructionSet::ST {
+                dst: Argument::CtHeap { addr },
+                ..
+            } => addr,
+            _ => continue,
+        };
+        high_water = high_water.max(slot + 1);
+    }
+    assert!(
+        high_water <= heap_size,
+        "Heap overflow: the program spills into {high_water} slots, the device reserves \
+         {heap_size}."
+    );
 }
 
 #[cfg(test)]
