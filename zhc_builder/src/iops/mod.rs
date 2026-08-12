@@ -52,6 +52,7 @@ pub const SIMD_N: usize = 12;
 
 mod add;
 mod adds;
+mod aes;
 mod bitwise;
 mod cast;
 mod cmp;
@@ -76,6 +77,7 @@ mod trivial_encrypt;
 
 pub use add::*;
 pub use adds::*;
+pub use aes::*;
 pub use bitwise::*;
 pub use cast::*;
 pub use cmp::*;

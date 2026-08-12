@@ -113,6 +113,22 @@ impl Builder {
     /// let result = builder.iop_bitwise(&a, &b, BwKind::Xor);
     /// ```
     pub fn iop_bitwise(&self, lhs: &Ciphertext, rhs: &Ciphertext, kind: BwKind) -> Ciphertext {
+        // If both operands are bits, XOR is PBS-free: sums stay pending until a
+        // consumer reduces them.
+        if matches!(kind, BwKind::Xor)
+            && lhs.spec().int_size() == rhs.spec().int_size()
+            && (self.registered_bits(lhs).is_some() || self.registered_bits(rhs).is_some())
+        {
+            let out: Vec<_> = self
+                .bits_of(lhs)
+                .into_iter()
+                .zip(self.bits_of(rhs))
+                .map(|(a, b)| self.bit_xor(a, b))
+                .collect();
+            let joined = self.bits_join(&out, lhs.spec().int_size());
+            self.register_bits(&joined, &out);
+            return joined;
+        }
         let lhs_blocks = self.ciphertext_split(lhs);
         let rhs_blocks = self.ciphertext_split(rhs);
         let res = self.vector_zip_then_lookup(
