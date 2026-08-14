@@ -94,9 +94,9 @@ impl Filters {
 
         // Filter iops by case-insensitive substring match
         let iops: Vec<Iop> = if iop_patterns.is_empty() {
-            Iop::ALL.to_vec()
+            Iop::TEST_ITER.to_vec()
         } else {
-            Iop::ALL
+            Iop::TEST_ITER
                 .iter()
                 .filter(|iop| {
                     let name = format!("{:?}", iop).to_lowercase();
@@ -249,7 +249,7 @@ fn run_benchmarks() -> BenchResult {
     let config = HpuConfig::default();
     let mut results: BTreeMap<String, BTreeMap<u16, Microseconds>> = BTreeMap::new();
 
-    for iop in Iop::ALL {
+    for iop in Iop::TEST_ITER {
         let iop_name = format!("{:?}", iop);
         println!("Benchmarking {}", iop_name);
         let bits_results = bench_iop(iop, &config, ALL_BITS);

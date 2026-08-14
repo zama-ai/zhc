@@ -1,13 +1,12 @@
 use crate::PipelineExt;
-use std::str::FromStr;
 
 use zhc_builder::{
     Builder, CiphertextSpec, add, add_simd, adds, bitwise_and, bitwise_inv, bitwise_or,
-    bitwise_xor, cmp_eq, cmp_gt, cmp_gte, cmp_lt, cmp_lte, cmp_neq, count_0, count_1, div, divs,
-    erc7984, erc7984_simd, if_then_else, if_then_zero, ilog2, lead0, lead1, memcpy, mods, mul,
-    muls, overflow_add, overflow_adds, overflow_mul, overflow_muls, overflow_ssub, overflow_sub,
-    overflow_subs, rem, rotate_left, rotate_right, rots_left, rots_right, shift_left, shift_right,
-    shifts_left, shifts_right, ssub, sub, subs, trail0, trail1,
+    bitwise_xor, cast, cmp_eq, cmp_gt, cmp_gte, cmp_lt, cmp_lte, cmp_neq, count_0, count_1, div,
+    divs, erc7984, erc7984_simd, flip, if_then_else, if_then_zero, ilog2, lead0, lead1, memcpy,
+    mods, mul, muls, overflow_add, overflow_adds, overflow_mul, overflow_muls, overflow_ssub,
+    overflow_sub, overflow_subs, rem, rotate_left, rotate_right, rots_left, rots_right, shift_left,
+    shift_right, shifts_left, shifts_right, ssub, sub, subs, sum, trail0, trail1,
 };
 use zhc_config::{hpu::HpuConfig, multi_hpu::MultiHpuConfig};
 use zhc_pipeline::Pipeline;
@@ -84,69 +83,17 @@ pub enum Iop {
     AddSimd,
     /// Block for block copy of an encrypted integer (`dst = src`).
     MemCpy,
-}
-
-impl FromStr for Iop {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "ADD" => Ok(Iop::Add),
-            "SUB" => Ok(Iop::Sub),
-            "MUL" => Ok(Iop::Mul),
-            "MULS" => Ok(Iop::Muls),
-            "CMP_GT" => Ok(Iop::CmpGt),
-            "CMP_GTE" => Ok(Iop::CmpGte),
-            "CMP_LT" => Ok(Iop::CmpLt),
-            "CMP_LTE" => Ok(Iop::CmpLte),
-            "CMP_EQ" => Ok(Iop::CmpEq),
-            "CMP_NEQ" => Ok(Iop::CmpNeq),
-            "IF_THEN_ZERO" => Ok(Iop::IfThenZero),
-            "IF_THEN_ELSE" => Ok(Iop::IfThenElse),
-            "COUNT0" => Ok(Iop::CountZeros),
-            "COUNT1" => Ok(Iop::CountOnes),
-            "ILOG2" => Ok(Iop::Ilog2),
-            "LEAD0" => Ok(Iop::LeadingZeros),
-            "LEAD1" => Ok(Iop::LeadingOnes),
-            "TRAIL0" => Ok(Iop::TrailingZeros),
-            "TRAIL1" => Ok(Iop::TrailingOnes),
-            "DIV" => Ok(Iop::Div),
-            "MOD" => Ok(Iop::Mod),
-            "DIVS" => Ok(Iop::Divs),
-            "MODS" => Ok(Iop::Mods),
-            "ADDS" => Ok(Iop::Adds),
-            "SUBS" => Ok(Iop::Subs),
-            "SSUB" => Ok(Iop::Ssub),
-            "OVF_ADDS" => Ok(Iop::OvfAdds),
-            "OVF_MULS" => Ok(Iop::OvfMuls),
-            "OVF_SUBS" => Ok(Iop::OvfSubs),
-            "OVF_SSUB" => Ok(Iop::OvfSsub),
-            "OVF_ADD" => Ok(Iop::OvfAdd),
-            "OVF_SUB" => Ok(Iop::OvfSub),
-            "OVF_MUL" => Ok(Iop::OvfMul),
-            "BW_AND" => Ok(Iop::BwAnd),
-            "BW_OR" => Ok(Iop::BwOr),
-            "BW_XOR" => Ok(Iop::BwXor),
-            "BW_NOT" => Ok(Iop::BwNot),
-            "SHIFT_R" => Ok(Iop::RightShift),
-            "SHIFT_L" => Ok(Iop::LeftShift),
-            "ROT_R" => Ok(Iop::RightRot),
-            "ROT_L" => Ok(Iop::LeftRot),
-            "SHIFTS_R" => Ok(Iop::RightShifts),
-            "SHIFTS_L" => Ok(Iop::LeftShifts),
-            "ROTS_R" => Ok(Iop::RightRots),
-            "ROTS_L" => Ok(Iop::LeftRots),
-            "ERC_7984" => Ok(Iop::Erc7984),
-            "ERC_7984_SIMD" => Ok(Iop::Erc7984Simd),
-            "ADD_SIMD" => Ok(Iop::AddSimd),
-            "MEMCPY" => Ok(Iop::MemCpy),
-            _ => Err(()),
-        }
-    }
+    Cast {
+        to_size: u16,
+    },
+    Flip,
+    Sum {
+        n: u16,
+    },
 }
 
 impl Iop {
-    pub const ALL: &[Iop] = &[
+    pub const ALL_STATIC: &[Iop] = &[
         Iop::CmpGt,
         Iop::CmpGte,
         Iop::CmpLt,
@@ -196,6 +143,75 @@ impl Iop {
         Iop::Erc7984,
         Iop::Erc7984Simd,
         Iop::MemCpy,
+        Iop::Flip,
+    ];
+
+    pub const TEST_ITER: &[Iop] = &[
+        Iop::CmpGt,
+        Iop::CmpGte,
+        Iop::CmpLt,
+        Iop::CmpLte,
+        Iop::CmpEq,
+        Iop::CmpNeq,
+        Iop::IfThenElse,
+        Iop::IfThenZero,
+        Iop::Add,
+        Iop::AddSimd,
+        Iop::Sub,
+        Iop::Mul,
+        Iop::Muls,
+        Iop::Ilog2,
+        Iop::CountZeros,
+        Iop::CountOnes,
+        Iop::LeadingZeros,
+        Iop::LeadingOnes,
+        Iop::TrailingZeros,
+        Iop::TrailingOnes,
+        Iop::Div,
+        Iop::Mod,
+        Iop::Divs,
+        Iop::Mods,
+        Iop::Adds,
+        Iop::Subs,
+        Iop::Ssub,
+        Iop::OvfAdds,
+        Iop::OvfMuls,
+        Iop::OvfSubs,
+        Iop::OvfSsub,
+        Iop::BwAnd,
+        Iop::BwOr,
+        Iop::BwXor,
+        Iop::BwNot,
+        Iop::RightShift,
+        Iop::LeftShift,
+        Iop::RightRot,
+        Iop::LeftRot,
+        Iop::RightShifts,
+        Iop::LeftShifts,
+        Iop::RightRots,
+        Iop::LeftRots,
+        Iop::OvfAdd,
+        Iop::OvfSub,
+        Iop::OvfMul,
+        Iop::Erc7984,
+        Iop::Erc7984Simd,
+        Iop::MemCpy,
+        Iop::Cast { to_size: 2 },
+        Iop::Cast { to_size: 4 },
+        Iop::Cast { to_size: 8 },
+        Iop::Cast { to_size: 16 },
+        Iop::Cast { to_size: 32 },
+        Iop::Cast { to_size: 64 },
+        Iop::Cast { to_size: 128 },
+        Iop::Flip,
+        Iop::Sum { n: 3 },
+        Iop::Sum { n: 5 },
+        Iop::Sum { n: 6 },
+        Iop::Sum { n: 9 },
+        Iop::Sum { n: 11 },
+        Iop::Sum { n: 13 },
+        Iop::Sum { n: 17 },
+        Iop::Sum { n: 26 },
     ];
 
     /// Returns the builder for this operation with the given ciphertext spec.
@@ -250,6 +266,9 @@ impl Iop {
             Iop::Erc7984 => erc7984(spec),
             Iop::Erc7984Simd => erc7984_simd(spec),
             Iop::MemCpy => memcpy(spec),
+            Iop::Cast { to_size } => cast(spec, *to_size),
+            Iop::Flip => flip(spec),
+            Iop::Sum { n } => sum(spec, *n as usize),
         }
     }
 

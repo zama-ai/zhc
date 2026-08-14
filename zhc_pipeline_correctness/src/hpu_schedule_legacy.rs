@@ -147,7 +147,7 @@ fn correctness() {
         let hpu_ir = pipeline(&iop_ir);
         check_iop_hpu_equivalence(&iop_ir, &hpu_ir, spec, 100);
     };
-    for iop in Iop::ALL {
+    for iop in Iop::TEST_ITER {
         for size in (2..=128).step_by(2) {
             check(iop.to_builder(CiphertextSpec::new(size, 2, 2)));
         }
