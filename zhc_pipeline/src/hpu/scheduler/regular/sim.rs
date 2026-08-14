@@ -106,6 +106,7 @@ pub struct LightHpu<'a, 'b> {
     pe_ctl_state: ProcessingElementState<'a, 'b>,
     pe_ctl_cost: ConstantLatency,
     op_states: OpMap<OpState>,
+    running: usize,
     val_states: ValMap<ValState>,
     pub schedule: VecDeque<SchedElm>,
     ir: &'b AnnIR<'a, HpuLang, Stats, ()>,
@@ -162,6 +163,7 @@ impl<'a, 'b> LightHpu<'a, 'b> {
             pe_ctl_state: ProcessingElementState::Idle,
             pe_ctl_cost: ConstantLatency::new(0),
             op_states,
+            running: 0,
             val_states,
             schedule: VecDeque::new(),
             ir,
@@ -216,9 +218,7 @@ impl<'a, 'b> LightHpu<'a, 'b> {
     }
 
     fn is_hpu_stalled(&self) -> bool {
-        self.op_states
-            .iter()
-            .all(|(_, st)| !matches!(st, OpState::Running))
+        self.running == 0
     }
 
     fn pop_pbs(&mut self) -> Vec<AnnOpRef<'a, 'b, HpuLang, Stats, ()>> {
@@ -257,6 +257,7 @@ impl<'a, 'b> LightHpu<'a, 'b> {
                     OpState::Running => OpState::Landed,
                     _ => unreachable!(),
                 });
+            self.running -= 1;
             let iterator = match self.policy {
                 SchedPolicy::AsSoonAsPossible => op.get_users_iter().reconcile_1_of_2(),
                 SchedPolicy::AsLateAsPossible => op.get_predecessors_iter().reconcile_2_of_2(),
@@ -392,6 +393,7 @@ impl<'a, 'b> zhc_sim::Simulatable for LightHpu<'a, 'b> {
                     OpState::Ready => OpState::Running,
                     _ => unreachable!(),
                 });
+            self.running += 1;
             self.pe_ctl_state.transition(|old| match old {
                 ProcessingElementState::Idle => ProcessingElementState::Running(vec![op]),
                 _ => unreachable!(),
@@ -408,6 +410,7 @@ impl<'a, 'b> zhc_sim::Simulatable for LightHpu<'a, 'b> {
                     OpState::Ready => OpState::Running,
                     _ => unreachable!(),
                 });
+            self.running += 1;
             self.pe_alu_state.transition(|old| match old {
                 ProcessingElementState::Idle => ProcessingElementState::Running(vec![op]),
                 _ => unreachable!(),
@@ -424,6 +427,7 @@ impl<'a, 'b> zhc_sim::Simulatable for LightHpu<'a, 'b> {
                     OpState::Ready => OpState::Running,
                     _ => unreachable!(),
                 });
+            self.running += 1;
             self.pe_mem_state.transition(|old| match old {
                 ProcessingElementState::Idle => ProcessingElementState::Running(vec![op]),
                 _ => unreachable!(),
@@ -443,6 +447,7 @@ impl<'a, 'b> zhc_sim::Simulatable for LightHpu<'a, 'b> {
                         OpState::Ready => OpState::Running,
                         _ => unreachable!(),
                     });
+                self.running += 1;
             }
             self.pe_pbs_state.transition(|old| match old {
                 ProcessingElementState::Idle => ProcessingElementState::Running(ops),
@@ -452,6 +457,10 @@ impl<'a, 'b> zhc_sim::Simulatable for LightHpu<'a, 'b> {
     }
 
     fn report<'t>(&self, at: Cycle, tracer: &mut Tracer, tracing_level: TracingLevel) {
+        // Called on every step: skip the counter computations when not tracing.
+        if matches!(tracing_level, TracingLevel::None) {
+            return;
+        }
         tracer.add_state(tracing_level, at, None, self.name(), self);
 
         // ── PE occupancy: how many ops each unit is currently executing.
