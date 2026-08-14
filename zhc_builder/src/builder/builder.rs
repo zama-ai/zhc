@@ -112,6 +112,7 @@ pub(super) struct InnerBuilder {
     pub(super) hierarchies: Store<OpId, Hierarchy>,
     pub(super) partitions: Store<OpId, PartitionId>,
     pub(super) sig: Signature<Type>,
+    pub(super) outputted: FastSet<zhc_ir::ValId>,
 }
 
 impl InnerBuilder {
@@ -234,6 +235,7 @@ impl Builder {
                 hierarchies: Store::empty(),
                 partitions: Store::empty(),
                 sig: Signature::empty(),
+                outputted: FastSet::default(),
             })),
             hierarchy: RefCell::new(Hierarchy::new()),
             partition: RefCell::new(PartitionId::new(0, "Inputs")),
@@ -918,13 +920,44 @@ impl Builder {
     /// ```
     pub fn ciphertext_output(&self, ct: impl AsRef<Ciphertext>) {
         let ct = ct.as_ref();
-        let pos = self.inner_mut().push_ret_type(Type::Ciphertext(ct.spec()));
+        let owned = if self.owns_destination(ct) {
+            *ct
+        } else {
+            self.ciphertext_join(self.ciphertext_split(ct), Some(ct.spec().int_size()))
+        };
+
+        assert!(
+            !self.inner().outputted.contains(&ct.valid),
+            "Tried to output the same ciphertext twice, which lowering cannot express. Copy it first, e.g. with iop_memcpy."
+        );
+
+        self.inner_mut().outputted.insert(ct.valid);
+        self.inner_mut().outputted.insert(owned.valid);
+
+        let pos = self
+            .inner_mut()
+            .push_ret_type(Type::Ciphertext(owned.spec()));
+
         self.inner_mut().insert_op(
             IopInstructionSet::OutputCiphertext { pos },
-            svec![ct.valid],
+            svec![owned.valid],
             self.current_hierarchy(),
             self.current_partition(),
         );
+    }
+
+    /// Whether `ct` is backed by a `StoreCtBlock` chain, hence owns a destination.
+    fn owns_destination(&self, ct: &Ciphertext) -> bool {
+        let inner = self.inner();
+        matches!(
+            inner
+                .ir
+                .get_val(ct.valid)
+                .get_origin()
+                .opref
+                .get_instruction(),
+            IopInstructionSet::StoreCtBlock { .. }
+        )
     }
 
     /// Creates a constant [`PlaintextBlock`] with the given message value.
