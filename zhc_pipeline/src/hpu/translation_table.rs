@@ -624,7 +624,7 @@ mod test {
     use super::generate_translation_table;
 
     fn pipeline(ir: &IR<IopLang>) -> Vec<u32> {
-        let ir = lower_iop_to_hpu(&ir).output;
+        let ir = lower_iop_to_hpu(&ir).translation.output;
         let config = HpuConfig::from(PhysicalConfig::gaussian_64b_fast());
         let scheduled = scheduler::legacy::schedule(
             &ir,

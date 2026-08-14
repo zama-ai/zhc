@@ -13,6 +13,7 @@ pub enum PipelineTypeSystem {
     // Hpu
     HpuConfig,
     HpuLangTranslated,
+    HpuLutPayload,
     HpuLangScheduled,
     DopLang,
     HpuMetrics,
