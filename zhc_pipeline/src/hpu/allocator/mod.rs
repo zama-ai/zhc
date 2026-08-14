@@ -27,7 +27,7 @@ pub fn allocate_registers(ir: &IR<HpuLang>, config: &HpuConfig) -> IR<DopLang> {
 mod test {
     use zhc_builder::{
         Builder, CiphertextSpec, add, adds, bitwise_and, bitwise_or, bitwise_xor, cmp_gt, div,
-        if_then_else, if_then_zero, mul, overflow_ssub, overflow_subs, ssub, subs,
+        if_then_else, if_then_zero, match_value, mul, overflow_ssub, overflow_subs, ssub, subs,
     };
     use zhc_config::hpu::{HpuConfig, PhysicalConfig};
     use zhc_ir::{IR, PrintWalker};
@@ -37,13 +37,13 @@ mod test {
     use crate::{
         SchedPolicy,
         hpu::{lowering::lower_iop_to_hpu, scheduler::legacy::schedule},
-        test::check_iop_dop_equivalence,
+        test::{check_iop_dop_equivalence, check_iop_dop_equivalence_exhaustive},
     };
 
     use super::allocate_registers;
 
     fn pipeline(ir: &IR<IopLang>) -> IR<DopLang> {
-        let ir = lower_iop_to_hpu(&ir).output;
+        let ir = lower_iop_to_hpu(&ir).translation.output;
         let config = HpuConfig::from(PhysicalConfig::gaussian_64b());
         let scheduled = schedule(
             &ir,
@@ -221,6 +221,32 @@ mod test {
             check(if_then_zero(spec));
             check(mul(spec));
             check(div(spec));
+        }
+    }
+
+    /// A circuit with non-builtin LUTs runs correctly after the allocated tables
+    /// reach the device.
+    ///
+    /// The test checks every input value: hits and misses of the sparse table.
+    /// 4 bits has no mux tree. 6 bits has one level. 8 bits (the AES S-box shape)
+    /// has two levels and the largest LUT count.
+    #[test]
+    fn match_value_correctness() {
+        let config = HpuConfig::from(PhysicalConfig::gaussian_64b());
+        for bits in [4u16, 6, 8] {
+            let spec = CiphertextSpec::new(bits, 2, 2);
+            let table: Vec<(u128, u128)> = (0..1 << bits)
+                .step_by(3)
+                .map(|k| (k, (k * 7 + 1) & ((1 << bits) - 1)))
+                .collect();
+            let iop_ir = match_value(spec, &table, bits).optimize_ir();
+            let dop_ir = pipeline(&iop_ir);
+            check_iop_dop_equivalence_exhaustive(
+                &iop_ir,
+                &dop_ir,
+                spec.block_spec(),
+                config.regf_size,
+            );
         }
     }
 }

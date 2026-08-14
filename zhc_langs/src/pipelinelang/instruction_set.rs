@@ -87,7 +87,7 @@ impl DialectInstructionSet for PipelineInstructionSet {
             BuilderToIopLang => sig![(Builder) -> (IopLang)],
             BuilderToPrototype => sig![(Builder) -> (Prototype)],
             ComputePbsMetrics => sig![(IopLang) -> (PbsMetrics)],
-            IopLangToHpuLang => sig![(IopLang) -> (HpuLangTranslated)],
+            IopLangToHpuLang => sig![(IopLang) -> (HpuLangTranslated, HpuLutPayload)],
             ScheduleHpuLang => sig![(HpuLangTranslated, HpuConfig) -> (HpuLangScheduled)],
             AllocateDopLang => sig![(HpuLangScheduled, HpuConfig) -> (DopLang)],
             GenerateHpuStream => sig![(DopLang) -> (HpuStream)],

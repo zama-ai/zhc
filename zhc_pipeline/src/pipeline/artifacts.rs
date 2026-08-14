@@ -8,7 +8,7 @@ use zhc_config::{hpu::HpuConfig, multi_hpu::MultiHpuConfig, vm::VmConfig};
 use zhc_ir::{IR, OpMap, Signature, evaluation::Evaluation, partition::PartitionId};
 use zhc_langs::{
     doplang::DopLang,
-    hpulang::{HpuLang, HpuLocality},
+    hpulang::{HpuLang, HpuLocality, LutId},
     ioplang::IopLang,
     vmlang::VmLang,
 };
@@ -28,6 +28,7 @@ pub enum PipelineArtifact {
     // Hpu
     HpuConfig(HpuConfig),
     HpuLangTranslated(IR<HpuLang>),
+    HpuLutPayload(Vec<(LutId, Vec<u8>)>),
     HpuLangScheduled(IR<HpuLang>),
     DopLang(IR<DopLang>),
     HpuStream(Vec<DOpRepr>),

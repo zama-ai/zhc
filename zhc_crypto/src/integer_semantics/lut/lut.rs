@@ -79,6 +79,26 @@ impl Lut1 {
         &self.spec
     }
 
+    /// Returns the LUT content as a plain table.
+    ///
+    /// # Panics
+    ///
+    /// Panics if an entry sets the padding bit or does not fit in a u8,
+    /// because the table format cannot represent it.
+    pub fn data_table(&self) -> Vec<u8> {
+        self.lut
+            .iter()
+            .map(|block| {
+                assert!(
+                    block.raw_padding_bits() == 0,
+                    "LUT {} sets the padding bit, which the table export cannot represent.",
+                    self.name
+                );
+                block.raw_data_bits().sas()
+            })
+            .collect()
+    }
+
     /// Constructs a LUT by evaluating a function over the entire data space.
     ///
     /// The function `f` is called once for each of the `2^data_size()` possible input values
