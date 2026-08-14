@@ -49,14 +49,14 @@ pub struct Allocator<'ir> {
 }
 
 impl<'ir> Allocator<'ir> {
-    pub fn init(ir: &IR<HpuLang>, nregs: usize) -> Allocator<'_> {
+    pub fn init(ir: &IR<HpuLang>, nregs: usize, isc_depth: usize) -> Allocator<'_> {
         let live_ranges = LiveRangeMap::from_scheduled_ir(ir);
         let register_file = RegFile::empty(nregs);
         let map = ir.filled_valmap(ValState::Unseen);
         let input = ir;
         let current_point = 0;
         let end_point = ir.n_ops();
-        let heap = Heap::empty();
+        let heap = Heap::new(isc_depth);
         Allocator {
             input,
             live_ranges,
@@ -143,7 +143,9 @@ impl<'ir> Allocator<'ir> {
     fn acquire_heap_slots(&mut self, op: OpRef<'ir, HpuLang>) -> SmallVec<HeapSlot> {
         use HpuInstructionSet::*;
         match op.get_instruction() {
-            TransferIn { .. } | TransferOut { .. } => svec![self.heap.get_unmapped()],
+            TransferIn { .. } | TransferOut { .. } => {
+                svec![self.heap.alloc(self.current_point.sas())]
+            }
             _ => svec![],
         }
     }
@@ -180,7 +182,7 @@ impl<'ir> Allocator<'ir> {
                 None => {
                     let rid = self.pick_reg_for_src_eviction();
                     let evicted = self.register_file[rid].evict(op.get_id());
-                    let slot = self.heap.get(&evicted);
+                    let slot = self.heap.get(&evicted, self.current_point.sas());
                     self.map[evicted].spill(slot);
                     spills.push(Spill {
                         from: rid,
@@ -219,7 +221,7 @@ impl<'ir> Allocator<'ir> {
                     for rid in rrid.rids_iter() {
                         if !self.register_file[rid].is_empty() {
                             let evicted = self.register_file[rid].evict(op.get_id());
-                            let slot = self.heap.get(&evicted);
+                            let slot = self.heap.get(&evicted, self.current_point.sas());
                             self.map[evicted].spill(slot);
                             spills.push(Spill {
                                 from: rid,
@@ -239,7 +241,8 @@ impl<'ir> Allocator<'ir> {
         spills
     }
 
-    pub fn allocate_registers(mut self) -> OpMap<Alloc> {
+    /// Also returns the number of heap slots the allocation uses.
+    pub fn allocate_registers(mut self) -> (OpMap<Alloc>, usize) {
         use zhc_langs::hpulang::HpuTypeSystem::*;
 
         let mut output = self.input.empty_opmap();
@@ -283,16 +286,21 @@ impl<'ir> Allocator<'ir> {
                 eprintln!("  : Heap size: {}", self.heap.size());
             }
 
+            let now = self.current_point.sas();
+            let (map, heap) = (&mut self.map, &mut self.heap);
             self.register_file.iter_registers_mut().for_each(|(_, rs)| {
                 match rs.stabilize(op.get_id()) {
-                    Some(valid) => self.map[valid].retire(),
+                    Some(valid) => {
+                        map[valid].retire();
+                        heap.release(valid, now);
+                    }
                     None => {}
                 }
             });
 
             self.current_point += 1;
         }
-        output
+        (output, self.heap.size())
     }
 }
 

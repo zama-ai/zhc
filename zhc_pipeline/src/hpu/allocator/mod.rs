@@ -17,8 +17,14 @@ mod value_state;
 /// and the hardware configuration `config` to produce a new IR in the device
 /// operation language with physical register assignments for all values.
 pub fn allocate_registers(ir: &IR<HpuLang>, config: &HpuConfig) -> IR<DopLang> {
-    let allocator = allocator::Allocator::init(ir, config.regf_size);
-    let allocation = allocator.allocate_registers();
+    let allocator = allocator::Allocator::init(ir, config.regf_size, config.isc_depth);
+    let (allocation, heap_usage) = allocator.allocate_registers();
+    // Past its band, the heap overwrites the b2b pool and user ciphertexts.
+    assert!(
+        heap_usage <= config.heap_size,
+        "Heap overflow: the program spills into {heap_usage} slots, the device reserves {}.",
+        config.heap_size
+    );
     let annir = AnnIR::new(ir, allocation, ir.filled_valmap(()));
     translator::translate(&annir)
 }

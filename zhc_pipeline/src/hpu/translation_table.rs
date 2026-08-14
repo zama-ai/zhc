@@ -149,6 +149,22 @@ pub struct PeSyncHex {
     opcode: u8,
 }
 
+/// Number of heap slots a compiled stream needs: the largest slot its
+/// `LD`/`ST` instructions address, plus one. Zero if it never spills.
+pub fn hpu_stream_heap_usage(stream: &[DOpRepr]) -> usize {
+    let mut max: Option<u16> = None;
+    for &word in stream {
+        let opcode = DOpRawHex::from(word).opcode();
+        if opcode == DOpCode::LD as u8 || opcode == DOpCode::ST as u8 {
+            let mem = PeMemHex::from(word);
+            if mem.mode() == MEM_HEAP {
+                max = Some(max.map_or(mem.slot(), |m| m.max(mem.slot())));
+            }
+        }
+    }
+    max.map_or(0, |m| m as usize + 1)
+}
+
 /// Generates binary instruction encodings from device operation IR.
 ///
 /// Converts the intermediate representation `ir` containing device operations
