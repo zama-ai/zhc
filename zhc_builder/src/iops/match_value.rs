@@ -58,6 +58,22 @@ impl Builder {
         out_size: u16,
     ) -> (Ciphertext, Ciphertext) {
         let in_size = src.spec().int_size();
+
+        // Bypass for AES S-box and xtime optimizations
+        if in_size == 8 && out_size == 8 {
+            let bypass = if super::is_aes_sbox(table) {
+                Some(self.iop_sbox(src))
+            } else if super::is_xtime(table) {
+                Some(self.iop_xtime(src))
+            } else {
+                None
+            };
+            if let Some(out) = bypass {
+                let flag = self.ciphertext_join([self.block_let_ciphertext(1)], None);
+                return (out, flag);
+            }
+        }
+
         let src_blocks = self.ciphertext_split(src);
 
         // guardrails

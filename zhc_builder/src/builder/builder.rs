@@ -42,7 +42,7 @@ use zhc_langs::ioplang::{
     skip_redundant_stores, skip_store_load,
 };
 use zhc_utils::{
-    Dumpable, FastSet, SafeAs, Store,
+    Dumpable, FastMap, FastSet, SafeAs, Store,
     files::FileHandle,
     iter::{Chunk, ChunkIt},
     small::SmallVec,
@@ -168,6 +168,14 @@ impl InnerBuilder {
 /// output 0. This ordering defines the circuit's [`signature`](Self::signature) and must
 /// match the order of values passed to [`Interpreter::with_inputs`].
 ///
+/// # Bit Form
+///
+/// Some circuits use boolean gates. A bit is the parity of a sum of one-bit values, which the code
+/// does not reduce.
+/// An operation records the bits of its result. The next bit-level operation reads them and does
+/// not split the ciphertext.
+/// The operation also makes the byte, which dead code elimination removes if nothing reads it.
+///
 /// # Comments
 ///
 /// The builder maintains a comment stack that annotates IR instructions for debugging and
@@ -196,6 +204,7 @@ pub struct Builder {
     inner: Rc<RefCell<InnerBuilder>>,
     hierarchy: RefCell<Hierarchy>,
     partition: RefCell<PartitionId>,
+    bit_forms: Rc<RefCell<FastMap<zhc_ir::ValId, Vec<(zhc_ir::ValId, u8, bool)>>>>,
 }
 
 impl Builder {
@@ -237,6 +246,7 @@ impl Builder {
                 sig: Signature::empty(),
                 outputted: FastSet::default(),
             })),
+            bit_forms: Rc::new(RefCell::new(FastMap::default())),
             hierarchy: RefCell::new(Hierarchy::new()),
             partition: RefCell::new(PartitionId::new(0, "Inputs")),
         }
@@ -459,6 +469,7 @@ impl Builder {
             inner: self.inner.clone(),
             hierarchy,
             partition: self.partition.clone(),
+            bit_forms: self.bit_forms.clone(),
         }
     }
 
@@ -872,6 +883,38 @@ impl Builder {
             acc = ret[0];
         }
         Ciphertext { valid: acc, spec }
+    }
+
+    /// Records the bit form of `ct`.
+    /// Each item of `bits` holds the block, the number of pending terms and
+    /// the pending negation. The first item is the least significant bit.
+    /// A later operation uses these bits and does not split `ct`.
+    pub(crate) fn bit_form_set(&self, ct: &Ciphertext, bits: Vec<(CiphertextBlock, u8, bool)>) {
+        self.bit_forms.borrow_mut().insert(
+            ct.valid,
+            bits.into_iter()
+                .map(|(block, terms, inv)| (block.valid, terms, inv))
+                .collect(),
+        );
+    }
+
+    /// Gives the recorded bit form of `ct`, if an operation recorded one.
+    /// Each block uses the spec of this builder.
+    pub(crate) fn bit_form_get(&self, ct: &Ciphertext) -> Option<Vec<(CiphertextBlock, u8, bool)>> {
+        self.bit_forms.borrow().get(&ct.valid).map(|bits| {
+            bits.iter()
+                .map(|&(valid, terms, inv)| {
+                    (
+                        CiphertextBlock {
+                            valid,
+                            spec: self.spec,
+                        },
+                        terms,
+                        inv,
+                    )
+                })
+                .collect()
+        })
     }
 
     /// Creates a new IR node that aliases an existing ciphertext.
