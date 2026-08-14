@@ -4,6 +4,7 @@ use zhc_utils::SafeAs;
 
 use crate::integer_semantics::CiphertextSpec;
 use crate::integer_semantics::EmulatedCiphertext;
+use crate::integer_semantics::EmulatedPlaintext;
 
 use super::{EmulatedCiphertextBlock, EmulatedPlaintextBlock};
 
@@ -463,6 +464,62 @@ impl EmulatedCiphertext {
         }
     }
 
+    pub fn adds(self, other: EmulatedPlaintext) -> EmulatedCiphertext {
+        assert_eq!(
+            self.spec.int_size(),
+            other.spec().int_size(),
+            "Spec mismatch."
+        );
+        assert_eq!(
+            self.spec.block_count(),
+            other.spec().block_count(),
+            "Spec mismatch."
+        );
+        let storage = (self.storage + other.storage) & self.spec.int_mask();
+        EmulatedCiphertext {
+            storage,
+            spec: self.spec,
+        }
+    }
+
+    /// Subtracts a scalar from an encrypted integer: `self - other` (wrapping).
+    pub fn subs(self, other: EmulatedPlaintext) -> EmulatedCiphertext {
+        assert_eq!(
+            self.spec.int_size(),
+            other.spec().int_size(),
+            "Spec mismatch."
+        );
+        assert_eq!(
+            self.spec.block_count(),
+            other.spec().block_count(),
+            "Spec mismatch."
+        );
+        let storage = self.storage.wrapping_sub(other.raw_mask_int()) & self.spec.int_mask();
+        EmulatedCiphertext {
+            storage,
+            spec: self.spec,
+        }
+    }
+
+    /// Subtracts an encrypted integer from a scalar: `other - self` (wrapping).
+    pub fn ssub(self, other: EmulatedPlaintext) -> EmulatedCiphertext {
+        assert_eq!(
+            self.spec.int_size(),
+            other.spec().int_size(),
+            "Spec mismatch."
+        );
+        assert_eq!(
+            self.spec.block_count(),
+            other.spec().block_count(),
+            "Spec mismatch."
+        );
+        let storage = other.raw_mask_int().wrapping_sub(self.storage) & self.spec.int_mask();
+        EmulatedCiphertext {
+            storage,
+            spec: self.spec,
+        }
+    }
+
     pub fn sub(self, other: Self) -> EmulatedCiphertext {
         assert_eq!(self.spec, other.spec(), "Spec mismatch.");
         let storage = self.storage.wrapping_sub(other.storage) & self.spec.int_mask();
@@ -588,6 +645,107 @@ impl EmulatedCiphertext {
         )
     }
 
+    /// `self + other` with unsigned-overflow (carry) detection, `other` being a scalar.
+    pub fn overflow_adds(
+        self,
+        other: EmulatedPlaintext,
+    ) -> (EmulatedCiphertext, EmulatedCiphertext) {
+        assert_eq!(
+            self.spec.int_size(),
+            other.spec().int_size(),
+            "Spec mismatch."
+        );
+        assert_eq!(
+            self.spec.block_count(),
+            other.spec().block_count(),
+            "Spec mismatch."
+        );
+        let (raw_sum, wrapped) = self.storage.overflowing_add(other.raw_mask_int());
+        let overflow: u128 = (wrapped || raw_sum > self.spec.int_mask()).sas();
+        (
+            EmulatedCiphertext {
+                storage: raw_sum & self.spec.int_mask(),
+                spec: self.spec,
+            },
+            EmulatedCiphertext {
+                storage: overflow,
+                spec: CiphertextSpec::new(
+                    self.spec.block_spec().message_size() as u16,
+                    self.spec.block_spec().message_size(),
+                    self.spec.block_spec().carry_size(),
+                ),
+            },
+        )
+    }
+
+    /// `self - other` with unsigned-underflow (borrow) detection, `other` being a scalar.
+    pub fn overflow_subs(
+        self,
+        other: EmulatedPlaintext,
+    ) -> (EmulatedCiphertext, EmulatedCiphertext) {
+        assert_eq!(
+            self.spec.int_size(),
+            other.spec().int_size(),
+            "Spec mismatch."
+        );
+        assert_eq!(
+            self.spec.block_count(),
+            other.spec().block_count(),
+            "Spec mismatch."
+        );
+        let rhs = other.raw_mask_int();
+        let diff = self.storage.wrapping_sub(rhs) & self.spec.int_mask();
+        let overflow: u128 = if rhs > self.storage { 1 } else { 0 };
+        (
+            EmulatedCiphertext {
+                storage: diff,
+                spec: self.spec,
+            },
+            EmulatedCiphertext {
+                storage: overflow,
+                spec: CiphertextSpec::new(
+                    self.spec.block_spec().message_size() as u16,
+                    self.spec.block_spec().message_size(),
+                    self.spec.block_spec().carry_size(),
+                ),
+            },
+        )
+    }
+
+    /// `other - self` with unsigned-underflow (borrow) detection, `other` being a scalar.
+    pub fn overflow_ssub(
+        self,
+        other: EmulatedPlaintext,
+    ) -> (EmulatedCiphertext, EmulatedCiphertext) {
+        assert_eq!(
+            self.spec.int_size(),
+            other.spec().int_size(),
+            "Spec mismatch."
+        );
+        assert_eq!(
+            self.spec.block_count(),
+            other.spec().block_count(),
+            "Spec mismatch."
+        );
+        let lhs = other.raw_mask_int();
+        let diff = lhs.wrapping_sub(self.storage) & self.spec.int_mask();
+        let overflow: u128 = if self.storage > lhs { 1 } else { 0 };
+        (
+            EmulatedCiphertext {
+                storage: diff,
+                spec: self.spec,
+            },
+            EmulatedCiphertext {
+                storage: overflow,
+                spec: CiphertextSpec::new(
+                    self.spec.block_spec().message_size() as u16,
+                    self.spec.block_spec().message_size(),
+                    self.spec.block_spec().carry_size(),
+                ),
+            },
+        )
+    }
+
     pub fn overflow_sub(self, other: Self) -> (EmulatedCiphertext, EmulatedCiphertext) {
         assert_eq!(self.spec, other.spec(), "Spec mismatch.");
         let diff = self.storage.wrapping_sub(other.storage) & self.spec.int_mask();
@@ -617,6 +775,59 @@ impl EmulatedCiphertext {
             spec: self.spec,
         }
     }
+    /// Describe scalar multiplication behavior when MSB are dropped
+    pub fn muls_lsb(self, other: EmulatedPlaintext) -> EmulatedCiphertext {
+        assert_eq!(
+            self.spec.int_size(),
+            other.spec().int_size(),
+            "Spec mismatch."
+        );
+        assert_eq!(
+            self.spec.block_count(),
+            other.spec().block_count(),
+            "Spec mismatch."
+        );
+        let storage = self.storage.wrapping_mul(other.raw_mask_int()) & self.spec.int_mask();
+        EmulatedCiphertext {
+            storage,
+            spec: self.spec,
+        }
+    }
+
+    /// Describe scalar multiplication behavior with overflow detection when MSB are dropped
+    pub fn overflow_muls_lsb(
+        self,
+        other: EmulatedPlaintext,
+    ) -> (EmulatedCiphertext, EmulatedCiphertext) {
+        assert_eq!(
+            self.spec.int_size(),
+            other.spec().int_size(),
+            "Spec mismatch."
+        );
+        assert_eq!(
+            self.spec.block_count(),
+            other.spec().block_count(),
+            "Spec mismatch."
+        );
+        let (raw_mul, overflow_u128) = self.storage.overflowing_mul(other.raw_mask_int());
+        let int_size = self.spec.int_size();
+        let overflow_flag = overflow_u128 || (int_size < 128 && (raw_mul >> int_size) != 0);
+        (
+            EmulatedCiphertext {
+                storage: raw_mul & self.spec.int_mask(),
+                spec: self.spec,
+            },
+            EmulatedCiphertext {
+                storage: overflow_flag.sas(),
+                spec: CiphertextSpec::new(
+                    self.spec.block_spec().message_size() as u16,
+                    self.spec.block_spec().message_size(),
+                    self.spec.block_spec().carry_size(),
+                ),
+            },
+        )
+    }
+
     /// Describe multiplication behavior with overflow detection when MSB are dropped
     pub fn overflow_mul_lsb(self, other: Self) -> (EmulatedCiphertext, EmulatedCiphertext) {
         assert_eq!(self.spec, other.spec(), "Spec mismatch.");

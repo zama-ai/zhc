@@ -104,7 +104,7 @@ use zhc_ir::{
 };
 use zhc_langs::{
     doplang::DopLang,
-    hpulang::{HpuLang, HpuLocality},
+    hpulang::{HpuLang, HpuLocality, LutId},
     ioplang::IopLang,
     pipelinelang::{PipelineInstructionSet, PipelineLang},
     vmlang::VmLang,
@@ -130,6 +130,7 @@ struct ArtifactsValids {
     prototype: ValId,
     hpu_config: ValId,
     hpulang_translated: ValId,
+    hpu_lut_payload: ValId,
     hpulang_scheduled: ValId,
     doplang: ValId,
     hpu_stream: ValId,
@@ -173,6 +174,7 @@ static PIPELINE: LazyLock<(IR<PipelineLang>, ArtifactsValids)> = LazyLock::new(|
     let hpu_config = rets[0];
     let (_, rets) = ir.add_op(IopLangToHpuLang, svec![ioplang]);
     let hpulang_translated = rets[0];
+    let hpu_lut_payload = rets[1];
     let (_, rets) = ir.add_op(ScheduleHpuLang, svec![hpulang_translated, hpu_config]);
     let hpulang_scheduled = rets[0];
     let (_, rets) = ir.add_op(AllocateDopLang, svec![hpulang_scheduled, hpu_config]);
@@ -237,6 +239,7 @@ static PIPELINE: LazyLock<(IR<PipelineLang>, ArtifactsValids)> = LazyLock::new(|
             prototype,
             hpu_config,
             hpulang_translated,
+            hpu_lut_payload,
             hpulang_scheduled,
             doplang,
             hpu_stream,
@@ -710,6 +713,28 @@ impl Pipeline {
             .get_val(VALIDS().hpulang_translated)
             .unwrap()
             .unwrap_hpu_lang_translated_ref()
+    }
+
+    /// Returns the tables of the non-builtin LUTs that the circuit references.
+    /// The key of each table is the gid that lowering allocated to it.
+    ///
+    /// A builtin LUT is already resident in the device LUT memory.
+    /// The instruction stream refers to it by gid alone, and it carries no payload.
+    /// A non-builtin LUT is a `Lut1Def::Table`. Today only `iop_match_value` emits them.
+    /// Lowering assigns each one a gid past the builtin range.
+    /// The caller must upload its table before the instruction stream runs.
+    /// If not, the device bootstraps against the old content of the slot.
+    ///
+    /// Lowering deduplicates the tables by content, so an operation that reuses one table
+    /// many times pays for it once.
+    pub fn get_hpu_lut_payload(&mut self) -> &[(LutId, Vec<u8>)] {
+        self.eval
+            .pull_val(&mut self.context, VALIDS().hpu_lut_payload);
+        self.eventually_report_failure();
+        self.eval
+            .get_val(VALIDS().hpu_lut_payload)
+            .unwrap()
+            .unwrap_hpu_lut_payload_ref()
     }
 
     /// Returns the block-level HPU IR of the circuit, after scheduling.

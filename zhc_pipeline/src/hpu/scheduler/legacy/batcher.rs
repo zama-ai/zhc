@@ -383,8 +383,8 @@ pub fn batch<'a, 'b>(
 mod test {
     use crate::{hpu::lowering::lower_iop_to_hpu, test::check_iop_hpu_equivalence};
     use zhc_builder::{
-        Builder, CiphertextSpec, add, bitwise_and, bitwise_or, bitwise_xor, div, if_then_else,
-        if_then_zero, mul,
+        Builder, CiphertextSpec, add, adds, bitwise_and, bitwise_or, bitwise_xor, div,
+        if_then_else, if_then_zero, mul,
     };
     use zhc_config::hpu::PhysicalConfig;
     use zhc_ir::IR;
@@ -394,7 +394,7 @@ mod test {
     use super::*;
 
     fn pipeline(ir: &IR<IopLang>) -> IR<HpuLang> {
-        let ir = lower_iop_to_hpu(&ir).output;
+        let ir = lower_iop_to_hpu(&ir).translation.output;
         let config = HpuConfig::from(PhysicalConfig::gaussian_64b());
         batch(&ir, &config, SchedPolicy::AsSoonAsPossible)
     }
@@ -539,6 +539,7 @@ mod test {
         for size in 2..=64 {
             let spec = CiphertextSpec::new(size, 2, 2);
             check(add(spec));
+            check(adds(spec));
             check(bitwise_and(spec));
             check(bitwise_or(spec));
             check(bitwise_xor(spec));
