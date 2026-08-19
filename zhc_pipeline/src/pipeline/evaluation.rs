@@ -11,7 +11,7 @@ use zhc_utils::{
     svec,
 };
 
-use crate::{SchedPolicy, hpu, misc, multi_hpu, pipeline::context::PipelineContext, vm};
+use crate::{SchedPolicy, hpu, misc::{self, check_noise}, multi_hpu, pipeline::context::PipelineContext, vm};
 
 use super::PipelineArtifact;
 
@@ -19,6 +19,7 @@ impl EvaluatesTo<PipelineArtifact> for PipelineTypeSystem {
     fn type_of(interp: &PipelineArtifact) -> Self {
         match interp {
             PipelineArtifact::Builder(_) => PipelineTypeSystem::Builder,
+            PipelineArtifact::UncheckedIopLang(_) => PipelineTypeSystem::UncheckedIopLang,
             PipelineArtifact::IopLang(_) => PipelineTypeSystem::IopLang,
             PipelineArtifact::HpuConfig(_) => PipelineTypeSystem::HpuConfig,
             PipelineArtifact::HpuLangTranslated(_) => PipelineTypeSystem::HpuLangTranslated,
@@ -30,6 +31,7 @@ impl EvaluatesTo<PipelineArtifact> for PipelineTypeSystem {
             PipelineArtifact::SlackDrawing(_) => PipelineTypeSystem::SlackDrawing,
             PipelineArtifact::HpuTrace(_) => PipelineTypeSystem::HpuTrace,
             PipelineArtifact::Partitions(_) => PipelineTypeSystem::Partitions,
+            PipelineArtifact::CiphertextBlockSpec(_) => PipelineTypeSystem::CiphertextBlockSpec,
             PipelineArtifact::HpuAssembly(_) => PipelineTypeSystem::HpuAssembly,
             PipelineArtifact::MultiHpuConfig(_) => PipelineTypeSystem::MultiHpuConfig,
             PipelineArtifact::MultiHpuLangTranslated(_) => {
@@ -73,13 +75,23 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                 interval_end(c"InputHpuConfig", 0);
                 result
             }
-            PipelineInstructionSet::BuilderToIopLang => {
-                interval_begin(c"BuilderToIopLang", 0);
+            PipelineInstructionSet::BuilderToUncheckedIopLang => {
+                interval_begin(c"BuilderToUncheckedIopLang", 0);
                 let builder = arguments[0].unwrap_builder_ref();
-                let ioplang = builder.optimize_ir();
-                let result = svec![PipelineArtifact::IopLang(ioplang)];
-                interval_end(c"BuilderToIopLang", 0);
+                let unchecked = builder.optimize_ir();
+                let result = svec![PipelineArtifact::UncheckedIopLang(unchecked)];
+                interval_end(c"BuilderToUncheckedIopLang", 0);
                 result
+            }
+            PipelineInstructionSet::CheckIopLang => {
+                interval_begin(c"CheckIopLang", 0);
+                let unchecked = arguments[0].unwrap_unchecked_iop_lang_ref();
+                let spec = arguments[1].unwrap_ciphertext_block_spec_ref();
+                check_noise(unchecked, &spec.matching_plaintext_block_spec());
+                let result = svec![PipelineArtifact::IopLang(unchecked.clone())];
+                interval_end(c"CheckIopLang", 0);
+                result
+
             }
             PipelineInstructionSet::BuilderToPartitions => {
                 interval_begin(c"BuilderToPartitions", 0);
@@ -95,6 +107,14 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                 let prototype = builder.signature();
                 let result = svec![PipelineArtifact::Prototype(prototype)];
                 interval_end(c"BuilderToPrototype", 0);
+                result
+            }
+            PipelineInstructionSet::BuilderToCiphertextBlockSpec => {
+                interval_begin(c"BuilderToCiphertextBlockSpec", 0);
+                let builder = arguments[0].unwrap_builder_ref();
+                let spec = builder.spec().clone();
+                let result = svec![PipelineArtifact::CiphertextBlockSpec(spec)];
+                interval_end(c"BuilderToCiphertextBlockSpec", 0);
                 result
             }
             PipelineInstructionSet::IopLangToHpuLang => {

@@ -37,7 +37,7 @@ pub use view::*;
 /// [`Analyzed`](Analysing::Analyzed) once the analysis callback produces a
 /// result. After the pass completes, all slots are unwrapped via
 /// [`unwrap_analyzed`](Analysing::unwrap_analyzed).
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum Analysing<A> {
     Pending,
     Analyzed(A),

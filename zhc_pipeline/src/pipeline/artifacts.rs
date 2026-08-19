@@ -3,7 +3,7 @@ use crate::{
     misc::PbsMetrics,
     vm::scheduler::VmExecutionPlan,
 };
-use zhc_builder::{Builder, Type};
+use zhc_builder::{Builder, CiphertextBlockSpec, Type};
 use zhc_config::{hpu::HpuConfig, multi_hpu::MultiHpuConfig, vm::VmConfig};
 use zhc_ir::{
     IR, OpMap, Signature,
@@ -25,11 +25,13 @@ use zhc_utils::{existential_enum, topology::Topology};
 pub enum PipelineArtifact {
     // Commons
     Builder(Builder),
+    UncheckedIopLang(IR<IopLang>),
     IopLang(IR<IopLang>),
     PbsMetrics(PbsMetrics),
     SlackDrawing(FileHandle),
     Partitions(OpMap<PartitionId>),
     Prototype(Signature<Type>),
+    CiphertextBlockSpec(CiphertextBlockSpec),
     // Hpu
     HpuConfig(HpuConfig),
     HpuLangTranslated(IR<HpuLang>),

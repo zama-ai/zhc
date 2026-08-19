@@ -36,9 +36,11 @@ use super::PipelineTypeSystem;
 pub enum PipelineInstructionSet {
     // Commons
     InputBuilder,
-    BuilderToIopLang,
+    BuilderToUncheckedIopLang,
+    CheckIopLang,
     BuilderToPartitions,
     BuilderToPrototype,
+    BuilderToCiphertextBlockSpec,
     ComputePbsMetrics,
     DrawSlack,
     // Hpu
@@ -74,7 +76,7 @@ impl PipelineInstructionSet {
     pub fn get_affinity(&self) -> Affinity {
         use PipelineInstructionSet::*;
         match self {
-            InputBuilder | BuilderToIopLang | BuilderToPartitions | BuilderToPrototype
+            InputBuilder | BuilderToUncheckedIopLang | CheckIopLang | BuilderToPartitions | BuilderToPrototype | BuilderToCiphertextBlockSpec
             | ComputePbsMetrics | DrawSlack => Affinity::Commons,
 
             InputHpuConfig | IopLangToHpuLang | ScheduleHpuLang | AllocateDopLang
@@ -103,8 +105,10 @@ impl Format for PipelineInstructionSet {
         match self {
             InputBuilder => write!(f, "input_builder"),
             InputHpuConfig => write!(f, "input_hpu_config"),
-            BuilderToIopLang => write!(f, "builder_to_iop_lang"),
+            BuilderToUncheckedIopLang => write!(f, "builder_to_unchecked_ioplang"),
+            CheckIopLang => write!(f, "check_ioplang"),
             BuilderToPrototype => write!(f, "builder_to_prototype"),
+            BuilderToCiphertextBlockSpec => write!(f, "builder_to_ciphertext_block_spec"),
             ComputePbsMetrics => write!(f, "compute_pbs_metrics"),
             IopLangToHpuLang => write!(f, "ioplang_to_hpulang"),
             ScheduleHpuLang => write!(f, "schedule_hpulang"),
@@ -145,16 +149,18 @@ impl DialectInstructionSet for PipelineInstructionSet {
         match self {
             InputBuilder => sig![() -> (Builder)],
             InputHpuConfig => sig![() -> (HpuConfig)],
-            BuilderToIopLang => sig![(Builder) -> (IopLang)],
+            BuilderToUncheckedIopLang => sig![(Builder) -> (UncheckedIopLang)],
+            CheckIopLang => sig![(UncheckedIopLang, CiphertextBlockSpec) -> (IopLang)],
             BuilderToPrototype => sig![(Builder) -> (Prototype)],
-            ComputePbsMetrics => sig![(IopLang) -> (PbsMetrics)],
+            BuilderToCiphertextBlockSpec => sig![(Builder) -> (CiphertextBlockSpec)],
+            ComputePbsMetrics => sig![(UncheckedIopLang) -> (PbsMetrics)],
             IopLangToHpuLang => sig![(IopLang) -> (HpuLangTranslated)],
             ScheduleHpuLang => sig![(HpuLangTranslated, HpuConfig) -> (HpuLangScheduled)],
             AllocateDopLang => sig![(HpuLangScheduled, HpuConfig) -> (DopLang)],
             GenerateHpuStream => sig![(DopLang) -> (HpuStream)],
             ComputeHpuMetrics => sig![(DopLang, HpuLangScheduled) -> (HpuMetrics)],
             TraceHpuExecution => sig![(DopLang, HpuConfig) -> (HpuTrace)],
-            DrawSlack => sig![(IopLang) -> (SlackDrawing)],
+            DrawSlack => sig![(UncheckedIopLang) -> (SlackDrawing)],
             BuilderToPartitions => sig![(Builder) -> (Partitions)],
             GenerateHpuAssembly => sig![(DopLang) -> (HpuAssembly)],
             InputMultiHpuConfig => sig![() -> (MultiHpuConfig)],

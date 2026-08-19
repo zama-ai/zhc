@@ -15,14 +15,14 @@ pub mod prelude {
     pub use zhc_langs::ioplang::{Lut1Def, Lut2Def};
     pub use zhc_pipeline::*;
     pub use zhc_utils::{Dumpable, topology::Topology};
+
+    // pub trait BuilderExt {
+    //     fn
+    // }
 }
 
 #[cfg(test)]
 mod test {
-    use zhc_builder::CiphertextSpec;
-    use zhc_pipeline::{Pipeline, compat::Iop};
-    use zhc_utils::Dumpable;
-
     #[test]
     fn brrrrrr() {}
 }
