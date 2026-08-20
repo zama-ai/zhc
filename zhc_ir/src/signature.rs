@@ -97,6 +97,6 @@ impl<T: Debug> Dumpable for Signature<T> {
 #[macro_export]
 macro_rules! sig {
     (($($arg:expr),*) -> ($($ret:expr),*)) => {
-        Signature(zhc_utils::svec![$($arg),*], zhc_utils::svec![$($ret),*])
+        $crate::Signature($crate::zhc_utils::svec![$($arg),*], $crate::zhc_utils::svec![$($ret),*])
     };
 }

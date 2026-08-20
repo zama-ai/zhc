@@ -22,6 +22,9 @@
 //! helps for cross-dialects translation, and [`traversal`] offers walker verification
 //! utilities.
 
+#[doc(hidden)]
+pub use zhc_utils;
+
 pub mod cse;
 pub mod dce;
 pub mod evaluation;
