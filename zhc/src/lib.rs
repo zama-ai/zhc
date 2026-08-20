@@ -16,9 +16,15 @@ pub mod prelude {
     pub use zhc_pipeline::*;
     pub use zhc_utils::{Dumpable, topology::Topology};
 
-    // pub trait BuilderExt {
-    //     fn
-    // }
+    pub trait BuilderExt {
+        fn dump_noise_budget(&self);
+    }
+
+    impl BuilderExt for Builder {
+        fn dump_noise_budget(&self) {
+            analyze_noise(&*self.ir(), &self.spec().matching_plaintext_block_spec()).dump();
+        }
+    }
 }
 
 #[cfg(test)]

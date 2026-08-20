@@ -208,7 +208,7 @@ fn median(samples: &mut [f64]) -> f64 {
 /// Returns the pipeline compiling this iop, with the same scheduler `compute_latency` picks.
 fn iop_pipeline(iop: &Iop, config: &HpuConfig, spec: CiphertextSpec) -> Pipeline {
     let pipeline = Pipeline::new()
-        .with_builder(iop.get_builder(spec))
+        .with_builder(iop.to_builder(spec))
         .with_hpu_config(config.clone());
     match (iop, spec.int_size()) {
         (Iop::Mul, _)

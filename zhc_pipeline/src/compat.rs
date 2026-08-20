@@ -213,7 +213,7 @@ impl Iop {
         spec: CiphertextSpec,
     ) -> Vec<DOpRepr> {
         let pipeline = Pipeline::new()
-            .with_builder(self.get_builder(spec))
+            .with_builder(self.to_builder(spec))
             .with_hpu_config(hpu_config.clone());
         let mut pipeline = match (self, spec.int_size()) {
             (Iop::Mul, _)
@@ -228,7 +228,7 @@ impl Iop {
 
     pub fn compute_latency(&self, hpu_config: &HpuConfig, spec: CiphertextSpec) -> Microseconds {
         let pipeline = Pipeline::new()
-            .with_builder(self.get_builder(spec))
+            .with_builder(self.to_builder(spec))
             .with_hpu_config(hpu_config.clone());
         let mut pipeline = match (self, spec.int_size()) {
             (Iop::Mul, _)
@@ -239,60 +239,6 @@ impl Iop {
             _ => pipeline,
         };
         pipeline.get_hpu_metrics().latency
-    }
-
-    pub fn get_builder(&self, spec: CiphertextSpec) -> Builder {
-        match self {
-            Iop::CmpGt => cmp_gt(spec),
-            Iop::CmpGte => cmp_gte(spec),
-            Iop::CmpLt => cmp_lt(spec),
-            Iop::CmpLte => cmp_lte(spec),
-            Iop::CmpEq => cmp_eq(spec),
-            Iop::CmpNeq => cmp_neq(spec),
-            Iop::IfThenElse => if_then_else(spec),
-            Iop::IfThenZero => if_then_zero(spec),
-            Iop::Add => add(spec),
-            Iop::Sub => sub(spec),
-            Iop::Mul => mul(spec),
-            Iop::Ilog2 => ilog2(spec),
-            Iop::CountZeros => count_0(spec),
-            Iop::CountOnes => count_1(spec),
-            Iop::LeadingZeros => lead0(spec),
-            Iop::LeadingOnes => lead1(spec),
-            Iop::TrailingZeros => trail0(spec),
-            Iop::TrailingOnes => trail1(spec),
-            Iop::Div => div(spec),
-            Iop::Mod => rem(spec),
-            // Iop::AddPt => todo!(),
-            // Iop::SubPt => todo!(),
-            // Iop::PtSub => todo!(),
-            // Iop::MulPt => todo!(),
-            // Iop::DivPt => todo!(),
-            // Iop::ModPt => todo!(),
-            // Iop::OvfAddPt => todo!(),
-            // Iop::OvfSubPt => todo!(),
-            // Iop::OvfPtSub => todo!(),
-            // Iop::OvfMulPt => todo!(),
-            // Iop::RightShiftPt => todo!(),
-            // Iop::LeftShiftPt => todo!(),
-            // Iop::RightRotPt => todo!(),
-            // Iop::LeftRotPt => todo!(),
-            Iop::OvfAdd => overflow_add(spec),
-            Iop::OvfSub => overflow_sub(spec),
-            Iop::OvfMul => overflow_mul(spec),
-            Iop::BwAnd => bitwise_and(spec),
-            Iop::BwOr => bitwise_or(spec),
-            Iop::BwXor => bitwise_xor(spec),
-            Iop::BwNot => bitwise_inv(spec),
-            Iop::RightShift => shift_right(spec),
-            Iop::LeftShift => shift_left(spec),
-            Iop::RightRot => rotate_right(spec),
-            Iop::LeftRot => rotate_left(spec),
-            Iop::Erc7984 => erc7984(spec),
-            Iop::Erc7984Simd => erc7984_simd(spec),
-            Iop::AddSimd => add_simd(spec),
-            // Iop::MemCpy => todo!(),
-        }
     }
 }
 

@@ -123,8 +123,6 @@ use crate::{
 
 struct ArtifactsValids {
     builder: ValId,
-    unchecked_ioplang: ValId,
-    ciphertext_block_spec: ValId,
     ioplang: ValId,
     slack_drawing: ValId,
     pbs_metrics: ValId,
@@ -236,7 +234,6 @@ static PIPELINE: LazyLock<(IR<PipelineLang>, ArtifactsValids)> = LazyLock::new(|
         ir,
         ArtifactsValids {
             builder,
-            unchecked_ioplang,
             ioplang,
             pbs_metrics,
             slack_drawing,
@@ -262,7 +259,6 @@ static PIPELINE: LazyLock<(IR<PipelineLang>, ArtifactsValids)> = LazyLock::new(|
             topology,
             vmlang,
             vm_execution_plan,
-            ciphertext_block_spec,
         },
     )
 });

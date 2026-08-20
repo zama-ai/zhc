@@ -1295,7 +1295,7 @@ fn test_val_ann_gauge_widget() {
     val_annotations.insert(inc3[0], ValAnn(130.));
 
     let ann_ir = AnnIR::new(&ir, ir.filled_opmap(()), val_annotations);
-    draw_ann_ir_to_html(&ann_ir.view(), None).open();
+    draw_ann_ir_to_html(&ann_ir.view(), None);
 }
 
 #[test]
