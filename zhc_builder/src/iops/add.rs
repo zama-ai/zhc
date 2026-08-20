@@ -188,16 +188,16 @@ impl Builder {
     ) -> (Vec<CiphertextBlock>, CiphertextBlock) {
         match int_size {
             0..8 => self.iop_add_ripple_carry_raw(&lhs_blocks, &rhs_blocks, cin),
-            8..17 => self.iop_add_hillis_steele_raw(&lhs_blocks, &rhs_blocks, cin, true),
-            17..256 => {
-                // select internal par_w based on integer_w
-                let par_w = match int_size {
-                    16..24 => 7,
-                    24..256 => 12,
-                    _ => 1,
-                };
-                self.iop_add_kogge_stone_raw(&lhs_blocks, &rhs_blocks, cin, par_w)
-            }
+            8..256 => self.iop_add_hillis_steele_raw(&lhs_blocks, &rhs_blocks, cin, true),
+            // 17..256 => {
+            //     // select internal par_w based on integer_w
+            //     let par_w = match int_size {
+            //         16..24 => 7,
+            //         24..256 => 12,
+            //         _ => 1,
+            //     };
+            //     self.iop_add_kogge_stone_raw(&lhs_blocks, &rhs_blocks, cin, par_w)
+            // }
             _ => todo!(),
         }
     }
