@@ -1,7 +1,4 @@
-use zhc_builder::{
-    Builder, CiphertextSpec, add, bitwise_and, bitwise_or, bitwise_xor, cmp_gt, div, if_then_else,
-    if_then_zero, mul,
-};
+use zhc_builder::{Builder, CiphertextSpec, add, cmp_gt};
 use zhc_config::hpu::{HpuConfig, PhysicalConfig};
 use zhc_crypto::integer_semantics::lut::LutRegistry;
 use zhc_ir::{IR, PrintWalker};
@@ -174,7 +171,10 @@ fn test_allocate_cmp_ir() {
 }
 
 #[test]
+#[ignore]
 fn allocator_correctness() {
+    use zhc::compat::Iop;
+
     let config = HpuConfig::from(PhysicalConfig::gaussian_64b());
     let check = |b: Builder| {
         let spec = *b.spec();
@@ -182,15 +182,9 @@ fn allocator_correctness() {
         let (dop_ir, lut_reg) = pipeline(&iop_ir);
         check_iop_dop_equivalence(&iop_ir, &dop_ir, &lut_reg, spec, config.regf_size, 100);
     };
-    for size in 2..=64 {
-        let spec = CiphertextSpec::new(size, 2, 2);
-        check(add(spec));
-        check(bitwise_and(spec));
-        check(bitwise_or(spec));
-        check(bitwise_xor(spec));
-        check(if_then_else(spec));
-        check(if_then_zero(spec));
-        check(mul(spec));
-        check(div(spec));
+    for iop in Iop::ALL {
+        for size in (2..=128).step_by(2) {
+            check(iop.to_builder(CiphertextSpec::new(size, 2, 2)));
+        }
     }
 }

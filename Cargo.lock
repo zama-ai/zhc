@@ -1571,6 +1571,7 @@ dependencies = [
 name = "zhc_pipeline_correctness"
 version = "0.9.1"
 dependencies = [
+ "zhc",
  "zhc_builder",
  "zhc_config",
  "zhc_crypto",

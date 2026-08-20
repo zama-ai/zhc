@@ -143,3 +143,22 @@ fn test_scheduler() {
         "#
     )
 }
+
+#[test]
+#[ignore]
+fn correctness() {
+    use zhc::compat::Iop;
+    use zhc_builder::Builder;
+
+    let check = |b: Builder| {
+        let spec = *b.spec();
+        let iop_ir = b.optimize_ir();
+        let hpu_ir = pipeline(&iop_ir);
+        crate::equivalence_check::check_iop_hpu_equivalence(&iop_ir, &hpu_ir, spec, 100);
+    };
+    for iop in Iop::ALL {
+        for size in (2..=128).step_by(2) {
+            check(iop.to_builder(CiphertextSpec::new(size, 2, 2)));
+        }
+    }
+}
