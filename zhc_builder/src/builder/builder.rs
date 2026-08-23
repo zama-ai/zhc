@@ -1901,6 +1901,50 @@ impl Builder {
         return output;
     }
 
+    /// Adds a cyphertext block slices and a plaintext block slices element-wise.
+    ///
+    /// For each position, calls [`block_add_plaintext`](Self::block_add_plaintext) on the
+    /// corresponding pair. When the two slices have different lengths, `extension` controls the
+    /// behavior (see [`ExtensionBehavior`]).
+    ///
+    /// # Panics
+    ///
+    /// Panics if the slices differ in length and `extension` is
+    /// [`Panic`](ExtensionBehavior::Panic).
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let c = builder.ciphertext_input(8);
+    /// let p = builder.plaintext_input(8);
+    /// let c_blocks = builder.ciphertext_split(&c);
+    /// let p_blocks = builder.plaintext_split(&p);
+    /// let sums = builder.vector_add_plaintext(&c_blocks, &p_blocks, ExtensionBehavior::Panic);
+    /// ```
+    pub fn vector_add_plaintext(
+        &self,
+        lhs: impl AsRef<[CiphertextBlock]>,
+        rhs: impl AsRef<[PlaintextBlock]>,
+        extension: ExtensionBehavior,
+    ) -> Vec<CiphertextBlock> {
+        let mut output = Vec::new();
+        let mut lhs_i = lhs.as_ref().iter();
+        let mut rhs_i = rhs.as_ref().iter();
+        loop {
+            match (&extension, lhs_i.next(), rhs_i.next()) {
+                (_, Some(li), Some(ri)) => output.push(self.block_add_plaintext(li, ri)),
+                (_, None, None) => break,
+                (ExtensionBehavior::Panic, _, _) => panic!(),
+                (ExtensionBehavior::Limit, _, _) => break,
+                (ExtensionBehavior::Passthrough, None, _) => break,
+                (ExtensionBehavior::Passthrough, Some(v), None) => output.push(*v),
+            }
+        }
+        return output;
+    }
+
     /// Zero-extends a block slice to a given length.
     ///
     /// Pads `inp` with zero-valued constant ciphertext blocks
