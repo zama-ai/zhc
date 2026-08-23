@@ -26,8 +26,8 @@ pub fn allocate_registers(ir: &IR<HpuLang>, config: &HpuConfig) -> IR<DopLang> {
 #[cfg(test)]
 mod test {
     use zhc_builder::{
-        Builder, CiphertextSpec, add, bitwise_and, bitwise_or, bitwise_xor, cmp_gt, div,
-        if_then_else, if_then_zero, mul,
+        Builder, CiphertextSpec, add, adds, bitwise_and, bitwise_or, bitwise_xor, cast, cmp_gt,
+        div, flip, if_then_else, if_then_zero, mul, overflow_ssub, overflow_subs, ssub, subs, sum,
     };
     use zhc_config::hpu::{HpuConfig, PhysicalConfig};
     use zhc_ir::{IR, PrintWalker};
@@ -209,13 +209,22 @@ mod test {
         for size in 2..=64 {
             let spec = CiphertextSpec::new(size, 2, 2);
             check(add(spec));
+            check(adds(spec));
+            check(subs(spec));
+            check(ssub(spec));
+            check(overflow_subs(spec));
+            check(overflow_ssub(spec));
             check(bitwise_and(spec));
             check(bitwise_or(spec));
             check(bitwise_xor(spec));
             check(if_then_else(spec));
             check(if_then_zero(spec));
+            check(flip(spec));
+            check(sum(spec, 5));
             check(mul(spec));
             check(div(spec));
+            check(cast(spec, 2));
+            check(cast(spec, 128));
         }
     }
 }
