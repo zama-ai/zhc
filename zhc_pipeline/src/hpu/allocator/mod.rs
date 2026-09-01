@@ -1,4 +1,5 @@
 use zhc_config::hpu::HpuConfig;
+use zhc_crypto::integer_semantics::lut::LutRegistry;
 use zhc_ir::{AnnIR, IR};
 use zhc_langs::{doplang::DopLang, hpulang::HpuLang};
 
@@ -16,11 +17,15 @@ mod value_state;
 /// Takes a scheduled intermediate representation `ir` containing HPU operations
 /// and the hardware configuration `config` to produce a new IR in the device
 /// operation language with physical register assignments for all values.
-pub fn allocate_registers(ir: &IR<HpuLang>, config: &HpuConfig) -> IR<DopLang> {
+pub fn allocate_registers(
+    ir: &IR<HpuLang>,
+    config: &HpuConfig,
+    lut_reg: &LutRegistry,
+) -> IR<DopLang> {
     let allocator = allocator::Allocator::init(ir, config.regf_size);
     let allocation = allocator.allocate_registers();
     let annir = AnnIR::new(ir, allocation, ir.filled_valmap(()));
-    translator::translate(&annir)
+    translator::translate(&annir, &lut_reg)
 }
 
 #[cfg(test)]
@@ -30,6 +35,7 @@ mod test {
         if_then_else, if_then_zero, mul,
     };
     use zhc_config::hpu::{HpuConfig, PhysicalConfig};
+    use zhc_crypto::integer_semantics::lut::LutRegistry;
     use zhc_ir::{IR, PrintWalker};
     use zhc_langs::{doplang::DopLang, ioplang::IopLang};
     use zhc_utils::assert_display_is;
@@ -37,12 +43,14 @@ mod test {
     use crate::{
         SchedPolicy,
         hpu::{lowering::lower_iop_to_hpu, scheduler::legacy::schedule},
+        misc::extract_lut_registry,
         test::check_iop_dop_equivalence,
     };
 
     use super::allocate_registers;
 
-    fn pipeline(ir: &IR<IopLang>) -> IR<DopLang> {
+    fn pipeline(ir: &IR<IopLang>) -> (IR<DopLang>, LutRegistry) {
+        let lut_reg = extract_lut_registry(&ir);
         let ir = lower_iop_to_hpu(&ir).output;
         let config = HpuConfig::from(PhysicalConfig::gaussian_64b());
         let scheduled = schedule(
@@ -51,12 +59,12 @@ mod test {
             SchedPolicy::AsSoonAsPossible,
             SchedPolicy::AsSoonAsPossible,
         );
-        allocate_registers(&scheduled, &config)
+        (allocate_registers(&scheduled, &config, &lut_reg), lut_reg)
     }
 
     #[test]
     fn test_allocate_add_ir() {
-        let ir = pipeline(&add(CiphertextSpec::new(16, 2, 2)).optimize_ir());
+        let ir = pipeline(&add(CiphertextSpec::new(16, 2, 2)).optimize_ir()).0;
         assert_display_is!(
             ir.format(),
             r#"
@@ -84,23 +92,23 @@ mod test {
                 %21 = ADD<R(4), R(4), R(7)>(%20);
                 %22 = ADD<R(1), R(8), R(1)>(%21);
                 %23 = ADD<R(2), R(2), R(10)>(%22);
-                %24 = PBS2<R(8, 2), R(0), LUT(26)>(%23);
-                %25 = PBS<R(7), R(2), LUT(47)>(%24);
-                %26 = PBS<R(10), R(4), LUT(48)>(%25);
-                %27 = PBS<R(11), R(6), LUT(49)>(%26);
-                %28 = PBS<R(14), R(5), LUT(47)>(%27);
-                %29 = PBS<R(15), R(3), LUT(48)>(%28);
-                %30 = PBSF<R(16), R(1), LUT(49)>(%29);
+                %24 = PBS2<R(8, 2), R(0), LUT(0)>(%23);
+                %25 = PBS<R(7), R(2), LUT(1)>(%24);
+                %26 = PBS<R(10), R(4), LUT(2)>(%25);
+                %27 = PBS<R(11), R(6), LUT(3)>(%26);
+                %28 = PBS<R(14), R(5), LUT(1)>(%27);
+                %29 = PBS<R(15), R(3), LUT(2)>(%28);
+                %30 = PBSF<R(16), R(1), LUT(3)>(%29);
                 %31 = ADD<R(0), R(12), R(13)>(%30);
                 %32 = ADD<R(7), R(9), R(7)>(%31);
                 %33 = ADD<R(10), R(7), R(10)>(%32);
                 %34 = ADD<R(2), R(2), R(9)>(%33);
                 %35 = ADD<R(9), R(10), R(11)>(%34);
-                %36 = PBS<R(11), R(8), LUT(1)>(%35);
-                %37 = PBS<R(12), R(2), LUT(1)>(%36);
-                %38 = PBS<R(13), R(7), LUT(44)>(%37);
-                %39 = PBS<R(17), R(10), LUT(45)>(%38);
-                %40 = PBSF<R(18), R(9), LUT(46)>(%39);
+                %36 = PBS<R(11), R(8), LUT(7)>(%35);
+                %37 = PBS<R(12), R(2), LUT(7)>(%36);
+                %38 = PBS<R(13), R(7), LUT(5)>(%37);
+                %39 = PBS<R(17), R(10), LUT(6)>(%38);
+                %40 = PBSF<R(18), R(9), LUT(4)>(%39);
                 %41 = ADD<R(2), R(14), R(15)>(%40);
                 %42 = ADD<R(7), R(2), R(16)>(%41);
                 %43 = ST<TC(0, 0), R(11)>(%42);
@@ -111,21 +119,21 @@ mod test {
                 %48 = ADD<R(7), R(7), R(18)>(%47);
                 %49 = ADD<R(8), R(14), R(18)>(%48);
                 %50 = ADD<R(2), R(2), R(18)>(%49);
-                %51 = PBS<R(9), R(4), LUT(1)>(%50);
-                %52 = PBS<R(10), R(6), LUT(1)>(%51);
-                %53 = PBS<R(11), R(8), LUT(44)>(%52);
-                %54 = PBS<R(12), R(2), LUT(45)>(%53);
-                %55 = PBS<R(13), R(7), LUT(46)>(%54);
-                %56 = PBSF<R(14), R(5), LUT(1)>(%55);
+                %51 = PBS<R(9), R(4), LUT(7)>(%50);
+                %52 = PBS<R(10), R(6), LUT(7)>(%51);
+                %53 = PBS<R(11), R(8), LUT(5)>(%52);
+                %54 = PBS<R(12), R(2), LUT(6)>(%53);
+                %55 = PBS<R(13), R(7), LUT(4)>(%54);
+                %56 = PBSF<R(14), R(5), LUT(7)>(%55);
                 %57 = ST<TC(0, 2), R(9)>(%56);
                 %58 = ADD<R(2), R(3), R(11)>(%57);
                 %59 = ST<TC(0, 4), R(14)>(%58);
                 %60 = ST<TC(0, 3), R(10)>(%59);
                 %61 = ADD<R(0), R(0), R(13)>(%60);
                 %62 = ADD<R(1), R(1), R(12)>(%61);
-                %63 = PBS<R(3), R(2), LUT(1)>(%62);
-                %64 = PBS<R(4), R(1), LUT(1)>(%63);
-                %65 = PBSF<R(5), R(0), LUT(1)>(%64);
+                %63 = PBS<R(3), R(2), LUT(7)>(%62);
+                %64 = PBS<R(4), R(1), LUT(7)>(%63);
+                %65 = PBSF<R(5), R(0), LUT(7)>(%64);
                 %66 = ST<TC(0, 5), R(3)>(%65);
                 %67 = ST<TC(0, 7), R(5)>(%66);
                 %68 = ST<TC(0, 6), R(4)>(%67);
@@ -136,7 +144,7 @@ mod test {
 
     #[test]
     fn test_allocate_cmp_ir() {
-        let ir = pipeline(&cmp_gt(CiphertextSpec::new(16, 2, 2)).optimize_ir());
+        let ir = pipeline(&cmp_gt(CiphertextSpec::new(16, 2, 2)).optimize_ir()).0;
         assert_display_is!(
             ir.format().with_walker(PrintWalker::Linear),
             r#"
@@ -177,20 +185,20 @@ mod test {
                 %34 = SUB<R(1), R(11), R(15)>(%33);
                 %35 = SUB<R(2), R(9), R(13)>(%34);
                 %36 = SUB<R(3), R(10), R(14)>(%35);
-                %37 = PBS<R(4), R(0), LUT(40)>(%36);
-                %38 = PBS<R(5), R(2), LUT(40)>(%37);
-                %39 = PBS<R(6), R(3), LUT(40)>(%38);
-                %40 = PBSF<R(7), R(1), LUT(40)>(%39);
+                %37 = PBS<R(4), R(0), LUT(1)>(%36);
+                %38 = PBS<R(5), R(2), LUT(1)>(%37);
+                %39 = PBS<R(6), R(3), LUT(1)>(%38);
+                %40 = PBSF<R(7), R(1), LUT(1)>(%39);
                 %41 = ADDS<R(0), R(4), PT_I(1)>(%40);
                 %42 = ADDS<R(1), R(7), PT_I(1)>(%41);
                 %43 = ADDS<R(2), R(5), PT_I(1)>(%42);
                 %44 = ADDS<R(3), R(6), PT_I(1)>(%43);
                 %45 = MAC<R(0), R(2), R(0), PT_I(4)>(%44);
                 %46 = MAC<R(1), R(1), R(3), PT_I(4)>(%45);
-                %47 = PBS<R(2), R(0), LUT(51)>(%46);
-                %48 = PBSF<R(3), R(1), LUT(51)>(%47);
+                %47 = PBS<R(2), R(0), LUT(2)>(%46);
+                %48 = PBSF<R(3), R(1), LUT(2)>(%47);
                 %49 = MAC<R(0), R(3), R(2), PT_I(4)>(%48);
-                %50 = PBSF<R(1), R(0), LUT(27)>(%49);
+                %50 = PBSF<R(1), R(0), LUT(3)>(%49);
                 %51 = ST<TC(0, 0), R(1)>(%50);
                 _END(%51);
             "#
@@ -203,8 +211,8 @@ mod test {
         let check = |b: Builder| {
             let spec = *b.spec();
             let iop_ir = b.optimize_ir();
-            let dop_ir = pipeline(&iop_ir);
-            check_iop_dop_equivalence(&iop_ir, &dop_ir, spec, config.regf_size, 100);
+            let (dop_ir, lut_reg) = pipeline(&iop_ir);
+            check_iop_dop_equivalence(&iop_ir, &dop_ir, &lut_reg, spec, config.regf_size, 100);
         };
         for size in 2..=64 {
             let spec = CiphertextSpec::new(size, 2, 2);

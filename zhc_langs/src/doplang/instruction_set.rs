@@ -1,88 +1,8 @@
-use crate::hpulang::LutId;
-
 use super::type_system::DopTypeSystem;
 use serde::Serialize;
 use std::fmt::{Debug, Display};
+use zhc_crypto::integer_semantics::lut::{LutId, LutRegistry};
 use zhc_ir::{DialectInstructionSet, Format, FormatContext, Signature, sig};
-
-pub(crate) const LUT_ALIASES: [&str; 76] = [
-    "None",
-    "MsgOnly",
-    "CarryOnly",
-    "CarryInMsg",
-    "MultCarryMsg",
-    "MultCarryMsgLsb",
-    "MultCarryMsgMsb",
-    "BwAnd",
-    "BwOr",
-    "BwXor",
-    "CmpSign",
-    "CmpReduce",
-    "CmpGt",
-    "CmpGte",
-    "CmpLt",
-    "CmpLte",
-    "CmpEq",
-    "CmpNeq",
-    "ManyGenProp",
-    "ReduceCarry2",
-    "ReduceCarry3",
-    "ReduceCarryPad",
-    "GenPropAdd",
-    "IfTrueZeroed",
-    "IfFalseZeroed",
-    "Ripple2GenProp",
-    "ManyCarryMsg",
-    "CmpGtMrg",
-    "CmpGteMrg",
-    "CmpLtMrg",
-    "CmpLteMrg",
-    "CmpEqMrg",
-    "CmpNeqMrg",
-    "IsSome",
-    "CarryIsSome",
-    "CarryIsNone",
-    "MultCarryMsgIsSome",
-    "MultCarryMsgMsbIsSome",
-    "IsNull",
-    "IsNullPos1",
-    "NotNull",
-    "MsgNotNull",
-    "MsgNotNullPos1",
-    "ManyMsgSplitShift1",
-    "SolvePropGroupFinal0",
-    "SolvePropGroupFinal1",
-    "SolvePropGroupFinal2",
-    "ExtractPropGroup0",
-    "ExtractPropGroup1",
-    "ExtractPropGroup2",
-    "ExtractPropGroup3",
-    "SolveProp",
-    "SolvePropCarry",
-    "SolveQuotient",
-    "SolveQuotientPos1",
-    "IfPos1FalseZeroed",
-    "IfPos1FalseZeroedMsgCarry1",
-    "ShiftLeftByCarryPos0Msg",
-    "ShiftLeftByCarryPos0MsgNext",
-    "ShiftRightByCarryPos0Msg",
-    "ShiftRightByCarryPos0MsgNext",
-    "IfPos0TrueZeroed",
-    "IfPos0FalseZeroed",
-    "IfPos1TrueZeroed",
-    "ManyInv1CarryMsg",
-    "ManyInv2CarryMsg",
-    "ManyInv3CarryMsg",
-    "ManyInv4CarryMsg",
-    "ManyInv5CarryMsg",
-    "ManyInv6CarryMsg",
-    "ManyInv7CarryMsg",
-    "ManyMsgSplit",
-    "Manym2lPropBit1MsgSplit",
-    "Manym2lPropBit0MsgSplit",
-    "Manyl2mPropBit1MsgSplit",
-    "Manyl2mPropBit0MsgSplit",
-];
 
 /// Register address mask that compares all bits (single-output PBS or
 /// plain register).
@@ -230,7 +150,7 @@ impl Argument {
         Argument::LutId { id: val.0 }
     }
 
-    pub fn asm(&self) -> String {
+    pub fn asm(&self, registry: &LutRegistry) -> String {
         match self {
             Argument::PtConst { val } => format!("{val}"),
             Argument::CtHeap { addr } => format!("TH.{addr}"),
@@ -239,7 +159,7 @@ impl Argument {
             Argument::CtDstVar { id, block } => format!("TD[{id}].{block}"),
             Argument::PtSrcVar { id, block } => format!("TI[{id}].{block}"),
             Argument::CtReg { addr, .. } => format!("R{addr}"),
-            Argument::LutId { id } => format!("Pbs{}", LUT_ALIASES[*id]),
+            Argument::LutId { id } => format!("Pbs{}", registry.get_raw_lut(&LutId(*id)).name()),
             Argument::UserFlag { flag } => format!("F{flag}"),
             Argument::VirtId { id } => format!("N{id}"),
         }

@@ -11,7 +11,13 @@ use zhc_utils::{
     svec,
 };
 
-use crate::{SchedPolicy, hpu, misc, multi_hpu, pipeline::context::PipelineContext, vm};
+use crate::{
+    SchedPolicy, hpu,
+    misc::{self, extract_lut_registry},
+    multi_hpu,
+    pipeline::context::PipelineContext,
+    vm,
+};
 
 use super::PipelineArtifact;
 
@@ -46,6 +52,9 @@ impl EvaluatesTo<PipelineArtifact> for PipelineTypeSystem {
             PipelineArtifact::Topology(_) => PipelineTypeSystem::Topology,
             PipelineArtifact::VmLang(_) => PipelineTypeSystem::VmLang,
             PipelineArtifact::VmExecutionPlan(_) => PipelineTypeSystem::VmExecutionPlan,
+            PipelineArtifact::LutRegistry(_) => PipelineTypeSystem::LutRegistry,
+            PipelineArtifact::HpuLutRelocation(_) => PipelineTypeSystem::HpuLutRelocation,
+            PipelineArtifact::MultiHpuLutRelocation(_) => PipelineTypeSystem::MultiHpuLutRelocation,
         }
     }
 }
@@ -131,7 +140,8 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                 interval_begin(c"AllocateDopLang", 0);
                 let scheduled = arguments[0].unwrap_hpu_lang_scheduled_ref();
                 let config = arguments[1].unwrap_hpu_config_ref();
-                let allocated = hpu::allocator::allocate_registers(scheduled, config);
+                let lut_registry = arguments[2].unwrap_lut_registry_ref();
+                let allocated = hpu::allocator::allocate_registers(scheduled, config, lut_registry);
                 let result = svec![PipelineArtifact::DopLang(allocated)];
                 interval_end(c"AllocateDopLang", 0);
                 result
@@ -139,7 +149,11 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
             PipelineInstructionSet::GenerateHpuStream => {
                 interval_begin(c"GenerateHpuStream", 0);
                 let allocated = arguments[0].unwrap_dop_lang_ref();
-                let stream = hpu::translation_table::generate_translation_table(allocated);
+                let lut_reloc = arguments[1].unwrap_hpu_lut_relocation_ref();
+                let stream = hpu::translation_table::generate_translation_table(
+                    allocated,
+                    lut_reloc.as_ref().map(|v| v.as_slice()),
+                );
                 let result = svec![PipelineArtifact::HpuStream(stream)];
                 interval_end(c"GenerateHpuStream", 0);
                 result
@@ -182,8 +196,9 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
             PipelineInstructionSet::GenerateHpuAssembly => {
                 interval_begin(c"GenerateHpuAssembly", 0);
                 let doplang = arguments[0].unwrap_dop_lang_ref();
+                let lut_reg = arguments[1].unwrap_lut_registry_ref();
                 let file = FileHandle::random(Extension::Asm);
-                let asm = emit_assembly(doplang);
+                let asm = emit_assembly(doplang, lut_reg);
                 asm.dump_to_file(&file);
                 let result = svec![PipelineArtifact::HpuAssembly(file)];
                 interval_end(c"GenerateHpuAssembly", 0);
@@ -228,9 +243,10 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                 interval_begin(c"AllocateMultiDopLang", 0);
                 let scheduled = arguments[0].unwrap_multi_hpu_lang_scheduled_ref();
                 let config = arguments[1].unwrap_multi_hpu_config_ref();
+                let lut_reg = arguments[2].unwrap_lut_registry_ref();
                 let allocated = scheduled
                     .iter()
-                    .map(|ir| hpu::allocator::allocate_registers(ir, &config.hpu_config))
+                    .map(|ir| hpu::allocator::allocate_registers(ir, &config.hpu_config, &lut_reg))
                     .collect();
                 let result = svec![PipelineArtifact::MultiDopLang(allocated)];
                 interval_end(c"AllocateMultiDopLang", 0);
@@ -239,9 +255,15 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
             PipelineInstructionSet::GenerateMultiHpuStream => {
                 interval_begin(c"GenerateMultiHpuStream", 0);
                 let allocated = arguments[0].unwrap_multi_dop_lang_ref();
+                let lut_reloc = arguments[1].unwrap_multi_hpu_lut_relocation_ref();
                 let streams = allocated
                     .iter()
-                    .map(|ir| hpu::translation_table::generate_translation_table(ir))
+                    .map(|ir| {
+                        hpu::translation_table::generate_translation_table(
+                            ir,
+                            lut_reloc.as_ref().map(|v| v.as_slice()),
+                        )
+                    })
                     .collect();
                 let result = svec![PipelineArtifact::MultiHpuStream(streams)];
                 interval_end(c"GenerateMultiHpuStream", 0);
@@ -265,11 +287,12 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
             PipelineInstructionSet::GenerateMultiHpuAssembly => {
                 interval_begin(c"GenerateMultiHpuAssembly", 0);
                 let allocated = arguments[0].unwrap_multi_dop_lang_ref();
+                let lut_reg = arguments[1].unwrap_lut_registry_ref();
                 let files = allocated
                     .iter()
                     .map(|ir| {
                         let file = FileHandle::random(Extension::Asm);
-                        let asm = emit_assembly(ir);
+                        let asm = emit_assembly(ir, lut_reg);
                         asm.dump_to_file(&file);
                         file
                     })
@@ -305,14 +328,40 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                 let vmlang = arguments[0].unwrap_vm_lang_ref();
                 let config = arguments[1].unwrap_vm_config_ref();
                 let topology = arguments[2].unwrap_topology_ref();
+                let lut_reg = arguments[3].unwrap_lut_registry_ref();
                 let exec = vm::scheduler::schedule(
                     vmlang,
+                    lut_reg,
                     config,
                     topology,
                     SchedPolicy::AsSoonAsPossible,
                 );
                 let result = svec![PipelineArtifact::VmExecutionPlan(exec)];
                 interval_end(c"GenerateVmExecutionPlan", 0);
+                result
+            }
+            PipelineInstructionSet::IopLangToLutRegistry => {
+                interval_begin(c"IopLangToLutRegistry", 0);
+                let ioplang = arguments[0].unwrap_iop_lang_ref();
+                let lut_reg = extract_lut_registry(ioplang);
+                let result = svec![PipelineArtifact::LutRegistry(lut_reg)];
+                interval_end(c"IopLangToLutRegistry", 0);
+                result
+            }
+            PipelineInstructionSet::InputHpuLutRelocation => {
+                interval_begin(c"InputHpuLutRelocation", 0);
+                let result = svec![PipelineArtifact::HpuLutRelocation(
+                    context.hpu_lut_relocation.clone()
+                )];
+                interval_end(c"InputHpuLutRelocation", 0);
+                result
+            }
+            PipelineInstructionSet::InputMultiHpuLutRelocation => {
+                interval_begin(c"InputMultiHpuLutRelocation", 0);
+                let result = svec![PipelineArtifact::MultiHpuLutRelocation(
+                    context.hpu_lut_relocation.clone()
+                )];
+                interval_end(c"InputMultiHpuLutRelocation", 0);
                 result
             }
         }

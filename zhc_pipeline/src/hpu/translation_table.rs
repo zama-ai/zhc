@@ -6,6 +6,7 @@
 //! machine code for the target HPU hardware.
 
 use bitfield_struct::bitfield;
+use zhc_crypto::integer_semantics::lut::LutId;
 use zhc_ir::IR;
 use zhc_langs::doplang::DopLang;
 use zhc_utils::SafeAs;
@@ -154,7 +155,10 @@ pub struct PeSyncHex {
 /// Converts the intermediate representation `ir` containing device operations
 /// into a vector of binary instruction representations suitable for execution
 /// on the target hardware.
-pub fn generate_translation_table(ir: &IR<DopLang>) -> Vec<DOpRepr> {
+pub fn generate_translation_table(
+    ir: &IR<DopLang>,
+    lut_relocation: Option<&[LutId]>,
+) -> Vec<DOpRepr> {
     let mut output = Vec::with_capacity(ir.n_ops().sas());
     output.push(0); // reserve room for the length of the stream at the beginning of the stream.
     for op in ir.walk_ops_topological() {
@@ -416,11 +420,15 @@ pub fn generate_translation_table(ir: &IR<DopLang>) -> Vec<DOpRepr> {
                 src: CtReg { addr: src, .. },
                 lut: LutId { id: gid },
             } => {
+                let gid = match lut_relocation {
+                    Some(reloc) => reloc.get(*gid).unwrap().0,
+                    None => *gid,
+                };
                 output.push(
                     PePbsHex::new()
                         .with_dst_rid((*dst).sas())
                         .with_src_rid((*src).sas())
-                        .with_gid((*gid).sas())
+                        .with_gid(gid.sas())
                         .with_opcode(DOpCode::PBS as u8)
                         .0,
                 );
@@ -605,12 +613,14 @@ mod test {
     use zhc_utils::assert_display_is;
 
     use crate::SchedPolicy;
+    use crate::misc::extract_lut_registry;
 
     use super::super::{allocator::allocate_registers, lowering::lower_iop_to_hpu, scheduler};
 
     use super::generate_translation_table;
 
     fn pipeline(ir: &IR<IopLang>) -> Vec<u32> {
+        let lut_reg = extract_lut_registry(&ir);
         let ir = lower_iop_to_hpu(&ir).output;
         let config = HpuConfig::from(PhysicalConfig::gaussian_64b_fast());
         let scheduled = scheduler::legacy::schedule(
@@ -619,8 +629,8 @@ mod test {
             SchedPolicy::AsLateAsPossible,
             SchedPolicy::AsLateAsPossible,
         );
-        let allocated = allocate_registers(&scheduled, &config);
-        generate_translation_table(&allocated)
+        let allocated = allocate_registers(&scheduled, &config, &lut_reg);
+        generate_translation_table(&allocated, None)
     }
 
     fn format_binary_vec(inp: &Vec<u32>) -> String {
@@ -658,17 +668,17 @@ mod test {
                 0b00000100000000010100001100000101,
                 0b10000000000001000001101000000110,
                 0b00000100000000011000001110000110,
-                0b11000000000011000100000100000111,
-                0b11000000000011000000000000001000,
-                0b11000100000001101000000010001010,
-                0b11100000000010111100000110001001,
+                0b11000000000000001100000100000111,
+                0b11000000000000001000000000001000,
+                0b11000100000000000000000010001010,
+                0b11100000000000000100000110001001,
                 0b00000100000000100100010110000001,
                 0b00000100000000100000000010001000,
                 0b00000100000000011100010000000111,
-                0b11000000000010111000001110001001,
-                0b11000000000011000100001100001100,
-                0b11000000000010111100001000001101,
-                0b11100000000011000000001010001110,
+                0b11000000000000010000001110001001,
+                0b11000000000000001100001100001100,
+                0b11000000000000000100001000001101,
+                0b11100000000000001000001010001110,
                 0b00000100000000111000011010000111,
                 0b00000100000000100100011010001101,
                 0b00000100000000110000001110001100,
@@ -679,24 +689,24 @@ mod test {
                 0b00000100000000111100011100001110,
                 0b00000100000000101100000110000011,
                 0b00000100000000100100001000000100,
-                0b11000000000010110000000010001001,
-                0b11000000000010110100010000001011,
-                0b11000000000010110000011010001111,
-                0b11000000000010110100001110010000,
-                0b11100000000010111000011000010001,
+                0b11000000000000010100000010001001,
+                0b11000000000000011000010000001011,
+                0b11000000000000010100011010001111,
+                0b11000000000000011000001110010000,
+                0b11100000000000010000011000010001,
                 0b00000100000000111100001010000001,
                 0b00000100000000101100000100000010,
                 0b00000100000001000000001100000101,
                 0b00000100000000100100000000000000,
                 0b00000100000001000100011100000110,
-                0b11000000000000000100010100000111,
-                0b11000000000000000100000110001000,
-                0b11000000000000000100000000001001,
-                0b11000000000000000100000100001011,
-                0b11000000000000000100001000001100,
-                0b11000000000000000100000010001101,
-                0b11000000000000000100001010001110,
-                0b11100000000000000100001100001111,
+                0b11000000000000011100010100000111,
+                0b11000000000000011100000110001000,
+                0b11000000000000011100000000001001,
+                0b11000000000000011100000100001011,
+                0b11000000000000011100001000001100,
+                0b11000000000000011100000010001101,
+                0b11000000000000011100001010001110,
+                0b11100000000000011100001100001111,
                 0b10000100000000000000111100001011,
                 0b10000100000000000001001100001100,
                 0b10000100000000000000101100001001,
@@ -752,20 +762,20 @@ mod test {
                 0b00001000000000110100011000000001,
                 0b00001000000000100100010000000010,
                 0b00001000000000111100011100000011,
-                0b11000000000010100000000100000100,
-                0b11000000000010100000000000000101,
-                0b11000000000010100000000010000110,
-                0b11100000000010100000000110000111,
+                0b11000000000000000100000100000100,
+                0b11000000000000000100000000000101,
+                0b11000000000000000100000010000110,
+                0b11100000000000000100000110000111,
                 0b00100100000000001000001010000000,
                 0b00100100000000001000001110000001,
                 0b00100100000000001000001000000010,
                 0b00100100000000001000001100000011,
                 0b00010100100000001000000000000000,
                 0b00010100100000001100000010000001,
-                0b11000000000011001100000000000010,
-                0b11100000000011001100000010000011,
+                0b11000000000000001000000000000010,
+                0b11100000000000001000000010000011,
                 0b00010100100000001000000110000000,
-                0b11100000000001101100000000000001,
+                0b11100000000000001100000000000001,
                 0b10000100000000000000001100000001,
             "#
         );

@@ -1,14 +1,12 @@
 use zhc_builder::CiphertextBlockSpec;
-use zhc_crypto::integer_semantics::lut::{Lut1, Lut2};
+use zhc_crypto::integer_semantics::lut::LutRegistry;
 use zhc_ir::IR;
 use zhc_langs::{
     doplang::{DopInterpreterContext, DopLang, DopValue},
-    hpulang::{HpuInterpreterContext, HpuLang, HpuValue, LutId, TDstId, TImmId, TSrcId},
+    hpulang::{HpuInterpreterContext, HpuLang, HpuValue, TDstId, TImmId, TSrcId},
     ioplang::{IopInstructionSet, IopInterepreterContext, IopLang, IopValue},
 };
 use zhc_utils::{Dumpable, FastMap, SafeAs};
-
-use crate::hpu::lowering::{GIDS1, GIDS2};
 
 pub fn check_iop_hpu_equivalence(
     iop_ir: &IR<IopLang>,
@@ -16,10 +14,6 @@ pub fn check_iop_hpu_equivalence(
     spec: CiphertextBlockSpec,
     nreps: usize,
 ) {
-    // Build reverse LUT tables.
-    let lut1: FastMap<LutId, Lut1> = GIDS1.iter().map(|(k, v)| (*v, k.clone())).collect();
-    let lut2: FastMap<LutId, Lut2> = GIDS2.iter().map(|(k, v)| (*v, k.clone())).collect();
-
     // Discover input slots from the IOP IR.
     let mut input_slots: Vec<(usize, bool, u16)> = Vec::new(); // (pos, is_ct, int_size)
     for op in iop_ir.walk_ops_linear() {
@@ -64,8 +58,6 @@ pub fn check_iop_hpu_equivalence(
 
         // Populate HPU context: decompose IOP inputs into block-level entries.
         let mut hpu_ctx = HpuInterpreterContext::new(spec);
-        hpu_ctx.lut1_table = lut1.clone();
-        hpu_ctx.lut2_table = lut2.clone();
         let mut ct_idx = 0usize;
         let mut pt_idx = 0usize;
         for val in iop_inputs.iter() {
@@ -131,14 +123,11 @@ pub fn check_iop_hpu_equivalence(
 pub fn check_iop_dop_equivalence(
     iop_ir: &IR<IopLang>,
     dop_ir: &IR<DopLang>,
+    lut_reg: &LutRegistry,
     spec: CiphertextBlockSpec,
     num_registers: usize,
     nreps: usize,
 ) {
-    // Build reverse LUT tables.
-    let lut1: FastMap<LutId, Lut1> = GIDS1.iter().map(|(k, v)| (*v, k.clone())).collect();
-    let lut2: FastMap<LutId, Lut2> = GIDS2.iter().map(|(k, v)| (*v, k.clone())).collect();
-
     // Discover input slots from the IOP IR.
     let mut input_slots: Vec<(usize, bool, u16)> = Vec::new();
     for op in iop_ir.walk_ops_linear() {
@@ -182,9 +171,7 @@ pub fn check_iop_dop_equivalence(
             .expect("IOP interpretation failed");
 
         // Populate DOP context: decompose IOP inputs into block-level entries.
-        let mut dop_ctx = DopInterpreterContext::new(spec, num_registers);
-        dop_ctx.lut1_table = lut1.clone();
-        dop_ctx.lut2_table = lut2.clone();
+        let mut dop_ctx = DopInterpreterContext::new(spec, num_registers, lut_reg);
         let mut ct_idx = 0usize;
         let mut pt_idx = 0usize;
         for val in iop_inputs.iter() {

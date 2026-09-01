@@ -8,8 +8,6 @@ use zhc_langs::{
 };
 use zhc_utils::{SafeAs, small::SmallMap, svec};
 
-use crate::hpu::lowering::{GIDS1, GIDS2};
-
 pub fn lower_iop_to_vm(ir: &IR<IopLang>) -> IR<VmLang> {
     use IopInstructionSet::*;
     let remap = ir
@@ -237,27 +235,15 @@ pub fn lower_iop_to_vm(ir: &IR<IopLang>) -> IR<VmLang> {
                 );
             }
             IopInstructionSet::Pbs { lut, .. } => {
-                let lut = match GIDS1.get(&lut) {
-                    Some(v) => *v,
-                    None => {
-                        panic!("Warning: Failed to lookup the gid for key: {lut:?}. Custom LUT loading is not yet implemented.");
-                    }
-                };
                 let new_arg = translator.translate_val(op.get_arg_valids()[0]);
                 let rets = translator.add_op(VmInstructionSet::Ks, svec![new_arg]);
-                let rets = translator.add_op(VmInstructionSet::Pbs { lut: lut.0 }, rets);
+                let rets = translator.add_op(VmInstructionSet::Pbs { lut: lut.clone() }, rets);
                 translator.register_translation(op.get_return_valids()[0], rets[0]);
             }
             IopInstructionSet::Pbs2 { lut, .. } => {
-                let lut = match GIDS2.get(&lut) {
-                    Some(v) => *v,
-                    None => {
-                        panic!("Warning: Failed to lookup the gid for key: {lut:?}. Custom LUT loading is not yet implemented.");
-                    }
-                };
                 let new_arg = translator.translate_val(op.get_arg_valids()[0]);
                 let rets = translator.add_op(VmInstructionSet::Ks, svec![new_arg]);
-                let rets = translator.add_op(VmInstructionSet::Pbs2 { lut: lut.0 }, rets);
+                let rets = translator.add_op(VmInstructionSet::Pbs2 { lut: lut.clone() }, rets);
                 translator.register_translation(op.get_return_valids()[0], rets[0]);
                 translator.register_translation(op.get_return_valids()[1], rets[1]);
             }

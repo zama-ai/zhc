@@ -319,14 +319,7 @@ fn get_ranges<'ir>(op: &OpRef<'ir, HpuLang>) -> impl Iterator<Item = SmallVec<Va
             block
                 .walk_ops_linear()
                 .filter_map(move |batch_op| match batch_op.get_instruction() {
-                    Pbs { .. }
-                    | PbsF { .. }
-                    | Pbs2 { .. }
-                    | Pbs2F { .. }
-                    | Pbs4 { .. }
-                    | Pbs4F { .. }
-                    | Pbs8 { .. }
-                    | Pbs8F { .. } => Some(
+                    Pbs { .. } | PbsF { .. } | Pbs2 { .. } | Pbs2F { .. } => Some(
                         batch_op
                             .get_return_valids()
                             .iter()

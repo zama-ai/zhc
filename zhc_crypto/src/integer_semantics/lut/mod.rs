@@ -10,6 +10,8 @@
 //!   [`Lut1::lookup`].
 //! - [`Lut2`] — two-output "many-LUT" table. Evaluates two functions on the same input in a single
 //!   operation.
+//! - [`Lut4`] — four-output "many-LUT" table. Reserves the two topmost data bits of the input.
+//! - [`Lut8`] — eight-output "many-LUT" table. Reserves the three topmost data bits of the input.
 //!
 //! The legacy [`lookup`] function is also available for ad-hoc lookups without precomputing a
 //! table.
@@ -42,12 +44,16 @@
 //! ```
 
 mod builtin;
+mod id;
 mod lookup;
 mod lut;
+mod registry;
 
 pub use builtin::*;
+pub use id::*;
 pub use lookup::*;
 pub use lut::*;
+pub use registry::*;
 
 #[cfg(test)]
 mod legacy;

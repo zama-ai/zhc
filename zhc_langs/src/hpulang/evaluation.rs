@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use zhc_crypto::integer_semantics::lut::{Lut1, Lut2};
+use zhc_crypto::integer_semantics::lut::{Lut1, Lut2, LutId};
 use zhc_crypto::integer_semantics::{
     CiphertextBlockSpec, EmulatedCiphertextBlock, EmulatedCiphertextBlockStorage,
     EmulatedPlaintextBlock, EmulatedPlaintextBlockStorage, lut::LookupCheck,
@@ -10,7 +10,7 @@ use zhc_utils::iter::CollectInSmallVec;
 use zhc_utils::small::SmallVec;
 use zhc_utils::{FastMap, SafeAs, svec};
 
-use crate::hpulang::{HpuTypeSystem, LutId, TDstId, TImmId, TSrcId};
+use crate::hpulang::{HpuTypeSystem, TDstId, TImmId, TSrcId};
 
 /// Interpretation domain for HPU programs.
 ///
@@ -247,21 +247,13 @@ impl Evaluable<HpuValue> for super::HpuInstructionSet {
             // ── PBS (regular + flush, semantically identical) ────────
             Pbs { lut } | PbsF { lut } => {
                 let ct = arguments[0].clone().unwrap_ct_register();
-                let lut_def = context
-                    .lut1_table
-                    .get(lut)
-                    .unwrap_or_else(|| panic!("Lut1 {lut} missing from context"));
                 svec![HpuValue::CtRegister(
-                    lut_def.lookup(ct, LookupCheck::AllowBothPadding)
+                    lut.lookup(ct, LookupCheck::AllowBothPadding)
                 )]
             }
             Pbs2 { lut } | Pbs2F { lut } => {
                 let ct = arguments[0].clone().unwrap_ct_register();
-                let lut_def = context
-                    .lut2_table
-                    .get(lut)
-                    .unwrap_or_else(|| panic!("Lut2 {lut} missing from context"));
-                let (ct0, ct1) = lut_def.lookup(ct, LookupCheck::AllowOutputPadding);
+                let (ct0, ct1) = lut.lookup(ct, LookupCheck::AllowOutputPadding);
                 svec![HpuValue::CtRegister(ct0), HpuValue::CtRegister(ct1)]
             }
             Pbs4 { .. } | Pbs4F { .. } => {

@@ -37,6 +37,47 @@ impl LookupCheck {
     }
 }
 
+#[derive(Clone)]
+pub struct RawLut {
+    lut: Vec<EmulatedCiphertextBlock>,
+    name: String,
+    spec: CiphertextBlockSpec,
+}
+
+impl RawLut {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn spec(&self) -> &CiphertextBlockSpec {
+        &self.spec
+    }
+
+    pub fn lut(&self) -> &[EmulatedCiphertextBlock] {
+        self.lut.as_slice()
+    }
+}
+
+impl PartialEq for RawLut {
+    fn eq(&self, other: &Self) -> bool {
+        self.lut == other.lut
+    }
+}
+
+impl Eq for RawLut {}
+
+impl Debug for RawLut {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.name.fmt(f)
+    }
+}
+
+impl Hash for RawLut {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.lut.hash(state);
+    }
+}
+
 /// A single-output lookup table for PBS emulation.
 ///
 /// Encapsulates a precomputed lookup table that maps each possible data-space input to a single
@@ -61,22 +102,19 @@ impl LookupCheck {
 /// let output = double.lookup(input, LookupCheck::Protect);
 /// assert_eq!(output.raw_message_bits(), 10);
 /// ```
-#[derive(Clone)]
-pub struct Lut1 {
-    lut: Vec<EmulatedCiphertextBlock>,
-    name: String,
-    spec: CiphertextBlockSpec,
-}
+#[repr(transparent)]
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
+pub struct Lut1(pub RawLut);
 
 impl Lut1 {
     /// Returns the name assigned to this LUT at construction.
     pub fn name(&self) -> &str {
-        &self.name
+        &self.0.name
     }
 
     /// Returns the block specification this LUT operates on.
     pub fn spec(&self) -> &CiphertextBlockSpec {
-        &self.spec
+        &self.0.spec
     }
 
     /// Constructs a LUT by evaluating a function over the entire data space.
@@ -99,7 +137,7 @@ impl Lut1 {
         let name = name.as_ref().to_string();
         let lut = spec.iter_data_space().map(f).covec();
         assert_eq!(lut.len(), 2_usize.pow(spec.data_size().sas()));
-        Self { name, lut, spec }
+        Self(RawLut { name, lut, spec })
     }
 
     /// Applies the LUT to an input block with the specified padding-bit policy.
@@ -128,7 +166,7 @@ impl Lut1 {
         inp: EmulatedCiphertextBlock,
         check: LookupCheck,
     ) -> EmulatedCiphertextBlock {
-        assert_eq!(inp.spec(), self.spec, "Spec mismatch.");
+        assert_eq!(inp.spec(), self.0.spec, "Spec mismatch.");
         if check.should_check_input_padding() {
             assert!(
                 !inp.has_active_padding_bit(),
@@ -136,7 +174,7 @@ impl Lut1 {
             );
         }
         let wop_inp = inp.raw_data_bits();
-        let mut output = self.lut[wop_inp.sas::<usize>()];
+        let mut output = self.0.lut[wop_inp.sas::<usize>()];
         assert!(
             output.storage >> inp.spec().complete_size() == 0,
             "Lookup output is invalid."
@@ -154,56 +192,59 @@ impl Lut1 {
     }
 }
 
-impl PartialEq for Lut1 {
-    fn eq(&self, other: &Self) -> bool {
-        self.lut == other.lut
+/// Renders a LUT as a boxed table with one input column and `n_out` output columns.
+///
+/// The internal table is interpreted as `n_out` consecutive sub-tables of equal length, as laid
+/// out by the `from_fn` constructors.
+fn dump_lut_table(raw: &RawLut, kind: &str, n_out: usize) -> String {
+    const SUBSCRIPTS: [char; 8] = ['₁', '₂', '₃', '₄', '₅', '₆', '₇', '₈'];
+    let rows = raw.lut.len() / n_out;
+    let cols = n_out + 1;
+    // Column width based on ctblock format: "p_cc_mmmm_ctblock"
+    let min_col_w = raw.spec.complete_size() as usize + 4 + 8; // bits + separators + "_ctblock"
+    let title = format!("{kind}({:?}) @ {:?}", raw.name, raw.spec);
+    // Total width: cols*(col_w+2) + (cols-1) = cols*col_w + 3*cols - 1
+    // Ensure title fits: title.len() + 2 <= cols*col_w + 3*cols - 1
+    let col_w = min_col_w.max(
+        (title.len() + 2)
+            .saturating_sub(3 * cols - 1)
+            .div_ceil(cols),
+    );
+    let seps = vec!["═".repeat(col_w + 2); cols];
+    let total_w = cols * col_w + 3 * cols - 1;
+    let mut result = format!("╔{}╗\n║ {title}", "═".repeat(total_w));
+    result.push_str(&" ".repeat(total_w - title.len() - 1));
+    let headers = std::iter::once("Input".to_string())
+        .chain((0..n_out).map(|i| {
+            if n_out == 1 {
+                "Output".to_string()
+            } else {
+                format!("Out{}", SUBSCRIPTS[i])
+            }
+        }))
+        .map(|h| format!(" {h:^col_w$} "))
+        .covec();
+    result.push_str(&format!(
+        "║\n╠{}╣\n║{}║\n╠{}╣",
+        seps.join("╦"),
+        headers.join("║"),
+        seps.join("╬")
+    ));
+    for i in 0..rows {
+        let inp = raw.spec.from_data(i.sas());
+        let cells = std::iter::once(inp)
+            .chain((0..n_out).map(|k| raw.lut[i + k * rows]))
+            .map(|c| format!(" {:^col_w$} ", c.dump_to_string()))
+            .covec();
+        result.push_str(&format!("\n║{}║", cells.join("║")));
     }
-}
-
-impl Eq for Lut1 {}
-
-impl Debug for Lut1 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Lut1({:?})", self.name)
-    }
-}
-
-impl Hash for Lut1 {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.lut.hash(state);
-    }
+    result.push_str(&format!("\n╚{}╝", seps.join("╩")));
+    result
 }
 
 impl Dumpable for Lut1 {
     fn dump_to_string(&self) -> String {
-        // Column width based on ctblock format: "p_cc_mmmm_ctblock"
-        let min_col_w = self.spec.complete_size() as usize + 4 + 8; // bits + separators + "_ctblock"
-        let title = format!("Lut1({:?}) @ {:?}", self.name, self.spec);
-        // For 2 columns: total = 2*(col_w+2) + 1 = 2*col_w + 5
-        // Ensure title fits: title.len() + 2 <= 2*col_w + 5
-        let col_w = min_col_w.max((title.len() + 2).saturating_sub(5).div_ceil(2));
-        let sep = "═".repeat(col_w + 2);
-        let total_w = 2 * col_w + 5;
-        let top = "═".repeat(total_w);
-        let mut result = format!("╔{top}╗\n║ {title}");
-        result.push_str(&" ".repeat(total_w - title.len() - 1));
-        result.push_str(&format!(
-            "║
-╠{sep}╦{sep}╣
-║ {:^col_w$} ║ {:^col_w$} ║
-╠{sep}╬{sep}╣",
-            "Input", "Output"
-        ));
-        for (i, out) in self.lut.iter().enumerate() {
-            let inp = self.spec.from_data(i.sas());
-            result.push_str(&format!(
-                "\n║ {:^col_w$} ║ {:^col_w$} ║",
-                inp.dump_to_string(),
-                out.dump_to_string()
-            ));
-        }
-        result.push_str(&format!("\n╚{sep}╩{sep}╝"));
-        result
+        dump_lut_table(&self.0, "Lut1", 1)
     }
 }
 
@@ -239,22 +280,19 @@ impl Dumpable for Lut1 {
 /// assert_eq!(msg.raw_message_bits(), 5);
 /// assert_eq!(carry.raw_message_bits(), 1);
 /// ```
-#[derive(Clone)]
-pub struct Lut2 {
-    lut: Vec<EmulatedCiphertextBlock>,
-    name: String,
-    spec: CiphertextBlockSpec,
-}
+#[repr(transparent)]
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
+pub struct Lut2(pub RawLut);
 
 impl Lut2 {
     /// Returns the name assigned to this LUT at construction.
     pub fn name(&self) -> &str {
-        &self.name
+        &self.0.name
     }
 
     /// Returns the block specification this LUT operates on.
     pub fn spec(&self) -> &CiphertextBlockSpec {
-        &self.spec
+        &self.0.spec
     }
 
     /// Constructs a two-output LUT by evaluating two functions over valid inputs.
@@ -287,7 +325,7 @@ impl Lut2 {
             )
             .covec();
         assert_eq!(lut.len(), 2_usize.pow(spec.data_size().sas()));
-        Self { name, lut, spec }
+        Self(RawLut { name, lut, spec })
     }
 
     /// Applies the LUT to an input block, returning both output values.
@@ -319,7 +357,7 @@ impl Lut2 {
         inp: EmulatedCiphertextBlock,
         check: LookupCheck,
     ) -> (EmulatedCiphertextBlock, EmulatedCiphertextBlock) {
-        assert_eq!(inp.spec(), self.spec, "Spec mismatch.");
+        assert_eq!(inp.spec(), self.0.spec, "Spec mismatch.");
         assert!(
             matches!(
                 check,
@@ -337,12 +375,12 @@ impl Lut2 {
         );
 
         let wop_inp = inp.raw_data_bits();
-        let output1 = self.lut[wop_inp.sas::<usize>()];
+        let output1 = self.0.lut[wop_inp.sas::<usize>()];
         assert!(
             output1.storage >> inp.spec().complete_size() == 0,
             "Lookup output is invalid."
         );
-        let output2 = self.lut[wop_inp.sas::<usize>() + self.lut.len() / 2];
+        let output2 = self.0.lut[wop_inp.sas::<usize>() + self.0.lut.len() / 2];
         assert!(
             output2.storage >> inp.spec().complete_size() == 0,
             "Lookup output is invalid."
@@ -361,59 +399,359 @@ impl Lut2 {
     }
 }
 
-impl PartialEq for Lut2 {
-    fn eq(&self, other: &Self) -> bool {
-        self.lut == other.lut
-    }
-}
-
-impl Eq for Lut2 {}
-
-impl Debug for Lut2 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Lut2({:?})", self.name)
-    }
-}
-
-impl Hash for Lut2 {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.lut.hash(state);
-    }
-}
-
 impl Dumpable for Lut2 {
     fn dump_to_string(&self) -> String {
-        let half = self.lut.len() / 2;
-        let min_col_w = self.spec.complete_size() as usize + 4 + 8;
-        let title = format!("Lut2({:?}) @ {:?}", self.name, self.spec);
-        // For 3 columns: total = 3*(col_w+2) + 2 = 3*col_w + 8
-        // Ensure title fits: title.len() + 2 <= 3*col_w + 8
-        let col_w = min_col_w.max((title.len() + 2).saturating_sub(8).div_ceil(3));
-        let sep = "═".repeat(col_w + 2);
-        let total_w = 3 * col_w + 8;
-        let top = "═".repeat(total_w);
-        let mut result = format!("╔{top}╗\n║ {title}");
-        result.push_str(&" ".repeat(total_w - title.len() - 1));
-        result.push_str(&format!(
-            "║
-╠{sep}╦{sep}╦{sep}╣
-║ {:^col_w$} ║ {:^col_w$} ║ {:^col_w$} ║
-╠{sep}╬{sep}╬{sep}╣",
-            "Input", "Out₁", "Out₂"
-        ));
-        for i in 0..half {
-            let inp = self.spec.from_data(i.sas());
-            let out1 = &self.lut[i];
-            let out2 = &self.lut[i + half];
-            result.push_str(&format!(
-                "\n║ {:^col_w$} ║ {:^col_w$} ║ {:^col_w$} ║",
-                inp.dump_to_string(),
-                out1.dump_to_string(),
-                out2.dump_to_string()
-            ));
+        dump_lut_table(&self.0, "Lut2", 2)
+    }
+}
+
+/// A four-output lookup table for many-LUT PBS emulation.
+///
+/// Encapsulates a precomputed lookup table that evaluates four functions simultaneously on the
+/// same input, returning all four results. This emulates the TFHE "many-LUT" optimization where
+/// multiple outputs can be extracted from a single PBS operation by packing sub-tables into
+/// different regions of the polynomial.
+///
+/// The input must have its padding bit clear **and** its two topmost data bits (the "many-LUT
+/// index bits") clear. These bits are reserved for the many-LUT encoding.
+///
+/// Unlike [`Lut1`], this type does not support `AllowInputPadding` or `AllowBothPadding` modes
+/// because the many-LUT encoding requires strict control over the input bit layout.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, lut::{Lut4, LookupCheck}};
+/// let spec = CiphertextBlockSpec(2, 4);
+///
+/// // Build a LUT that returns the message shifted by 0, 1, 2 and 3
+/// let shifts = Lut4::from_fn(
+///     "shifts",
+///     spec,
+///     |b| spec.from_message(b.raw_message_bits()),
+///     |b| spec.from_message((b.raw_message_bits() << 1) & spec.message_mask()),
+///     |b| spec.from_message((b.raw_message_bits() << 2) & spec.message_mask()),
+///     |b| spec.from_message((b.raw_message_bits() << 3) & spec.message_mask()),
+/// );
+///
+/// let input = spec.from_message(1);
+/// let (s0, s1, s2, s3) = shifts.lookup(input, LookupCheck::Protect);
+/// assert_eq!(s0.raw_message_bits(), 1);
+/// assert_eq!(s1.raw_message_bits(), 2);
+/// assert_eq!(s2.raw_message_bits(), 4);
+/// assert_eq!(s3.raw_message_bits(), 8);
+/// ```
+#[repr(transparent)]
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
+pub struct Lut4(pub RawLut);
+
+impl Lut4 {
+    /// Returns the name assigned to this LUT at construction.
+    pub fn name(&self) -> &str {
+        &self.0.name
+    }
+
+    /// Returns the block specification this LUT operates on.
+    pub fn spec(&self) -> &CiphertextBlockSpec {
+        &self.0.spec
+    }
+
+    /// Constructs a four-output LUT by evaluating four functions over valid inputs.
+    ///
+    /// All functions are called for each valid input (those with the two many-LUT index bits
+    /// clear). The results are stored as four consecutive sub-tables to enable simultaneous
+    /// lookup.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, lut::Lut4};
+    /// let spec = CiphertextBlockSpec(2, 4);
+    /// let lut = Lut4::from_fn("quad_identity", spec, |b| b, |b| b, |b| b, |b| b);
+    /// ```
+    pub fn from_fn(
+        name: impl AsRef<str>,
+        spec: CiphertextBlockSpec,
+        f1: impl Fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
+        f2: impl Fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
+        f3: impl Fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
+        f4: impl Fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
+    ) -> Self {
+        let name = name.as_ref().to_string();
+        let fs: [&dyn Fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock; 4] =
+            [&f1, &f2, &f3, &f4];
+        let lut = fs
+            .iter()
+            .flat_map(|f| {
+                spec.iter_data_space()
+                    .filter(|c| !c.has_active_last_ith_bit(1) && !c.has_active_last_ith_bit(2))
+                    .map(|c| f(c))
+            })
+            .covec();
+        assert_eq!(lut.len(), 2_usize.pow(spec.data_size().sas()));
+        Self(RawLut { name, lut, spec })
+    }
+
+    /// Applies the LUT to an input block, returning all four output values.
+    ///
+    /// The input must have the padding bit and the two many-LUT index bits (topmost data bits)
+    /// clear. The outputs come from `f1`, `f2`, `f3` and `f4` in order.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the input spec does not match, if the padding bit is set, if a many-LUT index
+    /// bit is set, if `check` is `AllowInputPadding` or `AllowBothPadding` (not supported), or if
+    /// any output padding bit is set and `check` requires it to be clear.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, lut::{Lut4, LookupCheck}};
+    /// let spec = CiphertextBlockSpec(2, 4);
+    /// let lut = Lut4::from_fn("quad_identity", spec, |b| b, |b| b, |b| b, |b| b);
+    /// let (o1, o2, o3, o4) = lut.lookup(spec.from_message(5), LookupCheck::Protect);
+    /// assert_eq!(o1.raw_message_bits(), 5);
+    /// ```
+    pub fn lookup(
+        &self,
+        inp: EmulatedCiphertextBlock,
+        check: LookupCheck,
+    ) -> (
+        EmulatedCiphertextBlock,
+        EmulatedCiphertextBlock,
+        EmulatedCiphertextBlock,
+        EmulatedCiphertextBlock,
+    ) {
+        assert_eq!(inp.spec(), self.0.spec, "Spec mismatch.");
+        assert!(
+            matches!(
+                check,
+                LookupCheck::Protect | LookupCheck::AllowOutputPadding
+            ),
+            "Encountered incompatible check for many-lut lookup"
+        );
+        assert!(
+            !inp.has_active_padding_bit(),
+            "Encountered active padding bit in input when executing lookup4."
+        );
+        for i in [1, 2] {
+            assert!(
+                !inp.has_active_last_ith_bit(i),
+                "Encountered active many lut bit in input when executing lookup4."
+            );
         }
-        result.push_str(&format!("\n╚{sep}╩{sep}╩{sep}╝"));
-        result
+
+        let wop_inp = inp.raw_data_bits();
+        let quarter = self.0.lut.len() / 4;
+        let outputs = [0usize, 1, 2, 3].map(|k| {
+            let output = self.0.lut[wop_inp.sas::<usize>() + k * quarter];
+            assert!(
+                output.storage >> inp.spec().complete_size() == 0,
+                "Lookup output is invalid."
+            );
+            if check.should_check_output_padding() {
+                assert!(
+                    !output.has_active_padding_bit(),
+                    "Encountered active padding bit in output when executing lookup4."
+                );
+            }
+            output
+        });
+        (outputs[0], outputs[1], outputs[2], outputs[3])
+    }
+}
+
+impl Dumpable for Lut4 {
+    fn dump_to_string(&self) -> String {
+        dump_lut_table(&self.0, "Lut4", 4)
+    }
+}
+
+/// An eight-output lookup table for many-LUT PBS emulation.
+///
+/// Encapsulates a precomputed lookup table that evaluates eight functions simultaneously on the
+/// same input, returning all eight results. This emulates the TFHE "many-LUT" optimization where
+/// multiple outputs can be extracted from a single PBS operation by packing sub-tables into
+/// different regions of the polynomial.
+///
+/// The input must have its padding bit clear **and** its three topmost data bits (the "many-LUT
+/// index bits") clear. These bits are reserved for the many-LUT encoding.
+///
+/// Unlike [`Lut1`], this type does not support `AllowInputPadding` or `AllowBothPadding` modes
+/// because the many-LUT encoding requires strict control over the input bit layout.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, lut::{Lut8, LookupCheck}};
+/// let spec = CiphertextBlockSpec(2, 4);
+///
+/// // Build a LUT that returns the message plus 0..8
+/// let offsets = Lut8::from_fn(
+///     "offsets",
+///     spec,
+///     |b| spec.from_message(b.raw_message_bits()),
+///     |b| spec.from_message((b.raw_message_bits() + 1) & spec.message_mask()),
+///     |b| spec.from_message((b.raw_message_bits() + 2) & spec.message_mask()),
+///     |b| spec.from_message((b.raw_message_bits() + 3) & spec.message_mask()),
+///     |b| spec.from_message((b.raw_message_bits() + 4) & spec.message_mask()),
+///     |b| spec.from_message((b.raw_message_bits() + 5) & spec.message_mask()),
+///     |b| spec.from_message((b.raw_message_bits() + 6) & spec.message_mask()),
+///     |b| spec.from_message((b.raw_message_bits() + 7) & spec.message_mask()),
+/// );
+///
+/// let input = spec.from_message(1);
+/// let (o0, o1, _, _, _, _, _, o7) = offsets.lookup(input, LookupCheck::Protect);
+/// assert_eq!(o0.raw_message_bits(), 1);
+/// assert_eq!(o1.raw_message_bits(), 2);
+/// assert_eq!(o7.raw_message_bits(), 8);
+/// ```
+#[repr(transparent)]
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
+pub struct Lut8(pub RawLut);
+
+impl Lut8 {
+    /// Returns the name assigned to this LUT at construction.
+    pub fn name(&self) -> &str {
+        &self.0.name
+    }
+
+    /// Returns the block specification this LUT operates on.
+    pub fn spec(&self) -> &CiphertextBlockSpec {
+        &self.0.spec
+    }
+
+    /// Constructs an eight-output LUT by evaluating eight functions over valid inputs.
+    ///
+    /// All functions are called for each valid input (those with the three many-LUT index bits
+    /// clear). The results are stored as eight consecutive sub-tables to enable simultaneous
+    /// lookup.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, lut::Lut8};
+    /// let spec = CiphertextBlockSpec(2, 4);
+    /// let lut = Lut8::from_fn(
+    ///     "octo_identity", spec,
+    ///     |b| b, |b| b, |b| b, |b| b, |b| b, |b| b, |b| b, |b| b,
+    /// );
+    /// ```
+    #[allow(clippy::too_many_arguments)]
+    pub fn from_fn(
+        name: impl AsRef<str>,
+        spec: CiphertextBlockSpec,
+        f1: impl Fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
+        f2: impl Fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
+        f3: impl Fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
+        f4: impl Fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
+        f5: impl Fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
+        f6: impl Fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
+        f7: impl Fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
+        f8: impl Fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
+    ) -> Self {
+        let name = name.as_ref().to_string();
+        let fs: [&dyn Fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock; 8] =
+            [&f1, &f2, &f3, &f4, &f5, &f6, &f7, &f8];
+        let lut = fs
+            .iter()
+            .flat_map(|f| {
+                spec.iter_data_space()
+                    .filter(|c| {
+                        !c.has_active_last_ith_bit(1)
+                            && !c.has_active_last_ith_bit(2)
+                            && !c.has_active_last_ith_bit(3)
+                    })
+                    .map(|c| f(c))
+            })
+            .covec();
+        assert_eq!(lut.len(), 2_usize.pow(spec.data_size().sas()));
+        Self(RawLut { name, lut, spec })
+    }
+
+    /// Applies the LUT to an input block, returning all eight output values.
+    ///
+    /// The input must have the padding bit and the three many-LUT index bits (topmost data bits)
+    /// clear. The outputs come from `f1` through `f8` in order.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the input spec does not match, if the padding bit is set, if a many-LUT index
+    /// bit is set, if `check` is `AllowInputPadding` or `AllowBothPadding` (not supported), or if
+    /// any output padding bit is set and `check` requires it to be clear.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, lut::{Lut8, LookupCheck}};
+    /// let spec = CiphertextBlockSpec(2, 4);
+    /// let lut = Lut8::from_fn(
+    ///     "octo_identity", spec,
+    ///     |b| b, |b| b, |b| b, |b| b, |b| b, |b| b, |b| b, |b| b,
+    /// );
+    /// let (o1, ..) = lut.lookup(spec.from_message(5), LookupCheck::Protect);
+    /// assert_eq!(o1.raw_message_bits(), 5);
+    /// ```
+    #[allow(clippy::type_complexity)]
+    pub fn lookup(
+        &self,
+        inp: EmulatedCiphertextBlock,
+        check: LookupCheck,
+    ) -> (
+        EmulatedCiphertextBlock,
+        EmulatedCiphertextBlock,
+        EmulatedCiphertextBlock,
+        EmulatedCiphertextBlock,
+        EmulatedCiphertextBlock,
+        EmulatedCiphertextBlock,
+        EmulatedCiphertextBlock,
+        EmulatedCiphertextBlock,
+    ) {
+        assert_eq!(inp.spec(), self.0.spec, "Spec mismatch.");
+        assert!(
+            matches!(
+                check,
+                LookupCheck::Protect | LookupCheck::AllowOutputPadding
+            ),
+            "Encountered incompatible check for many-lut lookup"
+        );
+        assert!(
+            !inp.has_active_padding_bit(),
+            "Encountered active padding bit in input when executing lookup8."
+        );
+        for i in [1, 2, 3] {
+            assert!(
+                !inp.has_active_last_ith_bit(i),
+                "Encountered active many lut bit in input when executing lookup8."
+            );
+        }
+
+        let wop_inp = inp.raw_data_bits();
+        let eighth = self.0.lut.len() / 8;
+        let outputs = [0usize, 1, 2, 3, 4, 5, 6, 7].map(|k| {
+            let output = self.0.lut[wop_inp.sas::<usize>() + k * eighth];
+            assert!(
+                output.storage >> inp.spec().complete_size() == 0,
+                "Lookup output is invalid."
+            );
+            if check.should_check_output_padding() {
+                assert!(
+                    !output.has_active_padding_bit(),
+                    "Encountered active padding bit in output when executing lookup8."
+                );
+            }
+            output
+        });
+        (
+            outputs[0], outputs[1], outputs[2], outputs[3], outputs[4], outputs[5], outputs[6],
+            outputs[7],
+        )
+    }
+}
+
+impl Dumpable for Lut8 {
+    fn dump_to_string(&self) -> String {
+        dump_lut_table(&self.0, "Lut8", 8)
     }
 }
 
@@ -627,5 +965,209 @@ mod tests {
             assert_eq!(out1, spec.from_message(1)); // f1
             assert_eq!(out2, spec.from_message(2)); // f2
         }
+    }
+
+    #[test]
+    fn test_lut4_lookup_returns_all_function_results() {
+        let spec = CiphertextBlockSpec(2, 4);
+        let lut = Lut4::from_fn(
+            "test",
+            spec,
+            |x| spec.from_message(x.raw_message_bits()),
+            |x| spec.from_message((x.raw_message_bits() + 1) & spec.message_mask()),
+            |x| spec.from_message((x.raw_message_bits() + 2) & spec.message_mask()),
+            |x| spec.from_message((x.raw_message_bits() + 3) & spec.message_mask()),
+        );
+        // Valid inputs: data bits 4 and 5 clear, i.e. no carry, any message
+        for msg in 0..16u16 {
+            let (o1, o2, o3, o4) = lut.lookup(spec.from_message(msg), LookupCheck::Protect);
+            assert_eq!(o1.raw_message_bits(), msg);
+            assert_eq!(o2.raw_message_bits(), (msg + 1) & spec.message_mask());
+            assert_eq!(o3.raw_message_bits(), (msg + 2) & spec.message_mask());
+            assert_eq!(o4.raw_message_bits(), (msg + 3) & spec.message_mask());
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "Encountered active padding bit in input when executing lookup4.")]
+    fn test_lut4_panics_on_input_padding_set() {
+        let spec = CiphertextBlockSpec(2, 4);
+        let lut = Lut4::from_fn("test", spec, |x| x, |x| x, |x| x, |x| x);
+        let inp = spec.from_complete(1 << spec.data_size()); // padding bit set
+        let _ = lut.lookup(inp, LookupCheck::Protect);
+    }
+
+    #[test]
+    #[should_panic(expected = "Encountered active many lut bit in input when executing lookup4.")]
+    fn test_lut4_panics_on_first_many_lut_bit_set() {
+        let spec = CiphertextBlockSpec(2, 4);
+        let lut = Lut4::from_fn("test", spec, |x| x, |x| x, |x| x, |x| x);
+        let inp = spec.from_data(0b10_0000); // data bit 5 set
+        let _ = lut.lookup(inp, LookupCheck::Protect);
+    }
+
+    #[test]
+    #[should_panic(expected = "Encountered active many lut bit in input when executing lookup4.")]
+    fn test_lut4_panics_on_second_many_lut_bit_set() {
+        let spec = CiphertextBlockSpec(2, 4);
+        let lut = Lut4::from_fn("test", spec, |x| x, |x| x, |x| x, |x| x);
+        let inp = spec.from_data(0b01_0000); // data bit 4 set
+        let _ = lut.lookup(inp, LookupCheck::Protect);
+    }
+
+    #[test]
+    #[should_panic(expected = "Encountered active padding bit in output when executing lookup4.")]
+    fn test_lut4_protect_panics_on_output_padding() {
+        let spec = CiphertextBlockSpec(2, 4);
+        let lut = Lut4::from_fn(
+            "test",
+            spec,
+            |_| spec.from_message(0),
+            |_| spec.from_message(0),
+            |_| spec.from_message(0),
+            |_| spec.from_complete(1 << spec.data_size()), // padding set
+        );
+        let _ = lut.lookup(spec.from_message(0), LookupCheck::Protect);
+    }
+
+    #[test]
+    fn test_lut4_allow_output_padding_does_not_panic() {
+        let spec = CiphertextBlockSpec(2, 4);
+        let padded = move |_| spec.from_complete(1 << spec.data_size());
+        let lut = Lut4::from_fn("test", spec, padded, padded, padded, padded);
+        let _ = lut.lookup(spec.from_message(0), LookupCheck::AllowOutputPadding);
+    }
+
+    #[test]
+    #[should_panic(expected = "Encountered incompatible check for many-lut lookup")]
+    fn test_lut4_rejects_allow_input_padding_check() {
+        let spec = CiphertextBlockSpec(2, 4);
+        let lut = Lut4::from_fn("test", spec, |x| x, |x| x, |x| x, |x| x);
+        let _ = lut.lookup(spec.from_message(0), LookupCheck::AllowInputPadding);
+    }
+
+    #[test]
+    #[should_panic(expected = "Encountered incompatible check for many-lut lookup")]
+    fn test_lut4_rejects_allow_both_padding_check() {
+        let spec = CiphertextBlockSpec(2, 4);
+        let lut = Lut4::from_fn("test", spec, |x| x, |x| x, |x| x, |x| x);
+        let _ = lut.lookup(spec.from_message(0), LookupCheck::AllowBothPadding);
+    }
+
+    #[test]
+    fn test_lut8_lookup_returns_all_function_results() {
+        let spec = CiphertextBlockSpec(2, 4);
+        let offset = |k: u16| {
+            move |x: EmulatedCiphertextBlock| {
+                x.spec()
+                    .from_message((x.raw_message_bits() + k) & x.spec().message_mask())
+            }
+        };
+        let lut = Lut8::from_fn(
+            "test",
+            spec,
+            offset(0),
+            offset(1),
+            offset(2),
+            offset(3),
+            offset(4),
+            offset(5),
+            offset(6),
+            offset(7),
+        );
+        // Valid inputs: data bits 3, 4 and 5 clear, i.e. no carry, message < 8
+        for msg in 0..8u16 {
+            let outs = lut.lookup(spec.from_message(msg), LookupCheck::Protect);
+            let outs = [
+                outs.0, outs.1, outs.2, outs.3, outs.4, outs.5, outs.6, outs.7,
+            ];
+            for (k, out) in outs.iter().enumerate() {
+                assert_eq!(
+                    out.raw_message_bits(),
+                    (msg + k as u16) & spec.message_mask()
+                );
+            }
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "Encountered active padding bit in input when executing lookup8.")]
+    fn test_lut8_panics_on_input_padding_set() {
+        let spec = CiphertextBlockSpec(2, 4);
+        let lut = Lut8::from_fn(
+            "test",
+            spec,
+            |x| x,
+            |x| x,
+            |x| x,
+            |x| x,
+            |x| x,
+            |x| x,
+            |x| x,
+            |x| x,
+        );
+        let inp = spec.from_complete(1 << spec.data_size()); // padding bit set
+        let _ = lut.lookup(inp, LookupCheck::Protect);
+    }
+
+    #[test]
+    #[should_panic(expected = "Encountered active many lut bit in input when executing lookup8.")]
+    fn test_lut8_panics_on_many_lut_bit_set() {
+        let spec = CiphertextBlockSpec(2, 4);
+        let lut = Lut8::from_fn(
+            "test",
+            spec,
+            |x| x,
+            |x| x,
+            |x| x,
+            |x| x,
+            |x| x,
+            |x| x,
+            |x| x,
+            |x| x,
+        );
+        let inp = spec.from_data(0b00_1000); // data bit 3 set
+        let _ = lut.lookup(inp, LookupCheck::Protect);
+    }
+
+    #[test]
+    #[should_panic(expected = "Encountered active padding bit in output when executing lookup8.")]
+    fn test_lut8_protect_panics_on_output_padding() {
+        let spec = CiphertextBlockSpec(2, 4);
+        let zero = move |_| spec.from_message(0);
+        let padded = move |_| spec.from_complete(1 << spec.data_size());
+        let lut = Lut8::from_fn(
+            "test", spec, zero, zero, zero, zero, zero, zero, zero, padded,
+        );
+        let _ = lut.lookup(spec.from_message(0), LookupCheck::Protect);
+    }
+
+    #[test]
+    fn test_lut8_allow_output_padding_does_not_panic() {
+        let spec = CiphertextBlockSpec(2, 4);
+        let padded = move |_| spec.from_complete(1 << spec.data_size());
+        let lut = Lut8::from_fn(
+            "test", spec, padded, padded, padded, padded, padded, padded, padded, padded,
+        );
+        let _ = lut.lookup(spec.from_message(0), LookupCheck::AllowOutputPadding);
+    }
+
+    #[test]
+    #[should_panic(expected = "Encountered incompatible check for many-lut lookup")]
+    fn test_lut8_rejects_allow_input_padding_check() {
+        let spec = CiphertextBlockSpec(2, 4);
+        let lut = Lut8::from_fn(
+            "test",
+            spec,
+            |x| x,
+            |x| x,
+            |x| x,
+            |x| x,
+            |x| x,
+            |x| x,
+            |x| x,
+            |x| x,
+        );
+        let _ = lut.lookup(spec.from_message(0), LookupCheck::AllowInputPadding);
     }
 }

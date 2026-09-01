@@ -1,5 +1,6 @@
 use std::fmt::{Debug, Display};
 
+use zhc_crypto::integer_semantics::lut::{Lut1, Lut2, Lut4, Lut8};
 use zhc_ir::{DialectInstructionSet, Format, FormatContext, IR, Signature, sig};
 use zhc_utils::iter::CollectInSmallVec;
 
@@ -46,21 +47,6 @@ pub struct TDstId {
 impl Display for TDstId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}.{}_tdst", self.dst_pos, self.block_pos)
-    }
-}
-
-/// Numeric lookup table identifier.
-///
-/// Mapped from symbolic [`Lut1Def`](crate::ioplang::Lut1Def) /
-/// [`Lut2Def`](crate::ioplang::Lut2Def) names during IOP-to-HPU
-/// translation. Carried through to the DOP dialect and encoded into
-/// the hardware translation table.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub struct LutId(pub usize);
-
-impl Display for LutId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Lut@{}", self.0)
     }
 }
 
@@ -162,28 +148,28 @@ pub enum HpuInstructionSet {
     /// `() → (CtRegister)`
     SrcLd { from: TSrcId },
     /// Single-output PBS. `(CtRegister) → (CtRegister)`
-    Pbs { lut: LutId },
+    Pbs { lut: Lut1 },
     /// 2-output many-LUT PBS.
     /// `(CtRegister) → (CtRegister, CtRegister)`
-    Pbs2 { lut: LutId },
+    Pbs2 { lut: Lut2 },
     /// 4-output many-LUT PBS.
     /// `(CtRegister) → (CtRegister × 4)`
-    Pbs4 { lut: LutId },
+    Pbs4 { lut: Lut4 },
     /// 8-output many-LUT PBS.
     /// `(CtRegister) → (CtRegister × 8)`
-    Pbs8 { lut: LutId },
+    Pbs8 { lut: Lut8 },
     /// Single-output PBS with flush (batch boundary marker).
     /// `(CtRegister) → (CtRegister)`
-    PbsF { lut: LutId },
+    PbsF { lut: Lut1 },
     /// 2-output many-LUT PBS with flush.
     /// `(CtRegister) → (CtRegister, CtRegister)`
-    Pbs2F { lut: LutId },
+    Pbs2F { lut: Lut2 },
     /// 4-output many-LUT PBS with flush.
     /// `(CtRegister) → (CtRegister × 4)`
-    Pbs4F { lut: LutId },
+    Pbs4F { lut: Lut4 },
     /// 8-output many-LUT PBS with flush.
     /// `(CtRegister) → (CtRegister × 8)`
-    Pbs8F { lut: LutId },
+    Pbs8F { lut: Lut8 },
     /// Nested sub-program grouping a batch of PBS operations. The
     /// signature is derived from the `BatchArg` and `BatchRet` ops
     /// inside `block`.
@@ -272,14 +258,14 @@ impl Format for HpuInstructionSet {
             HpuInstructionSet::ImmLd { from } => write!(f, "imm_ld<{from}>"),
             HpuInstructionSet::SrcLd { from } => write!(f, "src_ld<{from}>"),
             HpuInstructionSet::DstSt { to } => write!(f, "dst_st<{to}>"),
-            HpuInstructionSet::Pbs { lut } => write!(f, "pbs<{lut}>"),
-            HpuInstructionSet::Pbs2 { lut } => write!(f, "pbs_2<{lut}>"),
-            HpuInstructionSet::Pbs4 { lut } => write!(f, "pbs_4<{lut}>"),
-            HpuInstructionSet::Pbs8 { lut } => write!(f, "pbs_8<{lut}>"),
-            HpuInstructionSet::PbsF { lut } => write!(f, "pbs_f<{lut}>"),
-            HpuInstructionSet::Pbs2F { lut } => write!(f, "pbs_2f<{lut}>"),
-            HpuInstructionSet::Pbs4F { lut } => write!(f, "pbs_4f<{lut}>"),
-            HpuInstructionSet::Pbs8F { lut } => write!(f, "pbs_8f<{lut}>"),
+            HpuInstructionSet::Pbs { lut } => write!(f, "pbs<{lut:?}>"),
+            HpuInstructionSet::Pbs2 { lut } => write!(f, "pbs_2<{lut:?}>"),
+            HpuInstructionSet::Pbs4 { lut } => write!(f, "pbs_4<{lut:?}>"),
+            HpuInstructionSet::Pbs8 { lut } => write!(f, "pbs_8<{lut:?}>"),
+            HpuInstructionSet::PbsF { lut } => write!(f, "pbs_f<{lut:?}>"),
+            HpuInstructionSet::Pbs2F { lut } => write!(f, "pbs_2f<{lut:?}>"),
+            HpuInstructionSet::Pbs4F { lut } => write!(f, "pbs_4f<{lut:?}>"),
+            HpuInstructionSet::Pbs8F { lut } => write!(f, "pbs_8f<{lut:?}>"),
             HpuInstructionSet::Batch { block, .. } => {
                 // Format nested IR with proper prefix propagation and unique nested prefix
                 let inner_ctx = ctx.with_prefix("    ").with_next_nested_prefix();

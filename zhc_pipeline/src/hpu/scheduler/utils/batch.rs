@@ -12,16 +12,16 @@ use zhc_utils::{
 fn flush_pbs(instruction: &HpuInstructionSet) -> HpuInstructionSet {
     match instruction {
         HpuInstructionSet::Pbs { lut } | HpuInstructionSet::PbsF { lut } => {
-            HpuInstructionSet::PbsF { lut: *lut }
+            HpuInstructionSet::PbsF { lut: lut.clone() }
         }
         HpuInstructionSet::Pbs2 { lut } | HpuInstructionSet::Pbs2F { lut } => {
-            HpuInstructionSet::Pbs2F { lut: *lut }
+            HpuInstructionSet::Pbs2F { lut: lut.clone() }
         }
         HpuInstructionSet::Pbs4 { lut } | HpuInstructionSet::Pbs4F { lut } => {
-            HpuInstructionSet::Pbs4F { lut: *lut }
+            HpuInstructionSet::Pbs4F { lut: lut.clone() }
         }
         HpuInstructionSet::Pbs8 { lut } | HpuInstructionSet::Pbs8F { lut } => {
-            HpuInstructionSet::Pbs8F { lut: *lut }
+            HpuInstructionSet::Pbs8F { lut: lut.clone() }
         }
         _ => unreachable!(),
     }

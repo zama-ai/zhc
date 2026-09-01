@@ -462,14 +462,14 @@ mod test {
                     %a5 = batch_arg<5, CtRegister>();
                     %a6 = batch_arg<6, CtRegister>();
                     %a7 = batch_arg<7, CtRegister>();
-                    %a8, %a9 = pbs_2<Lut@71>(%a0);
-                    %a10, %a11 = pbs_2<Lut@71>(%a1);
-                    %a12, %a13 = pbs_2<Lut@71>(%a2);
-                    %a14, %a15 = pbs_2<Lut@71>(%a3);
-                    %a16, %a17 = pbs_2<Lut@71>(%a4);
-                    %a18, %a19 = pbs_2<Lut@71>(%a5);
-                    %a20, %a21 = pbs_2<Lut@71>(%a6);
-                    %a22, %a23 = pbs_2f<Lut@71>(%a7);
+                    %a8, %a9 = pbs_2<Lut2("ManyMsgSplit")>(%a0);
+                    %a10, %a11 = pbs_2<Lut2("ManyMsgSplit")>(%a1);
+                    %a12, %a13 = pbs_2<Lut2("ManyMsgSplit")>(%a2);
+                    %a14, %a15 = pbs_2<Lut2("ManyMsgSplit")>(%a3);
+                    %a16, %a17 = pbs_2<Lut2("ManyMsgSplit")>(%a4);
+                    %a18, %a19 = pbs_2<Lut2("ManyMsgSplit")>(%a5);
+                    %a20, %a21 = pbs_2<Lut2("ManyMsgSplit")>(%a6);
+                    %a22, %a23 = pbs_2f<Lut2("ManyMsgSplit")>(%a7);
                     batch_ret<0, CtRegister>(%a8);
                     batch_ret<1, CtRegister>(%a9);
                     batch_ret<2, CtRegister>(%a10);
@@ -509,9 +509,9 @@ mod test {
                     %a0 = batch_arg<0, CtRegister>();
                     %a1 = batch_arg<1, CtRegister>();
                     %a2 = batch_arg<2, CtRegister>();
-                    %a3, %a4 = pbs_2<Lut@65>(%a2);
-                    %a5, %a6 = pbs_2<Lut@70>(%a0);
-                    %a7, %a8 = pbs_2f<Lut@70>(%a1);
+                    %a3, %a4 = pbs_2<Lut2("ManyInv2CarryMsg")>(%a2);
+                    %a5, %a6 = pbs_2<Lut2("ManyInv7CarryMsg")>(%a0);
+                    %a7, %a8 = pbs_2f<Lut2("ManyInv7CarryMsg")>(%a1);
                     batch_ret<0, CtRegister>(%a5);
                     batch_ret<1, CtRegister>(%a6);
                     batch_ret<2, CtRegister>(%a7);
@@ -526,9 +526,9 @@ mod test {
                 %48, %49, %50, %51 = batch {
                     %a0 = batch_arg<0, CtRegister>();
                     %a1 = batch_arg<1, CtRegister>();
-                    %a2 = pbs<Lut@1>(%a0);
-                    %a3 = pbs<Lut@3>(%a0);
-                    %a4, %a5 = pbs_2f<Lut@26>(%a1);
+                    %a2 = pbs<Lut1("MsgOnly")>(%a0);
+                    %a3 = pbs<Lut1("CarryInMsg")>(%a0);
+                    %a4, %a5 = pbs_2f<Lut2("ManyCarryMsg")>(%a1);
                     batch_ret<0, CtRegister>(%a2);
                     batch_ret<1, CtRegister>(%a3);
                     batch_ret<2, CtRegister>(%a4);
@@ -538,7 +538,7 @@ mod test {
                 %52 = add_ct(%49, %50);
                 %53, %54 = batch {
                     %a0 = batch_arg<0, CtRegister>();
-                    %a1, %a2 = pbs_2f<Lut@26>(%a0);
+                    %a1, %a2 = pbs_2f<Lut2("ManyCarryMsg")>(%a0);
                     batch_ret<0, CtRegister>(%a1);
                     batch_ret<1, CtRegister>(%a2);
                 }(%52);
@@ -546,7 +546,7 @@ mod test {
                 %55 = add_ct(%54, %51);
                 %56, %57 = batch {
                     %a0 = batch_arg<0, CtRegister>();
-                    %a1, %a2 = pbs_2f<Lut@26>(%a0);
+                    %a1, %a2 = pbs_2f<Lut2("ManyCarryMsg")>(%a0);
                     batch_ret<0, CtRegister>(%a1);
                     batch_ret<1, CtRegister>(%a2);
                 }(%55);
