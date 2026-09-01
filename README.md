@@ -18,7 +18,7 @@
   <a href="https://github.com/zama-ai/zhc/blob/main/LICENSE"><img src="https://img.shields.io/crates/l/zhc?style=flat-square" alt="license"></a>
 </p>
 
-# What is ZHC ?
+# What is ZHC?
 
 ZHC is an open-source compiler toolchain for [FHE](https://en.wikipedia.org/wiki/Homomorphic_encryption) computation: it compiles arithmetic circuits into optimized instruction streams for hardware that computes directly on encrypted data:
 
@@ -38,18 +38,18 @@ ZHC is an open-source compiler toolchain for [FHE](https://en.wikipedia.org/wiki
 </sub></pre>
 </div>
 
-Under the hood, [tfhe-rs](https://github.com/zama-ai/tfhe-rs) uses it for its [HPU](https://github.com/zama-ai/hpu_fpga) backend and experimental Circuit API. It is built atop a custom, dialect-generic SSA-IR implemented from scratch, enabling speed at every step:
-+ [Design](#circuit-design): Circuit definition, visualization and evaluation on emulated semantics. A programmatic frontend, that makes sense for circuit design.
+Under the hood, [tfhe-rs](https://github.com/zama-ai/tfhe-rs) uses it for its [HPU](https://github.com/zama-ai/hpu_fpga) backend and experimental Circuit API. ZHC is built atop a custom, dialect-generic SSA-IR implemented from scratch, enabling speed at every step:
++ [Design](#circuit-design): Circuit definition, visualization and evaluation on emulated semantics. A programmatic frontend that makes sense for circuit design.
 + [Compilation](#compilation): Progressive lowering from high-level representation down to specialized hardware ISA. Target-agnostic optimizations, then hardware-aware scheduling and register allocation. All fast enough to support JIT compilation.
 + [Execution](#execution): Optimized instruction streams for HPU, HPU clusters, and CPU target. HPU and Multi-HPU streams can be evaluated against an accurate hardware simulator, delivering a streamlined development experience.
 
-Currently ZHC focuses on the [TFHE](eprint.iacr.org/2021/1402.pdf) cryptosystem.
+Currently ZHC focuses on the [TFHE](https://eprint.iacr.org/2021/1402.pdf) cryptosystem.
 
 # Get started
 
 To benefit from ZHC to accelerate an FHE application, just use the tfhe-rs Circuit API, and run the code in any executor.
 
-To design new FHE algorithms, then add zhc as a dependency to any rust project and follow the [tour](#a-tour-of-zhc), or look into one of the [examples](zhc/examples) :
+To design new FHE algorithms, add zhc as a dependency to any Rust project and follow the [tour](#a-tour-of-zhc), or look into one of the [examples](zhc/examples):
 ```shell
 cargo add zhc
 ```
@@ -84,9 +84,9 @@ bd.draw().open();
 
 <br clear="right">
 
-The [`draw`](https://docs.rs/zhc_builder/latest/zhc_builder/struct.Builder.html#method.draw) method renders the underlying intermediate representation to an interactive graph suitable to visual inspection. This graph can optionally be annotated with various informations such as emulation values, scheduling slack, noise level, etc.
+The [`draw`](https://docs.rs/zhc_builder/latest/zhc_builder/struct.Builder.html#method.draw) method renders the underlying intermediate representation to an interactive graph suitable for visual inspection. This graph can optionally be annotated with various information such as emulation values, scheduling slack, noise level, etc.
 
-The API exposed by the `Builder` object, offers a semantic tailored to the TFHE cryptosystem. Operations are available in [different flavors](https://docs.rs/zhc_crypto/latest/zhc_crypto/integer_semantics/index.html) depending on how they treat the __padding bit__. To simplify the debugging without having to go through encryptions/decryptions cycles, the builder object exposes an emulation layer which performs an abstract interpretation of the program and annotates the intermediate values: 
+The API exposed by the `Builder` object offers semantics tailored to the TFHE cryptosystem. Operations are available in [different flavors](https://docs.rs/zhc_crypto/latest/zhc_crypto/integer_semantics/index.html) depending on how they treat the __padding bit__. To simplify the debugging without having to go through encryption/decryption cycles, the builder object exposes an emulation layer which performs an abstract interpretation of the program and annotates the intermediate values: 
 
 ```rust
 bd.interpret()
@@ -113,7 +113,7 @@ The invariants of the semantics are checked during this abstract interpretation.
 
 Noise management is a big part of implementing FHE algorithms; it must always stay within some bounds to ensure the data are not corrupted. The [`Builder::dump_noise_budget`](https://docs.rs/zhc_builder/latest/zhc_builder/struct.Builder.html#method.dump_noise_budget) method performs a noise analysis and displays it in a suitable format:
 ```rust
-bd.dump_noise_budget()
+bd.dump_noise_budget();
 // On stdout:
 // ╔════════════════════════════════════════════
 // ║ Noise Analysis
@@ -146,7 +146,7 @@ pl.get_hpu_assembly().open().unwrap();
 pl.get_hpu_trace().open().unwrap();
 ```
 
-Artifacts are pulled from the pipeline with `get_*` methods. Every intermediate artifacts are cached in the pipeline, and can be pulled for inspection.
+Artifacts are pulled from the pipeline with `get_*` methods. Every intermediate artifact is cached in the pipeline, and can be pulled for inspection.
 
 The HPU pipeline takes roughly three steps. First, target-agnostic optimizations are applied to the [`IopLang`](https://docs.rs/zhc_langs/latest/zhc_langs/ioplang/index.html) IR. This representation is then lowered to the [`HpuLang`](https://docs.rs/zhc_langs/latest/zhc_langs/hpulang/index.html) dialect, on which scheduling and PBS batching is performed. Once scheduled, a linear scan register allocator translates the code to [`DopLang`](https://docs.rs/zhc_langs/latest/zhc_langs/doplang/index.html) dialect, which corresponds to the HPU ISA. 
 
@@ -156,7 +156,7 @@ The HPU pipeline takes roughly three steps. First, target-agnostic optimizations
 <summary>About Scheduling</summary>
 <br>
     
-FHE is special for its large imbalance in operation latency: ratio between PBS to linear operations (the two broad categories), can be from 100s to 1000s. This makes textbook scheduler approaches unsuitable in this regime. Our scheduler mixes as-late-as-possible list-scheduling with a lightweight simulation, to both schedule and batch PBS operations together in one pass. 
+FHE is special for its large imbalance in operation latency: the ratio of PBS to linear operations runtimes (the two broad categories) can be from 100s to 1000s. This makes textbook scheduler approaches unsuitable in this regime. Our scheduler mixes as-late-as-possible list-scheduling with a lightweight simulation, to both schedule and batch PBS operations together in one pass. 
 
 </details>
 
@@ -164,7 +164,7 @@ FHE is special for its large imbalance in operation latency: ratio between PBS t
 <summary>About Verification</summary>
 <br>
     
-Every passes of the pipeline (including scheduling and register allocation) is verified, on [_the complete IOP library_](https://docs.rs/zhc/latest/zhc/prelude/compat/enum.Iop.html), for precisions ranging from 2 to 128bits. The current approach used for verification is differential evaluation. For each circuit, the IRs before and after the pass are both emulated (each dialect having its own emulator) on a large number of inputs, and the results are asserted bitwise equals.
+Every pass of the pipeline (including scheduling and register allocation) is verified, on [_the complete IOP library_](https://docs.rs/zhc/latest/zhc/prelude/compat/enum.Iop.html), for precisions ranging from 2 to 128 bits. The current approach used for verification is differential evaluation. For each circuit, the IRs before and after the pass are both emulated (each dialect having its own emulator) on a large number of inputs, and the results are asserted bitwise equal.
 
 </details>
 
@@ -178,10 +178,10 @@ Compilation time is on the order of a few microseconds per instruction (well bel
 
 ## Execution
 
-ZHC is currently capable of targetting HPU, HPU-Clusters, and an experimental CPU Virtual Machine.
+ZHC is currently capable of targeting HPU, HPU-Clusters, and an experimental CPU Virtual Machine.
 
-<img align="right" width="300" src="docs/assets/trace.png" alt="IR visualization">
+<img align="right" width="300" src="docs/assets/trace.png" alt="Perfetto trace">
 
-Not every circuit designer has an HPU board handy. To simplify the development of HPU programs, ZHC includes a simulator for the HPU and HPU-Cluster targets, which can be used to get an accurate estimation of the HPU behavior on the compiled streams. Even better, [Perfetto](https://perfetto.dev/) traces of the execution, can be extracted from the simulator using the [`Pipeline::get_hpu_trace`](https://docs.rs/zhc_pipeline/latest/zhc_pipeline/struct.Pipeline.html#method.get_hpu_trace). For faster feedback loops, simpler aggregate metrics can be accessed with [`Pipeline::get_hpu_metrics`](https://docs.rs/zhc_pipeline/latest/zhc_pipeline/struct.Pipeline.html#method.get_hpu_metrics).
+Not every circuit designer has an HPU board handy. To simplify the development of HPU programs, ZHC includes a simulator for the HPU and HPU-Cluster targets, which can be used to get an accurate estimation of the HPU behavior on the compiled streams. Even better, [Perfetto](https://perfetto.dev/) traces of the execution can be extracted from the simulator using the [`Pipeline::get_hpu_trace`](https://docs.rs/zhc_pipeline/latest/zhc_pipeline/struct.Pipeline.html#method.get_hpu_trace) method. For faster feedback loops, simpler aggregate metrics can be accessed with [`Pipeline::get_hpu_metrics`](https://docs.rs/zhc_pipeline/latest/zhc_pipeline/struct.Pipeline.html#method.get_hpu_metrics).
 
-<br clear="left">
+<br clear="right">
