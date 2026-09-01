@@ -24,6 +24,7 @@ mod misc;
 mod safe_as;
 mod store;
 mod type_name;
+mod value_set;
 
 pub use bi_map::*;
 pub use change_guard::*;
@@ -35,6 +36,7 @@ pub use misc::*;
 pub use safe_as::*;
 pub use store::*;
 pub use type_name::*;
+pub use value_set::*;
 
 pub use zhc_utils_macro::DisplayVariant;
 pub use zhc_utils_macro::StoreIndex;
