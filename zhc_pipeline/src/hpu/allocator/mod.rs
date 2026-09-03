@@ -2,6 +2,7 @@ use zhc_config::hpu::HpuConfig;
 use zhc_crypto::integer_semantics::lut::LutRegistry;
 use zhc_ir::{AnnIR, IR};
 use zhc_langs::{doplang::DopLang, hpulang::HpuLang};
+use zhc_utils::SafeAs;
 
 mod allocator;
 mod batch_map;
@@ -22,7 +23,12 @@ pub fn allocate_registers(
     config: &HpuConfig,
     lut_reg: &LutRegistry,
 ) -> IR<DopLang> {
-    let allocator = allocator::Allocator::init(ir, config.regf_size);
+    let allocator = allocator::Allocator::init(
+        ir,
+        config.regf_size,
+        config.isc_depth.sas(),
+        config.heap_size,
+    );
     let allocation = allocator.allocate_registers();
     let annir = AnnIR::new(ir, allocation, ir.filled_valmap(()));
     translator::translate(&annir, &lut_reg)

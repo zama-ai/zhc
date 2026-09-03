@@ -49,14 +49,19 @@ pub struct Allocator<'ir> {
 }
 
 impl<'ir> Allocator<'ir> {
-    pub fn init(ir: &IR<HpuLang>, nregs: usize) -> Allocator<'_> {
+    pub fn init(
+        ir: &IR<HpuLang>,
+        nregs: usize,
+        heap_quarantine: u16,
+        heap_size: usize,
+    ) -> Allocator<'_> {
         let live_ranges = LiveRangeMap::from_scheduled_ir(ir);
         let register_file = RegFile::empty(nregs);
         let map = ir.filled_valmap(ValState::Unseen);
         let input = ir;
         let current_point = 0;
         let end_point = ir.n_ops();
-        let heap = Heap::empty();
+        let heap = Heap::new(heap_quarantine, heap_size);
         Allocator {
             input,
             live_ranges,
@@ -143,7 +148,9 @@ impl<'ir> Allocator<'ir> {
     fn acquire_heap_slots(&mut self, op: OpRef<'ir, HpuLang>) -> SmallVec<HeapSlot> {
         use HpuInstructionSet::*;
         match op.get_instruction() {
-            TransferIn { .. } | TransferOut { .. } => svec![self.heap.get_unmapped()],
+            TransferIn { .. } | TransferOut { .. } => {
+                svec![self.heap.alloc_exclusive()]
+            }
             _ => svec![],
         }
     }
@@ -180,7 +187,7 @@ impl<'ir> Allocator<'ir> {
                 None => {
                     let rid = self.pick_reg_for_src_eviction();
                     let evicted = self.register_file[rid].evict(op.get_id());
-                    let slot = self.heap.get(&evicted);
+                    let slot = self.heap.alloc(self.current_point.sas());
                     self.map[evicted].spill(slot);
                     spills.push(Spill {
                         from: rid,
@@ -192,6 +199,7 @@ impl<'ir> Allocator<'ir> {
 
             self.register_file[available].acquire_unspill(valid_to_unspill);
             let slot = self.map[valid_to_unspill].unspill(available);
+            self.heap.release(slot, self.current_point.sas());
             unspills.push(Unspill {
                 from: slot,
                 to: available,
@@ -219,7 +227,7 @@ impl<'ir> Allocator<'ir> {
                     for rid in rrid.rids_iter() {
                         if !self.register_file[rid].is_empty() {
                             let evicted = self.register_file[rid].evict(op.get_id());
-                            let slot = self.heap.get(&evicted);
+                            let slot = self.heap.alloc(self.current_point.sas());
                             self.map[evicted].spill(slot);
                             spills.push(Spill {
                                 from: rid,
@@ -285,7 +293,9 @@ impl<'ir> Allocator<'ir> {
 
             self.register_file.iter_registers_mut().for_each(|(_, rs)| {
                 match rs.stabilize(op.get_id()) {
-                    Some(valid) => self.map[valid].retire(),
+                    Some(valid) => {
+                        self.map[valid].retire();
+                    }
                     None => {}
                 }
             });
