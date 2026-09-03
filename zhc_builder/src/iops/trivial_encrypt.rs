@@ -121,4 +121,11 @@ mod test {
             trivial_encrypt(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
         }
     }
+
+    #[test]
+    fn noise_trivial_encrypt() {
+        for size in (2..128).step_by(2) {
+            trivial_encrypt(CiphertextSpec::new(size, 2, 2)).check_noise();
+        }
+    }
 }

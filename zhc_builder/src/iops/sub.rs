@@ -47,18 +47,11 @@ impl Builder {
     /// let diff = builder.iop_sub(&a, &b);
     /// ```
     pub fn iop_sub(&self, lhs: &Ciphertext, rhs: &Ciphertext) -> Ciphertext {
-        let par_w = match lhs.spec().int_size() {
-            8..16 => 1,
-            16..24 => 7,
-            24..256 => 12,
-            _ => 1,
-        };
         let one = self.block_let_ciphertext(1);
         let b_inv = self.iop_bitwise_inv(&rhs);
         match lhs.spec().int_size() {
             0..8 => self.iop_add_ripple_carry(&lhs, &b_inv, Some(&one)).0,
-            8..17 => self.iop_add_hillis_steele(&lhs, &b_inv, Some(&one)).0,
-            17..256 => self.iop_add_kogge_stone(&lhs, &b_inv, Some(&one), par_w).0,
+            8..256 => self.iop_add_hillis_steele(&lhs, &b_inv, Some(&one)).0,
             _ => todo!(),
         }
     }
@@ -80,26 +73,11 @@ impl Builder {
     /// let (diff, borrow) = builder.iop_overflow_sub(&a, &b);
     /// ```
     pub fn iop_overflow_sub(&self, lhs: &Ciphertext, rhs: &Ciphertext) -> (Ciphertext, Ciphertext) {
-        let par_w = match lhs.spec().int_size() {
-            8..16 => 1,
-            16..24 => 7,
-            24..256 => 12,
-            _ => 1,
-        };
         let one = self.block_let_ciphertext(1);
         let b_inv = self.iop_bitwise_inv(&rhs);
         let (res, carry_out) = match lhs.spec().int_size() {
             0..8 => self.iop_add_ripple_carry(&lhs, &b_inv, Some(&one)),
-            8..17 => self.iop_add_hillis_steele(&lhs, &b_inv, Some(&one)),
-            17..256 => {
-                let lhs = self.ciphertext_split(&lhs);
-                let rhs = self.ciphertext_split(&b_inv);
-                let (blocks, co) = self.iop_add_kogge_stone_raw(lhs, rhs, Some(&one), par_w);
-                (
-                    self.comment("Join Output").ciphertext_join(blocks, None),
-                    self.comment("Join Carry").ciphertext_join([co], None),
-                )
-            }
+            8..256 => self.iop_add_hillis_steele(&lhs, &b_inv, Some(&one)),
             _ => todo!(),
         };
 
@@ -139,6 +117,20 @@ mod test {
         }
         for size in (2..128).step_by(2) {
             overflow_sub(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+        }
+    }
+
+    #[test]
+    fn noise_sub() {
+        for size in (2..128).step_by(2) {
+            sub(CiphertextSpec::new(size, 2, 2)).check_noise();
+        }
+    }
+
+    #[test]
+    fn noise_overflow_sub() {
+        for size in (2..128).step_by(2) {
+            overflow_sub(CiphertextSpec::new(size, 2, 2)).check_noise();
         }
     }
 }

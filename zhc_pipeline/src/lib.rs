@@ -15,7 +15,7 @@ mod vm;
 
 pub use commons::*;
 pub use hpu::metrics::HpuMetrics;
-pub use misc::PbsMetrics;
+pub use misc::*;
 pub use pipeline::Pipeline;
 pub use vm::scheduler::VmExecutionPlan;
 

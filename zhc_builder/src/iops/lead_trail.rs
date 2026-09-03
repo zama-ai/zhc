@@ -593,4 +593,39 @@ mod test {
             ilog2(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
         }
     }
+
+    #[test]
+    fn noise_lead0() {
+        for size in (2..128).step_by(2) {
+            lead0(CiphertextSpec::new(size, 2, 2)).check_noise();
+        }
+    }
+
+    #[test]
+    fn noise_lead1() {
+        for size in (2..128).step_by(2) {
+            lead1(CiphertextSpec::new(size, 2, 2)).check_noise();
+        }
+    }
+
+    #[test]
+    fn noise_trail0() {
+        for size in (2..128).step_by(2) {
+            trail0(CiphertextSpec::new(size, 2, 2)).check_noise();
+        }
+    }
+
+    #[test]
+    fn noise_trail1() {
+        for size in (2..128).step_by(2) {
+            trail1(CiphertextSpec::new(size, 2, 2)).check_noise();
+        }
+    }
+
+    #[test]
+    fn noise_ilog2() {
+        for size in (2..128).step_by(2) {
+            ilog2(CiphertextSpec::new(size, 2, 2)).check_noise();
+        }
+    }
 }

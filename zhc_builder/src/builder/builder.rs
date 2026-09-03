@@ -40,7 +40,7 @@ use zhc_ir::{
 };
 use zhc_langs::ioplang::{
     IopInstructionSet, IopLang, IopTypeSystem, IopValue, Lut1Def, Lut2Def, Lut4Def, Lut8Def,
-    eliminate_aliases, skip_redundant_stores, skip_store_load,
+    analyze_noise, check_noise, eliminate_aliases, skip_redundant_stores, skip_store_load,
 };
 use zhc_utils::{
     Dumpable, FastSet, SafeAs, Store,
@@ -2400,6 +2400,66 @@ impl Builder {
             .enumerate()
             .map(|(i, b)| self.comment(format!("{i}")).block_inspect(b))
             .collect()
+    }
+
+    /// Prints the estimated noise budget of every value in the circuit built so far.
+    ///
+    /// Homomorphic operations accumulate noise in ciphertext blocks. This method runs a static
+    /// noise analysis over the current IR and prints the result to standard output. Every value is
+    /// listed with a bar showing how much of the allowed noise budget it consumes, expressed as a
+    /// percentage. A fresh ciphertext (input or bootstrap output) uses one unit; ciphertext
+    /// additions add the operands' budgets; plaintext multiplications and packings scale them. A
+    /// value whose estimate exceeds the budget is flagged with a warning mark. Plaintext values
+    /// carry no noise and always show 0%.
+    ///
+    /// This is a debugging aid: use it to find where a circuit runs out of noise budget and where
+    /// a bootstrap is needed. It does not modify the circuit. To assert that the budget is never
+    /// exceeded, use [`check_noise`](Self::check_noise) instead.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let a = builder.ciphertext_split(builder.ciphertext_input(8));
+    /// let b = builder.ciphertext_split(builder.ciphertext_input(8));
+    /// let sum = builder.vector_add(&a, &b, ExtensionBehavior::Panic);
+    /// builder.dump_noise(); // each block of `sum` shows 17%
+    /// ```
+    pub fn dump_noise(&self) {
+        analyze_noise(&*self.ir(), &self.spec().matching_plaintext_block_spec()).dump();
+    }
+
+    /// Asserts that the circuit built so far stays within the noise budget.
+    ///
+    /// Homomorphic operations accumulate noise in ciphertext blocks. This method runs a static
+    /// noise analysis over the current IR and verifies two properties: no value's estimated noise
+    /// exceeds the allowed budget, and every ciphertext passed to an output is fresh, meaning it
+    /// comes directly from an input or a bootstrap with no intermediate arithmetic. The second
+    /// rule guarantees that outputs can be safely consumed by another circuit.
+    ///
+    /// Call this at the end of circuit construction, or at intermediate points, as a cheap
+    /// sanity check. It does not modify the circuit. To see the per-value estimates instead of a
+    /// pass/fail result, use [`dump_noise`](Self::dump_noise).
+    ///
+    /// # Panics
+    ///
+    /// Panics if any value's estimated noise exceeds the allowed budget. Panics if any output
+    /// ciphertext is not fresh. The panic message lists the offending values.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let a = builder.ciphertext_split(builder.ciphertext_input(8));
+    /// let b = builder.ciphertext_split(builder.ciphertext_input(8));
+    /// let sum = builder.vector_add(&a, &b, ExtensionBehavior::Panic);
+    /// builder.ciphertext_output(builder.ciphertext_join(&sum, None));
+    /// builder.check_noise(); // panics: the output was not bootstrapped
+    /// ```
+    pub fn check_noise(&self) {
+        check_noise(&*self.ir(), &self.spec().matching_plaintext_block_spec());
     }
 }
 

@@ -432,4 +432,46 @@ mod test {
             cmp_neq(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
         }
     }
+
+    #[test]
+    fn noise_cmp_gt() {
+        for size in (2..128).step_by(2) {
+            cmp_gt(CiphertextSpec::new(size, 2, 2)).check_noise();
+        }
+    }
+
+    #[test]
+    fn noise_cmp_gte() {
+        for size in (2..128).step_by(2) {
+            cmp_gte(CiphertextSpec::new(size, 2, 2)).check_noise();
+        }
+    }
+
+    #[test]
+    fn noise_cmp_lt() {
+        for size in (2..128).step_by(2) {
+            cmp_lt(CiphertextSpec::new(size, 2, 2)).check_noise();
+        }
+    }
+
+    #[test]
+    fn noise_cmp_lte() {
+        for size in (2..128).step_by(2) {
+            cmp_lte(CiphertextSpec::new(size, 2, 2)).check_noise();
+        }
+    }
+
+    #[test]
+    fn noise_cmp_eq() {
+        for size in (2..128).step_by(2) {
+            cmp_eq(CiphertextSpec::new(size, 2, 2)).check_noise();
+        }
+    }
+
+    #[test]
+    fn noise_cmp_neq() {
+        for size in (2..128).step_by(2) {
+            cmp_neq(CiphertextSpec::new(size, 2, 2)).check_noise();
+        }
+    }
 }

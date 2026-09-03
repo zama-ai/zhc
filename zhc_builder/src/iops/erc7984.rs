@@ -62,26 +62,10 @@ impl Builder {
         //   enough_fund=0 (insufficient) -> actual_amount = 0
         let actual_amount = self.iop_if_then_zero(src_amount, &enough_fund);
 
-        // Step 3: Arithmetic strategy selection (matching add.rs / sub.rs).
-        // when KS ADD/SUB (32b or 64b, over 24b) are standalone the par_w is 12
-        // as it was determine to maximize usage of pe-pbs batches
-        // but here manual exploration at LLT implementation time (~2025) showed
-        // that par_w 10 was generating a smaller carry reduction tree which meant
-        // a bit less PBS (-4 ReduceCarryPad)
-        let par_w = match spec.int_size() {
-            8..16 => 1,
-            16..24 => 5,
-            24..256 => 10,
-            _ => 1,
-        };
-
         // Step 4: new_to = src_to + actual_amount
         let new_to = match spec.int_size() {
             0..8 => self.iop_add_ripple_carry(src_to, &actual_amount, None).0,
-            8..256 => {
-                self.iop_add_kogge_stone(src_to, &actual_amount, None, par_w)
-                    .0
-            }
+            8..256 => self.iop_add_hillis_steele(src_to, &actual_amount, None).0,
             _ => todo!(),
         };
 
@@ -94,7 +78,7 @@ impl Builder {
                     .0
             }
             8..256 => {
-                self.iop_add_kogge_stone(src_from, &actual_amount_inv, Some(&one), par_w)
+                self.iop_add_hillis_steele(src_from, &actual_amount_inv, Some(&one))
                     .0
             }
             _ => todo!(),
@@ -193,6 +177,20 @@ mod test {
         }
         for size in (2..64).step_by(2) {
             erc7984_simd(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+        }
+    }
+
+    #[test]
+    fn noise_erc7984() {
+        for size in (2..64).step_by(2) {
+            erc7984(CiphertextSpec::new(size, 2, 2)).check_noise();
+        }
+    }
+
+    #[test]
+    fn noise_erc7984_simd() {
+        for size in (2..64).step_by(2) {
+            erc7984_simd(CiphertextSpec::new(size, 2, 2)).check_noise();
         }
     }
 }

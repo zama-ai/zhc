@@ -12,9 +12,20 @@ pub mod prelude {
     pub use zhc_config::*;
     pub use zhc_crypto::integer_semantics::CiphertextBlockSpec;
     pub use zhc_langs::ioplang::IopValue;
+    use zhc_langs::ioplang::analyze_noise;
     pub use zhc_langs::ioplang::{Lut1Def, Lut2Def};
     pub use zhc_pipeline::*;
     pub use zhc_utils::{Dumpable, topology::Topology};
+
+    pub trait BuilderExt {
+        fn dump_noise_budget(&self);
+    }
+
+    impl BuilderExt for Builder {
+        fn dump_noise_budget(&self) {
+            analyze_noise(&*self.ir(), &self.spec().matching_plaintext_block_spec()).dump();
+        }
+    }
 }
 
 #[cfg(test)]

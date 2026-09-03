@@ -108,4 +108,11 @@ mod test {
             "#
         );
     }
+
+    #[test]
+    fn noise_if_then_zero() {
+        for size in (2..128).step_by(2) {
+            if_then_zero(CiphertextSpec::new(size, 2, 2)).check_noise();
+        }
+    }
 }

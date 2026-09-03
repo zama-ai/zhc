@@ -161,16 +161,23 @@ static PIPELINE: LazyLock<(IR<PipelineLang>, ArtifactsValids)> = LazyLock::new(|
     // Commons
     let (_, rets) = ir.add_op(InputBuilder, svec![]);
     let builder = rets[0];
-    let (_, rets) = ir.add_op(BuilderToIopLang, svec![builder]);
-    let ioplang = rets[0];
+    let (_, rets) = ir.add_op(BuilderToUncheckedIopLang, svec![builder]);
+    let unchecked_ioplang = rets[0];
     let (_, rets) = ir.add_op(BuilderToPartitions, svec![builder]);
     let partitions = rets[0];
     let (_, rets) = ir.add_op(BuilderToPrototype, svec![builder]);
     let prototype = rets[0];
-    let (_, rets) = ir.add_op(DrawSlack, svec![ioplang]);
+    let (_, rets) = ir.add_op(BuilderToCiphertextBlockSpec, svec![builder]);
+    let ciphertext_block_spec = rets[0];
+    let (_, rets) = ir.add_op(DrawSlack, svec![unchecked_ioplang]);
     let slack_drawing = rets[0];
-    let (_, rets) = ir.add_op(ComputePbsMetrics, svec![ioplang]);
+    let (_, rets) = ir.add_op(ComputePbsMetrics, svec![unchecked_ioplang]);
     let pbs_metrics = rets[0];
+    let (_, rets) = ir.add_op(
+        CheckIopLang,
+        svec![unchecked_ioplang, ciphertext_block_spec],
+    );
+    let ioplang = rets[0];
     let (_, rets) = ir.add_op(IopLangToLutRegistry, svec![ioplang]);
     let lut_registry = rets[0];
 
@@ -314,6 +321,24 @@ pub struct Pipeline {
 }
 
 impl Pipeline {
+    pub fn draw() -> FileHandle {
+        let h_root = Hierarchy::new();
+        let h_commons = h_root.make_child("Commons");
+        let h_hpu = h_root.make_child("Hpu");
+        let h_mhpu = h_root.make_child("Multi-Hpu");
+        let h_vm = h_root.make_child("Vm");
+        let opmap = IR().totally_mapped_opmap(|op| {
+            use zhc_langs::pipelinelang::Affinity::*;
+            match op.get_instruction().get_affinity() {
+                Commons => h_commons.clone(),
+                Hpu => h_hpu.clone(),
+                MultiHpu => h_mhpu.clone(),
+                Vm => h_vm.clone(),
+            }
+        });
+        IR().draw_to_html(Some(opmap))
+    }
+
     /// Creates a pipeline with no circuit and no target configuration.
     ///
     /// Nothing is compiled at this point: every step of the flow starts out pending. The inputs

@@ -199,6 +199,13 @@ impl Builder {
             self.pop_comment();
         }
 
+        if matches!(kind, ShiftRotKind::RotateLeft | ShiftRotKind::RotateRight) {
+            merged = merged
+                .into_iter()
+                .map(|b| self.block_lookup(&b, Lut1Def::MsgOnly))
+                .collect();
+        }
+
         self.comment("Join").ciphertext_join(merged, None)
     }
 
@@ -418,6 +425,34 @@ mod test {
         }
         for size in [4, 8, 16, 32, 64] {
             rotate_left(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+        }
+    }
+
+    #[test]
+    fn noise_shift_right() {
+        for size in [4, 8, 16, 32, 64] {
+            shift_right(CiphertextSpec::new(size, 2, 2)).check_noise();
+        }
+    }
+
+    #[test]
+    fn noise_shift_left() {
+        for size in [4, 8, 16, 32, 64] {
+            shift_left(CiphertextSpec::new(size, 2, 2)).check_noise();
+        }
+    }
+
+    #[test]
+    fn noise_rotate_right() {
+        for size in [4, 8, 16, 32, 64] {
+            rotate_right(CiphertextSpec::new(size, 2, 2)).check_noise();
+        }
+    }
+
+    #[test]
+    fn noise_rotate_left() {
+        for size in [4, 8, 16, 32, 64] {
+            rotate_left(CiphertextSpec::new(size, 2, 2)).check_noise();
         }
     }
 }

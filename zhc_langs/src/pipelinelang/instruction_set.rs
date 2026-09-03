@@ -11,10 +11,13 @@ use super::PipelineTypeSystem;
 /// [`PipelineTypeSystem`] artifacts according to the fixed signature exposed by the
 /// [`DialectInstructionSet`] impl. Instructions fall into the four [`Affinity`] branches:
 ///
-/// **Commons.** `InputBuilder` introduces the source circuit; from it, `BuilderToIopLang`,
-/// `BuilderToPartitions`, and `BuilderToPrototype` derive the block-level IR, the multi-HPU
-/// partitioning, and the call prototype. `ComputePbsMetrics` and `DrawSlack` each analyze the
-/// IOP IR, producing PBS metrics and a slack drawing respectively.
+/// **Commons.** `InputBuilder` introduces the source circuit; from it, `BuilderToUncheckedIopLang`,
+/// `BuilderToPartitions`, `BuilderToPrototype`, and `BuilderToCiphertextBlockSpec` derive the
+/// unchecked integer-level IR, the multi-HPU partitioning, the call prototype, and the ciphertext
+/// block specification. `CheckIopLang` runs the noise analysis on the unchecked IR against that
+/// specification and yields the checked IR every backend consumes. `ComputePbsMetrics` and
+/// `DrawSlack` each analyze the unchecked IR, producing PBS metrics and a slack drawing
+/// respectively, and `IopLangToLutRegistry` collects the lookup tables of the checked IR.
 ///
 /// **Hpu.** `InputHpuConfig` introduces the target configuration. `IopLangToHpuLang` translates
 /// the IOP IR, then `ScheduleHpuLang` schedules the translated form and `AllocateDopLang`
@@ -36,9 +39,11 @@ use super::PipelineTypeSystem;
 pub enum PipelineInstructionSet {
     // Commons
     InputBuilder,
-    BuilderToIopLang,
+    BuilderToUncheckedIopLang,
+    CheckIopLang,
     BuilderToPartitions,
     BuilderToPrototype,
+    BuilderToCiphertextBlockSpec,
     ComputePbsMetrics,
     IopLangToLutRegistry,
     DrawSlack,
@@ -77,8 +82,15 @@ impl PipelineInstructionSet {
     pub fn get_affinity(&self) -> Affinity {
         use PipelineInstructionSet::*;
         match self {
-            InputBuilder | BuilderToIopLang | BuilderToPartitions | BuilderToPrototype
-            | ComputePbsMetrics | DrawSlack | IopLangToLutRegistry => Affinity::Commons,
+            InputBuilder
+            | BuilderToUncheckedIopLang
+            | CheckIopLang
+            | BuilderToPartitions
+            | BuilderToPrototype
+            | BuilderToCiphertextBlockSpec
+            | ComputePbsMetrics
+            | DrawSlack
+            | IopLangToLutRegistry => Affinity::Commons,
             InputHpuConfig
             | IopLangToHpuLang
             | ScheduleHpuLang
@@ -109,9 +121,11 @@ impl Format for PipelineInstructionSet {
         match self {
             // Commons
             InputBuilder => write!(f, "input_builder"),
-            BuilderToIopLang => write!(f, "builder_to_iop_lang"),
+            BuilderToUncheckedIopLang => write!(f, "builder_to_unchecked_ioplang"),
+            CheckIopLang => write!(f, "check_ioplang"),
             BuilderToPartitions => write!(f, "builder_to_partitions"),
             BuilderToPrototype => write!(f, "builder_to_prototype"),
+            BuilderToCiphertextBlockSpec => write!(f, "builder_to_ciphertext_block_spec"),
             ComputePbsMetrics => write!(f, "compute_pbs_metrics"),
             IopLangToLutRegistry => write!(f, "ioplang_to_lut_registry"),
             DrawSlack => write!(f, "draw_slack"),
@@ -158,12 +172,14 @@ impl DialectInstructionSet for PipelineInstructionSet {
         match self {
             // Commons
             InputBuilder => sig![() -> (Builder)],
-            BuilderToIopLang => sig![(Builder) -> (IopLang)],
+            BuilderToUncheckedIopLang => sig![(Builder) -> (UncheckedIopLang)],
+            CheckIopLang => sig![(UncheckedIopLang, CiphertextBlockSpec) -> (IopLang)],
             BuilderToPartitions => sig![(Builder) -> (Partitions)],
             BuilderToPrototype => sig![(Builder) -> (Prototype)],
-            ComputePbsMetrics => sig![(IopLang) -> (PbsMetrics)],
+            BuilderToCiphertextBlockSpec => sig![(Builder) -> (CiphertextBlockSpec)],
+            ComputePbsMetrics => sig![(UncheckedIopLang) -> (PbsMetrics)],
             IopLangToLutRegistry => sig![(IopLang) -> (LutRegistry)],
-            DrawSlack => sig![(IopLang) -> (SlackDrawing)],
+            DrawSlack => sig![(UncheckedIopLang) -> (SlackDrawing)],
             // Hpu
             InputHpuLutRelocation => sig![() -> (HpuLutRelocation)],
             InputHpuConfig => sig![() -> (HpuConfig)],

@@ -14,11 +14,14 @@ use zhc_utils::DisplayVariant;
 pub enum PipelineTypeSystem {
     // Commons
     Builder,
+    CiphertextBlockSpec,
+    UncheckedIopLang,
     IopLang,
     Partitions,
     Prototype,
     PbsMetrics,
     SlackDrawing,
+    NoiseDrawing,
     LutRegistry,
     // Hpu
     HpuLutRelocation,

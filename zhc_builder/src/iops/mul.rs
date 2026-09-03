@@ -364,4 +364,18 @@ mod test {
             "#
         );
     }
+
+    #[test]
+    fn noise_mul_lsb() {
+        for size in (2..128).step_by(2) {
+            mul(CiphertextSpec::new(size, 2, 2)).check_noise();
+        }
+    }
+
+    #[test]
+    fn noise_overflow_mul_lsb() {
+        for size in (2..128).step_by(2) {
+            overflow_mul(CiphertextSpec::new(size, 2, 2)).check_noise();
+        }
+    }
 }

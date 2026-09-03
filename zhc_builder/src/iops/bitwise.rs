@@ -383,4 +383,32 @@ mod test {
             bitwise_inv(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
         }
     }
+
+    #[test]
+    fn noise_and() {
+        for size in (2..128).step_by(2) {
+            bitwise_and(CiphertextSpec::new(size, 2, 2)).check_noise();
+        }
+    }
+
+    #[test]
+    fn noise_or() {
+        for size in (2..128).step_by(2) {
+            bitwise_or(CiphertextSpec::new(size, 2, 2)).check_noise();
+        }
+    }
+
+    #[test]
+    fn noise_xor() {
+        for size in (2..128).step_by(2) {
+            bitwise_xor(CiphertextSpec::new(size, 2, 2)).check_noise();
+        }
+    }
+
+    #[test]
+    fn noise_inv() {
+        for size in (2..128).step_by(2) {
+            bitwise_inv(CiphertextSpec::new(size, 2, 2)).check_noise();
+        }
+    }
 }

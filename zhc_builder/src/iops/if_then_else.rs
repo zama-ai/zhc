@@ -63,7 +63,8 @@ impl Builder {
                 let cond_a = self.block_lookup(&cond_a, Lut1Def::IfFalseZeroed);
                 let cond_b = self.block_pack(&cond_blocks[0], b);
                 let cond_b = self.block_lookup(&cond_b, Lut1Def::IfTrueZeroed);
-                self.block_add(&cond_a, &cond_b)
+                let sum = self.block_add(&cond_a, &cond_b);
+                self.block_lookup(&sum, Lut1Def::MsgOnly)
             })
             .cosvec();
 
@@ -108,52 +109,67 @@ mod test {
                 %22 = pack_ct<4>(%19, %11);
                 %23 = pbs<Protect, Lut1("IfTrueZeroed")>(%22);
                 %24 = add_ct(%21, %23);
-                %25 = pack_ct<4>(%19, %4);
-                %26 = pbs<Protect, Lut1("IfFalseZeroed")>(%25);
-                %27 = pack_ct<4>(%19, %12);
-                %28 = pbs<Protect, Lut1("IfTrueZeroed")>(%27);
-                %29 = add_ct(%26, %28);
-                %30 = pack_ct<4>(%19, %5);
-                %31 = pbs<Protect, Lut1("IfFalseZeroed")>(%30);
-                %32 = pack_ct<4>(%19, %13);
-                %33 = pbs<Protect, Lut1("IfTrueZeroed")>(%32);
-                %34 = add_ct(%31, %33);
-                %35 = pack_ct<4>(%19, %6);
-                %36 = pbs<Protect, Lut1("IfFalseZeroed")>(%35);
-                %37 = pack_ct<4>(%19, %14);
-                %38 = pbs<Protect, Lut1("IfTrueZeroed")>(%37);
-                %39 = add_ct(%36, %38);
-                %40 = pack_ct<4>(%19, %7);
-                %41 = pbs<Protect, Lut1("IfFalseZeroed")>(%40);
-                %42 = pack_ct<4>(%19, %15);
-                %43 = pbs<Protect, Lut1("IfTrueZeroed")>(%42);
-                %44 = add_ct(%41, %43);
-                %45 = pack_ct<4>(%19, %8);
-                %46 = pbs<Protect, Lut1("IfFalseZeroed")>(%45);
-                %47 = pack_ct<4>(%19, %16);
-                %48 = pbs<Protect, Lut1("IfTrueZeroed")>(%47);
-                %49 = add_ct(%46, %48);
-                %50 = pack_ct<4>(%19, %9);
+                %25 = pbs<Protect, Lut1("MsgOnly")>(%24);
+                %26 = pack_ct<4>(%19, %4);
+                %27 = pbs<Protect, Lut1("IfFalseZeroed")>(%26);
+                %28 = pack_ct<4>(%19, %12);
+                %29 = pbs<Protect, Lut1("IfTrueZeroed")>(%28);
+                %30 = add_ct(%27, %29);
+                %31 = pbs<Protect, Lut1("MsgOnly")>(%30);
+                %32 = pack_ct<4>(%19, %5);
+                %33 = pbs<Protect, Lut1("IfFalseZeroed")>(%32);
+                %34 = pack_ct<4>(%19, %13);
+                %35 = pbs<Protect, Lut1("IfTrueZeroed")>(%34);
+                %36 = add_ct(%33, %35);
+                %37 = pbs<Protect, Lut1("MsgOnly")>(%36);
+                %38 = pack_ct<4>(%19, %6);
+                %39 = pbs<Protect, Lut1("IfFalseZeroed")>(%38);
+                %40 = pack_ct<4>(%19, %14);
+                %41 = pbs<Protect, Lut1("IfTrueZeroed")>(%40);
+                %42 = add_ct(%39, %41);
+                %43 = pbs<Protect, Lut1("MsgOnly")>(%42);
+                %44 = pack_ct<4>(%19, %7);
+                %45 = pbs<Protect, Lut1("IfFalseZeroed")>(%44);
+                %46 = pack_ct<4>(%19, %15);
+                %47 = pbs<Protect, Lut1("IfTrueZeroed")>(%46);
+                %48 = add_ct(%45, %47);
+                %49 = pbs<Protect, Lut1("MsgOnly")>(%48);
+                %50 = pack_ct<4>(%19, %8);
                 %51 = pbs<Protect, Lut1("IfFalseZeroed")>(%50);
-                %52 = pack_ct<4>(%19, %17);
+                %52 = pack_ct<4>(%19, %16);
                 %53 = pbs<Protect, Lut1("IfTrueZeroed")>(%52);
                 %54 = add_ct(%51, %53);
-                %55 = pack_ct<4>(%19, %10);
-                %56 = pbs<Protect, Lut1("IfFalseZeroed")>(%55);
-                %57 = pack_ct<4>(%19, %18);
-                %58 = pbs<Protect, Lut1("IfTrueZeroed")>(%57);
-                %59 = add_ct(%56, %58);
-                %60 = decl_ct<16>();
-                %70 = store_ct_block<0>(%24, %60);
-                %71 = store_ct_block<1>(%29, %70);
-                %72 = store_ct_block<2>(%34, %71);
-                %73 = store_ct_block<3>(%39, %72);
-                %74 = store_ct_block<4>(%44, %73);
-                %75 = store_ct_block<5>(%49, %74);
-                %76 = store_ct_block<6>(%54, %75);
-                %77 = store_ct_block<7>(%59, %76);
-                output<0>(%77);
+                %55 = pbs<Protect, Lut1("MsgOnly")>(%54);
+                %56 = pack_ct<4>(%19, %9);
+                %57 = pbs<Protect, Lut1("IfFalseZeroed")>(%56);
+                %58 = pack_ct<4>(%19, %17);
+                %59 = pbs<Protect, Lut1("IfTrueZeroed")>(%58);
+                %60 = add_ct(%57, %59);
+                %61 = pbs<Protect, Lut1("MsgOnly")>(%60);
+                %62 = pack_ct<4>(%19, %10);
+                %63 = pbs<Protect, Lut1("IfFalseZeroed")>(%62);
+                %64 = pack_ct<4>(%19, %18);
+                %65 = pbs<Protect, Lut1("IfTrueZeroed")>(%64);
+                %66 = add_ct(%63, %65);
+                %67 = pbs<Protect, Lut1("MsgOnly")>(%66);
+                %68 = decl_ct<16>();
+                %78 = store_ct_block<0>(%25, %68);
+                %79 = store_ct_block<1>(%31, %78);
+                %80 = store_ct_block<2>(%37, %79);
+                %81 = store_ct_block<3>(%43, %80);
+                %82 = store_ct_block<4>(%49, %81);
+                %83 = store_ct_block<5>(%55, %82);
+                %84 = store_ct_block<6>(%61, %83);
+                %85 = store_ct_block<7>(%67, %84);
+                output<0>(%85);
             "#
         );
+    }
+
+    #[test]
+    fn noise_if_then_else() {
+        for size in (2..128).step_by(2) {
+            if_then_else(CiphertextSpec::new(size, 2, 2)).check_noise();
+        }
     }
 }

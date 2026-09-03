@@ -330,4 +330,18 @@ mod test {
             count_1(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
         }
     }
+
+    #[test]
+    fn noise_count0() {
+        for size in (2..128).step_by(2) {
+            count_0(CiphertextSpec::new(size, 2, 2)).check_noise();
+        }
+    }
+
+    #[test]
+    fn noise_count1() {
+        for size in (2..128).step_by(2) {
+            count_1(CiphertextSpec::new(size, 2, 2)).check_noise();
+        }
+    }
 }

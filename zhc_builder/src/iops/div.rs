@@ -461,4 +461,11 @@ mod test {
             div(CiphertextSpec::new(size, 2, 2)).test_random(1000, semantic);
         }
     }
+
+    #[test]
+    fn noise_div() {
+        for size in (2..128).step_by(2) {
+            div(CiphertextSpec::new(size, 2, 2)).check_noise();
+        }
+    }
 }

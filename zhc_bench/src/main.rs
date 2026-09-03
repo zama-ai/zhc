@@ -1,7 +1,9 @@
 use std::collections::BTreeMap;
 use std::fs;
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::Mutex;
 use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
@@ -22,6 +24,33 @@ const DEFAULT_REPS: usize = 3;
 const RED: &str = "\x1b[31m";
 const GREEN: &str = "\x1b[32m";
 const RESET: &str = "\x1b[0m";
+
+/// Panic reports buffered by the hook, printed at the end so they don't mangle the tables.
+static PANIC_REPORTS: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+/// Replaces the default panic hook (which prints at panic time) with one buffering reports
+/// into PANIC_REPORTS. Backtraces are kept when RUST_BACKTRACE is set.
+fn install_panic_hook() {
+    std::panic::set_hook(Box::new(|info| {
+        let mut report = info.to_string();
+        if std::env::var("RUST_BACKTRACE").is_ok_and(|v| v != "0") {
+            report = format!("{}\n{}", report, std::backtrace::Backtrace::force_capture());
+        }
+        PANIC_REPORTS.lock().unwrap().push(report);
+    }));
+}
+
+/// Runs `f`, catching a panic so the remaining runs still execute. Returns None on panic,
+/// tagging the buffered report with `context` to identify the run.
+fn catch_panic<T>(context: &str, f: impl FnOnce() -> T) -> Option<T> {
+    let result = catch_unwind(AssertUnwindSafe(f)).ok();
+    if result.is_none()
+        && let Some(report) = PANIC_REPORTS.lock().unwrap().last_mut()
+    {
+        *report = format!("[{}] {}", context, report);
+    }
+    result
+}
 
 /// Parsed filter options from CLI arguments.
 struct Filters {
@@ -158,8 +187,10 @@ fn bench_iop(iop: &Iop, config: &HpuConfig, bits_filter: &[u16]) -> BTreeMap<u16
     let mut bits_results = BTreeMap::new();
     for &bits in bits_filter {
         let spec = CiphertextSpec::new(bits, 2, 2);
-        let latency = iop.compute_latency(&config, spec);
-        bits_results.insert(bits, latency);
+        let context = format!("{:?} {}b latency", iop, bits);
+        if let Some(latency) = catch_panic(&context, || iop.compute_latency(&config, spec)) {
+            bits_results.insert(bits, latency);
+        }
     }
     bits_results
 }
@@ -177,7 +208,7 @@ fn median(samples: &mut [f64]) -> f64 {
 /// Returns the pipeline compiling this iop, with the same scheduler `compute_latency` picks.
 fn iop_pipeline(iop: &Iop, config: &HpuConfig, spec: CiphertextSpec) -> Pipeline {
     let pipeline = Pipeline::new()
-        .with_builder(iop.get_builder(spec))
+        .with_builder(iop.to_builder(spec))
         .with_hpu_config(config.clone());
     match (iop, spec.int_size()) {
         (Iop::Mul, _)
@@ -200,15 +231,20 @@ fn bench_compile_iop(
     for &bits in bits_filter {
         let spec = CiphertextSpec::new(bits, 2, 2);
         // A pipeline caches its steps, so each repetition compiles on a fresh one.
-        let mut samples: Vec<f64> = (0..reps)
-            .map(|_| {
-                let mut pipeline = iop_pipeline(iop, config, spec);
-                let tic = Instant::now();
-                pipeline.get_hpu_stream();
-                tic.elapsed().as_secs_f64() * 1e6
-            })
-            .collect();
-        bits_results.insert(bits, Microseconds(median(&mut samples)));
+        let context = format!("{:?} {}b compile", iop, bits);
+        let samples: Option<Vec<f64>> = catch_panic(&context, || {
+            (0..reps)
+                .map(|_| {
+                    let mut pipeline = iop_pipeline(iop, config, spec);
+                    let tic = Instant::now();
+                    pipeline.get_hpu_stream();
+                    tic.elapsed().as_secs_f64() * 1e6
+                })
+                .collect()
+        });
+        if let Some(mut samples) = samples {
+            bits_results.insert(bits, Microseconds(median(&mut samples)));
+        }
     }
     bits_results
 }
@@ -370,6 +406,7 @@ fn run_diff_incremental(baseline: &BenchResult, use_color: bool, filters: &Filte
                 (Some(&curr), Some(&base)) => {
                     format_diff(curr.0, base.0, use_color, DELTA_THRESHOLD)
                 }
+                (None, _) => "panic!".into(),
                 _ => "-".into(),
             };
             table.set(row, col, cell);
@@ -392,7 +429,7 @@ fn run_latency_table(filters: &Filters) {
         for (col, bits) in filters.bits.iter().enumerate() {
             let cell = match bits_results.get(bits) {
                 Some(&us) => format_latency(us.0),
-                None => "-".into(),
+                None => "panic!".into(),
             };
             table.set(row, col, cell);
         }
@@ -414,7 +451,7 @@ fn run_compile_table(filters: &Filters) {
         for (col, bits) in filters.bits.iter().enumerate() {
             let cell = match bits_results.get(bits) {
                 Some(&us) => format_compile_time(us.0),
-                None => "-".into(),
+                None => "panic!".into(),
             };
             table.set(row, col, cell);
         }
@@ -456,6 +493,7 @@ fn run_compile_diff(baseline: &BenchResult, use_color: bool, filters: &Filters) 
                 (Some(&curr), Some(&base)) => {
                     format_diff(curr.0, base.0, use_color, COMPILE_DELTA_THRESHOLD)
                 }
+                (None, _) => "panic!".into(),
                 _ => "-".into(),
             };
             table.set(row, col, cell);
@@ -479,8 +517,9 @@ fn run_analyze(filters: &Filters) {
     for (row, iop) in filters.iops.iter().enumerate() {
         for (col, bits) in filters.bits.iter().enumerate() {
             let spec = CiphertextSpec::new(*bits, 2, 2);
-            let builder = iop.to_builder(spec);
-            let cell = analyze_ir(&builder);
+            let context = format!("{:?} {}b analyze", iop, bits);
+            let cell = catch_panic(&context, || analyze_ir(&iop.to_builder(spec)))
+                .unwrap_or_else(|| "panic!".into());
             table.set(row, col, cell);
         }
     }
@@ -700,6 +739,7 @@ fn resolve_baseline(rev_arg: Option<&String>) -> BenchResult {
 }
 
 fn main() {
+    install_panic_hook();
     let args: Vec<String> = std::env::args().collect();
     let (filters, remaining) = Filters::parse(&args[1..]);
     let cmd = remaining.first().map(|s| s.as_str()).unwrap_or("run");
@@ -775,5 +815,14 @@ fn main() {
             eprintln!("  zhc_bench compile -i mul -b 8,16");
             eprintln!("  zhc_bench compile-diff HEAD~1 -b 64");
         }
+    }
+
+    let reports = PANIC_REPORTS.lock().unwrap();
+    if !reports.is_empty() {
+        for report in reports.iter() {
+            eprintln!("\n{}", report);
+        }
+        eprintln!("\nError: {} run(s) panicked.", reports.len());
+        std::process::exit(1);
     }
 }

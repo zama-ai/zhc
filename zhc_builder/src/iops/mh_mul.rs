@@ -706,4 +706,13 @@ mod test {
             "#
         );
     }
+
+    #[test]
+    fn noise_mh_mul() {
+        for split_depth in SPLIT_DEPTH.iter() {
+            for size in (4 * *split_depth as u16..64).step_by(2 * *split_depth as usize) {
+                mh_mul(CiphertextSpec::new(size, 2, 2), *split_depth).check_noise();
+            }
+        }
+    }
 }
