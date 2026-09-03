@@ -1,5 +1,6 @@
 use super::{
-    CiphertextBlockSpec, EmulatedCiphertextBlock, EmulatedPlaintextBlock, PlaintextBlockSpec,
+    CiphertextBlockSpec, EmulatedCiphertextBlock, EmulatedPlaintextBlock, Flavor,
+    PlaintextBlockSpec,
 };
 
 #[test]
@@ -874,4 +875,222 @@ fn plaintext_ct_operations_return_ct_spec() {
 
     assert_eq!(pt.protect_sub_ct(ct).spec, ct_spec);
     assert_eq!(pt.wrapping_sub_ct(ct).spec, ct_spec);
+}
+
+#[test]
+fn temper_shl_basic() {
+    let spec = CiphertextBlockSpec(2, 3);
+    let block = EmulatedCiphertextBlock {
+        storage: 0b0_10_100,
+        spec,
+    };
+
+    // Overflow into the padding bit is allowed.
+    let result = block.temper_shl(1);
+    assert_eq!(result.storage, 0b1_01_000);
+}
+
+#[test]
+#[should_panic(expected = "Overflow occured while performing temper-shl")]
+fn temper_shl_padding_overflow_panics() {
+    let spec = CiphertextBlockSpec(2, 3);
+    let block = EmulatedCiphertextBlock {
+        storage: 0b1_10_100,
+        spec,
+    };
+
+    block.temper_shl(1);
+}
+
+#[test]
+fn temper_shr_accepts_padding() {
+    let spec = CiphertextBlockSpec(2, 3);
+    let block = EmulatedCiphertextBlock {
+        storage: 0b1_10_100,
+        spec,
+    };
+
+    let result = block.temper_shr(1);
+    assert_eq!(result.storage, 0b0_11_010);
+}
+
+#[test]
+#[should_panic(expected = "Underflow occured while performing protect-shr")]
+fn protect_shr_underflow_panics() {
+    let spec = CiphertextBlockSpec(2, 3);
+    let block = EmulatedCiphertextBlock {
+        storage: 0b0_10_101,
+        spec,
+    };
+
+    block.protect_shr(1);
+}
+
+#[test]
+#[should_panic(expected = "Underflow occured while performing temper-shr")]
+fn temper_shr_underflow_panics() {
+    let spec = CiphertextBlockSpec(2, 3);
+    let block = EmulatedCiphertextBlock {
+        storage: 0b1_10_110,
+        spec,
+    };
+
+    block.temper_shr(2);
+}
+
+#[test]
+fn wrapping_shr_underflow_drops_bits() {
+    let spec = CiphertextBlockSpec(2, 3);
+    let block = EmulatedCiphertextBlock {
+        storage: 0b0_10_101,
+        spec,
+    };
+
+    let result = block.wrapping_shr(1);
+    assert_eq!(result.storage, 0b0_01_010);
+}
+
+#[test]
+fn temper_sub_pt_ct_accepts_padding() {
+    let ct_spec = CiphertextBlockSpec(2, 3);
+    let pt_spec = PlaintextBlockSpec(6);
+    let lhs = EmulatedPlaintextBlock {
+        storage: 0b111111,
+        spec: pt_spec,
+    };
+    let rhs = EmulatedCiphertextBlock {
+        storage: 0b1_00_010,
+        spec: ct_spec,
+    };
+
+    let result = lhs.temper_sub_ct(rhs);
+    assert_eq!(result.storage, 0b0_11_101);
+    assert_eq!(result.spec, ct_spec);
+}
+
+#[test]
+#[should_panic(expected = "Underflow occured while performing temper-sub")]
+fn temper_sub_pt_ct_underflow_panics() {
+    let ct_spec = CiphertextBlockSpec(2, 3);
+    let pt_spec = PlaintextBlockSpec(3);
+    let lhs = EmulatedPlaintextBlock {
+        storage: 0b001,
+        spec: pt_spec,
+    };
+    let rhs = EmulatedCiphertextBlock {
+        storage: 0b0_00_010,
+        spec: ct_spec,
+    };
+
+    lhs.temper_sub_ct(rhs);
+}
+
+#[test]
+fn mac_protect_packs() {
+    let spec = CiphertextBlockSpec(3, 3);
+    let hi = spec.from_message(0b101);
+    let lo = spec.from_message(0b011);
+
+    let result = hi.mac(1 << 3, lo, Flavor::Protect);
+    assert_eq!(result.storage, 0b0_101_011);
+}
+
+#[test]
+#[should_panic(expected = "Overflow occured while performing protect-mac")]
+fn mac_protect_carry_overflow_panics() {
+    let spec = CiphertextBlockSpec(2, 2);
+    let hi = spec.from_data(0b01_00);
+    let lo = spec.from_message(0);
+
+    hi.mac(1 << 2, lo, Flavor::Protect);
+}
+
+#[test]
+#[should_panic(expected = "lhs has active padding bit")]
+fn mac_protect_padding_panics() {
+    let spec = CiphertextBlockSpec(2, 2);
+    let hi = spec.from_complete(0b1_00_00);
+    let lo = spec.from_message(0);
+
+    hi.mac(1, lo, Flavor::Protect);
+}
+
+#[test]
+fn mac_temper_allows_padding_write() {
+    let spec = CiphertextBlockSpec(2, 2);
+    let hi = spec.from_data(0b01_00);
+    let lo = spec.from_message(0b01);
+
+    let result = hi.mac(1 << 2, lo, Flavor::Temper);
+    assert_eq!(result.storage, 0b1_00_01);
+}
+
+#[test]
+#[should_panic(expected = "Overflow occured while performing temper-mac")]
+fn mac_temper_overflow_panics() {
+    let spec = CiphertextBlockSpec(2, 2);
+    let hi = spec.from_data(0b10_00);
+    let lo = spec.from_message(0);
+
+    hi.mac(1 << 2, lo, Flavor::Temper);
+}
+
+#[test]
+fn mac_wrapping_wraps() {
+    let spec = CiphertextBlockSpec(2, 2);
+    let hi = spec.from_data(0b10_00);
+    let lo = spec.from_message(0b01);
+
+    let result = hi.mac(1 << 2, lo, Flavor::Wrapping);
+    assert_eq!(result.storage, 0b0_00_01);
+}
+
+#[test]
+fn flavor_dispatch_matches_prefixed_operations() {
+    // Wide carry so that no protect operation overflows on message-space operands.
+    let spec = CiphertextBlockSpec(4, 2);
+    let pt_spec = spec.complete_plaintext_block_spec();
+    for a in spec.iter_message_space() {
+        for b in spec.iter_message_space() {
+            let pt = pt_spec.from_message(b.raw_message_bits());
+            for flavor in [Flavor::Protect, Flavor::Temper, Flavor::Wrapping] {
+                let (add, sub, add_pt, mul_pt, shl, shr, pt_sub) = match flavor {
+                    Flavor::Protect => (
+                        a.protect_add(b),
+                        a.protect_add(b).protect_sub(b),
+                        a.protect_add_pt(pt),
+                        a.protect_mul_pt(pt),
+                        a.protect_shl(1),
+                        a.protect_shl(1).protect_shr(1),
+                        pt.protect_sub_ct(a.protect_sub(a)),
+                    ),
+                    Flavor::Temper => (
+                        a.temper_add(b),
+                        a.temper_add(b).temper_sub(b),
+                        a.temper_add_pt(pt),
+                        a.temper_mul_pt(pt),
+                        a.temper_shl(1),
+                        a.temper_shl(1).temper_shr(1),
+                        pt.temper_sub_ct(a.temper_sub(a)),
+                    ),
+                    Flavor::Wrapping => (
+                        a.wrapping_add(b),
+                        a.wrapping_add(b).wrapping_sub(b),
+                        a.wrapping_add_pt(pt),
+                        a.wrapping_mul_pt(pt),
+                        a.wrapping_shl(1),
+                        a.wrapping_shl(1).wrapping_shr(1),
+                        pt.wrapping_sub_ct(a.wrapping_sub(a)),
+                    ),
+                };
+                assert_eq!(a.add(b, flavor), add);
+                assert_eq!(a.add(b, flavor).sub(b, flavor), sub);
+                assert_eq!(a.add_pt(pt, flavor), add_pt);
+                assert_eq!(a.mul_pt(pt, flavor), mul_pt);
+                assert_eq!(a.shl(1, flavor), shl);
+                assert_eq!(a.shl(1, flavor).shr(1, flavor), shr);
+                assert_eq!(pt.sub_ct(a.sub(a, flavor), flavor), pt_sub);
+            }
+        }
+    }
 }

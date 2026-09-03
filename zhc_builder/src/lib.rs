@@ -50,7 +50,8 @@
 //! - The user may want to rely on the **overflow/underflow** of the whole block, to implement
 //!   signed integer semantics for instance.
 //!
-//! To accommodate these use cases, block-level operations come in three flavors:
+//! To accommodate these use cases, block-level operations come in three flavors, modelled by
+//! [`Flavor`]:
 //!
 //! - **`protect`** — operand padding bits must be zero, and the result must not overflow into the
 //!   padding bit. This is the default and most common flavor.
@@ -59,9 +60,42 @@
 //! - **`wrapping`** — operand padding bits may be arbitrary, and overflow/underflow is
 //!   unrestricted. Similar to Rust's `wrapping_add` / `wrapping_sub` on integers.
 //!
-//! Unless explicited in their name, [`Builder`] arithmetic methods use the **protect** flavor.
-//! Methods that use a different flavor are explicitly marked (e.g.
-//! [`block_wrapping_add_plaintext`](Builder::block_wrapping_add_plaintext)).
+//! Every linear block operation (`add`, `sub`, `shl`, `mac`, `pack`, `add_plaintext`,
+//! `sub_plaintext`, `plaintext_sub`, `mul_plaintext`) exists in all three flavors. Unless
+//! explicited in their name, [`Builder`] arithmetic methods use the **protect** flavor. Methods
+//! that use a different flavor are explicitly marked (e.g.
+//! [`block_wrapping_add_plaintext`](Builder::block_wrapping_add_plaintext)), and every operation
+//! also has a `*_with` form taking the [`Flavor`] as a runtime argument (e.g.
+//! [`block_add_with`](Builder::block_add_with)). [`block_neg`](Builder::block_neg) is the only
+//! linear operation without a flavor: negation is inherently wrapping.
+//!
+//! # Lookup Checks
+//!
+//! A programmable bootstrapping evaluates a lookup table on the data bits of a block. Because
+//! TFHE tables are negacyclic, an input with its padding bit set reads the negated second half
+//! of the table. The [`LookupCheck`] policy attached to every PBS states which padding bits
+//! the interpreter asserts clear:
+//!
+//! - [`Protect`](LookupCheck::Protect) — input and output padding bits must be clear. This is the
+//!   default of [`block_lookup`](Builder::block_lookup) and its many-LUT siblings.
+//! - [`AllowOutputPadding`](LookupCheck::AllowOutputPadding) — the table may write the padding bit.
+//!   Used by [`block_padding_lookup`](Builder::block_padding_lookup).
+//! - [`AllowInputPadding`](LookupCheck::AllowInputPadding) — the input may have its padding bit
+//!   set, triggering negacyclic negation, but the output must be clean.
+//! - [`AllowBothPadding`](LookupCheck::AllowBothPadding) — no assertion at all. Used by
+//!   [`block_wrapping_lookup`](Builder::block_wrapping_lookup).
+//!
+//! The `*_with` lookup methods ([`block_lookup_with`](Builder::block_lookup_with), ...) take the
+//! policy as an argument.
+//!
+//! PBS lookups come in four widths. [`block_lookup`](Builder::block_lookup) produces one output
+//! block; [`block_lookup2`](Builder::block_lookup2), [`block_lookup4`](Builder::block_lookup4)
+//! and [`block_lookup8`](Builder::block_lookup8) are *many-LUT* bootstrappings producing 2, 4
+//! or 8 blocks from a single input. A many-LUT of `2^k` outputs reserves the `k` topmost data
+//! bits of its input for the table index, so the input must be small enough, and only the
+//! `Protect` and `AllowOutputPadding` checks are meaningful. Tables are named by the
+//! [`Lut1Def`], [`Lut2Def`], [`Lut4Def`] and [`Lut8Def`] enums, which also accept custom
+//! functions through their `custom` constructor.
 //!
 //! # Typical Workflow
 //!
@@ -97,3 +131,6 @@ mod iops;
 
 pub use builder::*;
 pub use iops::*;
+
+#[cfg(test)]
+mod test;

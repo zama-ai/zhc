@@ -5,7 +5,101 @@ use zhc_utils::SafeAs;
 use crate::integer_semantics::CiphertextSpec;
 use crate::integer_semantics::EmulatedCiphertext;
 
-use super::{EmulatedCiphertextBlock, EmulatedPlaintextBlock};
+use super::{
+    EmulatedCiphertextBlock, EmulatedCiphertextBlockStorage, EmulatedPlaintextBlock, Flavor,
+};
+
+/// Flavor-dispatching operations.
+///
+/// Each method selects the `protect_*`, `temper_*` or `wrapping_*` implementation matching the
+/// given [`Flavor`]. See the [module documentation](super) for the semantics of each flavor.
+impl EmulatedCiphertextBlock {
+    /// Adds two ciphertext blocks with the given flavor.
+    pub fn add(self, rhs: Self, flavor: Flavor) -> Self {
+        match flavor {
+            Flavor::Protect => self.protect_add(rhs),
+            Flavor::Temper => self.temper_add(rhs),
+            Flavor::Wrapping => self.wrapping_add(rhs),
+        }
+    }
+
+    /// Subtracts two ciphertext blocks with the given flavor.
+    pub fn sub(self, rhs: Self, flavor: Flavor) -> Self {
+        match flavor {
+            Flavor::Protect => self.protect_sub(rhs),
+            Flavor::Temper => self.temper_sub(rhs),
+            Flavor::Wrapping => self.wrapping_sub(rhs),
+        }
+    }
+
+    /// Adds a plaintext block to a ciphertext block with the given flavor.
+    pub fn add_pt(self, rhs: EmulatedPlaintextBlock, flavor: Flavor) -> Self {
+        match flavor {
+            Flavor::Protect => self.protect_add_pt(rhs),
+            Flavor::Temper => self.temper_add_pt(rhs),
+            Flavor::Wrapping => self.wrapping_add_pt(rhs),
+        }
+    }
+
+    /// Subtracts a plaintext block from a ciphertext block with the given flavor.
+    pub fn sub_pt(self, rhs: EmulatedPlaintextBlock, flavor: Flavor) -> Self {
+        match flavor {
+            Flavor::Protect => self.protect_sub_pt(rhs),
+            Flavor::Temper => self.temper_sub_pt(rhs),
+            Flavor::Wrapping => self.wrapping_sub_pt(rhs),
+        }
+    }
+
+    /// Multiplies a ciphertext block by a plaintext block with the given flavor.
+    pub fn mul_pt(self, rhs: EmulatedPlaintextBlock, flavor: Flavor) -> Self {
+        match flavor {
+            Flavor::Protect => self.protect_mul_pt(rhs),
+            Flavor::Temper => self.temper_mul_pt(rhs),
+            Flavor::Wrapping => self.wrapping_mul_pt(rhs),
+        }
+    }
+
+    /// Shifts a ciphertext block left by `amount` bits with the given flavor.
+    pub fn shl(self, amount: u8, flavor: Flavor) -> Self {
+        match flavor {
+            Flavor::Protect => self.protect_shl(amount),
+            Flavor::Temper => self.temper_shl(amount),
+            Flavor::Wrapping => self.wrapping_shl(amount),
+        }
+    }
+
+    /// Shifts a ciphertext block right by `amount` bits with the given flavor.
+    pub fn shr(self, amount: u8, flavor: Flavor) -> Self {
+        match flavor {
+            Flavor::Protect => self.protect_shr(amount),
+            Flavor::Temper => self.temper_shr(amount),
+            Flavor::Wrapping => self.wrapping_shr(amount),
+        }
+    }
+
+    /// Computes `self * mul + rhs` (multiply-accumulate) with the given flavor.
+    ///
+    /// With `mul = 2^message_size` this packs `self` in the carry region and `rhs` in the
+    /// message region of a single block.
+    pub fn mac(self, mul: u8, rhs: Self, flavor: Flavor) -> Self {
+        match flavor {
+            Flavor::Protect => self.protect_mac(mul, rhs),
+            Flavor::Temper => self.temper_mac(mul, rhs),
+            Flavor::Wrapping => self.wrapping_mac(mul, rhs),
+        }
+    }
+}
+
+impl EmulatedPlaintextBlock {
+    /// Subtracts a ciphertext block from this plaintext block with the given flavor.
+    pub fn sub_ct(self, rhs: EmulatedCiphertextBlock, flavor: Flavor) -> EmulatedCiphertextBlock {
+        match flavor {
+            Flavor::Protect => self.protect_sub_ct(rhs),
+            Flavor::Temper => self.temper_sub_ct(rhs),
+            Flavor::Wrapping => self.wrapping_sub_ct(rhs),
+        }
+    }
+}
 
 impl EmulatedCiphertextBlock {
     /// Negates the ciphertext block. This can freely set or unset the padding bit.
@@ -105,9 +199,6 @@ impl EmulatedCiphertextBlock {
 
     /// Adds a plaintext block to a ciphertext block with overflow wrapping.
     pub fn wrapping_add_pt(self, rhs: EmulatedPlaintextBlock) -> Self {
-        if !(rhs.spec.message_size() <= self.spec.complete_size()) {
-            println!("toto");
-        }
         assert!(
             rhs.spec.message_size() <= self.spec.complete_size(),
             "Spec mismatch. rhs: {}, lhs: {}",
@@ -244,6 +335,19 @@ impl EmulatedCiphertextBlock {
         }
     }
 
+    /// Shifts a ciphertext block left while preventing padding bit overflow.
+    pub fn temper_shl(&self, rhs: u8) -> Self {
+        let storage = self.raw_complete_bits().shl(rhs);
+        assert!(
+            !self.spec.overflows_padding(storage),
+            "Overflow occured while performing temper-shl."
+        );
+        Self {
+            storage,
+            spec: self.spec,
+        }
+    }
+
     /// Shifts a ciphertext block left with overflow wrapping.
     pub fn wrapping_shl(&self, rhs: u8) -> Self {
         let storage = self.raw_complete_bits().shl(rhs) & self.spec.complete_mask();
@@ -253,17 +357,36 @@ impl EmulatedCiphertextBlock {
         }
     }
 
-    /// Shifts a ciphertext block right while protecting the padding bit from writes.
+    /// Shifts a ciphertext block right while protecting the padding bit from writes and
+    /// preventing underflow.
+    ///
+    /// A homomorphic right shift is only exact when the value is divisible by `2^rhs`: dropping
+    /// a set bit is the shift analogue of a subtraction going below zero.
     pub fn protect_shr(&self, rhs: u8) -> Self {
         assert!(
             self.raw_padding_bits() == 0,
             "Tried to protect-shr, but lhs has active padding bit."
         );
-        let storage = self.raw_complete_bits().shr(rhs);
         assert!(
-            !self.spec.overflows_carry(storage),
-            "Overflow occured while performing protect-shr."
+            self.raw_complete_bits() & ((1 << rhs) - 1) == 0,
+            "Underflow occured while performing protect-shr."
         );
+        let storage = self.raw_complete_bits().shr(rhs);
+        Self {
+            storage,
+            spec: self.spec,
+        }
+    }
+
+    /// Shifts a ciphertext block right while preventing underflow.
+    ///
+    /// Unlike [`protect_shr`](Self::protect_shr), the operand may have its padding bit set.
+    pub fn temper_shr(&self, rhs: u8) -> Self {
+        assert!(
+            self.raw_complete_bits() & ((1 << rhs) - 1) == 0,
+            "Underflow occured while performing temper-shr."
+        );
+        let storage = self.raw_complete_bits().shr(rhs);
         Self {
             storage,
             spec: self.spec,
@@ -320,7 +443,7 @@ impl EmulatedCiphertextBlock {
 
     /// Multiplies a ciphertext block by a plaintext block with modular arithmetic and overflow
     /// wrapping.
-    pub fn wrapping_mul(&self, rhs: EmulatedPlaintextBlock) -> Self {
+    pub fn wrapping_mul_pt(&self, rhs: EmulatedPlaintextBlock) -> Self {
         assert!(
             rhs.spec.message_size() <= self.spec.complete_size(),
             "Spec mismatch."
@@ -328,6 +451,58 @@ impl EmulatedCiphertextBlock {
         let storage = self
             .raw_complete_bits()
             .wrapping_mul(rhs.raw_message_bits())
+            & self.spec.complete_mask();
+        Self {
+            storage,
+            spec: self.spec,
+        }
+    }
+
+    /// Computes `self * mul + rhs` while protecting the padding bit from writes.
+    pub fn protect_mac(self, mul: u8, rhs: Self) -> Self {
+        assert_eq!(self.spec, rhs.spec, "Spec mismatch.");
+        assert!(
+            self.raw_padding_bits() == 0,
+            "Tried to protect-mac, but lhs has active padding bit."
+        );
+        assert!(
+            rhs.raw_padding_bits() == 0,
+            "Tried to protect-mac, but rhs has active padding bit."
+        );
+        let storage = self.raw_complete_bits() * mul.sas::<EmulatedCiphertextBlockStorage>()
+            + rhs.raw_complete_bits();
+        assert!(
+            !self.spec.overflows_carry(storage),
+            "Overflow occured while performing protect-mac."
+        );
+        Self {
+            storage,
+            spec: self.spec,
+        }
+    }
+
+    /// Computes `self * mul + rhs` while preventing padding bit overflow.
+    pub fn temper_mac(self, mul: u8, rhs: Self) -> Self {
+        assert_eq!(self.spec, rhs.spec, "Spec mismatch.");
+        let storage = self.raw_complete_bits() * mul.sas::<EmulatedCiphertextBlockStorage>()
+            + rhs.raw_complete_bits();
+        assert!(
+            !self.spec.overflows_padding(storage),
+            "Overflow occured while performing temper-mac."
+        );
+        Self {
+            storage,
+            spec: self.spec,
+        }
+    }
+
+    /// Computes `self * mul + rhs` with modular arithmetic and overflow wrapping.
+    pub fn wrapping_mac(self, mul: u8, rhs: Self) -> Self {
+        assert_eq!(self.spec, rhs.spec, "Spec mismatch.");
+        let storage = self
+            .raw_complete_bits()
+            .wrapping_mul(mul.sas::<EmulatedCiphertextBlockStorage>())
+            .wrapping_add(rhs.raw_complete_bits())
             & self.spec.complete_mask();
         Self {
             storage,
@@ -350,6 +525,23 @@ impl EmulatedPlaintextBlock {
         assert!(
             self.raw_message_bits() >= rhs.raw_complete_bits(),
             "Underflow occured while performing protect-sub."
+        );
+        let storage = self.raw_message_bits().sub(rhs.raw_complete_bits());
+        EmulatedCiphertextBlock {
+            storage,
+            spec: rhs.spec,
+        }
+    }
+
+    /// Subtracts a ciphertext block from this plaintext block while preventing underflow.
+    pub fn temper_sub_ct(self, rhs: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
+        assert!(
+            self.spec.message_size() <= rhs.spec.complete_size(),
+            "Spec mismatch."
+        );
+        assert!(
+            self.raw_message_bits() >= rhs.raw_complete_bits(),
+            "Underflow occured while performing temper-sub."
         );
         let storage = self.raw_message_bits().sub(rhs.raw_complete_bits());
         EmulatedCiphertextBlock {

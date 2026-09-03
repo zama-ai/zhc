@@ -91,7 +91,6 @@ pub struct HpuInterpreterContext {
     pub lut1_table: FastMap<LutId, Lut1>,
     /// Reverse LUT table: LutId → Lut2 (for Pbs2/Pbs2F).
     pub lut2_table: FastMap<LutId, Lut2>,
-    // Lut4/Lut8 tables omitted: the corresponding enums are uninhabited.
     /// Batch argument state for nested `Batch` interpretation.
     batch_args: FastMap<u8, HpuValue>,
     /// Batch return state for nested `Batch` interpretation.
@@ -207,7 +206,7 @@ impl Evaluable<HpuValue> for super::HpuInstructionSet {
             MulPt => {
                 let ct = arguments[0].clone().unwrap_ct_register();
                 let pt = arguments[1].clone().unwrap_pt_immediate();
-                svec![HpuValue::CtRegister(ct.wrapping_mul(pt))]
+                svec![HpuValue::CtRegister(ct.wrapping_mul_pt(pt))]
             }
 
             // ── Inline constant arithmetic ───────────────────────────
@@ -241,7 +240,7 @@ impl Evaluable<HpuValue> for super::HpuInstructionSet {
                     .spec
                     .complete_plaintext_block_spec()
                     .from_message(cst.0 as EmulatedPlaintextBlockStorage);
-                svec![HpuValue::CtRegister(ct.wrapping_mul(pt))]
+                svec![HpuValue::CtRegister(ct.wrapping_mul_pt(pt))]
             }
 
             // ── PBS (regular + flush, semantically identical) ────────
@@ -256,11 +255,22 @@ impl Evaluable<HpuValue> for super::HpuInstructionSet {
                 let (ct0, ct1) = lut.lookup(ct, LookupCheck::AllowOutputPadding);
                 svec![HpuValue::CtRegister(ct0), HpuValue::CtRegister(ct1)]
             }
-            Pbs4 { .. } | Pbs4F { .. } => {
-                panic!("Pbs4 interpretation not implementd.")
+            Pbs4 { lut } | Pbs4F { lut } => {
+                let ct = arguments[0].clone().unwrap_ct_register();
+                let (o0, o1, o2, o3) = lut.lookup(ct, LookupCheck::AllowOutputPadding);
+                [o0, o1, o2, o3]
+                    .into_iter()
+                    .map(HpuValue::CtRegister)
+                    .cosvec()
             }
-            Pbs8 { .. } | Pbs8F { .. } => {
-                panic!("Pbs8 interpretation not implemented.")
+            Pbs8 { lut } | Pbs8F { lut } => {
+                let ct = arguments[0].clone().unwrap_ct_register();
+                let (o0, o1, o2, o3, o4, o5, o6, o7) =
+                    lut.lookup(ct, LookupCheck::AllowOutputPadding);
+                [o0, o1, o2, o3, o4, o5, o6, o7]
+                    .into_iter()
+                    .map(HpuValue::CtRegister)
+                    .cosvec()
             }
 
             // ── Batching ─────────────────────────────────────────────

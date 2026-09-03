@@ -220,7 +220,7 @@ impl Evaluable<DopValue> for super::DopInstructionSet {
             MULS { dst, src, cst } => {
                 let ct = context.read_ct(src);
                 let pt = context.read_pt(cst);
-                context.write_ct(dst, ct.wrapping_mul(pt));
+                context.write_ct(dst, ct.wrapping_mul_pt(pt));
                 svec![DopValue::Ctx]
             }
 

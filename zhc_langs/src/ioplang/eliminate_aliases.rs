@@ -66,6 +66,7 @@ mod tests {
 
     use super::*;
 
+    use zhc_crypto::integer_semantics::Flavor;
     use zhc_utils::assert_display_is;
 
     /// Single alias should be eliminated, replacing all uses with the original value
@@ -173,7 +174,12 @@ mod tests {
             },
             svec![inp[0]],
         );
-        let (_, sum) = ir.add_op(IopInstructionSet::AddCt, svec![aliased[0], aliased[0]]);
+        let (_, sum) = ir.add_op(
+            IopInstructionSet::AddCt {
+                flavor: Flavor::Protect,
+            },
+            svec![aliased[0], aliased[0]],
+        );
         ir.add_op(
             IopInstructionSet::_Consume {
                 typ: IopTypeSystem::CiphertextBlock,
@@ -222,7 +228,12 @@ mod tests {
             },
             svec![inp1[0]],
         );
-        let (_, sum) = ir.add_op(IopInstructionSet::AddCt, svec![a0[0], a1[0]]);
+        let (_, sum) = ir.add_op(
+            IopInstructionSet::AddCt {
+                flavor: Flavor::Protect,
+            },
+            svec![a0[0], a1[0]],
+        );
         ir.add_op(
             IopInstructionSet::_Consume {
                 typ: IopTypeSystem::CiphertextBlock,
@@ -262,7 +273,12 @@ mod tests {
 
         let (_, inp0) = ir.add_op(IopInstructionSet::LetCiphertextBlock { value: 0 }, svec![]);
         let (_, inp1) = ir.add_op(IopInstructionSet::LetCiphertextBlock { value: 1 }, svec![]);
-        let (_, sum) = ir.add_op(IopInstructionSet::AddCt, svec![inp0[0], inp1[0]]);
+        let (_, sum) = ir.add_op(
+            IopInstructionSet::AddCt {
+                flavor: Flavor::Protect,
+            },
+            svec![inp0[0], inp1[0]],
+        );
         ir.add_op(
             IopInstructionSet::_Consume {
                 typ: IopTypeSystem::CiphertextBlock,
@@ -297,7 +313,12 @@ mod tests {
             },
             svec![inp[0]],
         );
-        let (_, sum) = ir.add_op(IopInstructionSet::AddCt, svec![a1[0], a2[0]]);
+        let (_, sum) = ir.add_op(
+            IopInstructionSet::AddCt {
+                flavor: Flavor::Protect,
+            },
+            svec![a1[0], a2[0]],
+        );
         ir.add_op(
             IopInstructionSet::_Consume {
                 typ: IopTypeSystem::CiphertextBlock,
@@ -342,7 +363,12 @@ mod tests {
             },
             svec![inp0[0]],
         );
-        let (_, sum) = ir.add_op(IopInstructionSet::AddCt, svec![a0[0], inp1[0]]);
+        let (_, sum) = ir.add_op(
+            IopInstructionSet::AddCt {
+                flavor: Flavor::Protect,
+            },
+            svec![a0[0], inp1[0]],
+        );
         let (_, a1) = ir.add_op(
             IopInstructionSet::Inspect {
                 typ: IopTypeSystem::CiphertextBlock,

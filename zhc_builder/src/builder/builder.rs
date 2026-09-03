@@ -28,18 +28,19 @@ use std::{
     rc::Rc,
 };
 use zhc_crypto::integer_semantics::{
-    CiphertextBlockSpec, CiphertextSpec, PlaintextBlockSpec, PlaintextSpec, lut::LookupCheck,
+    CiphertextBlockSpec, CiphertextSpec, Flavor, PlaintextBlockSpec, PlaintextSpec,
+    lut::LookupCheck,
 };
 use zhc_ir::{
-    AnnIR, IR, OpId, OpMap, PrintWalker, Signature,
+    AnnIR, IR, OpId, OpMap, PrintWalker, Signature, ValId,
     cse::eliminate_common_subexpressions,
     dce::eliminate_dead_code,
     partition::{PartitionId, PartitionIdRaw, PartitionTable},
     visualization::{Hierarchy, draw_ann_ir_to_html, draw_ir_to_html},
 };
 use zhc_langs::ioplang::{
-    IopInstructionSet, IopLang, IopTypeSystem, IopValue, Lut1Def, Lut2Def, eliminate_aliases,
-    skip_redundant_stores, skip_store_load,
+    IopInstructionSet, IopLang, IopTypeSystem, IopValue, Lut1Def, Lut2Def, Lut4Def, Lut8Def,
+    eliminate_aliases, skip_redundant_stores, skip_store_load,
 };
 use zhc_utils::{
     Dumpable, FastSet, SafeAs, Store,
@@ -228,7 +229,7 @@ impl Builder {
     /// ```
     pub fn new(spec: CiphertextBlockSpec) -> Self {
         Self {
-            spec: spec,
+            spec,
             inner: Rc::new(RefCell::new(InnerBuilder {
                 ir: IR::empty(),
                 hierarchies: Store::empty(),
@@ -930,7 +931,7 @@ impl Builder {
     /// Creates a constant [`PlaintextBlock`] with the given message value.
     ///
     /// The `value` is stored as a message-only plaintext block. Its bit-width must fit
-    /// within the builder's message size.
+    /// within the builder's complete block size.
     ///
     /// # Examples
     ///
@@ -955,6 +956,100 @@ impl Builder {
         }
     }
 
+    /// Creates a constant [`CiphertextBlock`] with the given value.
+    ///
+    /// The `value` is stored as a trivially-encrypted block (zero noise). This is useful
+    /// for initializing accumulators or providing constant operands in arithmetic. The
+    /// value's bit-width must fit within the block's message bits.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let zero = builder.block_let_ciphertext(0);
+    /// let ct = builder.ciphertext_input(4);
+    /// let blocks = builder.ciphertext_split(&ct);
+    /// let sum = builder.block_add(&zero, &blocks[0]); // 0 + blocks[0]
+    /// ```
+    pub fn block_let_ciphertext(&self, value: u8) -> CiphertextBlock {
+        self.emit_block(IopInstructionSet::LetCiphertextBlock { value }, svec![])
+    }
+
+    /// Creates a new IR node that aliases an existing ciphertext block.
+    ///
+    /// The returned block references the same underlying value but has a distinct IR
+    /// node identity. This is useful for debugging purposes.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let ct = builder.ciphertext_input(4);
+    /// let blocks = builder.ciphertext_split(&ct);
+    /// let labeled = builder.comment("lsb").block_inspect(&blocks[0]);
+    /// ```
+    pub fn block_inspect(&self, src: impl AsRef<CiphertextBlock>) -> CiphertextBlock {
+        self.emit_block(
+            IopInstructionSet::Inspect {
+                typ: IopTypeSystem::CiphertextBlock,
+            },
+            svec![src.as_ref().valid],
+        )
+    }
+
+    /// Emits a block-returning instruction and wraps its single result.
+    fn emit_block(&self, op: IopInstructionSet, args: SmallVec<ValId>) -> CiphertextBlock {
+        let (_node, ret) = self.inner_mut().insert_op(
+            op,
+            args,
+            self.current_hierarchy(),
+            self.current_partition(),
+        );
+        CiphertextBlock {
+            valid: ret[0],
+            spec: self.spec,
+        }
+    }
+
+    /// Emits a block instruction returning `N` blocks and wraps its results.
+    fn emit_blocks<const N: usize>(
+        &self,
+        op: IopInstructionSet,
+        args: SmallVec<ValId>,
+    ) -> [CiphertextBlock; N] {
+        let (_node, ret) = self.inner_mut().insert_op(
+            op,
+            args,
+            self.current_hierarchy(),
+            self.current_partition(),
+        );
+        assert_eq!(ret.len(), N);
+        std::array::from_fn(|i| CiphertextBlock {
+            valid: ret[i],
+            spec: self.spec,
+        })
+    }
+
+    /// Adds two ciphertext blocks with the given flavor.
+    ///
+    /// Computes `src_a + src_b` at the block level. See
+    /// [Operation Flavors](super::super#operation-flavors). Prefer the named shortcuts
+    /// [`block_add`](Self::block_add), [`block_temper_add`](Self::block_temper_add) and
+    /// [`block_wrapping_add`](Self::block_wrapping_add) when the flavor is fixed.
+    pub fn block_add_with(
+        &self,
+        src_a: impl AsRef<CiphertextBlock>,
+        src_b: impl AsRef<CiphertextBlock>,
+        flavor: Flavor,
+    ) -> CiphertextBlock {
+        self.emit_block(
+            IopInstructionSet::AddCt { flavor },
+            svec![src_a.as_ref().valid, src_b.as_ref().valid],
+        )
+    }
+
     /// Adds two ciphertext blocks (protect flavor).
     ///
     /// Computes `src_a + src_b` at the block level. Uses protect semantics — see
@@ -974,47 +1069,7 @@ impl Builder {
         src_a: impl AsRef<CiphertextBlock>,
         src_b: impl AsRef<CiphertextBlock>,
     ) -> CiphertextBlock {
-        let (src_a, src_b) = (src_a.as_ref(), src_b.as_ref());
-        let (_node, ret) = self.inner_mut().insert_op(
-            IopInstructionSet::AddCt,
-            svec![src_a.valid, src_b.valid],
-            self.current_hierarchy(),
-            self.current_partition(),
-        );
-        CiphertextBlock {
-            valid: ret[0],
-            spec: self.spec,
-        }
-    }
-
-    /// Creates a new IR node that aliases an existing ciphertext block.
-    ///
-    /// The returned block references the same underlying value but has a distinct IR
-    /// node identity. This is useful for debugging purposes.
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// # use zhc_builder::*;
-    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.ciphertext_input(4);
-    /// let blocks = builder.ciphertext_split(&ct);
-    /// let labeled = builder.comment("lsb").block_inspect(&blocks[0]);
-    /// ```
-    pub fn block_inspect(&self, src: impl AsRef<CiphertextBlock>) -> CiphertextBlock {
-        let src = src.as_ref();
-        let (_node, ret) = self.inner_mut().insert_op(
-            IopInstructionSet::Inspect {
-                typ: IopTypeSystem::CiphertextBlock,
-            },
-            svec![src.valid],
-            self.current_hierarchy(),
-            self.current_partition(),
-        );
-        CiphertextBlock {
-            valid: ret[0],
-            spec: self.spec,
-        }
+        self.block_add_with(src_a, src_b, Flavor::Protect)
     }
 
     /// Adds two ciphertext blocks (temper flavor).
@@ -1036,17 +1091,7 @@ impl Builder {
         src_a: impl AsRef<CiphertextBlock>,
         src_b: impl AsRef<CiphertextBlock>,
     ) -> CiphertextBlock {
-        let (src_a, src_b) = (src_a.as_ref(), src_b.as_ref());
-        let (_node, ret) = self.inner_mut().insert_op(
-            IopInstructionSet::TemperAddCt,
-            svec![src_a.valid, src_b.valid],
-            self.current_hierarchy(),
-            self.current_partition(),
-        );
-        CiphertextBlock {
-            valid: ret[0],
-            spec: self.spec,
-        }
+        self.block_add_with(src_a, src_b, Flavor::Temper)
     }
 
     /// Adds two ciphertext blocks (wrapping flavor).
@@ -1068,83 +1113,23 @@ impl Builder {
         src_a: impl AsRef<CiphertextBlock>,
         src_b: impl AsRef<CiphertextBlock>,
     ) -> CiphertextBlock {
-        let (src_a, src_b) = (src_a.as_ref(), src_b.as_ref());
-        let (_node, ret) = self.inner_mut().insert_op(
-            IopInstructionSet::WrappingAddCt,
-            svec![src_a.valid, src_b.valid],
-            self.current_hierarchy(),
-            self.current_partition(),
-        );
-        CiphertextBlock {
-            valid: ret[0],
-            spec: self.spec,
-        }
+        self.block_add_with(src_a, src_b, Flavor::Wrapping)
     }
 
-    /// Adds a plaintext block to a ciphertext block (protect flavor).
+    /// Subtracts two ciphertext blocks with the given flavor.
     ///
-    /// Computes `src_a + src_b` where `src_a` is encrypted and `src_b` is plaintext.
-    /// Uses protect semantics — see [Operation Flavors](super::super#operation-flavors).
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// # use zhc_builder::*;
-    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.ciphertext_input(4);
-    /// let blocks = builder.ciphertext_split(&ct);
-    /// let one = builder.block_let_plaintext(1);
-    /// let incremented = builder.block_add_plaintext(&blocks[0], &one);
-    /// ```
-    pub fn block_add_plaintext(
+    /// Computes `src_a - src_b` at the block level. See
+    /// [Operation Flavors](super::super#operation-flavors).
+    pub fn block_sub_with(
         &self,
         src_a: impl AsRef<CiphertextBlock>,
-        src_b: impl AsRef<PlaintextBlock>,
+        src_b: impl AsRef<CiphertextBlock>,
+        flavor: Flavor,
     ) -> CiphertextBlock {
-        let (src_a, src_b) = (src_a.as_ref(), src_b.as_ref());
-        let (_node, ret) = self.inner_mut().insert_op(
-            IopInstructionSet::AddPt,
-            svec![src_a.valid, src_b.valid],
-            self.current_hierarchy(),
-            self.current_partition(),
-        );
-        CiphertextBlock {
-            valid: ret[0],
-            spec: self.spec,
-        }
-    }
-
-    /// Adds a plaintext block to a ciphertext block (wrapping flavor).
-    ///
-    /// Computes `src_a + src_b` where `src_a` is encrypted and `src_b` is plaintext.
-    /// Uses wrapping semantics — see [Operation Flavors](super::super#operation-flavors).
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// # use zhc_builder::*;
-    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.ciphertext_input(4);
-    /// let blocks = builder.ciphertext_split(&ct);
-    /// let one = builder.block_let_plaintext(1);
-    /// let incremented = builder.block_wrapping_add_plaintext(&blocks[0], &one);
-    /// ```
-    pub fn block_wrapping_add_plaintext(
-        &self,
-        src_a: impl AsRef<CiphertextBlock>,
-        src_b: impl AsRef<PlaintextBlock>,
-    ) -> CiphertextBlock {
-        let (src_a, src_b) = (src_a.as_ref(), src_b.as_ref());
-        let (_node, ret) = self.inner_mut().insert_op(
-            IopInstructionSet::WrappingAddPt,
-            svec![src_a.valid, src_b.valid],
-            self.current_hierarchy(),
-            self.current_partition(),
-        );
-        CiphertextBlock {
-            valid: ret[0],
-            spec: self.spec,
-        }
+        self.emit_block(
+            IopInstructionSet::SubCt { flavor },
+            svec![src_a.as_ref().valid, src_b.as_ref().valid],
+        )
     }
 
     /// Subtracts two ciphertext blocks (protect flavor).
@@ -1166,17 +1151,20 @@ impl Builder {
         src_a: impl AsRef<CiphertextBlock>,
         src_b: impl AsRef<CiphertextBlock>,
     ) -> CiphertextBlock {
-        let (src_a, src_b) = (src_a.as_ref(), src_b.as_ref());
-        let (_node, ret) = self.inner_mut().insert_op(
-            IopInstructionSet::SubCt,
-            svec![src_a.valid, src_b.valid],
-            self.current_hierarchy(),
-            self.current_partition(),
-        );
-        CiphertextBlock {
-            valid: ret[0],
-            spec: self.spec,
-        }
+        self.block_sub_with(src_a, src_b, Flavor::Protect)
+    }
+
+    /// Subtracts two ciphertext blocks (temper flavor).
+    ///
+    /// Computes `src_a - src_b` at the block level. Operand padding bits may be set, but
+    /// the subtraction must not underflow. See
+    /// [Operation Flavors](super::super#operation-flavors).
+    pub fn block_temper_sub(
+        &self,
+        src_a: impl AsRef<CiphertextBlock>,
+        src_b: impl AsRef<CiphertextBlock>,
+    ) -> CiphertextBlock {
+        self.block_sub_with(src_a, src_b, Flavor::Temper)
     }
 
     /// Subtracts two ciphertext blocks (wrapping flavor).
@@ -1199,17 +1187,182 @@ impl Builder {
         src_a: impl AsRef<CiphertextBlock>,
         src_b: impl AsRef<CiphertextBlock>,
     ) -> CiphertextBlock {
-        let (src_a, src_b) = (src_a.as_ref(), src_b.as_ref());
-        let (_node, ret) = self.inner_mut().insert_op(
-            IopInstructionSet::WrappingSubCt,
-            svec![src_a.valid, src_b.valid],
-            self.current_hierarchy(),
-            self.current_partition(),
+        self.block_sub_with(src_a, src_b, Flavor::Wrapping)
+    }
+
+    /// Negates a ciphertext block on its complete width.
+    ///
+    /// Computes the two's complement of `src` modulo `2^complete_size`. Negation is
+    /// inherently wrapping: the padding bit may be freely set or cleared, so there is no
+    /// flavor to choose. This is the block-level primitive behind negacyclic tricks such
+    /// as sign extraction.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let ct = builder.ciphertext_input(4);
+    /// let blocks = builder.ciphertext_split(&ct);
+    /// let negated = builder.block_neg(&blocks[0]);
+    /// ```
+    pub fn block_neg(&self, src: impl AsRef<CiphertextBlock>) -> CiphertextBlock {
+        self.emit_block(IopInstructionSet::NegCt, svec![src.as_ref().valid])
+    }
+
+    /// Shifts a ciphertext block left by `amount` bits with the given flavor.
+    ///
+    /// Computes `src << amount` at the block level. See
+    /// [Operation Flavors](super::super#operation-flavors). Backends lower this to a
+    /// multiplication by the constant `2^amount`.
+    pub fn block_shl_with(
+        &self,
+        src: impl AsRef<CiphertextBlock>,
+        amount: u8,
+        flavor: Flavor,
+    ) -> CiphertextBlock {
+        assert!(
+            amount < self.spec.complete_size(),
+            "Tried to shift a block by {amount} bits, but the block only has {} bits.",
+            self.spec.complete_size()
         );
-        CiphertextBlock {
-            valid: ret[0],
-            spec: self.spec,
-        }
+        self.emit_block(
+            IopInstructionSet::ShlCt { amount, flavor },
+            svec![src.as_ref().valid],
+        )
+    }
+
+    /// Shifts a ciphertext block left by `amount` bits (protect flavor).
+    ///
+    /// Computes `src << amount` at the block level. The operand padding bit must be clear
+    /// and the shifted value must fit in the data bits. See
+    /// [Operation Flavors](super::super#operation-flavors).
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let ct = builder.ciphertext_input(4);
+    /// let blocks = builder.ciphertext_split(&ct);
+    /// let shifted = builder.block_shl(&blocks[0], 1);
+    /// ```
+    pub fn block_shl(&self, src: impl AsRef<CiphertextBlock>, amount: u8) -> CiphertextBlock {
+        self.block_shl_with(src, amount, Flavor::Protect)
+    }
+
+    /// Shifts a ciphertext block left by `amount` bits (temper flavor).
+    ///
+    /// Computes `src << amount` at the block level. The result may set the padding bit but
+    /// must not overflow past it. See [Operation Flavors](super::super#operation-flavors).
+    pub fn block_temper_shl(
+        &self,
+        src: impl AsRef<CiphertextBlock>,
+        amount: u8,
+    ) -> CiphertextBlock {
+        self.block_shl_with(src, amount, Flavor::Temper)
+    }
+
+    /// Shifts a ciphertext block left by `amount` bits (wrapping flavor).
+    ///
+    /// Computes `src << amount` modulo the complete block width. See
+    /// [Operation Flavors](super::super#operation-flavors).
+    pub fn block_wrapping_shl(
+        &self,
+        src: impl AsRef<CiphertextBlock>,
+        amount: u8,
+    ) -> CiphertextBlock {
+        self.block_shl_with(src, amount, Flavor::Wrapping)
+    }
+
+    /// Adds a plaintext block to a ciphertext block with the given flavor.
+    ///
+    /// Computes `src_a + src_b` where `src_a` is encrypted and `src_b` is plaintext. See
+    /// [Operation Flavors](super::super#operation-flavors).
+    pub fn block_add_plaintext_with(
+        &self,
+        src_a: impl AsRef<CiphertextBlock>,
+        src_b: impl AsRef<PlaintextBlock>,
+        flavor: Flavor,
+    ) -> CiphertextBlock {
+        self.emit_block(
+            IopInstructionSet::AddPt { flavor },
+            svec![src_a.as_ref().valid, src_b.as_ref().valid],
+        )
+    }
+
+    /// Adds a plaintext block to a ciphertext block (protect flavor).
+    ///
+    /// Computes `src_a + src_b` where `src_a` is encrypted and `src_b` is plaintext.
+    /// Uses protect semantics — see [Operation Flavors](super::super#operation-flavors).
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let ct = builder.ciphertext_input(4);
+    /// let blocks = builder.ciphertext_split(&ct);
+    /// let one = builder.block_let_plaintext(1);
+    /// let incremented = builder.block_add_plaintext(&blocks[0], &one);
+    /// ```
+    pub fn block_add_plaintext(
+        &self,
+        src_a: impl AsRef<CiphertextBlock>,
+        src_b: impl AsRef<PlaintextBlock>,
+    ) -> CiphertextBlock {
+        self.block_add_plaintext_with(src_a, src_b, Flavor::Protect)
+    }
+
+    /// Adds a plaintext block to a ciphertext block (temper flavor).
+    ///
+    /// Computes `src_a + src_b` where `src_a` is encrypted and `src_b` is plaintext.
+    /// Uses temper semantics — see [Operation Flavors](super::super#operation-flavors).
+    pub fn block_temper_add_plaintext(
+        &self,
+        src_a: impl AsRef<CiphertextBlock>,
+        src_b: impl AsRef<PlaintextBlock>,
+    ) -> CiphertextBlock {
+        self.block_add_plaintext_with(src_a, src_b, Flavor::Temper)
+    }
+
+    /// Adds a plaintext block to a ciphertext block (wrapping flavor).
+    ///
+    /// Computes `src_a + src_b` where `src_a` is encrypted and `src_b` is plaintext.
+    /// Uses wrapping semantics — see [Operation Flavors](super::super#operation-flavors).
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let ct = builder.ciphertext_input(4);
+    /// let blocks = builder.ciphertext_split(&ct);
+    /// let one = builder.block_let_plaintext(1);
+    /// let incremented = builder.block_wrapping_add_plaintext(&blocks[0], &one);
+    /// ```
+    pub fn block_wrapping_add_plaintext(
+        &self,
+        src_a: impl AsRef<CiphertextBlock>,
+        src_b: impl AsRef<PlaintextBlock>,
+    ) -> CiphertextBlock {
+        self.block_add_plaintext_with(src_a, src_b, Flavor::Wrapping)
+    }
+
+    /// Subtracts a plaintext block from a ciphertext block with the given flavor.
+    ///
+    /// Computes `src_a - src_b` where `src_a` is encrypted and `src_b` is plaintext. See
+    /// [Operation Flavors](super::super#operation-flavors).
+    pub fn block_sub_plaintext_with(
+        &self,
+        src_a: impl AsRef<CiphertextBlock>,
+        src_b: impl AsRef<PlaintextBlock>,
+        flavor: Flavor,
+    ) -> CiphertextBlock {
+        self.emit_block(
+            IopInstructionSet::SubPt { flavor },
+            svec![src_a.as_ref().valid, src_b.as_ref().valid],
+        )
     }
 
     /// Subtracts a plaintext block from a ciphertext block (protect flavor).
@@ -1232,17 +1385,47 @@ impl Builder {
         src_a: impl AsRef<CiphertextBlock>,
         src_b: impl AsRef<PlaintextBlock>,
     ) -> CiphertextBlock {
-        let (src_a, src_b) = (src_a.as_ref(), src_b.as_ref());
-        let (_node, ret) = self.inner_mut().insert_op(
-            IopInstructionSet::SubPt,
-            svec![src_a.valid, src_b.valid],
-            self.current_hierarchy(),
-            self.current_partition(),
-        );
-        CiphertextBlock {
-            valid: ret[0],
-            spec: self.spec,
-        }
+        self.block_sub_plaintext_with(src_a, src_b, Flavor::Protect)
+    }
+
+    /// Subtracts a plaintext block from a ciphertext block (temper flavor).
+    ///
+    /// Computes `src_a - src_b` where `src_a` is encrypted and `src_b` is plaintext.
+    /// Uses temper semantics — see [Operation Flavors](super::super#operation-flavors).
+    pub fn block_temper_sub_plaintext(
+        &self,
+        src_a: impl AsRef<CiphertextBlock>,
+        src_b: impl AsRef<PlaintextBlock>,
+    ) -> CiphertextBlock {
+        self.block_sub_plaintext_with(src_a, src_b, Flavor::Temper)
+    }
+
+    /// Subtracts a plaintext block from a ciphertext block (wrapping flavor).
+    ///
+    /// Computes `src_a - src_b` where `src_a` is encrypted and `src_b` is plaintext.
+    /// Uses wrapping semantics — see [Operation Flavors](super::super#operation-flavors).
+    pub fn block_wrapping_sub_plaintext(
+        &self,
+        src_a: impl AsRef<CiphertextBlock>,
+        src_b: impl AsRef<PlaintextBlock>,
+    ) -> CiphertextBlock {
+        self.block_sub_plaintext_with(src_a, src_b, Flavor::Wrapping)
+    }
+
+    /// Subtracts a ciphertext block from a plaintext block with the given flavor.
+    ///
+    /// Computes `src_a - src_b` where `src_a` is plaintext and `src_b` is encrypted. See
+    /// [Operation Flavors](super::super#operation-flavors).
+    pub fn block_plaintext_sub_with(
+        &self,
+        src_a: impl AsRef<PlaintextBlock>,
+        src_b: impl AsRef<CiphertextBlock>,
+        flavor: Flavor,
+    ) -> CiphertextBlock {
+        self.emit_block(
+            IopInstructionSet::PtSub { flavor },
+            svec![src_a.as_ref().valid, src_b.as_ref().valid],
+        )
     }
 
     /// Subtracts a ciphertext block from a plaintext block (protect flavor).
@@ -1267,20 +1450,50 @@ impl Builder {
         src_a: impl AsRef<PlaintextBlock>,
         src_b: impl AsRef<CiphertextBlock>,
     ) -> CiphertextBlock {
-        let (src_a, src_b) = (src_a.as_ref(), src_b.as_ref());
-        let (_node, ret) = self.inner_mut().insert_op(
-            IopInstructionSet::PtSub,
-            svec![src_a.valid, src_b.valid],
-            self.current_hierarchy(),
-            self.current_partition(),
-        );
-        CiphertextBlock {
-            valid: ret[0],
-            spec: self.spec,
-        }
+        self.block_plaintext_sub_with(src_a, src_b, Flavor::Protect)
     }
 
-    /// Muls a ciphertext block by a plaintext block (protect flavor).
+    /// Subtracts a ciphertext block from a plaintext block (temper flavor).
+    ///
+    /// Computes `src_a - src_b` where `src_a` is plaintext and `src_b` is encrypted.
+    /// Uses temper semantics — see [Operation Flavors](super::super#operation-flavors).
+    pub fn block_temper_plaintext_sub(
+        &self,
+        src_a: impl AsRef<PlaintextBlock>,
+        src_b: impl AsRef<CiphertextBlock>,
+    ) -> CiphertextBlock {
+        self.block_plaintext_sub_with(src_a, src_b, Flavor::Temper)
+    }
+
+    /// Subtracts a ciphertext block from a plaintext block (wrapping flavor).
+    ///
+    /// Computes `src_a - src_b` where `src_a` is plaintext and `src_b` is encrypted.
+    /// Uses wrapping semantics — see [Operation Flavors](super::super#operation-flavors).
+    pub fn block_wrapping_plaintext_sub(
+        &self,
+        src_a: impl AsRef<PlaintextBlock>,
+        src_b: impl AsRef<CiphertextBlock>,
+    ) -> CiphertextBlock {
+        self.block_plaintext_sub_with(src_a, src_b, Flavor::Wrapping)
+    }
+
+    /// Multiplies a ciphertext block by a plaintext block with the given flavor.
+    ///
+    /// Computes `src_a * src_b` where `src_a` is encrypted and `src_b` is plaintext. See
+    /// [Operation Flavors](super::super#operation-flavors).
+    pub fn block_mul_plaintext_with(
+        &self,
+        src_a: impl AsRef<CiphertextBlock>,
+        src_b: impl AsRef<PlaintextBlock>,
+        flavor: Flavor,
+    ) -> CiphertextBlock {
+        self.emit_block(
+            IopInstructionSet::MulPt { flavor },
+            svec![src_a.as_ref().valid, src_b.as_ref().valid],
+        )
+    }
+
+    /// Multiplies a ciphertext block by a plaintext block (protect flavor).
     ///
     /// Computes `src_a * src_b` where `src_a` is encrypted and `src_b` is plaintext.
     /// Uses protect semantics — see [Operation Flavors](super::super#operation-flavors).
@@ -1300,25 +1513,134 @@ impl Builder {
         src_a: impl AsRef<CiphertextBlock>,
         src_b: impl AsRef<PlaintextBlock>,
     ) -> CiphertextBlock {
-        let (src_a, src_b) = (src_a.as_ref(), src_b.as_ref());
-        let (_node, ret) = self.inner_mut().insert_op(
-            IopInstructionSet::MulPt,
-            svec![src_a.valid, src_b.valid],
-            self.current_hierarchy(),
-            self.current_partition(),
-        );
-        CiphertextBlock {
-            valid: ret[0],
-            spec: self.spec,
-        }
+        self.block_mul_plaintext_with(src_a, src_b, Flavor::Protect)
     }
 
-    /// Packs two ciphertext blocks into one.
+    /// Multiplies a ciphertext block by a plaintext block (temper flavor).
+    ///
+    /// Computes `src_a * src_b` where `src_a` is encrypted and `src_b` is plaintext.
+    /// Uses temper semantics — see [Operation Flavors](super::super#operation-flavors).
+    pub fn block_temper_mul_plaintext(
+        &self,
+        src_a: impl AsRef<CiphertextBlock>,
+        src_b: impl AsRef<PlaintextBlock>,
+    ) -> CiphertextBlock {
+        self.block_mul_plaintext_with(src_a, src_b, Flavor::Temper)
+    }
+
+    /// Multiplies a ciphertext block by a plaintext block (wrapping flavor).
+    ///
+    /// Computes `src_a * src_b` where `src_a` is encrypted and `src_b` is plaintext.
+    /// Uses wrapping semantics — see [Operation Flavors](super::super#operation-flavors).
+    pub fn block_wrapping_mul_plaintext(
+        &self,
+        src_a: impl AsRef<CiphertextBlock>,
+        src_b: impl AsRef<PlaintextBlock>,
+    ) -> CiphertextBlock {
+        self.block_mul_plaintext_with(src_a, src_b, Flavor::Wrapping)
+    }
+
+    /// Computes `src_a * mul + src_b` (multiply-accumulate) with the given flavor.
+    ///
+    /// This is a generalization of [`block_pack_with`](Self::block_pack_with) that accepts
+    /// an arbitrary immediate multiplier instead of the fixed `2^message_size`. See
+    /// [Operation Flavors](super::super#operation-flavors).
+    pub fn block_mac_with(
+        &self,
+        src_a: impl AsRef<CiphertextBlock>,
+        src_b: impl AsRef<CiphertextBlock>,
+        mul: u8,
+        flavor: Flavor,
+    ) -> CiphertextBlock {
+        self.emit_block(
+            IopInstructionSet::PackCt { mul, flavor },
+            svec![src_a.as_ref().valid, src_b.as_ref().valid],
+        )
+    }
+
+    /// Computes `src_a * mul + src_b` (multiply-accumulate) on two ciphertext blocks.
+    ///
+    /// Uses protect semantics: operand padding bits must be clear and the result must fit
+    /// in the data bits (carry + message). See
+    /// [Operation Flavors](super::super#operation-flavors).
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let ct = builder.ciphertext_input(4);
+    /// let blocks = builder.ciphertext_split(&ct);
+    /// // Compute blocks[0] * 3 + blocks[1]
+    /// let mac = builder.block_mac(&blocks[0], &blocks[1], 3);
+    /// ```
+    pub fn block_mac(
+        &self,
+        src_a: impl AsRef<CiphertextBlock>,
+        src_b: impl AsRef<CiphertextBlock>,
+        mul: u8,
+    ) -> CiphertextBlock {
+        self.block_mac_with(src_a, src_b, mul, Flavor::Protect)
+    }
+
+    /// Computes `src_a * mul + src_b` (multiply-accumulate) with temper semantics.
+    ///
+    /// The result may set the padding bit but must not overflow past it. See
+    /// [Operation Flavors](super::super#operation-flavors).
+    pub fn block_temper_mac(
+        &self,
+        src_a: impl AsRef<CiphertextBlock>,
+        src_b: impl AsRef<CiphertextBlock>,
+        mul: u8,
+    ) -> CiphertextBlock {
+        self.block_mac_with(src_a, src_b, mul, Flavor::Temper)
+    }
+
+    /// Computes `src_a * mul + src_b` (multiply-accumulate) with wrapping semantics.
+    ///
+    /// The result is reduced modulo the complete block width. See
+    /// [Operation Flavors](super::super#operation-flavors).
+    pub fn block_wrapping_mac(
+        &self,
+        src_a: impl AsRef<CiphertextBlock>,
+        src_b: impl AsRef<CiphertextBlock>,
+        mul: u8,
+    ) -> CiphertextBlock {
+        self.block_mac_with(src_a, src_b, mul, Flavor::Wrapping)
+    }
+
+    /// Packs two ciphertext blocks into one with the given flavor.
+    ///
+    /// Computes `src_a * 2^message_size + src_b`, placing `src_a` in the high (carry)
+    /// bits and `src_b` in the low (message) bits of the resulting block. See
+    /// [Operation Flavors](super::super#operation-flavors).
+    ///
+    /// # Panics
+    ///
+    /// Panics if the builder's `carry_size != message_size`, since packing requires
+    /// equal-width carry and message fields.
+    pub fn block_pack_with(
+        &self,
+        src_a: impl AsRef<CiphertextBlock>,
+        src_b: impl AsRef<CiphertextBlock>,
+        flavor: Flavor,
+    ) -> CiphertextBlock {
+        assert_eq!(
+            self.spec().carry_size(),
+            self.spec().message_size(),
+            "Packing requires equal carry and message sizes."
+        );
+        let mul = 2u8.pow(self.spec().message_size().sas::<u32>());
+        self.block_mac_with(src_a, src_b, mul, flavor)
+    }
+
+    /// Packs two ciphertext blocks into one (protect flavor).
     ///
     /// Computes `src_a * 2^message_size + src_b`, placing `src_a` in the high (carry)
     /// bits and `src_b` in the low (message) bits of the resulting block. This is the
     /// standard way to pack two blocks to be processed within a single programmable
-    /// bootstrapping (PBS) lookup.
+    /// bootstrapping (PBS) lookup. Both operands must be clean (padding and carry bits
+    /// clear) for the result to fit.
     ///
     /// # Panics
     ///
@@ -1341,20 +1663,32 @@ impl Builder {
         src_a: impl AsRef<CiphertextBlock>,
         src_b: impl AsRef<CiphertextBlock>,
     ) -> CiphertextBlock {
-        assert_eq!(self.spec().carry_size(), self.spec().message_size());
-        let (src_a, src_b) = (src_a.as_ref(), src_b.as_ref());
-        let (_node, ret) = self.inner_mut().insert_op(
-            IopInstructionSet::PackCt {
-                mul: 2u8.pow(self.spec().message_size().sas::<u32>()),
-            },
-            svec![src_a.valid, src_b.valid],
-            self.current_hierarchy(),
-            self.current_partition(),
-        );
-        CiphertextBlock {
-            valid: ret[0],
-            spec: self.spec,
-        }
+        self.block_pack_with(src_a, src_b, Flavor::Protect)
+    }
+
+    /// Packs two ciphertext blocks into one (temper flavor).
+    ///
+    /// Like [`block_pack`](Self::block_pack), but the result may set the padding bit.
+    /// Useful before a negacyclic lookup. See
+    /// [Operation Flavors](super::super#operation-flavors).
+    pub fn block_temper_pack(
+        &self,
+        src_a: impl AsRef<CiphertextBlock>,
+        src_b: impl AsRef<CiphertextBlock>,
+    ) -> CiphertextBlock {
+        self.block_pack_with(src_a, src_b, Flavor::Temper)
+    }
+
+    /// Packs two ciphertext blocks into one (wrapping flavor).
+    ///
+    /// Like [`block_pack`](Self::block_pack), but the result is reduced modulo the
+    /// complete block width. See [Operation Flavors](super::super#operation-flavors).
+    pub fn block_wrapping_pack(
+        &self,
+        src_a: impl AsRef<CiphertextBlock>,
+        src_b: impl AsRef<CiphertextBlock>,
+    ) -> CiphertextBlock {
+        self.block_pack_with(src_a, src_b, Flavor::Wrapping)
     }
 
     /// Packs two ciphertext blocks and applies a single-output PBS lookup.
@@ -1387,42 +1721,6 @@ impl Builder {
         self.block_lookup(&packed, def)
     }
 
-    /// Computes `src_a * mul + src_b` (multiply-accumulate) on two ciphertext blocks.
-    ///
-    /// This is a generalization of [`block_pack`](Self::block_pack) that accepts an
-    /// arbitrary immediate multiplier instead of the fixed `2^message_size`. The caller
-    /// is responsible for ensuring the result does not overflow the block's complete
-    /// capacity (padding + carry + message bits).
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// # use zhc_builder::*;
-    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.ciphertext_input(4);
-    /// let blocks = builder.ciphertext_split(&ct);
-    /// // Compute blocks[0] * 3 + blocks[1]
-    /// let mac = builder.block_mac(&blocks[0], &blocks[1], 3);
-    /// ```
-    pub fn block_mac(
-        &self,
-        src_a: impl AsRef<CiphertextBlock>,
-        src_b: impl AsRef<CiphertextBlock>,
-        mul: u8,
-    ) -> CiphertextBlock {
-        let (src_a, src_b) = (src_a.as_ref(), src_b.as_ref());
-        let (_node, ret) = self.inner_mut().insert_op(
-            IopInstructionSet::PackCt { mul },
-            svec![src_a.valid, src_b.valid],
-            self.current_hierarchy(),
-            self.current_partition(),
-        );
-        CiphertextBlock {
-            valid: ret[0],
-            spec: self.spec,
-        }
-    }
-
     /// Computes `src_a * mul + src_b` and applies a single-output PBS lookup.
     ///
     /// Combines a multiply-accumulate with an immediate multiplier and a programmable
@@ -1451,11 +1749,46 @@ impl Builder {
         self.block_lookup(&mac, def)
     }
 
+    /// Applies a single-output PBS lookup with an explicit padding-check policy.
+    ///
+    /// The `def` defines the function computed by the bootstrapping. The input block's
+    /// data bits (carry + message) index into the lookup table, and the result is a fresh
+    /// ciphertext block with clean noise. When the input padding bit is set, the output is
+    /// negacyclically negated. The `check` controls which padding bits are asserted clear
+    /// — see [Lookup Checks](super::super#lookup-checks). Prefer the named shortcuts
+    /// [`block_lookup`](Self::block_lookup),
+    /// [`block_padding_lookup`](Self::block_padding_lookup) and
+    /// [`block_wrapping_lookup`](Self::block_wrapping_lookup) when the policy is fixed.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// # use zhc_langs::ioplang::Lut1Def;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let ct = builder.ciphertext_input(4);
+    /// let blocks = builder.ciphertext_split(&ct);
+    /// let out = builder.block_lookup_with(&blocks[0], Lut1Def::MsgOnly, LookupCheck::AllowInputPadding);
+    /// ```
+    pub fn block_lookup_with(
+        &self,
+        src: impl AsRef<CiphertextBlock>,
+        def: Lut1Def,
+        check: LookupCheck,
+    ) -> CiphertextBlock {
+        let lut = def.into_lut(self.spec);
+        self.emit_block(
+            IopInstructionSet::Pbs { check, lut },
+            svec![src.as_ref().valid],
+        )
+    }
+
     /// Applies a single-output programmable bootstrapping (PBS) lookup to a block.
     ///
-    /// The `lut` defines the function computed by the bootstrapping. The input block's
+    /// The `def` defines the function computed by the bootstrapping. The input block's
     /// full data bits (carry + message) index into the lookup table, and the result is a
-    /// fresh ciphertext block with clean noise.
+    /// fresh ciphertext block with clean noise. Both the input and the output padding bits
+    /// are asserted clear ([`LookupCheck::Protect`]).
     ///
     /// # Examples
     ///
@@ -1469,28 +1802,14 @@ impl Builder {
     /// let clean = builder.block_lookup(&blocks[0], Lut1Def::MsgOnly);
     /// ```
     pub fn block_lookup(&self, src: impl AsRef<CiphertextBlock>, def: Lut1Def) -> CiphertextBlock {
-        let src = src.as_ref();
-        let lut = def.into_lut(self.spec);
-        let (_node, ret) = self.inner_mut().insert_op(
-            IopInstructionSet::Pbs {
-                check: LookupCheck::Protect,
-                lut,
-            },
-            svec![src.valid],
-            self.current_hierarchy(),
-            self.current_partition(),
-        );
-        CiphertextBlock {
-            valid: ret[0],
-            spec: self.spec,
-        }
+        self.block_lookup_with(src, def, LookupCheck::Protect)
     }
 
     /// Applies a single-output PBS lookup allowing output padding overflow.
     ///
     /// Like [`block_lookup`](Self::block_lookup), but the bootstrapping allows the result
-    /// to overflow into the output padding bit. The input padding bit must still be clear
-    /// (protect semantics on the input side). This is useful when a subsequent operation
+    /// to overflow into the output padding bit ([`LookupCheck::AllowOutputPadding`]). The
+    /// input padding bit must still be clear. This is useful when a subsequent operation
     /// will consume the padding bit before the next lookup.
     ///
     /// # Examples
@@ -1508,29 +1827,14 @@ impl Builder {
         src: impl AsRef<CiphertextBlock>,
         def: Lut1Def,
     ) -> CiphertextBlock {
-        let src = src.as_ref();
-        let lut = def.into_lut(self.spec);
-        let (_node, ret) = self.inner_mut().insert_op(
-            IopInstructionSet::Pbs {
-                check: LookupCheck::AllowOutputPadding,
-                lut,
-            },
-            svec![src.valid],
-            self.current_hierarchy(),
-            self.current_partition(),
-        );
-        CiphertextBlock {
-            valid: ret[0],
-            spec: self.spec,
-        }
+        self.block_lookup_with(src, def, LookupCheck::AllowOutputPadding)
     }
 
     /// Applies a single-output PBS lookup using wrapping (negacyclic) semantics.
     ///
-    /// Like [`block_lookup`](Self::block_lookup), but uses wrapping semantics for the
-    /// lookup — see [Operation Flavors](super::super#operation-flavors). This is appropriate
-    /// when the input block's padding bit may be set, enabling negacyclic lookup
-    /// behavior.
+    /// Like [`block_lookup`](Self::block_lookup), but no padding bit is checked
+    /// ([`LookupCheck::AllowBothPadding`]). This is appropriate when the input block's
+    /// padding bit may be set, enabling negacyclic lookup behavior.
     ///
     /// # Examples
     ///
@@ -1547,21 +1851,27 @@ impl Builder {
         src: impl AsRef<CiphertextBlock>,
         def: Lut1Def,
     ) -> CiphertextBlock {
-        let src = src.as_ref();
+        self.block_lookup_with(src, def, LookupCheck::AllowBothPadding)
+    }
+
+    /// Applies a dual-output PBS lookup with an explicit padding-check policy.
+    ///
+    /// Like [`block_lookup2`](Self::block_lookup2) with a configurable `check`. Many-LUT
+    /// bootstrapping reserves the topmost data bit of the input, so only
+    /// [`LookupCheck::Protect`] and [`LookupCheck::AllowOutputPadding`] are accepted; the
+    /// interpreter panics on the other policies.
+    pub fn block_lookup2_with(
+        &self,
+        src: impl AsRef<CiphertextBlock>,
+        def: Lut2Def,
+        check: LookupCheck,
+    ) -> (CiphertextBlock, CiphertextBlock) {
         let lut = def.into_lut(self.spec);
-        let (_node, ret) = self.inner_mut().insert_op(
-            IopInstructionSet::Pbs {
-                check: LookupCheck::AllowBothPadding,
-                lut,
-            },
-            svec![src.valid],
-            self.current_hierarchy(),
-            self.current_partition(),
+        let [o0, o1] = self.emit_blocks::<2>(
+            IopInstructionSet::Pbs2 { check, lut },
+            svec![src.as_ref().valid],
         );
-        CiphertextBlock {
-            valid: ret[0],
-            spec: self.spec,
-        }
+        (o0, o1)
     }
 
     /// Applies a dual-output programmable bootstrapping (PBS) lookup to a block.
@@ -1569,7 +1879,8 @@ impl Builder {
     /// Like [`block_lookup`](Self::block_lookup), but the bootstrapping produces two
     /// output blocks from a single input. The two lookup functions are defined by the
     /// [`Lut2Def`] variant. This amortizes the cost of a PBS when two related values
-    /// need to be extracted simultaneously.
+    /// need to be extracted simultaneously. The input must have its padding bit and its
+    /// topmost data bit clear.
     ///
     /// # Examples
     ///
@@ -1587,56 +1898,85 @@ impl Builder {
         src: impl AsRef<CiphertextBlock>,
         def: Lut2Def,
     ) -> (CiphertextBlock, CiphertextBlock) {
-        let src = src.as_ref();
+        self.block_lookup2_with(src, def, LookupCheck::Protect)
+    }
+
+    /// Applies a four-output PBS lookup with an explicit padding-check policy.
+    ///
+    /// Like [`block_lookup4`](Self::block_lookup4) with a configurable `check`. Only
+    /// [`LookupCheck::Protect`] and [`LookupCheck::AllowOutputPadding`] are accepted.
+    pub fn block_lookup4_with(
+        &self,
+        src: impl AsRef<CiphertextBlock>,
+        def: Lut4Def,
+        check: LookupCheck,
+    ) -> [CiphertextBlock; 4] {
         let lut = def.into_lut(self.spec);
-        let (_node, ret) = self.inner_mut().insert_op(
-            IopInstructionSet::Pbs2 {
-                check: LookupCheck::Protect,
-                lut,
-            },
-            svec![src.valid],
-            self.current_hierarchy(),
-            self.current_partition(),
-        );
-        (
-            CiphertextBlock {
-                valid: ret[0],
-                spec: self.spec,
-            },
-            CiphertextBlock {
-                valid: ret[1],
-                spec: self.spec,
-            },
+        self.emit_blocks::<4>(
+            IopInstructionSet::Pbs4 { check, lut },
+            svec![src.as_ref().valid],
         )
     }
 
-    /// Creates a constant [`CiphertextBlock`] with the given value.
+    /// Applies a four-output programmable bootstrapping (PBS) lookup to a block.
     ///
-    /// The `value` is stored as a trivially-encrypted block (zero noise). This is useful
-    /// for initializing accumulators or providing constant operands in arithmetic. The
-    /// value's bit-width must fit within the block's data bits (carry + message).
+    /// Produces four output blocks from a single input, one per function of the
+    /// [`Lut4Def`]. The input must have its padding bit and its two topmost data bits
+    /// clear, since those bits are reserved by the many-LUT encoding.
     ///
     /// # Examples
     ///
     /// ```rust,no_run
     /// # use zhc_builder::*;
+    /// # use zhc_langs::ioplang::Lut4Def;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let zero = builder.block_let_ciphertext(0);
-    /// let ct = builder.ciphertext_input(4);
+    /// let ct = builder.ciphertext_input(2);
     /// let blocks = builder.ciphertext_split(&ct);
-    /// let sum = builder.block_add(&zero, &blocks[0]); // 0 + blocks[0]
+    /// let def = Lut4Def::custom("shifts", [
+    ///     |b| b,
+    ///     |b| b.spec().from_data((b.raw_message_bits() << 1) & b.spec().data_mask()),
+    ///     |b| b.spec().from_data((b.raw_message_bits() << 2) & b.spec().data_mask()),
+    ///     |b| b.spec().from_data((b.raw_message_bits() << 3) & b.spec().data_mask()),
+    /// ]);
+    /// let [s0, s1, s2, s3] = builder.block_lookup4(&blocks[0], def);
     /// ```
-    pub fn block_let_ciphertext(&self, value: u8) -> CiphertextBlock {
-        let (_node, ret) = self.inner_mut().insert_op(
-            IopInstructionSet::LetCiphertextBlock { value },
-            svec![],
-            self.current_hierarchy(),
-            self.current_partition(),
-        );
-        CiphertextBlock {
-            valid: ret[0],
-            spec: self.spec,
-        }
+    pub fn block_lookup4(
+        &self,
+        src: impl AsRef<CiphertextBlock>,
+        def: Lut4Def,
+    ) -> [CiphertextBlock; 4] {
+        self.block_lookup4_with(src, def, LookupCheck::Protect)
+    }
+
+    /// Applies an eight-output PBS lookup with an explicit padding-check policy.
+    ///
+    /// Like [`block_lookup8`](Self::block_lookup8) with a configurable `check`. Only
+    /// [`LookupCheck::Protect`] and [`LookupCheck::AllowOutputPadding`] are accepted.
+    pub fn block_lookup8_with(
+        &self,
+        src: impl AsRef<CiphertextBlock>,
+        def: Lut8Def,
+        check: LookupCheck,
+    ) -> [CiphertextBlock; 8] {
+        let lut = def.into_lut(self.spec);
+        self.emit_blocks::<8>(
+            IopInstructionSet::Pbs8 { check, lut },
+            svec![src.as_ref().valid],
+        )
+    }
+
+    /// Applies an eight-output programmable bootstrapping (PBS) lookup to a block.
+    ///
+    /// Produces eight output blocks from a single input, one per function of the
+    /// [`Lut8Def`]. The input must have its padding bit and its three topmost data bits
+    /// clear, since those bits are reserved by the many-LUT encoding. With a
+    /// `CiphertextBlockSpec(2, 2)` this leaves a single usable input bit.
+    pub fn block_lookup8(
+        &self,
+        src: impl AsRef<CiphertextBlock>,
+        def: Lut8Def,
+    ) -> [CiphertextBlock; 8] {
+        self.block_lookup8_with(src, def, LookupCheck::Protect)
     }
 }
 
@@ -1857,6 +2197,81 @@ impl Builder {
             .collect()
     }
 
+    /// Applies a four-output PBS lookup to every block in a slice.
+    ///
+    /// Maps [`block_lookup4`](Self::block_lookup4) over each element, returning four
+    /// output blocks per input block.
+    pub fn vector_lookup4(
+        &self,
+        blocks: impl AsRef<[CiphertextBlock]>,
+        def: Lut4Def,
+    ) -> Vec<[CiphertextBlock; 4]> {
+        blocks
+            .as_ref()
+            .iter()
+            .map(|b| self.block_lookup4(b, def.clone()))
+            .collect()
+    }
+
+    /// Applies an eight-output PBS lookup to every block in a slice.
+    ///
+    /// Maps [`block_lookup8`](Self::block_lookup8) over each element, returning eight
+    /// output blocks per input block.
+    pub fn vector_lookup8(
+        &self,
+        blocks: impl AsRef<[CiphertextBlock]>,
+        def: Lut8Def,
+    ) -> Vec<[CiphertextBlock; 8]> {
+        blocks
+            .as_ref()
+            .iter()
+            .map(|b| self.block_lookup8(b, def.clone()))
+            .collect()
+    }
+
+    /// Applies a single-output PBS lookup with an explicit check to every block in a slice.
+    ///
+    /// Maps [`block_lookup_with`](Self::block_lookup_with) over each element.
+    pub fn vector_lookup_with(
+        &self,
+        blocks: impl AsRef<[CiphertextBlock]>,
+        def: Lut1Def,
+        check: LookupCheck,
+    ) -> Vec<CiphertextBlock> {
+        blocks
+            .as_ref()
+            .iter()
+            .map(|b| self.block_lookup_with(b, def.clone(), check))
+            .collect()
+    }
+
+    /// Adds two block slices element-wise with the given flavor.
+    ///
+    /// Like [`vector_add`](Self::vector_add), using [`block_add_with`](Self::block_add_with)
+    /// for each pair.
+    pub fn vector_add_with(
+        &self,
+        lhs: impl AsRef<[CiphertextBlock]>,
+        rhs: impl AsRef<[CiphertextBlock]>,
+        flavor: Flavor,
+        extension: ExtensionBehavior,
+    ) -> Vec<CiphertextBlock> {
+        let mut output = Vec::new();
+        let mut lhs_i = lhs.as_ref().iter();
+        let mut rhs_i = rhs.as_ref().iter();
+        loop {
+            match (&extension, lhs_i.next(), rhs_i.next()) {
+                (_, Some(li), Some(ri)) => output.push(self.block_add_with(li, ri, flavor)),
+                (_, None, None) => break,
+                (ExtensionBehavior::Panic, _, _) => panic!(),
+                (ExtensionBehavior::Limit, _, _) => break,
+                (ExtensionBehavior::Passthrough, None, Some(v)) => output.push(*v),
+                (ExtensionBehavior::Passthrough, Some(v), None) => output.push(*v),
+            }
+        }
+        output
+    }
+
     /// Adds two block slices element-wise.
     ///
     /// For each position, calls [`block_add`](Self::block_add) on the corresponding pair.
@@ -1898,7 +2313,7 @@ impl Builder {
                 (ExtensionBehavior::Passthrough, Some(v), None) => output.push(*v),
             }
         }
-        return output;
+        output
     }
 
     /// Zero-extends a block slice to a given length.

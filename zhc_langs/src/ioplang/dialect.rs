@@ -10,7 +10,7 @@ use zhc_utils::{SafeAs, iter::CollectInSmallVec};
 /// [`IopInstructionSet`](super::IopInstructionSet) into a concrete
 /// [`Dialect`] implementation. Also implements
 /// [`AllowCse`](zhc_ir::cse::AllowCse) with commutative normalization
-/// for the addition variants (`AddCt`, `WrappingAddCt`, `TemperAddCt`).
+/// for `AddCt`, whatever its flavor.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct IopLang;
 
@@ -28,7 +28,7 @@ impl AllowCse for IopLang {
         let mut args = args.cosvec();
         let arity = op.get_signature().get_returns_arity();
         let (args, op) = match op {
-            AddCt | WrappingAddCt | TemperAddCt => {
+            AddCt { .. } => {
                 // Addition is commutative regardless of flavor.
                 args.sort_unstable();
                 (args, op)

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use zhc_crypto::integer_semantics::CiphertextSpec;
+use zhc_crypto::integer_semantics::{CiphertextSpec, Flavor};
 use zhc_langs::ioplang::{Lut1Def, Lut2Def};
 use zhc_utils::{
     iter::{ChunkIt, CollectInSmallVec, IterMapFirst, MultiZip, ReconcilerOf2, Slide, SliderExt},
@@ -619,7 +619,17 @@ impl<'a> KoggeTree<'a> {
         };
 
         // MAC: lsb_val + (2^log_shift) * msb_val — implemented via doubling.
-        let mac = self.builder.block_mac(msb_val, lsb_val, msb_shift);
+        // When the combined position reaches the full data width the value spills into the
+        // padding bit on purpose: the wrapping ReduceCarryPad lookup below reads it back
+        // negacyclically. Every other position must stay within the data bits.
+        let flavor = if cpos == self.total_width {
+            Flavor::Temper
+        } else {
+            Flavor::Protect
+        };
+        let mac = self
+            .builder
+            .block_mac_with(msb_val, lsb_val, msb_shift, flavor);
 
         // Reduce via PBS based on cpos.
         let fresh = match cpos {
@@ -868,7 +878,7 @@ mod test {
                 // Kogge chunk [0..7)               | %52 = pack_ct<4>(%51, %35);
                 // Kogge chunk [0..7)               | %53 = pbs<Protect, Lut1("GenPropAdd")>(%52);
                 // Kogge chunk [0..7)               | %54 = pack_ct<2>(%34, %32);
-                // Kogge chunk [0..7)               | %56 = pack_ct<4>(%54, %46);
+                // Kogge chunk [0..7)               | %56 = temper_pack_ct<4>(%54, %46);
                 // Kogge chunk [0..7)               | %57 = pbs<AllowBothPadding, Lut1("ReduceCarryPad")>(%56);
                 // Kogge chunk [0..7)               | %58 = let_pt_block<1>();
                 // Kogge chunk [0..7)               | %59 = wrapping_add_pt(%57, %58);
@@ -884,13 +894,13 @@ mod test {
                 // Kogge chunk [0..7)               | %70 = pack_ct<4>(%69, %41);
                 // Kogge chunk [0..7)               | %71 = pbs<Protect, Lut1("GenPropAdd")>(%70);
                 // Kogge chunk [0..7)               | %72 = pack_ct<4>(%40, %66);
-                // Kogge chunk [0..7)               | %74 = pack_ct<2>(%72, %59);
+                // Kogge chunk [0..7)               | %74 = temper_pack_ct<2>(%72, %59);
                 // Kogge chunk [0..7)               | %75 = pbs<AllowBothPadding, Lut1("ReduceCarryPad")>(%74);
                 // Kogge chunk [0..7)               | %77 = wrapping_add_pt(%75, %58);
                 // Kogge chunk [0..7)               | %78 = pack_ct<4>(%77, %43);
                 // Kogge chunk [0..7)               | %79 = pbs<Protect, Lut1("GenPropAdd")>(%78);
                 // Kogge chunk [0..7)               | %80 = pack_ct<2>(%42, %40);
-                // Kogge chunk [0..7)               | %82 = pack_ct<4>(%80, %66);
+                // Kogge chunk [0..7)               | %82 = temper_pack_ct<4>(%80, %66);
                 // Kogge chunk [0..7)               | %83 = pbs<AllowBothPadding, Lut1("ReduceCarryPad")>(%82);
                 // Kogge chunk [0..7)               | %85 = wrapping_add_pt(%83, %58);
                 // Kogge chunk [0..7)               | %86 = pack_ct<2>(%85, %59);

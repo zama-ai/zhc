@@ -86,6 +86,7 @@ pub fn skip_store_load(ir: &mut IR<IopLang>) {
 mod tests {
     use super::*;
     use crate::ioplang::{IopInstructionSet, IopTypeSystem};
+    use zhc_crypto::integer_semantics::Flavor;
     use zhc_ir::dce::eliminate_dead_code;
     use zhc_utils::assert_display_is;
 
@@ -196,7 +197,12 @@ mod tests {
             IopInstructionSet::ExtractCtBlock { index: 1 },
             svec![ct2[0]],
         );
-        let (_, sum) = ir.add_op(IopInstructionSet::AddCt, svec![e0[0], e1[0]]);
+        let (_, sum) = ir.add_op(
+            IopInstructionSet::AddCt {
+                flavor: Flavor::Protect,
+            },
+            svec![e0[0], e1[0]],
+        );
         ir.add_op(
             IopInstructionSet::_Consume {
                 typ: IopTypeSystem::CiphertextBlock,
@@ -440,7 +446,12 @@ mod tests {
 
         let (_, b0) = ir.add_op(IopInstructionSet::LetCiphertextBlock { value: 0 }, svec![]);
         let (_, b1) = ir.add_op(IopInstructionSet::LetCiphertextBlock { value: 1 }, svec![]);
-        let (_, sum) = ir.add_op(IopInstructionSet::AddCt, svec![b0[0], b1[0]]);
+        let (_, sum) = ir.add_op(
+            IopInstructionSet::AddCt {
+                flavor: Flavor::Protect,
+            },
+            svec![b0[0], b1[0]],
+        );
         ir.add_op(
             IopInstructionSet::_Consume {
                 typ: IopTypeSystem::CiphertextBlock,
@@ -482,7 +493,12 @@ mod tests {
             IopInstructionSet::ExtractCtBlock { index: 0 },
             svec![ct2[0]],
         );
-        let (_, sum) = ir.add_op(IopInstructionSet::AddCt, svec![e1[0], e2[0]]);
+        let (_, sum) = ir.add_op(
+            IopInstructionSet::AddCt {
+                flavor: Flavor::Protect,
+            },
+            svec![e1[0], e2[0]],
+        );
         ir.add_op(
             IopInstructionSet::_Consume {
                 typ: IopTypeSystem::CiphertextBlock,

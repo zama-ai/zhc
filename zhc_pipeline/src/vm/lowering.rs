@@ -101,18 +101,28 @@ pub fn lower_iop_to_vm(ir: &IR<IopLang>) -> IR<VmLang> {
             IopInstructionSet::LetCiphertextBlock { value } => {
                 translator.direct_translation(&op, VmInstructionSet::CstCt { cst: *value });
             }
-            IopInstructionSet::AddCt
-            | IopInstructionSet::WrappingAddCt
-            | IopInstructionSet::TemperAddCt => {
+            IopInstructionSet::AddCt { .. } => {
                 translator.direct_translation(&op, VmInstructionSet::AddCt);
             }
-            IopInstructionSet::SubCt | IopInstructionSet::WrappingSubCt => {
+            IopInstructionSet::SubCt { .. } => {
                 translator.direct_translation(&op, VmInstructionSet::SubCt);
             }
-            IopInstructionSet::PackCt { mul } => {
+            IopInstructionSet::NegCt => {
+                // 0 - x on the complete block width.
+                translator.direct_translation(&op, VmInstructionSet::CstSub { cst: 0 });
+            }
+            IopInstructionSet::ShlCt { amount, .. } => {
+                translator.direct_translation(
+                    &op,
+                    VmInstructionSet::MulCst {
+                        cst: 1u8 << *amount,
+                    },
+                );
+            }
+            IopInstructionSet::PackCt { mul, .. } => {
                 translator.direct_translation(&op, VmInstructionSet::Mac { cst: (*mul).sas() });
             }
-            IopInstructionSet::AddPt | IopInstructionSet::WrappingAddPt => {
+            IopInstructionSet::AddPt { .. } => {
                 match op
                     .get_args_iter()
                     .nth(1)
@@ -135,7 +145,7 @@ pub fn lower_iop_to_vm(ir: &IR<IopLang>) -> IR<VmLang> {
                     }
                 }
             }
-            IopInstructionSet::SubPt => {
+            IopInstructionSet::SubPt { .. } => {
                 match op
                     .get_args_iter()
                     .nth(1)
@@ -158,7 +168,7 @@ pub fn lower_iop_to_vm(ir: &IR<IopLang>) -> IR<VmLang> {
                     }
                 }
             }
-            IopInstructionSet::PtSub => {
+            IopInstructionSet::PtSub { .. } => {
                 match op
                     .get_args_iter()
                     .nth(0)
@@ -181,7 +191,7 @@ pub fn lower_iop_to_vm(ir: &IR<IopLang>) -> IR<VmLang> {
                     }
                 }
             }
-            IopInstructionSet::MulPt => {
+            IopInstructionSet::MulPt { .. } => {
                 match op
                     .get_args_iter()
                     .nth(1)
@@ -246,6 +256,12 @@ pub fn lower_iop_to_vm(ir: &IR<IopLang>) -> IR<VmLang> {
                 let rets = translator.add_op(VmInstructionSet::Pbs2 { lut: lut.clone() }, rets);
                 translator.register_translation(op.get_return_valids()[0], rets[0]);
                 translator.register_translation(op.get_return_valids()[1], rets[1]);
+            }
+            IopInstructionSet::Pbs4 { .. } => {
+                panic!("The VM backend has no 4-output PBS bytecode; Pbs4 cannot be lowered.");
+            }
+            IopInstructionSet::Pbs8 { .. } => {
+                panic!("The VM backend has no 8-output PBS bytecode; Pbs8 cannot be lowered.");
             }
         }
     })

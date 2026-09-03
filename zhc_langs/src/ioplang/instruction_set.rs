@@ -1,5 +1,8 @@
 use std::{fmt::Debug, hash::Hash};
-use zhc_crypto::integer_semantics::lut::{LookupCheck, Lut1, Lut2};
+use zhc_crypto::integer_semantics::{
+    Flavor,
+    lut::{LookupCheck, Lut1, Lut2, Lut4, Lut8},
+};
 use zhc_ir::{DialectInstructionSet, Format, FormatContext, Signature, sig};
 
 use crate::ioplang::IopTypeSystem;
@@ -10,7 +13,7 @@ use crate::ioplang::IopTypeSystem;
 ///
 /// **I/O and aliasing.** `InputCiphertext`, `InputPlaintext`, and
 /// `OutputCiphertext` mark program entry/exit points at a given
-/// positional slot. `Alias` forwards a value unchanged and is eliminated
+/// positional slot. `Inspect` forwards a value unchanged and is eliminated
 /// by [`eliminate_aliases`](super::eliminate_aliases) before downstream
 /// processing.
 ///
@@ -19,14 +22,16 @@ use crate::ioplang::IopTypeSystem;
 /// `LetCiphertextBlock` produce scalar block constants.
 ///
 /// **Block arithmetic.** Ciphertext-ciphertext operations (`AddCt`,
-/// `WrappingAddCt`, `TemperAddCt`, `SubCt`, `PackCt`) and mixed
-/// ciphertext-plaintext operations (`AddPt`, `WrappingAddPt`, `SubPt`,
-/// `PtSub`, `MulPt`) all operate on individual blocks. The three
-/// addition flavors differ in overflow policy: `AddCt` asserts the
-/// padding bit stays clear on both inputs and output (protected),
-/// `TemperAddCt` allows the padding bit to absorb overflow but forbids
-/// carry beyond it (tempered), and `WrappingAddCt` performs modular
-/// arithmetic with no overflow check.
+/// `SubCt`, `NegCt`, `ShlCt`, `PackCt`) and mixed ciphertext-plaintext
+/// operations (`AddPt`, `SubPt`, `PtSub`, `MulPt`) all operate on
+/// individual blocks. Every linear operation except `NegCt` carries a
+/// [`Flavor`] selecting its overflow policy: `Protect` asserts the padding
+/// bit stays clear on both inputs and output, `Temper` allows the padding
+/// bit to absorb overflow but forbids carry beyond it, and `Wrapping`
+/// performs modular arithmetic with no overflow check. The semantics of
+/// each flavor are those of the matching `protect_*`, `temper_*` and
+/// `wrapping_*` methods of
+/// [`EmulatedCiphertextBlock`](zhc_crypto::integer_semantics::EmulatedCiphertextBlock).
 ///
 /// **Block extraction and storage.** `ExtractCtBlock` and
 /// `ExtractPtBlock` decompose a composite value into a block at a given
@@ -34,9 +39,11 @@ use crate::ioplang::IopTypeSystem;
 /// a given index, producing an updated ciphertext.
 ///
 /// **Programmable bootstrapping (PBS).** `Pbs` applies a single-output
-/// lookup table with a configurable padding-check policy. `Pbs2`,
-/// `Pbs4`, and `Pbs8` apply multi-output (many-LUT) bootstrapping,
-/// producing 2, 4, or 8 output blocks respectively from one input block.
+/// lookup table. `Pbs2`, `Pbs4`, and `Pbs8` apply multi-output (many-LUT)
+/// bootstrapping, producing 2, 4, or 8 output blocks respectively from one
+/// input block. Every PBS carries a [`LookupCheck`] policy controlling the
+/// padding-bit assertions on its input and outputs. Many-LUT variants only
+/// accept `Protect` and `AllowOutputPadding`.
 ///
 /// All signatures are available via the [`DialectInstructionSet`] impl.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -62,45 +69,35 @@ pub enum IopInstructionSet {
     LetPlaintextBlock { value: u8 },
     /// Ciphertext block constant. `() → (CiphertextBlock)`
     LetCiphertextBlock { value: u8 },
-    /// Protected addition of two ciphertext blocks. Both inputs and the
-    /// output must have their padding bit clear.
+    /// Addition of two ciphertext blocks.
     /// `(CiphertextBlock, CiphertextBlock) → (CiphertextBlock)`
-    AddCt,
-    /// Wrapping (modular) addition of two ciphertext blocks. No overflow
-    /// check; carry beyond the complete block width is discarded.
+    AddCt { flavor: Flavor },
+    /// Subtraction of two ciphertext blocks.
     /// `(CiphertextBlock, CiphertextBlock) → (CiphertextBlock)`
-    WrappingAddCt,
-    /// Tempered addition of two ciphertext blocks. The padding bit may
-    /// absorb overflow, but carry beyond the padding bit is forbidden.
+    SubCt { flavor: Flavor },
+    /// Two's-complement negation of a ciphertext block on its complete
+    /// width. Inherently wrapping: the padding bit may be freely set or
+    /// cleared. `(CiphertextBlock) → (CiphertextBlock)`
+    NegCt,
+    /// Left shift of a ciphertext block by `amount` bits.
+    /// `(CiphertextBlock) → (CiphertextBlock)`
+    ShlCt { amount: u8, flavor: Flavor },
+    /// Multiply-accumulate: `arg0 * mul + arg1`. With `mul` equal to
+    /// `2^message_size` this packs two blocks into one.
     /// `(CiphertextBlock, CiphertextBlock) → (CiphertextBlock)`
-    TemperAddCt,
-    /// Protected subtraction of two ciphertext blocks.
-    /// `(CiphertextBlock, CiphertextBlock) → (CiphertextBlock)`
-    SubCt,
-    /// Wrapping (modular) subtraction of two ciphertext blocks. No underflow
-    /// check; borrow beyond the complete block width wraps around.
-    /// `(CiphertextBlock, CiphertextBlock) → (CiphertextBlock)`
-    WrappingSubCt,
-    /// Packs two ciphertext blocks by shifting the first left by the
-    /// message width and adding the second. `mul` equals
-    /// `2^message_size`, guaranteed by construction.
-    /// `(CiphertextBlock, CiphertextBlock) → (CiphertextBlock)`
-    PackCt { mul: u8 },
-    /// Protected addition of a ciphertext block and a plaintext block.
+    PackCt { mul: u8, flavor: Flavor },
+    /// Addition of a ciphertext block and a plaintext block.
     /// `(CiphertextBlock, PlaintextBlock) → (CiphertextBlock)`
-    AddPt,
-    /// Wrapping addition of a ciphertext block and a plaintext block.
+    AddPt { flavor: Flavor },
+    /// Subtraction: ciphertext minus plaintext.
     /// `(CiphertextBlock, PlaintextBlock) → (CiphertextBlock)`
-    WrappingAddPt,
-    /// Protected subtraction: ciphertext minus plaintext.
-    /// `(CiphertextBlock, PlaintextBlock) → (CiphertextBlock)`
-    SubPt,
-    /// Protected subtraction: plaintext minus ciphertext.
+    SubPt { flavor: Flavor },
+    /// Subtraction: plaintext minus ciphertext.
     /// `(PlaintextBlock, CiphertextBlock) → (CiphertextBlock)`
-    PtSub,
-    /// Protected multiplication of a ciphertext block by a plaintext
-    /// block. `(CiphertextBlock, PlaintextBlock) → (CiphertextBlock)`
-    MulPt,
+    PtSub { flavor: Flavor },
+    /// Multiplication of a ciphertext block by a plaintext block.
+    /// `(CiphertextBlock, PlaintextBlock) → (CiphertextBlock)`
+    MulPt { flavor: Flavor },
     /// Extracts the ciphertext block at `index` from a composite
     /// ciphertext (index 0 = LSB).
     /// `(Ciphertext) → (CiphertextBlock)`
@@ -119,13 +116,35 @@ pub enum IopInstructionSet {
     /// 2-output many-LUT PBS. Checked according to the given policy.
     /// `(CiphertextBlock) → (CiphertextBlock, CiphertextBlock)`
     Pbs2 { check: LookupCheck, lut: Lut2 },
+    /// 4-output many-LUT PBS. Checked according to the given policy.
+    /// `(CiphertextBlock) → (CiphertextBlock × 4)`
+    Pbs4 { check: LookupCheck, lut: Lut4 },
+    /// 8-output many-LUT PBS. Checked according to the given policy.
+    /// `(CiphertextBlock) → (CiphertextBlock × 8)`
+    Pbs8 { check: LookupCheck, lut: Lut8 },
 }
 
 impl IopInstructionSet {
     /// Returns true if this instruction is a PBS operation.
     pub fn is_pbs(&self) -> bool {
         use IopInstructionSet::*;
-        matches!(self, Pbs { .. } | Pbs2 { .. })
+        matches!(self, Pbs { .. } | Pbs2 { .. } | Pbs4 { .. } | Pbs8 { .. })
+    }
+
+    /// Returns the flavor of a linear block operation, if it has one.
+    pub fn flavor(&self) -> Option<Flavor> {
+        use IopInstructionSet::*;
+        match self {
+            AddCt { flavor }
+            | SubCt { flavor }
+            | ShlCt { flavor, .. }
+            | PackCt { flavor, .. }
+            | AddPt { flavor }
+            | SubPt { flavor }
+            | PtSub { flavor }
+            | MulPt { flavor } => Some(*flavor),
+            _ => None,
+        }
     }
 }
 
@@ -145,22 +164,22 @@ impl Format for IopInstructionSet {
             DeclareCiphertext { int_size } => write!(f, "decl_ct<{int_size}>"),
             LetPlaintextBlock { value } => write!(f, "let_pt_block<{value}>"),
             LetCiphertextBlock { value } => write!(f, "let_ct_block<{value}>"),
-            PackCt { mul } => write!(f, "pack_ct<{mul}>"),
-            AddCt => write!(f, "add_ct"),
-            WrappingAddCt => write!(f, "wrapping_add_ct"),
-            TemperAddCt => write!(f, "temper_add_ct"),
-            SubCt => write!(f, "sub_ct"),
-            WrappingSubCt => write!(f, "wrapping_sub_ct"),
-            AddPt => write!(f, "add_pt"),
-            WrappingAddPt => write!(f, "wrapping_add_pt"),
-            SubPt => write!(f, "sub_pt"),
-            PtSub => write!(f, "pt_sub"),
-            MulPt => write!(f, "mul_pt"),
+            AddCt { flavor } => write!(f, "{}add_ct", flavor.prefix()),
+            SubCt { flavor } => write!(f, "{}sub_ct", flavor.prefix()),
+            NegCt => write!(f, "neg_ct"),
+            ShlCt { amount, flavor } => write!(f, "{}shl_ct<{amount}>", flavor.prefix()),
+            PackCt { mul, flavor } => write!(f, "{}pack_ct<{mul}>", flavor.prefix()),
+            AddPt { flavor } => write!(f, "{}add_pt", flavor.prefix()),
+            SubPt { flavor } => write!(f, "{}sub_pt", flavor.prefix()),
+            PtSub { flavor } => write!(f, "{}pt_sub", flavor.prefix()),
+            MulPt { flavor } => write!(f, "{}mul_pt", flavor.prefix()),
             ExtractCtBlock { index } => write!(f, "extract_ct_block<{index}>"),
             ExtractPtBlock { index } => write!(f, "extract_pt_block<{index}>"),
             StoreCtBlock { index } => write!(f, "store_ct_block<{index}>"),
             Pbs { check, lut } => write!(f, "pbs<{check:?}, {lut:?}>"),
             Pbs2 { check, lut } => write!(f, "pbs2<{check:?}, {lut:?}>"),
+            Pbs4 { check, lut } => write!(f, "pbs4<{check:?}, {lut:?}>"),
+            Pbs8 { check, lut } => write!(f, "pbs8<{check:?}, {lut:?}>"),
         }
     }
 }
@@ -182,41 +201,19 @@ impl DialectInstructionSet for IopInstructionSet {
             InputPlaintext { .. } => sig![() -> (Plaintext)],
             OutputCiphertext { .. } => sig![(Ciphertext) -> ()],
             _Consume { typ } => sig![(typ.clone()) -> ()],
+            Inspect { typ } => sig![(typ.clone()) -> (typ.clone())],
             DeclareCiphertext { .. } => sig![() -> (Ciphertext)],
             LetPlaintextBlock { .. } => sig![() -> (PlaintextBlock)],
             LetCiphertextBlock { .. } => sig![() -> (CiphertextBlock)],
-            AddCt => {
+            AddCt { .. } | SubCt { .. } | PackCt { .. } => {
                 sig![(CiphertextBlock, CiphertextBlock) -> (CiphertextBlock)]
             }
-            WrappingAddCt => {
-                sig![(CiphertextBlock, CiphertextBlock) -> (CiphertextBlock)]
-            }
-            TemperAddCt => {
-                sig![(CiphertextBlock, CiphertextBlock) -> (CiphertextBlock)]
-            }
-            SubCt => {
-                sig![(CiphertextBlock, CiphertextBlock) -> (CiphertextBlock)]
-            }
-            WrappingSubCt => {
-                sig![(CiphertextBlock, CiphertextBlock) -> (CiphertextBlock)]
-            }
-            PackCt { .. } => {
-                sig![(CiphertextBlock, CiphertextBlock) -> (CiphertextBlock)]
-            }
-            AddPt => {
+            NegCt | ShlCt { .. } => sig![(CiphertextBlock) -> (CiphertextBlock)],
+            AddPt { .. } | SubPt { .. } | MulPt { .. } => {
                 sig![(CiphertextBlock, PlaintextBlock) -> (CiphertextBlock)]
             }
-            WrappingAddPt => {
-                sig![(CiphertextBlock, PlaintextBlock) -> (CiphertextBlock)]
-            }
-            SubPt => {
-                sig![(CiphertextBlock, PlaintextBlock) -> (CiphertextBlock)]
-            }
-            PtSub => {
+            PtSub { .. } => {
                 sig![(PlaintextBlock, CiphertextBlock) -> (CiphertextBlock)]
-            }
-            MulPt => {
-                sig![(CiphertextBlock, PlaintextBlock) -> (CiphertextBlock)]
             }
             ExtractCtBlock { .. } => sig![(Ciphertext) -> (CiphertextBlock)],
             ExtractPtBlock { .. } => sig![(Plaintext) -> (PlaintextBlock)],
@@ -227,7 +224,15 @@ impl DialectInstructionSet for IopInstructionSet {
             Pbs2 { .. } => {
                 sig![(CiphertextBlock) -> (CiphertextBlock, CiphertextBlock)]
             }
-            Inspect { typ } => sig![(typ.clone()) -> (typ.clone())],
+            Pbs4 { .. } => {
+                sig![(CiphertextBlock) -> (CiphertextBlock, CiphertextBlock, CiphertextBlock, CiphertextBlock)]
+            }
+            Pbs8 { .. } => {
+                sig![(CiphertextBlock) -> (
+                    CiphertextBlock, CiphertextBlock, CiphertextBlock, CiphertextBlock,
+                    CiphertextBlock, CiphertextBlock, CiphertextBlock, CiphertextBlock
+                )]
+            }
         }
     }
 }

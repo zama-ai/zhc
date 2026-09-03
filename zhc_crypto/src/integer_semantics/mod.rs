@@ -45,14 +45,21 @@
 //!   padding bit does not overflow/underflow during execution.
 //! + `wrapping_*` prefixed operations allows arbitrary operand padding bits and overflow/underflow.
 //!
+//! The flavor is also available as a runtime value, [`Flavor`], with un-prefixed dispatching
+//! methods (`add`, `sub`, `mul_pt`, `shl`, ...) that select the matching `protect_*`, `temper_*`
+//! or `wrapping_*` implementation. This is what the compiler IR uses to carry the semantics of an
+//! operation.
+//!
 //! Lookup semantics
 //! ================
 //!
 //! Table lookups (programmable bootstrapping) are handled by [`lut::Lut1`] for single-output
-//! lookups and [`lut::Lut2`] for two-output "many-LUT" operations. Both are parameterized by a
-//! [`lut::LookupCheck`] policy that controls padding-bit assertions on input and output. When the
-//! input padding bit is set, the raw LUT output is two's-complement negated to reproduce the
-//! negacyclic table folding of a real TFHE bootstrap.
+//! lookups and [`lut::Lut2`], [`lut::Lut4`], [`lut::Lut8`] for two-, four- and eight-output
+//! "many-LUT" operations. All are parameterized by a [`lut::LookupCheck`] policy that controls
+//! padding-bit assertions on input and output. When the input padding bit is set, the raw LUT
+//! output is two's-complement negated to reproduce the negacyclic table folding of a real TFHE
+//! bootstrap. Many-LUT tables reserve the topmost data bits of the input and only accept the
+//! `Protect` and `AllowOutputPadding` checks.
 //!
 //! The legacy [`lut::lookup`] function is also available for ad-hoc lookups without precomputing
 //! a table.
@@ -69,12 +76,14 @@ pub mod lut;
 
 mod ciphertext;
 mod ciphertext_block;
+mod flavor;
 mod ops;
 mod plaintext;
 mod plaintext_block;
 
 pub use ciphertext::*;
 pub use ciphertext_block::*;
+pub use flavor::*;
 pub use plaintext::*;
 pub use plaintext_block::*;
 

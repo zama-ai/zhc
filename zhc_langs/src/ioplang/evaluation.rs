@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 use zhc_crypto::integer_semantics::{
-    CiphertextBlockSpec, EmulatedCiphertext, EmulatedCiphertextBlock,
-    EmulatedCiphertextBlockStorage, EmulatedPlaintext, EmulatedPlaintextBlock,
+    CiphertextBlockSpec, EmulatedCiphertext, EmulatedCiphertextBlock, EmulatedPlaintext,
+    EmulatedPlaintextBlock,
 };
 use zhc_ir::evaluation::{Evaluable, EvaluatesTo, Evaluation};
 use zhc_ir::visualization::{DynamicElement, VisualAnnotation};
@@ -130,6 +130,28 @@ pub struct IopInterepreterContext {
     pub outputs: FastMap<usize, IopValue>,
 }
 
+/// Unwraps the argument at `idx` as a ciphertext block.
+fn ct_arg(arguments: &SmallVec<&IopValue>, idx: usize) -> EmulatedCiphertextBlock {
+    match arguments[idx] {
+        IopValue::CiphertextBlock(ct) => *ct,
+        _ => panic!(
+            "Expected CiphertextBlock at argument {idx}, got:\n{:#?}",
+            arguments
+        ),
+    }
+}
+
+/// Unwraps the argument at `idx` as a plaintext block.
+fn pt_arg(arguments: &SmallVec<&IopValue>, idx: usize) -> EmulatedPlaintextBlock {
+    match arguments[idx] {
+        IopValue::PlaintextBlock(pt) => *pt,
+        _ => panic!(
+            "Expected PlaintextBlock at argument {idx}, got:\n{:#?}",
+            arguments
+        ),
+    }
+}
+
 impl Evaluable<IopValue> for super::IopInstructionSet {
     type Context = IopInterepreterContext;
     fn eval(
@@ -138,6 +160,7 @@ impl Evaluable<IopValue> for super::IopInstructionSet {
         arguments: SmallVec<&IopValue>,
     ) -> SmallVec<IopValue> {
         use super::IopInstructionSet::*;
+        let ct = |v: EmulatedCiphertextBlock| IopValue::CiphertextBlock(v);
         match self {
             InputCiphertext { pos, int_size } => {
                 assert!(
@@ -162,7 +185,7 @@ impl Evaluable<IopValue> for super::IopInstructionSet {
                 );
                 let input_value = context.inputs.get(pos).unwrap();
                 let IopValue::Plaintext(pt) = input_value else {
-                    panic!("Expected Planitext, got:\n{:#?}", input_value);
+                    panic!("Expected Plaintext, got:\n{:#?}", input_value);
                 };
                 assert_eq!(
                     context
@@ -183,6 +206,7 @@ impl Evaluable<IopValue> for super::IopInstructionSet {
                 svec![]
             }
             _Consume { .. } => panic!("Tried to interpret a _consume operation"),
+            Inspect { .. } => arguments.iter().map(|a| (*a).clone()).cosvec(),
             DeclareCiphertext { int_size } => {
                 svec![IopValue::Ciphertext(
                     context.spec.ciphertext_spec(*int_size).from_int(0)
@@ -197,134 +221,42 @@ impl Evaluable<IopValue> for super::IopInstructionSet {
                 )]
             }
             LetCiphertextBlock { value } => {
-                svec![IopValue::CiphertextBlock(
-                    context.spec.from_message((*value).sas())
+                svec![ct(context.spec.from_message((*value).sas()))]
+            }
+            AddCt { flavor } => {
+                svec![ct(ct_arg(&arguments, 0).add(ct_arg(&arguments, 1), *flavor))]
+            }
+            SubCt { flavor } => {
+                svec![ct(ct_arg(&arguments, 0).sub(ct_arg(&arguments, 1), *flavor))]
+            }
+            NegCt => svec![ct(ct_arg(&arguments, 0).neg())],
+            ShlCt { amount, flavor } => svec![ct(ct_arg(&arguments, 0).shl(*amount, *flavor))],
+            PackCt { mul, flavor } => {
+                svec![ct(ct_arg(&arguments, 0).mac(
+                    *mul,
+                    ct_arg(&arguments, 1),
+                    *flavor
+                ))]
+            }
+            AddPt { flavor } => {
+                svec![ct(
+                    ct_arg(&arguments, 0).add_pt(pt_arg(&arguments, 1), *flavor)
                 )]
             }
-            AddCt => {
-                let (IopValue::CiphertextBlock(left), IopValue::CiphertextBlock(right)) =
-                    (arguments[0].clone(), arguments[1].clone())
-                else {
-                    panic!(
-                        "Expected (CiphertextBlock, CiphertextBlock), got:\n{:#?}",
-                        arguments
-                    )
-                };
-                svec![IopValue::CiphertextBlock(left.protect_add(right))]
-            }
-            WrappingAddCt => {
-                let (IopValue::CiphertextBlock(left), IopValue::CiphertextBlock(right)) =
-                    (arguments[0].clone(), arguments[1].clone())
-                else {
-                    panic!(
-                        "Expected (CiphertextBlock, CiphertextBlock), got:\n{:#?}",
-                        arguments
-                    )
-                };
-                svec![IopValue::CiphertextBlock(left.wrapping_add(right))]
-            }
-            TemperAddCt => {
-                let (IopValue::CiphertextBlock(left), IopValue::CiphertextBlock(right)) =
-                    (arguments[0].clone(), arguments[1].clone())
-                else {
-                    panic!(
-                        "Expected (CiphertextBlock, CiphertextBlock), got:\n{:#?}",
-                        arguments
-                    )
-                };
-                svec![IopValue::CiphertextBlock(left.temper_add(right))]
-            }
-            SubCt => {
-                let (IopValue::CiphertextBlock(left), IopValue::CiphertextBlock(right)) =
-                    (arguments[0].clone(), arguments[1].clone())
-                else {
-                    panic!(
-                        "Expected (CiphertextBlock, CiphertextBlock), got:\n{:#?}",
-                        arguments
-                    )
-                };
-                svec![IopValue::CiphertextBlock(left.protect_sub(right))]
-            }
-            WrappingSubCt => {
-                let (IopValue::CiphertextBlock(left), IopValue::CiphertextBlock(right)) =
-                    (arguments[0].clone(), arguments[1].clone())
-                else {
-                    panic!(
-                        "Expected (CiphertextBlock, CiphertextBlock), got:\n{:#?}",
-                        arguments
-                    )
-                };
-                svec![IopValue::CiphertextBlock(left.wrapping_sub(right))]
-            }
-            PackCt { mul } => {
-                let (IopValue::CiphertextBlock(left), IopValue::CiphertextBlock(right)) =
-                    (arguments[0].clone(), arguments[1].clone())
-                else {
-                    panic!(
-                        "Expected (CiphertextBlock, CiphertextBlock), got:\n{:#?}",
-                        arguments
-                    )
-                };
-                let mul_val = (*mul).sas::<EmulatedCiphertextBlockStorage>();
-                let result = left.raw_complete_bits() * mul_val + right.raw_complete_bits();
-                svec![IopValue::CiphertextBlock(
-                    context.spec.from_complete(result)
+            SubPt { flavor } => {
+                svec![ct(
+                    ct_arg(&arguments, 0).sub_pt(pt_arg(&arguments, 1), *flavor)
                 )]
             }
-            AddPt => {
-                let (IopValue::CiphertextBlock(left), IopValue::PlaintextBlock(right)) =
-                    (arguments[0].clone(), arguments[1].clone())
-                else {
-                    panic!(
-                        "Expected (CiphertextBlock, PlaintextBlock), got:\n{:#?}",
-                        arguments
-                    )
-                };
-                svec![IopValue::CiphertextBlock(left.protect_add_pt(right))]
+            PtSub { flavor } => {
+                svec![ct(
+                    pt_arg(&arguments, 0).sub_ct(ct_arg(&arguments, 1), *flavor)
+                )]
             }
-            WrappingAddPt => {
-                let (IopValue::CiphertextBlock(left), IopValue::PlaintextBlock(right)) =
-                    (arguments[0].clone(), arguments[1].clone())
-                else {
-                    panic!(
-                        "Expected (CiphertextBlock, PlaintextBlock), got:\n{:#?}",
-                        arguments
-                    )
-                };
-                svec![IopValue::CiphertextBlock(left.wrapping_add_pt(right))]
-            }
-            SubPt => {
-                let (IopValue::CiphertextBlock(left), IopValue::PlaintextBlock(right)) =
-                    (arguments[0].clone(), arguments[1].clone())
-                else {
-                    panic!(
-                        "Expected (CiphertextBlock, PlaintextBlock), got:\n{:#?}",
-                        arguments
-                    )
-                };
-                svec![IopValue::CiphertextBlock(left.protect_sub_pt(right))]
-            }
-            PtSub => {
-                let (IopValue::PlaintextBlock(left), IopValue::CiphertextBlock(right)) =
-                    (arguments[0].clone(), arguments[1].clone())
-                else {
-                    panic!(
-                        "Expected (PlaintextBlock, CiphertextBlock), got:\n{:#?}",
-                        arguments
-                    )
-                };
-                svec![IopValue::CiphertextBlock(left.protect_sub_ct(right))]
-            }
-            MulPt => {
-                let (IopValue::CiphertextBlock(left), IopValue::PlaintextBlock(right)) =
-                    (arguments[0].clone(), arguments[1].clone())
-                else {
-                    panic!(
-                        "Expected (CiphertextBlock, PlaintextBlock), got:\n{:#?}",
-                        arguments
-                    )
-                };
-                svec![IopValue::CiphertextBlock(left.protect_mul_pt(right))]
+            MulPt { flavor } => {
+                svec![ct(
+                    ct_arg(&arguments, 0).mul_pt(pt_arg(&arguments, 1), *flavor)
+                )]
             }
             ExtractCtBlock { index } => {
                 let IopValue::Ciphertext(ct) = arguments[0] else {
@@ -343,31 +275,35 @@ impl Evaluable<IopValue> for super::IopInstructionSet {
                     (arguments[0].clone(), arguments[1].clone())
                 else {
                     panic!(
-                        "Expected (Ciphertext, CiphertextBlock), got:\n{:#?}",
+                        "Expected (CiphertextBlock, Ciphertext), got:\n{:#?}",
                         arguments
                     )
                 };
                 ct.set_block(*index, ctblock);
                 svec![IopValue::Ciphertext(ct)]
             }
-            Pbs { check, lut } => {
-                let IopValue::CiphertextBlock(ct) = arguments[0] else {
-                    panic!("Expected CiphertextBlock, got:\n{:#?}", arguments)
-                };
-                let ct0 = lut.lookup(*ct, *check);
-                svec![IopValue::CiphertextBlock(ct0)]
-            }
+            Pbs { check, lut } => svec![ct(lut.lookup(ct_arg(&arguments, 0), *check))],
             Pbs2 { check, lut } => {
-                let IopValue::CiphertextBlock(ct) = arguments[0] else {
-                    panic!("Expected CiphertextBlock, got:\n{:#?}", arguments)
-                };
-                let (ct0, ct1) = lut.lookup(*ct, *check);
+                let (o0, o1) = lut.lookup(ct_arg(&arguments, 0), *check);
+                svec![ct(o0), ct(o1)]
+            }
+            Pbs4 { check, lut } => {
+                let (o0, o1, o2, o3) = lut.lookup(ct_arg(&arguments, 0), *check);
+                svec![ct(o0), ct(o1), ct(o2), ct(o3)]
+            }
+            Pbs8 { check, lut } => {
+                let (o0, o1, o2, o3, o4, o5, o6, o7) = lut.lookup(ct_arg(&arguments, 0), *check);
                 svec![
-                    IopValue::CiphertextBlock(ct0),
-                    IopValue::CiphertextBlock(ct1)
+                    ct(o0),
+                    ct(o1),
+                    ct(o2),
+                    ct(o3),
+                    ct(o4),
+                    ct(o5),
+                    ct(o6),
+                    ct(o7)
                 ]
             }
-            Inspect { .. } => arguments.iter().map(|a| (*a).clone()).cosvec(),
         }
     }
 }

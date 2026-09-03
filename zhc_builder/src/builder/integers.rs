@@ -24,7 +24,7 @@ use zhc_utils::Dumpable;
 /// [`IopValue`] for [`Interpreter::with_inputs`](`super::Interpreter::with_inputs`).
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct CiphertextBlock {
-    pub(super) valid: ValId,
+    pub(crate) valid: ValId,
     pub(super) spec: CiphertextBlockSpec,
 }
 
@@ -81,7 +81,7 @@ impl CiphertextBlock {
 /// [`IopValue`] for [`Interpreter::with_inputs`](`super::Interpreter::with_inputs`).
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Ciphertext {
-    pub(super) valid: ValId,
+    pub(crate) valid: ValId,
     pub(super) spec: CiphertextSpec,
 }
 
@@ -131,7 +131,7 @@ impl Ciphertext {
 /// [`IopValue`] for [`Interpreter::with_inputs`](`super::Interpreter::with_inputs`).
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct PlaintextBlock {
-    pub(super) valid: ValId,
+    pub(crate) valid: ValId,
     pub(super) spec: PlaintextBlockSpec,
 }
 
@@ -185,7 +185,7 @@ impl PlaintextBlock {
 /// [`IopValue`] for [`Interpreter::with_inputs`](`super::Interpreter::with_inputs`).
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Plaintext {
-    pub(super) valid: ValId,
+    pub(crate) valid: ValId,
     pub(super) spec: PlaintextSpec,
 }
 

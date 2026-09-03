@@ -112,15 +112,25 @@ pub(crate) fn lower_iop_to_hpu(ir: &IR<IopLang>) -> Translation<HpuLang> {
                     },
                 );
             }
-            IopInstructionSet::AddCt
-            | IopInstructionSet::WrappingAddCt
-            | IopInstructionSet::TemperAddCt => {
+            IopInstructionSet::AddCt { .. } => {
                 translator.direct_translation(&op, HpuInstructionSet::AddCt);
             }
-            IopInstructionSet::SubCt | IopInstructionSet::WrappingSubCt => {
+            IopInstructionSet::SubCt { .. } => {
                 translator.direct_translation(&op, HpuInstructionSet::SubCt);
             }
-            IopInstructionSet::PackCt { mul } => {
+            IopInstructionSet::NegCt => {
+                // 0 - x on the complete block width.
+                translator.direct_translation(&op, HpuInstructionSet::CstSub { cst: Immediate(0) });
+            }
+            IopInstructionSet::ShlCt { amount, .. } => {
+                translator.direct_translation(
+                    &op,
+                    HpuInstructionSet::MulCst {
+                        cst: Immediate(1u8 << *amount),
+                    },
+                );
+            }
+            IopInstructionSet::PackCt { mul, .. } => {
                 translator.direct_translation(
                     &op,
                     HpuInstructionSet::Mac {
@@ -128,7 +138,7 @@ pub(crate) fn lower_iop_to_hpu(ir: &IR<IopLang>) -> Translation<HpuLang> {
                     },
                 );
             }
-            IopInstructionSet::AddPt | IopInstructionSet::WrappingAddPt => {
+            IopInstructionSet::AddPt { .. } => {
                 match op
                     .get_args_iter()
                     .nth(1)
@@ -151,7 +161,7 @@ pub(crate) fn lower_iop_to_hpu(ir: &IR<IopLang>) -> Translation<HpuLang> {
                     }
                 }
             }
-            IopInstructionSet::SubPt => {
+            IopInstructionSet::SubPt { .. } => {
                 match op
                     .get_args_iter()
                     .nth(1)
@@ -174,7 +184,7 @@ pub(crate) fn lower_iop_to_hpu(ir: &IR<IopLang>) -> Translation<HpuLang> {
                     }
                 }
             }
-            IopInstructionSet::PtSub => {
+            IopInstructionSet::PtSub { .. } => {
                 match op
                     .get_args_iter()
                     .nth(0)
@@ -197,7 +207,7 @@ pub(crate) fn lower_iop_to_hpu(ir: &IR<IopLang>) -> Translation<HpuLang> {
                     }
                 }
             }
-            IopInstructionSet::MulPt => {
+            IopInstructionSet::MulPt { .. } => {
                 match op
                     .get_args_iter()
                     .nth(1)
@@ -265,6 +275,12 @@ pub(crate) fn lower_iop_to_hpu(ir: &IR<IopLang>) -> Translation<HpuLang> {
             }
             IopInstructionSet::Pbs2 { lut, .. } => {
                 translator.direct_translation(&op, HpuInstructionSet::Pbs2 { lut: lut.clone() });
+            }
+            IopInstructionSet::Pbs4 { lut, .. } => {
+                translator.direct_translation(&op, HpuInstructionSet::Pbs4 { lut: lut.clone() });
+            }
+            IopInstructionSet::Pbs8 { lut, .. } => {
+                translator.direct_translation(&op, HpuInstructionSet::Pbs8 { lut: lut.clone() });
             }
         }
     })

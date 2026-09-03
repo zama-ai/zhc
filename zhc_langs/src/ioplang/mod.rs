@@ -16,10 +16,15 @@
 //! instructions operate exclusively on blocks; composite values are
 //! disassembled and reassembled via extract/store operations.
 //!
-//! PBS operations apply lookup tables defined by the [`Lut1Def`] and [`Lut2Def`] enums, which
-//! enumerate all available single- and two-output table functions. The dialect supports
-//! CSE via the [`AllowCse`](zhc_ir::cse::AllowCse) trait, normalizing
-//! commutative addition operand order.
+//! Linear block instructions carry a
+//! [`Flavor`](zhc_crypto::integer_semantics::Flavor) selecting their overflow
+//! policy (protect, temper, wrapping), mirroring the `zhc_crypto` operation
+//! flavors one-to-one. PBS instructions exist in 1-, 2-, 4- and 8-output
+//! variants, each carrying a
+//! [`LookupCheck`](zhc_crypto::integer_semantics::lut::LookupCheck) policy and a
+//! table built from the [`Lut1Def`], [`Lut2Def`], [`Lut4Def`] or [`Lut8Def`]
+//! enums. The dialect supports CSE via the [`AllowCse`](zhc_ir::cse::AllowCse)
+//! trait, normalizing commutative addition operand order.
 //!
 //! Two dialect-specific optimization passes are provided:
 //! [`eliminate_aliases`] removes identity-forwarding [`Inspect`](IopInstructionSet::Inspect)
