@@ -44,6 +44,7 @@ mod noise_analysis;
 mod skip_redundant_stores;
 mod skip_store_load;
 mod type_system;
+mod range_analysis;
 
 pub use dialect::*;
 pub use eliminate_aliases::*;
