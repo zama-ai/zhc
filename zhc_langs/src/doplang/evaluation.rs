@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use zhc_crypto::integer_semantics::lut::{Lut1, Lut2};
+use zhc_crypto::integer_semantics::lut::{LutId, LutRegistry};
 use zhc_crypto::integer_semantics::{
     CiphertextBlockSpec, EmulatedCiphertextBlock, EmulatedPlaintextBlock,
     EmulatedPlaintextBlockStorage, lut::LookupCheck,
@@ -8,8 +8,6 @@ use zhc_crypto::integer_semantics::{
 use zhc_ir::evaluation::{Evaluable, EvaluatesTo, Evaluation};
 use zhc_utils::small::SmallVec;
 use zhc_utils::{FastMap, SafeAs, svec};
-
-use crate::hpulang::LutId;
 
 use super::{Argument, DopTypeSystem};
 
@@ -56,10 +54,8 @@ pub struct DopInterpreterContext {
     pub heap: FastMap<usize, EmulatedCiphertextBlock>,
     /// I/O memory, keyed by I/O slot address.
     pub io: FastMap<usize, EmulatedCiphertextBlock>,
-    /// Reverse LUT table: LutId → Lut1 (for PBS / PBS_F).
-    pub lut1_table: FastMap<LutId, Lut1>,
-    /// Reverse LUT table: LutId → Lut2 (for PBS_ML2 / PBS_ML2_F).
-    pub lut2_table: FastMap<LutId, Lut2>,
+    /// Lut registry
+    pub lut_reg: LutRegistry,
     /// Symbolic ciphertext sources (unpatched stream), keyed by (id, block).
     pub sources: FastMap<(usize, usize), EmulatedCiphertextBlock>,
     /// Symbolic ciphertext destinations (unpatched stream), keyed by (id, block).
@@ -82,14 +78,13 @@ impl Debug for DopInterpreterContext {
 impl DopInterpreterContext {
     /// Creates a new context with the given spec and a register file
     /// of `num_registers` uninitialized slots.
-    pub fn new(spec: CiphertextBlockSpec, num_registers: usize) -> Self {
+    pub fn new(spec: CiphertextBlockSpec, num_registers: usize, lut_reg: &LutRegistry) -> Self {
         Self {
             spec,
             registers: svec![Some(spec.random()); num_registers],
             heap: FastMap::default(),
             io: FastMap::default(),
-            lut1_table: FastMap::default(),
-            lut2_table: FastMap::default(),
+            lut_reg: lut_reg.clone(),
             sources: FastMap::default(),
             destinations: FastMap::default(),
             pt_sources: FastMap::default(),
@@ -245,10 +240,7 @@ impl Evaluable<DopValue> for super::DopInstructionSet {
             PBS { dst, src, lut } | PBS_F { dst, src, lut } => {
                 let ct = context.read_ct(src);
                 let lut_id = DopInterpreterContext::resolve_lut_id(lut);
-                let lut_def = context
-                    .lut1_table
-                    .get(&lut_id)
-                    .unwrap_or_else(|| panic!("Lut1 {lut_id} missing from context"));
+                let lut_def = context.lut_reg.get_l1(&lut_id);
                 context.write_ct(dst, lut_def.lookup(ct, LookupCheck::AllowBothPadding));
                 svec![DopValue::Ctx]
             }
@@ -257,10 +249,7 @@ impl Evaluable<DopValue> for super::DopInstructionSet {
             PBS_ML2 { dst, src, lut } | PBS_ML2_F { dst, src, lut } => {
                 let ct = context.read_ct(src);
                 let lut_id = DopInterpreterContext::resolve_lut_id(lut);
-                let lut_def = context
-                    .lut2_table
-                    .get(&lut_id)
-                    .unwrap_or_else(|| panic!("Lut2 {lut_id} missing from context"));
+                let lut_def = context.lut_reg.get_l2(&lut_id);
                 let (ct0, ct1) = lut_def.lookup(ct, LookupCheck::AllowOutputPadding);
                 // Write to consecutive registers from the aligned base.
                 let Argument::CtReg { addr, mask } = dst else {

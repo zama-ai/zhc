@@ -1,6 +1,7 @@
 use super::*;
 use serde::Serialize;
 use std::{collections::VecDeque, fmt::Display};
+use zhc_crypto::integer_semantics::lut::LutRegistry;
 use zhc_ir::{AnnIR, AnnOpRef, OpIdRaw, OpMap, ValMap};
 use zhc_langs::vmlang::{VmByteCode, VmInstructionSet};
 use zhc_sim::{Tracer, TracingLevel};
@@ -80,6 +81,8 @@ pub struct LightVm<'a, 'b> {
     ready: VecDeque<StatOpRef<'a, 'b>>,
     #[serde(skip)]
     ir: &'b AnnIR<'a, VmLang, Stats, ()>,
+    #[serde(skip)]
+    lut_reg: &'b LutRegistry,
     threads: Store<ThreadId, ThreadState<'a, 'b>>,
     op_states: OpMap<OpState>,
     val_states: ValMap<ValState>,
@@ -100,7 +103,12 @@ pub struct LightVm<'a, 'b> {
 }
 
 impl<'a, 'b> LightVm<'a, 'b> {
-    pub fn new(ir: &'b AnnIR<'a, VmLang, Stats, ()>, n_threads: u16, policy: SchedPolicy) -> Self {
+    pub fn new(
+        ir: &'b AnnIR<'a, VmLang, Stats, ()>,
+        lut_reg: &'b LutRegistry,
+        n_threads: u16,
+        policy: SchedPolicy,
+    ) -> Self {
         let op_states = match policy {
             SchedPolicy::AsSoonAsPossible => {
                 ir.totally_mapped_opmap(|op| match op.get_predecessors_iter().count() {
@@ -122,6 +130,7 @@ impl<'a, 'b> LightVm<'a, 'b> {
             val_states,
             schedules: Store::with_value(VecDeque::new(), n_threads as usize),
             ir,
+            lut_reg,
             ready: VecDeque::new(),
             policy,
             threads: Store::with_value(ThreadState::Idle, n_threads as usize),
@@ -634,7 +643,7 @@ impl<'a, 'b> LightVm<'a, 'b> {
                     id: op.get_id().as_raw(),
                     dst: dst.0,
                     src: src.0,
-                    lut: (*lut).sas(),
+                    lut: self.lut_reg.get_l1_lid(lut).0.sas(),
                 }
             }
             VmInstructionSet::Pbs2 { lut } => {
@@ -672,7 +681,7 @@ impl<'a, 'b> LightVm<'a, 'b> {
                     dst1: dst1.0,
                     dst2: dst2.0,
                     src: src.0,
-                    lut: (*lut).sas(),
+                    lut: self.lut_reg.get_l2_lid(lut).0.sas(),
                 }
             }
         };

@@ -10,10 +10,7 @@
 //! Operand identifiers ([`TSrcId`], [`TDstId`], [`TImmId`]) encode the
 //! positional slot and block index of ciphertext inputs, ciphertext
 //! outputs, and plaintext inputs respectively, bridging the IOP-level
-//! positional naming to the hardware memory layout. [`LutId`] provides
-//! a numeric handle for lookup tables, mapped from the symbolic
-//! [`Lut1Def`](crate::ioplang::Lut1Def)/[`Lut2Def`](crate::ioplang::Lut2Def)
-//! names during IOP-to-HPU translation. [`Immediate`] wraps a `u8`
+//! positional naming to the hardware memory layout. [`Immediate`] wraps a `u8`
 //! plaintext constant inlined into instructions.
 //!
 //! PBS operations come in regular and flush variants (`Pbs`/`PbsF`,

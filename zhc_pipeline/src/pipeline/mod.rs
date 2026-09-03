@@ -98,6 +98,7 @@ use std::sync::LazyLock;
 
 use zhc_builder::{Builder, Type};
 use zhc_config::{hpu::HpuConfig, multi_hpu::MultiHpuConfig, vm::VmConfig};
+use zhc_crypto::integer_semantics::lut::{LutId, LutRegistry};
 use zhc_ir::{
     IR, OpMap, Signature, ValId, evaluation::LazyEvaluator, partition::PartitionId,
     visualization::Hierarchy,
@@ -128,6 +129,8 @@ struct ArtifactsValids {
     pbs_metrics: ValId,
     partitions: ValId,
     prototype: ValId,
+    lut_registry: ValId,
+    hpu_lut_relocation: ValId,
     hpu_config: ValId,
     hpulang_translated: ValId,
     hpulang_scheduled: ValId,
@@ -136,6 +139,7 @@ struct ArtifactsValids {
     hpu_metrics: ValId,
     hpu_trace: ValId,
     hpu_assembly: ValId,
+    multi_hpu_lut_relocation: ValId,
     multi_hpu_config: ValId,
     multi_hpulang_translated: ValId,
     multi_hpu_localities: ValId,
@@ -167,26 +171,35 @@ static PIPELINE: LazyLock<(IR<PipelineLang>, ArtifactsValids)> = LazyLock::new(|
     let slack_drawing = rets[0];
     let (_, rets) = ir.add_op(ComputePbsMetrics, svec![ioplang]);
     let pbs_metrics = rets[0];
+    let (_, rets) = ir.add_op(IopLangToLutRegistry, svec![ioplang]);
+    let lut_registry = rets[0];
 
     // Hpu
+    let (_, rets) = ir.add_op(InputHpuLutRelocation, svec![]);
+    let hpu_lut_relocation = rets[0];
     let (_, rets) = ir.add_op(InputHpuConfig, svec![]);
     let hpu_config = rets[0];
     let (_, rets) = ir.add_op(IopLangToHpuLang, svec![ioplang]);
     let hpulang_translated = rets[0];
     let (_, rets) = ir.add_op(ScheduleHpuLang, svec![hpulang_translated, hpu_config]);
     let hpulang_scheduled = rets[0];
-    let (_, rets) = ir.add_op(AllocateDopLang, svec![hpulang_scheduled, hpu_config]);
+    let (_, rets) = ir.add_op(
+        AllocateDopLang,
+        svec![hpulang_scheduled, hpu_config, lut_registry],
+    );
     let doplang = rets[0];
-    let (_, rets) = ir.add_op(GenerateHpuStream, svec![doplang]);
+    let (_, rets) = ir.add_op(GenerateHpuStream, svec![doplang, hpu_lut_relocation]);
     let hpu_stream = rets[0];
     let (_, rets) = ir.add_op(TraceHpuExecution, svec![doplang, hpu_config]);
     let hpu_trace = rets[0];
     let (_, rets) = ir.add_op(ComputeHpuMetrics, svec![doplang, hpulang_scheduled]);
     let hpu_metrics = rets[0];
-    let (_, rets) = ir.add_op(GenerateHpuAssembly, svec![doplang]);
+    let (_, rets) = ir.add_op(GenerateHpuAssembly, svec![doplang, lut_registry]);
     let hpu_assembly = rets[0];
 
     // Multi-Hpu
+    let (_, rets) = ir.add_op(InputMultiHpuLutRelocation, svec![]);
+    let multi_hpu_lut_relocation = rets[0];
     let (_, rets) = ir.add_op(InputMultiHpuConfig, svec![]);
     let multi_hpu_config = rets[0];
     let (_, rets) = ir.add_op(IopLangToMultiHpu, svec![ioplang, partitions]);
@@ -203,7 +216,7 @@ static PIPELINE: LazyLock<(IR<PipelineLang>, ArtifactsValids)> = LazyLock::new(|
     let multi_hpulang_scheduled = rets[0];
     let (_, rets) = ir.add_op(
         AllocateMultiDopLang,
-        svec![multi_hpulang_scheduled, multi_hpu_config],
+        svec![multi_hpulang_scheduled, multi_hpu_config, lut_registry],
     );
     let multi_doplang = rets[0];
     let (_, rets) = ir.add_op(
@@ -211,9 +224,12 @@ static PIPELINE: LazyLock<(IR<PipelineLang>, ArtifactsValids)> = LazyLock::new(|
         svec![multi_doplang, multi_hpu_config],
     );
     let multi_hpu_trace = rets[0];
-    let (_, rets) = ir.add_op(GenerateMultiHpuStream, svec![multi_doplang]);
+    let (_, rets) = ir.add_op(
+        GenerateMultiHpuStream,
+        svec![multi_doplang, multi_hpu_lut_relocation],
+    );
     let multi_hpu_stream = rets[0];
-    let (_, rets) = ir.add_op(GenerateMultiHpuAssembly, svec![multi_doplang]);
+    let (_, rets) = ir.add_op(GenerateMultiHpuAssembly, svec![multi_doplang, lut_registry]);
     let multi_hpu_assembly = rets[0];
 
     // Vm
@@ -223,7 +239,10 @@ static PIPELINE: LazyLock<(IR<PipelineLang>, ArtifactsValids)> = LazyLock::new(|
     let topology = rets[0];
     let (_, rets) = ir.add_op(IopLangToVmLang, svec![ioplang]);
     let vmlang = rets[0];
-    let (_, rets) = ir.add_op(GenerateVmExecutionPlan, svec![vmlang, vm_config, topology]);
+    let (_, rets) = ir.add_op(
+        GenerateVmExecutionPlan,
+        svec![vmlang, vm_config, topology, lut_registry],
+    );
     let vm_execution_plan = rets[0];
 
     (
@@ -235,6 +254,8 @@ static PIPELINE: LazyLock<(IR<PipelineLang>, ArtifactsValids)> = LazyLock::new(|
             slack_drawing,
             partitions,
             prototype,
+            lut_registry,
+            hpu_lut_relocation,
             hpu_config,
             hpulang_translated,
             hpulang_scheduled,
@@ -243,6 +264,7 @@ static PIPELINE: LazyLock<(IR<PipelineLang>, ArtifactsValids)> = LazyLock::new(|
             hpu_metrics,
             hpu_trace,
             hpu_assembly,
+            multi_hpu_lut_relocation,
             multi_hpu_config,
             multi_hpulang_translated,
             multi_hpu_localities,
@@ -539,6 +561,44 @@ impl Pipeline {
         self
     }
 
+    /// Sets the relocation table applied to LUT ids when encoding instruction streams.
+    ///
+    /// The compiler numbers the distinct lookup tables of the circuit from zero, in the order
+    /// they are first met, and by default the instruction streams carry those ids. When the
+    /// device holds its LUTs at other indices, this table gives the id to encode instead: entry
+    /// `i` is the device id of the compiler's LUT `i`, as listed by
+    /// [`get_lut_registry`](Self::get_lut_registry). The setting applies to the streams of both
+    /// HPU flows — [`get_hpu_stream`](Self::get_hpu_stream) and
+    /// [`get_multi_hpu_stream`](Self::get_multi_hpu_stream) — and to nothing else: the
+    /// device-level IRs and the assembly listings keep the compiler's ids.
+    ///
+    /// # Panics
+    ///
+    /// Generating a stream panics later if the table is missing an entry for one of the
+    /// circuit's LUTs.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_pipeline::Pipeline;
+    /// # use zhc_builder::{Builder, CiphertextBlockSpec};
+    /// # use zhc_config::hpu::HpuConfig;
+    /// # use zhc_crypto::integer_semantics::lut::LutId;
+    /// # let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let mut pipeline = Pipeline::new()
+    ///     .with_builder(builder)
+    ///     .with_hpu_config(HpuConfig::default())
+    ///     .with_hpu_lut_relocation(vec![LutId(4), LutId(2)]);
+    ///
+    /// // Bootstrappings using the compiler's LUTs 0 and 1 are now encoded with the
+    /// // device ids 4 and 2.
+    /// let stream = pipeline.get_hpu_stream();
+    /// ```
+    pub fn with_hpu_lut_relocation(mut self, relocation: Vec<LutId>) -> Self {
+        self.context.hpu_lut_relocation = Some(relocation);
+        self
+    }
+
     /// Sets the hardware topology the software VM schedules across.
     ///
     /// The `topology` argument describes the cores and memory of the machine the VM's compiled
@@ -648,6 +708,28 @@ impl Pipeline {
             .get_val(VALIDS().hpu_config)
             .unwrap()
             .unwrap_hpu_config_ref()
+    }
+
+    /// Returns the LUT relocation table applied to the single-HPU stream.
+    ///
+    /// Hands back the table given to [`with_hpu_lut_relocation`](Self::with_hpu_lut_relocation),
+    /// or `None` when none was set, in which case the stream carries the compiler's own LUT ids.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_pipeline::Pipeline;
+    /// let mut pipeline = Pipeline::new();
+    /// assert!(pipeline.get_hpu_lut_relocation().is_none());
+    /// ```
+    pub fn get_hpu_lut_relocation(&mut self) -> &Option<Vec<LutId>> {
+        self.eval
+            .pull_val(&mut self.context, VALIDS().hpu_lut_relocation);
+        self.eventually_report_failure();
+        self.eval
+            .get_val(VALIDS().hpu_lut_relocation)
+            .unwrap()
+            .unwrap_hpu_lut_relocation_ref()
     }
 
     /// Returns the optimized integer-level IR of the circuit.
@@ -849,6 +931,40 @@ impl Pipeline {
             .unwrap_pbs_metrics_ref()
     }
 
+    /// Returns the registry of the lookup tables of the circuit.
+    ///
+    /// Collects every distinct lookup table the circuit's programmable bootstrappings apply,
+    /// reading the optimized integer-level IR, and assigns each one the id the compiled program
+    /// refers to it by. This is the table to consult to know which function an id seen in an
+    /// assembly listing stands for, and it is what a relocation table given to
+    /// [`with_hpu_lut_relocation`](Self::with_hpu_lut_relocation) is indexed by. The registry
+    /// depends on the circuit alone, so it is shared by the single-HPU, multi-HPU, and VM flows.
+    ///
+    /// # Panics
+    ///
+    /// Panics if no circuit was set with [`with_builder`](Self::with_builder), or if a step this
+    /// artifact depends on panics, in which case the message names the failing step.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_pipeline::Pipeline;
+    /// # use zhc_builder::{Builder, CiphertextBlockSpec};
+    /// # use zhc_crypto::integer_semantics::lut::LutId;
+    /// # let mut pipeline = Pipeline::new()
+    /// #     .with_builder(Builder::new(CiphertextBlockSpec(2, 2)));
+    /// let registry = pipeline.get_lut_registry();
+    /// println!("{:?}", registry.get_raw_lut(&LutId(0)));
+    /// ```
+    pub fn get_lut_registry(&mut self) -> &LutRegistry {
+        self.eval.pull_val(&mut self.context, VALIDS().lut_registry);
+        self.eventually_report_failure();
+        self.eval
+            .get_val(VALIDS().lut_registry)
+            .unwrap()
+            .unwrap_lut_registry_ref()
+    }
+
     /// Returns the performance metrics of the compiled program.
     ///
     /// Runs the device-level program through the timing model of the HPU and reports the latency
@@ -1040,6 +1156,31 @@ impl Pipeline {
             .get_val(VALIDS().multi_hpu_config)
             .unwrap()
             .unwrap_multi_hpu_config_ref()
+    }
+
+    /// Returns the LUT relocation table applied to the per-HPU streams.
+    ///
+    /// The multi-HPU counterpart of
+    /// [`get_hpu_lut_relocation`](Self::get_hpu_lut_relocation): the same table, given to
+    /// [`with_hpu_lut_relocation`](Self::with_hpu_lut_relocation), is applied to the stream of
+    /// every HPU of the system. `None` when none was set, in which case the streams carry the
+    /// compiler's own LUT ids.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_pipeline::Pipeline;
+    /// let mut pipeline = Pipeline::new();
+    /// assert!(pipeline.get_multi_hpu_lut_relocation().is_none());
+    /// ```
+    pub fn get_multi_hpu_lut_relocation(&mut self) -> &Option<Vec<LutId>> {
+        self.eval
+            .pull_val(&mut self.context, VALIDS().multi_hpu_lut_relocation);
+        self.eventually_report_failure();
+        self.eval
+            .get_val(VALIDS().multi_hpu_lut_relocation)
+            .unwrap()
+            .unwrap_multi_hpu_lut_relocation_ref()
     }
 
     /// Returns the block-level HPU IR of the whole system, before scheduling.
@@ -1460,6 +1601,20 @@ impl Pipeline {
             .unwrap_hpu_config()
     }
 
+    /// Consumes the pipeline and returns the owned LUT relocation table of the single-HPU
+    /// stream.
+    ///
+    /// The owning counterpart of [`get_hpu_lut_relocation`](Self::get_hpu_lut_relocation).
+    pub fn into_hpu_lut_relocation(mut self) -> Option<Vec<LutId>> {
+        self.eval
+            .pull_val(&mut self.context, VALIDS().hpu_lut_relocation);
+        self.eventually_report_failure();
+        self.eval
+            .into_val(VALIDS().hpu_lut_relocation)
+            .unwrap()
+            .unwrap_hpu_lut_relocation()
+    }
+
     /// Consumes the pipeline and returns the owned integer-level IR of the circuit.
     ///
     /// The owning counterpart of [`get_ioplang`](Self::get_ioplang).
@@ -1571,6 +1726,22 @@ impl Pipeline {
             .unwrap_pbs_metrics()
     }
 
+    /// Consumes the pipeline and returns the owned registry of the lookup tables of the circuit.
+    ///
+    /// The owning counterpart of [`get_lut_registry`](Self::get_lut_registry).
+    ///
+    /// # Panics
+    ///
+    /// See [`get_lut_registry`](Self::get_lut_registry).
+    pub fn into_lut_registry(mut self) -> LutRegistry {
+        self.eval.pull_val(&mut self.context, VALIDS().lut_registry);
+        self.eventually_report_failure();
+        self.eval
+            .into_val(VALIDS().lut_registry)
+            .unwrap()
+            .unwrap_lut_registry()
+    }
+
     /// Consumes the pipeline and returns the owned performance metrics.
     ///
     /// The owning counterpart of [`get_hpu_metrics`](Self::get_hpu_metrics).
@@ -1667,6 +1838,20 @@ impl Pipeline {
             .into_val(VALIDS().multi_hpu_config)
             .unwrap()
             .unwrap_multi_hpu_config()
+    }
+
+    /// Consumes the pipeline and returns the owned LUT relocation table of the per-HPU streams.
+    ///
+    /// The owning counterpart of
+    /// [`get_multi_hpu_lut_relocation`](Self::get_multi_hpu_lut_relocation).
+    pub fn into_multi_hpu_lut_relocation(mut self) -> Option<Vec<LutId>> {
+        self.eval
+            .pull_val(&mut self.context, VALIDS().multi_hpu_lut_relocation);
+        self.eventually_report_failure();
+        self.eval
+            .into_val(VALIDS().multi_hpu_lut_relocation)
+            .unwrap()
+            .unwrap_multi_hpu_lut_relocation()
     }
 
     /// Consumes the pipeline and returns the owned block-level HPU IR of the whole system, before

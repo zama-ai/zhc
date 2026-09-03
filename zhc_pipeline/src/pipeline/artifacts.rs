@@ -5,6 +5,7 @@ use crate::{
 };
 use zhc_builder::{Builder, Type};
 use zhc_config::{hpu::HpuConfig, multi_hpu::MultiHpuConfig, vm::VmConfig};
+use zhc_crypto::integer_semantics::lut::{LutId, LutRegistry};
 use zhc_ir::{
     IR, OpMap, Signature,
     evaluation::Evaluation,
@@ -30,7 +31,9 @@ pub enum PipelineArtifact {
     SlackDrawing(FileHandle),
     Partitions(OpMap<PartitionId>),
     Prototype(Signature<Type>),
+    LutRegistry(LutRegistry),
     // Hpu
+    HpuLutRelocation(Option<Vec<LutId>>),
     HpuConfig(HpuConfig),
     HpuLangTranslated(IR<HpuLang>),
     HpuLangScheduled(IR<HpuLang>),
@@ -40,6 +43,7 @@ pub enum PipelineArtifact {
     HpuTrace(PerfettoTrace),
     HpuAssembly(FileHandle),
     // MultiHpu
+    MultiHpuLutRelocation(Option<Vec<LutId>>),
     MultiHpuConfig(MultiHpuConfig),
     MultiHpuLangTranslated(IR<HpuLang>),
     MultiHpuLocalities(OpMap<HpuLocality>),
@@ -53,6 +57,12 @@ pub enum PipelineArtifact {
     Topology(Topology),
     VmLang(IR<VmLang>),
     VmExecutionPlan(VmExecutionPlan),
+}
+
+impl From<LutRegistry> for PipelineArtifact {
+    fn from(v: LutRegistry) -> Self {
+        Self::LutRegistry(v)
+    }
 }
 
 impl Evaluation for PipelineArtifact {}

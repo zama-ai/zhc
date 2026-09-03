@@ -4,322 +4,15 @@
 //! representations from the integer operation language (IOP) to the HPU
 //! hardware language. The translation maps high-level operations to
 //! low-level hardware primitives while preserving semantic correctness.
-
-use std::sync::LazyLock;
-
-use zhc_builder::CiphertextBlockSpec;
-use zhc_crypto::integer_semantics::lut::{Lut1, Lut2};
 use zhc_ir::{
     IR,
     translation::{Order, Translation, translate_ann},
 };
 use zhc_langs::{
-    hpulang::{HpuInstructionSet, HpuLang, Immediate, LutId, TDstId, TImmId, TSrcId},
-    ioplang::{IopInstructionSet, IopLang, Lut1Def, Lut2Def},
+    hpulang::{HpuInstructionSet, HpuLang, Immediate, TDstId, TImmId, TSrcId},
+    ioplang::{IopInstructionSet, IopLang},
 };
-use zhc_utils::{FastMap, SafeAs, small::SmallMap, svec};
-
-pub(crate) static GIDS1: LazyLock<FastMap<Lut1, LutId>> = LazyLock::new(|| {
-    FastMap::from_iter([
-        (Lut1Def::None.into_lut(CiphertextBlockSpec(2, 2)), LutId(0)),
-        (
-            Lut1Def::MsgOnly.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(1),
-        ),
-        (
-            Lut1Def::CarryOnly.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(2),
-        ),
-        (
-            Lut1Def::CarryInMsg.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(3),
-        ),
-        (
-            Lut1Def::MultCarryMsg.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(4),
-        ),
-        (
-            Lut1Def::MultCarryMsgLsb.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(5),
-        ),
-        (
-            Lut1Def::MultCarryMsgMsb.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(6),
-        ),
-        (Lut1Def::BwAnd.into_lut(CiphertextBlockSpec(2, 2)), LutId(7)),
-        (Lut1Def::BwOr.into_lut(CiphertextBlockSpec(2, 2)), LutId(8)),
-        (Lut1Def::BwXor.into_lut(CiphertextBlockSpec(2, 2)), LutId(9)),
-        (
-            Lut1Def::CmpSign.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(10),
-        ),
-        (
-            Lut1Def::CmpReduce.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(11),
-        ),
-        (
-            Lut1Def::CmpGt.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(12),
-        ),
-        (
-            Lut1Def::CmpGte.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(13),
-        ),
-        (
-            Lut1Def::CmpLt.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(14),
-        ),
-        (
-            Lut1Def::CmpLte.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(15),
-        ),
-        (
-            Lut1Def::CmpEq.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(16),
-        ),
-        (
-            Lut1Def::CmpNeq.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(17),
-        ),
-        (
-            Lut1Def::ReduceCarry2.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(19),
-        ),
-        (
-            Lut1Def::ReduceCarry3.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(20),
-        ),
-        (
-            Lut1Def::ReduceCarryPad.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(21),
-        ),
-        (
-            Lut1Def::GenPropAdd.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(22),
-        ),
-        (
-            Lut1Def::IfTrueZeroed.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(23),
-        ),
-        (
-            Lut1Def::IfFalseZeroed.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(24),
-        ),
-        (
-            Lut1Def::Ripple2GenProp.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(25),
-        ),
-        (
-            Lut1Def::CmpGtMrg.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(27),
-        ),
-        (
-            Lut1Def::CmpGteMrg.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(28),
-        ),
-        (
-            Lut1Def::CmpLtMrg.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(29),
-        ),
-        (
-            Lut1Def::CmpLteMrg.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(30),
-        ),
-        (
-            Lut1Def::CmpEqMrg.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(31),
-        ),
-        (
-            Lut1Def::CmpNeqMrg.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(32),
-        ),
-        (
-            Lut1Def::IsSome.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(33),
-        ),
-        (
-            Lut1Def::CarryIsSome.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(34),
-        ),
-        (
-            Lut1Def::CarryIsNone.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(35),
-        ),
-        (
-            Lut1Def::MultCarryMsgIsSome.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(36),
-        ),
-        (
-            Lut1Def::MultCarryMsgMsbIsSome.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(37),
-        ),
-        (
-            Lut1Def::IsNull.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(38),
-        ),
-        (
-            Lut1Def::IsNullPos1.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(39),
-        ),
-        (
-            Lut1Def::NotNull.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(40),
-        ),
-        (
-            Lut1Def::MsgNotNull.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(41),
-        ),
-        (
-            Lut1Def::MsgNotNullPos1.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(42),
-        ),
-        (
-            Lut1Def::SolvePropGroupFinal0.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(44),
-        ),
-        (
-            Lut1Def::SolvePropGroupFinal1.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(45),
-        ),
-        (
-            Lut1Def::SolvePropGroupFinal2.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(46),
-        ),
-        (
-            Lut1Def::ExtractPropGroup0.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(47),
-        ),
-        (
-            Lut1Def::ExtractPropGroup1.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(48),
-        ),
-        (
-            Lut1Def::ExtractPropGroup2.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(49),
-        ),
-        (
-            Lut1Def::ExtractPropGroup3.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(50),
-        ),
-        (
-            Lut1Def::SolveProp.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(51),
-        ),
-        (
-            Lut1Def::SolvePropCarry.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(52),
-        ),
-        (
-            Lut1Def::SolveQuotient.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(53),
-        ),
-        (
-            Lut1Def::SolveQuotientPos1.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(54),
-        ),
-        (
-            Lut1Def::IfPos1FalseZeroed.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(55),
-        ),
-        (
-            Lut1Def::IfPos1FalseZeroedMsgCarry1.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(56),
-        ),
-        (
-            Lut1Def::ShiftLeftByCarryPos0Msg.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(57),
-        ),
-        (
-            Lut1Def::ShiftLeftByCarryPos0MsgNext.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(58),
-        ),
-        (
-            Lut1Def::ShiftRightByCarryPos0Msg.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(59),
-        ),
-        (
-            Lut1Def::ShiftRightByCarryPos0MsgNext.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(60),
-        ),
-        (
-            Lut1Def::IfPos0TrueZeroed.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(61),
-        ),
-        (
-            Lut1Def::IfPos0FalseZeroed.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(62),
-        ),
-        (
-            Lut1Def::IfPos1TrueZeroed.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(63),
-        ),
-    ])
-});
-
-pub(crate) static GIDS2: LazyLock<FastMap<Lut2, LutId>> = LazyLock::new(|| {
-    FastMap::from_iter([
-        (
-            Lut2Def::ManyGenProp.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(18),
-        ),
-        (
-            Lut2Def::ManyCarryMsg.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(26),
-        ),
-        (
-            Lut2Def::ManyMsgSplitShift1.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(43),
-        ),
-        (
-            Lut2Def::ManyInv1CarryMsg.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(64),
-        ),
-        (
-            Lut2Def::ManyInv2CarryMsg.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(65),
-        ),
-        (
-            Lut2Def::ManyInv3CarryMsg.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(66),
-        ),
-        (
-            Lut2Def::ManyInv4CarryMsg.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(67),
-        ),
-        (
-            Lut2Def::ManyInv5CarryMsg.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(68),
-        ),
-        (
-            Lut2Def::ManyInv6CarryMsg.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(69),
-        ),
-        (
-            Lut2Def::ManyInv7CarryMsg.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(70),
-        ),
-        (
-            Lut2Def::ManyMsgSplit.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(71),
-        ),
-        (
-            Lut2Def::Manym2lPropBit1MsgSplit.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(72),
-        ),
-        (
-            Lut2Def::Manym2lPropBit0MsgSplit.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(73),
-        ),
-        (
-            Lut2Def::Manyl2mPropBit1MsgSplit.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(74),
-        ),
-        (
-            Lut2Def::Manyl2mPropBit0MsgSplit.into_lut(CiphertextBlockSpec(2, 2)),
-            LutId(75),
-        ),
-    ])
-});
+use zhc_utils::{SafeAs, small::SmallMap, svec};
 
 pub(crate) fn lower_iop_to_hpu(ir: &IR<IopLang>) -> Translation<HpuLang> {
     use IopInstructionSet::*;
@@ -568,28 +261,10 @@ pub(crate) fn lower_iop_to_hpu(ir: &IR<IopLang>) -> Translation<HpuLang> {
                 // 10 CmpSign = 40 NotNull
                 // 11 CmpReduce = 51 SolveProp
                 // ...
-                let lut = match GIDS1.get(&lut) {
-                    Some(v) => *v,
-                    None => {
-                        eprintln!(
-                            "Warning: Failed to lookup the gid for key: {lut:?}. Custom LUT loading is not yet implemented. This can run on simulator but would fail on board."
-                        );
-                        LutId(76)
-                    }
-                };
-                translator.direct_translation(&op, HpuInstructionSet::Pbs { lut });
+                translator.direct_translation(&op, HpuInstructionSet::Pbs { lut: lut.clone() });
             }
             IopInstructionSet::Pbs2 { lut, .. } => {
-                let lut = match GIDS2.get(&lut) {
-                    Some(v) => *v,
-                    None => {
-                        eprintln!(
-                            "Warning: Failed to lookup the gid for key: {lut:?}. Custom LUT loading is not yet implemented. This can run on simulator but would fail on board."
-                        );
-                        LutId(76)
-                    }
-                };
-                translator.direct_translation(&op, HpuInstructionSet::Pbs2 { lut });
+                translator.direct_translation(&op, HpuInstructionSet::Pbs2 { lut: lut.clone() });
             }
         }
     })
@@ -641,27 +316,27 @@ mod test {
                 %21 = add_ct(%5, %13);
                 %22 = add_ct(%6, %14);
                 %23 = add_ct(%7, %15);
-                %24, %25 = pbs_2<Lut@26>(%16);
-                %26 = pbs<Lut@47>(%17);
-                %27 = pbs<Lut@48>(%18);
-                %28 = pbs<Lut@49>(%19);
-                %29 = pbs<Lut@47>(%20);
-                %30 = pbs<Lut@48>(%21);
-                %31 = pbs<Lut@49>(%22);
+                %24, %25 = pbs_2<Lut2("ManyCarryMsg")>(%16);
+                %26 = pbs<Lut1("ExtractPropGroup0")>(%17);
+                %27 = pbs<Lut1("ExtractPropGroup1")>(%18);
+                %28 = pbs<Lut1("ExtractPropGroup2")>(%19);
+                %29 = pbs<Lut1("ExtractPropGroup0")>(%20);
+                %30 = pbs<Lut1("ExtractPropGroup1")>(%21);
+                %31 = pbs<Lut1("ExtractPropGroup2")>(%22);
                 %32 = add_ct(%25, %26);
                 %33 = add_ct(%32, %27);
                 %34 = add_ct(%33, %28);
-                %35 = pbs<Lut@46>(%34);
+                %35 = pbs<Lut1("SolvePropGroupFinal2")>(%34);
                 %36 = add_ct(%29, %30);
                 %37 = add_ct(%36, %31);
-                %38 = pbs<Lut@44>(%32);
-                %39 = pbs<Lut@45>(%33);
+                %38 = pbs<Lut1("SolvePropGroupFinal0")>(%32);
+                %39 = pbs<Lut1("SolvePropGroupFinal1")>(%33);
                 %40 = add_ct(%29, %35);
-                %41 = pbs<Lut@44>(%40);
+                %41 = pbs<Lut1("SolvePropGroupFinal0")>(%40);
                 %42 = add_ct(%36, %35);
-                %43 = pbs<Lut@45>(%42);
+                %43 = pbs<Lut1("SolvePropGroupFinal1")>(%42);
                 %44 = add_ct(%37, %35);
-                %45 = pbs<Lut@46>(%44);
+                %45 = pbs<Lut1("SolvePropGroupFinal2")>(%44);
                 %46 = add_ct(%17, %25);
                 %47 = add_ct(%18, %38);
                 %48 = add_ct(%19, %39);
@@ -669,14 +344,14 @@ mod test {
                 %50 = add_ct(%21, %41);
                 %51 = add_ct(%22, %43);
                 %52 = add_ct(%23, %45);
-                %53 = pbs<Lut@1>(%24);
-                %54 = pbs<Lut@1>(%46);
-                %55 = pbs<Lut@1>(%47);
-                %56 = pbs<Lut@1>(%48);
-                %57 = pbs<Lut@1>(%49);
-                %58 = pbs<Lut@1>(%50);
-                %59 = pbs<Lut@1>(%51);
-                %60 = pbs<Lut@1>(%52);
+                %53 = pbs<Lut1("MsgOnly")>(%24);
+                %54 = pbs<Lut1("MsgOnly")>(%46);
+                %55 = pbs<Lut1("MsgOnly")>(%47);
+                %56 = pbs<Lut1("MsgOnly")>(%48);
+                %57 = pbs<Lut1("MsgOnly")>(%49);
+                %58 = pbs<Lut1("MsgOnly")>(%50);
+                %59 = pbs<Lut1("MsgOnly")>(%51);
+                %60 = pbs<Lut1("MsgOnly")>(%52);
                 dst_st<0.0_tdst>(%53);
                 dst_st<0.1_tdst>(%54);
                 dst_st<0.2_tdst>(%55);
@@ -712,39 +387,39 @@ mod test {
                 %14 = src_ld<1.6_tsrc>();
                 %15 = src_ld<1.7_tsrc>();
                 %16 = mac<4_imm>(%1, %0);
-                %17 = pbs<Lut@0>(%16);
+                %17 = pbs<Lut1("None")>(%16);
                 %18 = mac<4_imm>(%3, %2);
-                %19 = pbs<Lut@0>(%18);
+                %19 = pbs<Lut1("None")>(%18);
                 %20 = mac<4_imm>(%5, %4);
-                %21 = pbs<Lut@0>(%20);
+                %21 = pbs<Lut1("None")>(%20);
                 %22 = mac<4_imm>(%7, %6);
-                %23 = pbs<Lut@0>(%22);
+                %23 = pbs<Lut1("None")>(%22);
                 %24 = mac<4_imm>(%9, %8);
-                %25 = pbs<Lut@0>(%24);
+                %25 = pbs<Lut1("None")>(%24);
                 %26 = mac<4_imm>(%11, %10);
-                %27 = pbs<Lut@0>(%26);
+                %27 = pbs<Lut1("None")>(%26);
                 %28 = mac<4_imm>(%13, %12);
-                %29 = pbs<Lut@0>(%28);
+                %29 = pbs<Lut1("None")>(%28);
                 %30 = mac<4_imm>(%15, %14);
-                %31 = pbs<Lut@0>(%30);
+                %31 = pbs<Lut1("None")>(%30);
                 %32 = sub_ct(%17, %25);
-                %33 = pbs<Lut@40>(%32);
+                %33 = pbs<Lut1("CmpSign")>(%32);
                 %34 = add_cst<1_imm>(%33);
                 %35 = sub_ct(%19, %27);
-                %36 = pbs<Lut@40>(%35);
+                %36 = pbs<Lut1("CmpSign")>(%35);
                 %37 = add_cst<1_imm>(%36);
                 %38 = sub_ct(%21, %29);
-                %39 = pbs<Lut@40>(%38);
+                %39 = pbs<Lut1("CmpSign")>(%38);
                 %40 = add_cst<1_imm>(%39);
                 %41 = sub_ct(%23, %31);
-                %42 = pbs<Lut@40>(%41);
+                %42 = pbs<Lut1("CmpSign")>(%41);
                 %43 = add_cst<1_imm>(%42);
                 %44 = mac<4_imm>(%37, %34);
-                %45 = pbs<Lut@51>(%44);
+                %45 = pbs<Lut1("CmpReduce")>(%44);
                 %46 = mac<4_imm>(%43, %40);
-                %47 = pbs<Lut@51>(%46);
+                %47 = pbs<Lut1("CmpReduce")>(%46);
                 %48 = mac<4_imm>(%47, %45);
-                %49 = pbs<Lut@27>(%48);
+                %49 = pbs<Lut1("CmpGtMrg")>(%48);
                 dst_st<0.0_tdst>(%49);
             "#
         );

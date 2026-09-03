@@ -40,8 +40,10 @@ pub enum PipelineInstructionSet {
     BuilderToPartitions,
     BuilderToPrototype,
     ComputePbsMetrics,
+    IopLangToLutRegistry,
     DrawSlack,
     // Hpu
+    InputHpuLutRelocation,
     InputHpuConfig,
     IopLangToHpuLang,
     ScheduleHpuLang,
@@ -51,6 +53,7 @@ pub enum PipelineInstructionSet {
     TraceHpuExecution,
     GenerateHpuAssembly,
     // MultiHpu
+    InputMultiHpuLutRelocation,
     InputMultiHpuConfig,
     IopLangToMultiHpu,
     ScheduleMultiHpuLang,
@@ -75,21 +78,24 @@ impl PipelineInstructionSet {
         use PipelineInstructionSet::*;
         match self {
             InputBuilder | BuilderToIopLang | BuilderToPartitions | BuilderToPrototype
-            | ComputePbsMetrics | DrawSlack => Affinity::Commons,
-
-            InputHpuConfig | IopLangToHpuLang | ScheduleHpuLang | AllocateDopLang
-            | GenerateHpuStream | ComputeHpuMetrics | TraceHpuExecution | GenerateHpuAssembly => {
-                Affinity::Hpu
-            }
-
+            | ComputePbsMetrics | DrawSlack | IopLangToLutRegistry => Affinity::Commons,
+            InputHpuConfig
+            | IopLangToHpuLang
+            | ScheduleHpuLang
+            | AllocateDopLang
+            | GenerateHpuStream
+            | ComputeHpuMetrics
+            | TraceHpuExecution
+            | GenerateHpuAssembly
+            | InputHpuLutRelocation => Affinity::Hpu,
             InputMultiHpuConfig
+            | InputMultiHpuLutRelocation
             | IopLangToMultiHpu
             | ScheduleMultiHpuLang
             | AllocateMultiDopLang
             | GenerateMultiHpuStream
             | TraceMultiHpuExecution
             | GenerateMultiHpuAssembly => Affinity::MultiHpu,
-
             InputVmConfig | InputTopology | IopLangToVmLang | GenerateVmExecutionPlan => {
                 Affinity::Vm
             }
@@ -101,20 +107,26 @@ impl Format for PipelineInstructionSet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>, _ctx: &FormatContext) -> std::fmt::Result {
         use PipelineInstructionSet::*;
         match self {
+            // Commons
             InputBuilder => write!(f, "input_builder"),
-            InputHpuConfig => write!(f, "input_hpu_config"),
             BuilderToIopLang => write!(f, "builder_to_iop_lang"),
+            BuilderToPartitions => write!(f, "builder_to_partitions"),
             BuilderToPrototype => write!(f, "builder_to_prototype"),
             ComputePbsMetrics => write!(f, "compute_pbs_metrics"),
+            IopLangToLutRegistry => write!(f, "ioplang_to_lut_registry"),
+            DrawSlack => write!(f, "draw_slack"),
+            // Hpu
+            InputHpuLutRelocation => write!(f, "input_hpu_lut_relocation"),
+            InputHpuConfig => write!(f, "input_hpu_config"),
             IopLangToHpuLang => write!(f, "ioplang_to_hpulang"),
             ScheduleHpuLang => write!(f, "schedule_hpulang"),
             AllocateDopLang => write!(f, "allocate_doplang"),
             GenerateHpuStream => write!(f, "generate_hpu_stream"),
             ComputeHpuMetrics => write!(f, "compute_hpu_metrics"),
             TraceHpuExecution => write!(f, "trace_hpu_execution"),
-            DrawSlack => write!(f, "draw_slack"),
-            BuilderToPartitions => write!(f, "builder_to_partitions"),
             GenerateHpuAssembly => write!(f, "generate_hpu_assembly"),
+            // MultiHpu
+            InputMultiHpuLutRelocation => write!(f, "input_multi_hpu_lut_relocation"),
             InputMultiHpuConfig => write!(f, "input_multi_hpu_config"),
             IopLangToMultiHpu => write!(f, "ioplang_to_multi_hpu"),
             ScheduleMultiHpuLang => write!(f, "schedule_multi_hpulang"),
@@ -122,6 +134,7 @@ impl Format for PipelineInstructionSet {
             GenerateMultiHpuStream => write!(f, "generate_multi_hpu_stream"),
             TraceMultiHpuExecution => write!(f, "trace_multi_hpu_execution"),
             GenerateMultiHpuAssembly => write!(f, "generate_multi_hpu_assembly"),
+            // Vm
             InputVmConfig => write!(f, "input_vm_config"),
             InputTopology => write!(f, "input_topology"),
             IopLangToVmLang => write!(f, "ioplang_to_vmlang"),
@@ -143,20 +156,26 @@ impl DialectInstructionSet for PipelineInstructionSet {
         use PipelineInstructionSet::*;
         use PipelineTypeSystem::*;
         match self {
+            // Commons
             InputBuilder => sig![() -> (Builder)],
-            InputHpuConfig => sig![() -> (HpuConfig)],
             BuilderToIopLang => sig![(Builder) -> (IopLang)],
+            BuilderToPartitions => sig![(Builder) -> (Partitions)],
             BuilderToPrototype => sig![(Builder) -> (Prototype)],
             ComputePbsMetrics => sig![(IopLang) -> (PbsMetrics)],
+            IopLangToLutRegistry => sig![(IopLang) -> (LutRegistry)],
+            DrawSlack => sig![(IopLang) -> (SlackDrawing)],
+            // Hpu
+            InputHpuLutRelocation => sig![() -> (HpuLutRelocation)],
+            InputHpuConfig => sig![() -> (HpuConfig)],
             IopLangToHpuLang => sig![(IopLang) -> (HpuLangTranslated)],
             ScheduleHpuLang => sig![(HpuLangTranslated, HpuConfig) -> (HpuLangScheduled)],
-            AllocateDopLang => sig![(HpuLangScheduled, HpuConfig) -> (DopLang)],
-            GenerateHpuStream => sig![(DopLang) -> (HpuStream)],
+            AllocateDopLang => sig![(HpuLangScheduled, HpuConfig, LutRegistry) -> (DopLang)],
+            GenerateHpuStream => sig![(DopLang, HpuLutRelocation) -> (HpuStream)],
             ComputeHpuMetrics => sig![(DopLang, HpuLangScheduled) -> (HpuMetrics)],
             TraceHpuExecution => sig![(DopLang, HpuConfig) -> (HpuTrace)],
-            DrawSlack => sig![(IopLang) -> (SlackDrawing)],
-            BuilderToPartitions => sig![(Builder) -> (Partitions)],
-            GenerateHpuAssembly => sig![(DopLang) -> (HpuAssembly)],
+            GenerateHpuAssembly => sig![(DopLang, LutRegistry) -> (HpuAssembly)],
+            // MultiHpu
+            InputMultiHpuLutRelocation => sig![() -> (MultiHpuLutRelocation)],
             InputMultiHpuConfig => sig![() -> (MultiHpuConfig)],
             IopLangToMultiHpu => {
                 sig![(IopLang, Partitions) -> (MultiHpuLangTranslated, MultiHpuLocalities)]
@@ -164,14 +183,21 @@ impl DialectInstructionSet for PipelineInstructionSet {
             ScheduleMultiHpuLang => {
                 sig![(MultiHpuLangTranslated, MultiHpuLocalities, MultiHpuConfig) -> (MultiHpuLangScheduled)]
             }
-            AllocateMultiDopLang => sig![(MultiHpuLangScheduled, MultiHpuConfig) -> (MultiDopLang)],
-            GenerateMultiHpuStream => sig![(MultiDopLang) -> (MultiHpuStream)],
+            AllocateMultiDopLang => {
+                sig![(MultiHpuLangScheduled, MultiHpuConfig, LutRegistry) -> (MultiDopLang)]
+            }
+            GenerateMultiHpuStream => {
+                sig![(MultiDopLang, MultiHpuLutRelocation) -> (MultiHpuStream)]
+            }
             TraceMultiHpuExecution => sig![(MultiDopLang, MultiHpuConfig) -> (MultiHpuTrace)],
-            GenerateMultiHpuAssembly => sig![(MultiDopLang) -> (MultiHpuAssembly)],
+            GenerateMultiHpuAssembly => sig![(MultiDopLang, LutRegistry) -> (MultiHpuAssembly)],
+            // Vm
             InputVmConfig => sig![() -> (VmConfig)],
             InputTopology => sig![() -> (Topology)],
             IopLangToVmLang => sig![(IopLang) -> (VmLang)],
-            GenerateVmExecutionPlan => sig![(VmLang, VmConfig, Topology) -> (VmExecutionPlan)],
+            GenerateVmExecutionPlan => {
+                sig![(VmLang, VmConfig, Topology, LutRegistry) -> (VmExecutionPlan)]
+            }
         }
     }
 }

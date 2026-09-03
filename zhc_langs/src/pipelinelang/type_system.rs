@@ -19,7 +19,9 @@ pub enum PipelineTypeSystem {
     Prototype,
     PbsMetrics,
     SlackDrawing,
+    LutRegistry,
     // Hpu
+    HpuLutRelocation,
     HpuConfig,
     HpuLangTranslated,
     HpuLangScheduled,
@@ -29,6 +31,7 @@ pub enum PipelineTypeSystem {
     HpuAssembly,
     HpuStream,
     // Multi-Hpu
+    MultiHpuLutRelocation,
     MultiHpuConfig,
     MultiHpuLangTranslated,
     MultiHpuLocalities,

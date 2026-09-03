@@ -1,3 +1,4 @@
+use zhc_crypto::integer_semantics::lut::LutRegistry;
 use zhc_ir::{AnnIR, IR, ValId};
 use zhc_langs::{
     doplang::{Argument, DopInstructionSet, DopLang},
@@ -19,7 +20,7 @@ use super::{
 /// registers, and inter-HPU transfers as the `WAIT`/`NOTIFY`/`LD_B2B` handshake
 /// over the operation's reserved heap slots. The resulting stream is bracketed
 /// between a leading `_START` and a trailing `_END` context marker.
-pub fn translate<'ir>(ir: &AnnIR<'ir, HpuLang, Alloc, ()>) -> IR<DopLang> {
+pub fn translate<'ir>(ir: &AnnIR<'ir, HpuLang, Alloc, ()>, lut_reg: &LutRegistry) -> IR<DopLang> {
     use HpuInstructionSet::*;
 
     let mut output = IR::empty();
@@ -277,56 +278,56 @@ pub fn translate<'ir>(ir: &AnnIR<'ir, HpuLang, Alloc, ()>) -> IR<DopLang> {
                             add_op(DopInstructionSet::PBS {
                                 dst: Argument::ct_reg(translate(rets[0]).0),
                                 src: Argument::ct_reg(translate(args[0]).0),
-                                lut: Argument::lut_id(*lut),
+                                lut: Argument::lut_id(lut_reg.get_l1_lid(lut)),
                             });
                         }
                         PbsF { lut } => {
                             add_op(DopInstructionSet::PBS_F {
                                 dst: Argument::ct_reg(translate(rets[0]).0),
                                 src: Argument::ct_reg(translate(args[0]).0),
-                                lut: Argument::lut_id(*lut),
+                                lut: Argument::lut_id(lut_reg.get_l1_lid(lut)),
                             });
                         }
                         Pbs2 { lut } => {
                             add_op(DopInstructionSet::PBS_ML2 {
                                 dst: Argument::ct_reg2(translate(rets[0]).0),
                                 src: Argument::ct_reg(translate(args[0]).0),
-                                lut: Argument::lut_id(*lut),
+                                lut: Argument::lut_id(lut_reg.get_l2_lid(lut)),
                             });
                         }
                         Pbs2F { lut } => {
                             add_op(DopInstructionSet::PBS_ML2_F {
                                 dst: Argument::ct_reg2(translate(rets[0]).0),
                                 src: Argument::ct_reg(translate(args[0]).0),
-                                lut: Argument::lut_id(*lut),
+                                lut: Argument::lut_id(lut_reg.get_l2_lid(lut)),
                             });
                         }
                         Pbs4 { lut } => {
                             add_op(DopInstructionSet::PBS_ML4 {
                                 dst: Argument::ct_reg4(translate(rets[0]).0),
                                 src: Argument::ct_reg(translate(args[0]).0),
-                                lut: Argument::lut_id(*lut),
+                                lut: Argument::lut_id(lut_reg.get_l4_lid(lut)),
                             });
                         }
                         Pbs4F { lut } => {
                             add_op(DopInstructionSet::PBS_ML4_F {
                                 dst: Argument::ct_reg4(translate(rets[0]).0),
                                 src: Argument::ct_reg(translate(args[0]).0),
-                                lut: Argument::lut_id(*lut),
+                                lut: Argument::lut_id(lut_reg.get_l4_lid(lut)),
                             });
                         }
                         Pbs8 { lut } => {
                             add_op(DopInstructionSet::PBS_ML8 {
                                 dst: Argument::ct_reg8(translate(rets[0]).0),
                                 src: Argument::ct_reg(translate(args[0]).0),
-                                lut: Argument::lut_id(*lut),
+                                lut: Argument::lut_id(lut_reg.get_l8_lid(lut)),
                             });
                         }
                         Pbs8F { lut } => {
                             add_op(DopInstructionSet::PBS_ML8_F {
                                 dst: Argument::ct_reg8(translate(rets[0]).0),
                                 src: Argument::ct_reg(translate(args[0]).0),
-                                lut: Argument::lut_id(*lut),
+                                lut: Argument::lut_id(lut_reg.get_l8_lid(lut)),
                             });
                         }
                         BatchArg { .. } | BatchRet { .. } => {}

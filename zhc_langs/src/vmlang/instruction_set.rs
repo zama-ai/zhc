@@ -1,6 +1,7 @@
 use std::fmt::{Debug, Display};
 
 use super::type_system::VmTypeSystem;
+use zhc_crypto::integer_semantics::lut::{Lut1, Lut2};
 use zhc_ir::{DialectInstructionSet, Format, FormatContext, Signature, sig};
 
 /// Instruction set for the VM dialect.
@@ -85,10 +86,10 @@ pub enum VmInstructionSet {
     Ks,
     /// Single-output programmable bootstrapping through table `lut`.
     /// `(CtRegister) → (CtRegister)`
-    Pbs { lut: usize },
+    Pbs { lut: Lut1 },
     /// Two-output programmable bootstrapping through table `lut`.
     /// `(CtRegister) → (CtRegister, CtRegister)`
-    Pbs2 { lut: usize },
+    Pbs2 { lut: Lut2 },
 }
 
 impl VmInstructionSet {
@@ -127,8 +128,8 @@ impl Format for VmInstructionSet {
             } => write!(f, "src_ld<{from_pos}, {from_block}>"),
             DstSt { to_block, to_pos } => write!(f, "dst_st<{to_pos}, {to_block}>"),
             Ks => write!(f, "ks"),
-            Pbs { lut } => write!(f, "pbs<{lut}>"),
-            Pbs2 { lut } => write!(f, "pbs_2<{lut}>"),
+            Pbs { lut } => write!(f, "pbs<{lut:?}>"),
+            Pbs2 { lut } => write!(f, "pbs_2<{lut:?}>"),
         }
     }
 }

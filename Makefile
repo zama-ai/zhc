@@ -60,7 +60,7 @@ vm-throughput:
 		cargo +nightly-2026-04-22 bench --locked -p zhc_vm --bench throughput --profile profiling
 
 vm-throughput-verify:
-	VM_VERIFY=1 $(if $(CORES),VM_CORES=$(CORES)) \
+	VM_VERIFY=1 \
 	RUSTFLAGS="-C target-cpu=native -A warnings" CARGO_PROFILE_RELEASE_LTO=fat \
 		cargo +nightly-2026-04-22 bench --locked -p zhc_vm --bench throughput --profile profiling
 

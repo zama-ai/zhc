@@ -9,6 +9,7 @@ use tfhe::{
 };
 use zhc::prelude::VmExecutionPlan;
 use zhc_config::vm::VmConfig;
+use zhc_crypto::integer_semantics::lut::LutRegistry;
 use zhc_profiling::{interval_begin, interval_end};
 use zhc_utils::{BiMap, SafeAs, topology::Topology};
 
@@ -22,6 +23,11 @@ use super::*;
 /// [`set_server_key`](Self::set_server_key), the VM can execute any number of
 /// [`VmExecutionPlan`]s through [`execute`](Self::execute).
 ///
+/// The lookup tables are those of the plan being executed: each plan carries the registry
+/// of the tables its bootstrappings refer to, and [`execute`](Self::execute) loads them into
+/// every storage the first time it meets a new registry. Running plans that share the same
+/// registry back to back therefore costs no reload.
+///
 /// Workers synchronize via barrier: calling [`execute`](Self::execute) releases all workers
 /// to process their assigned bytecode slice, then blocks until every worker finishes. This
 /// means a single [`Vm`] instance is not meant to be shared across threads — it is driven
@@ -34,6 +40,7 @@ pub struct Vm {
     topo: Topology,
     state: Arc<State>,
     threads: Vec<JoinHandle<()>>,
+    loaded_luts: Option<LutRegistry>,
 }
 
 impl Vm {
@@ -129,6 +136,7 @@ impl Vm {
             threads: workers,
             state,
             topo,
+            loaded_luts: None,
         }
     }
 
@@ -140,6 +148,10 @@ impl Vm {
     /// the encrypted results. The correspondence between slice positions and the plan's
     /// input/output indices is determined at compilation time by the pipeline.
     ///
+    /// Before running, the lookup tables of the plan are loaded into every storage, unless
+    /// the previous plan already used the same registry. Loading builds one accumulator per
+    /// table and copies it on a processor local to each memory node.
+    ///
     /// This method blocks until every worker has finished its assigned bytecode. The plan
     /// can be reused across multiple calls, but the VM must not be called concurrently from
     /// multiple threads.
@@ -147,7 +159,10 @@ impl Vm {
     /// # Panics
     ///
     /// Panics if the plan requires more registers than the VM's register file can hold
-    /// (configured via `regf_size` in [`VmConfig`](zhc_config::vm::VmConfig)).
+    /// (configured via `regf_size` in [`VmConfig`](zhc_config::vm::VmConfig)), if it uses
+    /// more lookup tables than the registry holds
+    /// ([`LUTS_REGISTRY_SIZE`](zhc_config::vm::LUTS_REGISTRY_SIZE)), or if one of its tables
+    /// was built for another block spec than the VM's.
     ///
     /// # Examples
     ///
@@ -190,6 +205,9 @@ impl Vm {
             plan.nregs,
             self.config.regf_size
         );
+        if self.loaded_luts.as_ref() != Some(&plan.lut_reg) {
+            self.load_luts(&plan.lut_reg);
+        }
         let mut run = Run::generate(plan, inputs, outputs);
         self.state
             .run
@@ -202,6 +220,32 @@ impl Vm {
             .wall_nanos
             .fetch_add(t.elapsed().as_nanos() as u64, Ordering::Relaxed);
         interval_end(c"Execution", 0);
+    }
+
+    /// Builds the accumulators of `lut_reg` and copies them into every storage.
+    ///
+    /// The accumulators are built once, then copied on a processor local to each memory node
+    /// so the pages are faulted on the right NUMA domain.
+    fn load_luts(&mut self, lut_reg: &LutRegistry) {
+        interval_begin(c"LoadLuts", 0);
+        let len = self.config.lut_registry_alloc_size();
+        let mut accumulators = vec![0u64; len];
+        build_registry(&self.config, lut_reg, &mut accumulators);
+        for (sid, mem) in self
+            .topo
+            .iter_all_memories()
+            .enumerate()
+            .map(|(i, m)| (StorageId(i.sas()), m))
+        {
+            let storage = self.state.storages.get(sid).unwrap();
+            let processor = mem.iter_associated_processors().next().unwrap();
+            processor.run_on(|| unsafe {
+                std::slice::from_raw_parts_mut(storage.luts.ptr, len)
+                    .clone_from_slice(&accumulators);
+            });
+        }
+        self.loaded_luts = Some(lut_reg.clone());
+        interval_end(c"LoadLuts", 0);
     }
 
     /// Resets all accumulated execution statistics to zero.

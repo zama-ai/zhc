@@ -4,6 +4,9 @@
 //! plans against encrypted data. The VM manages a pool of worker threads pinned to hardware
 //! cores, each with NUMA-local copies of the cryptographic material (bootstrap key, keyswitch
 //! key, and lookup tables), so that FHE operations execute with minimal cross-socket traffic.
+//! The lookup tables come from the plan itself: every
+//! [`VmExecutionPlan`](zhc::prelude::VmExecutionPlan) carries the registry of the tables it uses,
+//! and the VM loads it on first execution.
 //!
 //! # Getting Started
 //!
@@ -15,7 +18,8 @@
 //! 3. Install the server key with [`Vm::set_server_key`] — this replicates the bootstrap and
 //!    keyswitch keys into every NUMA-local storage.
 //! 4. Compile a [`VmExecutionPlan`](zhc::prelude::VmExecutionPlan) from a pipeline, then call
-//!    [`Vm::execute`] to run it on ciphertext inputs.
+//!    [`Vm::execute`] to run it on ciphertext inputs. The plan's lookup tables are loaded into the
+//!    VM on the first call.
 //!
 //! ```rust,no_run
 //! # use tfhe::integer::RadixCiphertext;

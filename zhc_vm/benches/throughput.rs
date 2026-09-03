@@ -259,6 +259,7 @@ fn replicate(
     (
         VmExecutionPlan {
             irs,
+            lut_reg: single.lut_reg.clone(),
             locks_table,
             successors_table,
             nregs,
@@ -273,10 +274,8 @@ fn verify_correctness() {
     let spec = CiphertextSpec::new(64, 2, 2);
     let n_blocks = 64 / 2;
 
-    let n_cores = std::env::var("VM_CORES")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or_else(|| std::thread::available_parallelism().unwrap().get());
+    // One lane per VM worker: the VM spawns a worker per detected processor.
+    let n_cores = std::thread::available_parallelism().unwrap().get();
 
     let config = VmConfig::from_ks32_params(p, 1024);
     let lane_config = VmConfig::from_ks32_params(p, 1024);

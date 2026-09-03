@@ -1,4 +1,5 @@
 use zhc_config::vm::VmConfig;
+use zhc_crypto::integer_semantics::lut::LutRegistry;
 use zhc_ir::{IR, OpIdRaw};
 use zhc_langs::vmlang::{VmByteCode, VmLang};
 use zhc_sim::Simulator;
@@ -15,6 +16,7 @@ use crate::SchedPolicy;
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct VmExecutionPlan {
     pub irs: Vec<Vec<VmByteCode>>,
+    pub lut_reg: LutRegistry,
     pub locks_table: Vec<u8>,
     pub successors_table: Vec<SmallVec<OpIdRaw>>,
     pub nregs: usize,
@@ -23,6 +25,7 @@ pub struct VmExecutionPlan {
 #[allow(unused)]
 pub fn schedule<'a>(
     ir: &'a IR<VmLang>,
+    lut_reg: &LutRegistry,
     config: &VmConfig,
     topology: &Topology,
     policy: SchedPolicy,
@@ -30,7 +33,7 @@ pub fn schedule<'a>(
     let ann_ir = analyze(ir);
     let mut sim = Simulator::from_simulatable(
         MHz(400),
-        LightVm::new(&ann_ir, topology.n_processors().sas(), policy),
+        LightVm::new(&ann_ir, &lut_reg, topology.n_processors().sas(), policy),
         zhc_sim::TracingLevel::None,
     );
     sim.play();
@@ -41,6 +44,7 @@ pub fn schedule<'a>(
             .into_iter()
             .map(|deq| deq.into())
             .collect(),
+        lut_reg: lut_reg.clone(),
         locks_table: light_vm.locks_table,
         successors_table: light_vm.successors_table,
         nregs: light_vm.last_introduced_reg.0 as usize + 1,

@@ -4,8 +4,6 @@ use tfhe::core_crypto::prelude::{Fft, c64};
 use zhc_config::vm::VmConfig;
 use zhc_utils::topology::Topology;
 
-use super::*;
-
 pub struct Storage {
     pub bsk: Allocated<c64>,
     pub ksk: Allocated<u32>,
@@ -18,10 +16,8 @@ impl Storage {
     pub fn new(config: &VmConfig, topo: &Topology) -> Self {
         let bsk = Allocated::<c64>::alloc(config.bsk_alloc_size());
         let ksk = Allocated::<u32>::alloc(config.ksk_alloc_size());
+        // Accumulators are written by `Vm::load_luts` from the registry of each plan.
         let luts = Allocated::<u64>::alloc(config.lut_registry_alloc_size());
-        unsafe {
-            build_registry(config, std::slice::from_raw_parts_mut(luts.ptr, luts.len));
-        }
         let local_reg_size = config.register_alloc_size() / topo.n_memories();
         let reg = Allocated::<u64>::alloc(local_reg_size);
         unsafe {
