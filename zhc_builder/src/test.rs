@@ -139,6 +139,29 @@ fn let_ciphertext_spans_complete_width() {
     }
 }
 
+#[test]
+#[should_panic(expected = "ciphertext constant")]
+fn let_ciphertext_rejects_out_of_range_value() {
+    let builder = Builder::new(SPEC);
+    builder.block_let_ciphertext((SPEC.complete_mask() + 1) as u8);
+}
+
+#[test]
+#[should_panic(expected = "plaintext constant")]
+fn let_plaintext_rejects_out_of_range_value() {
+    let builder = Builder::new(SPEC);
+    builder.block_let_plaintext((SPEC.complete_mask() + 1) as u8);
+}
+
+#[test]
+#[should_panic(expected = "multiply-accumulate")]
+fn mac_rejects_out_of_range_factor() {
+    let builder = Builder::new(SPEC);
+    let a = builder.block_let_ciphertext(1);
+    let b = builder.block_let_ciphertext(1);
+    builder.block_wrapping_mac(a, b, (SPEC.complete_mask() + 1) as u8);
+}
+
 /// Wrapping `0 - x` is the two's complement of `x` on the complete width.
 #[test]
 fn wrapping_plaintext_sub_from_zero_negates() {

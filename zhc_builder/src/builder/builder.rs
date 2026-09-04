@@ -944,6 +944,11 @@ impl Builder {
     /// let incremented = builder.block_add_plaintext(&blocks[0], &one);
     /// ```
     pub fn block_let_plaintext(&self, value: u8) -> PlaintextBlock {
+        assert!(
+            value.sas::<u16>() <= self.spec.complete_mask(),
+            "Tried to create a plaintext constant {value}, but the block only has {} bits.",
+            self.spec.complete_size()
+        );
         let (_node, ret) = self.inner_mut().insert_op(
             IopInstructionSet::LetPlaintextBlock { value },
             svec![],
@@ -974,6 +979,11 @@ impl Builder {
     /// let sum = builder.block_add(&zero, &blocks[0]); // 0 + blocks[0]
     /// ```
     pub fn block_let_ciphertext(&self, value: u8) -> CiphertextBlock {
+        assert!(
+            value.sas::<u16>() <= self.spec.complete_mask(),
+            "Tried to create a ciphertext constant {value}, but the block only has {} bits.",
+            self.spec.complete_size()
+        );
         self.emit_block(IopInstructionSet::LetCiphertextBlock { value }, svec![])
     }
 
@@ -1533,6 +1543,11 @@ impl Builder {
         mul: u8,
         flavor: Flavor,
     ) -> CiphertextBlock {
+        assert!(
+            mul.sas::<u16>() <= self.spec.complete_mask(),
+            "Tried to multiply-accumulate with factor {mul}, but the block only has {} bits.",
+            self.spec.complete_size()
+        );
         self.emit_block(
             IopInstructionSet::PackCt { mul, flavor },
             svec![src_a.as_ref().valid, src_b.as_ref().valid],
