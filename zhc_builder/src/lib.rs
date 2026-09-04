@@ -66,8 +66,10 @@
 //! that use a different flavor are explicitly marked (e.g.
 //! [`block_wrapping_add_plaintext`](Builder::block_wrapping_add_plaintext)), and every operation
 //! also has a `*_with` form taking the [`Flavor`] as a runtime argument (e.g.
-//! [`block_add_with`](Builder::block_add_with)). [`block_neg`](Builder::block_neg) is the only
-//! linear operation without a flavor: negation is inherently wrapping.
+//! [`block_add_with`](Builder::block_add_with)). There is no dedicated negation: negating a
+//! block is [`block_wrapping_plaintext_sub`](Builder::block_wrapping_plaintext_sub) from a zero
+//! plaintext, which two's-complements the block on its complete width and may flip the
+//! padding bit.
 //!
 //! # Lookup Checks
 //!

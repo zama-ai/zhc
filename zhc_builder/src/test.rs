@@ -21,22 +21,8 @@ const SPEC: CiphertextBlockSpec = CiphertextBlockSpec(2, 2);
 const FLAVORS: [Flavor; 3] = [Flavor::Protect, Flavor::Temper, Flavor::Wrapping];
 
 /// Builds a constant block holding any complete-width value.
-///
-/// `LetCiphertextBlock` only accepts message values, so the upper bits are added with wrapping
-/// plaintext additions, message-sized chunk by chunk.
 fn let_complete(builder: &Builder, value: EmulatedCiphertextBlockStorage) -> CiphertextBlock {
-    let msg = SPEC.message_size();
-    let mut acc = builder.block_let_ciphertext((value & SPEC.message_mask()) as u8);
-    let mut shift = msg;
-    while shift < SPEC.complete_size() {
-        let chunk = ((value >> shift) & SPEC.message_mask()) as u8;
-        if chunk != 0 {
-            let pt = builder.block_let_plaintext(chunk << shift);
-            acc = builder.block_wrapping_add_plaintext(acc, pt);
-        }
-        shift += msg;
-    }
-    acc
+    builder.block_let_ciphertext(value as u8)
 }
 
 /// Builds a circuit from raw complete-width constants, evaluates it and returns the raw output
@@ -146,10 +132,23 @@ fn named_shortcuts_pick_the_documented_flavor() {
 }
 
 #[test]
-fn neg_matches_crypto() {
+fn let_ciphertext_spans_complete_width() {
     for a in 0..=SPEC.complete_mask() {
-        let expected = Some(SPEC.from_complete(a).neg());
-        assert_eq!(run1(&[a], |bd, x| bd.block_neg(x[0])), expected);
+        let expected = Some(SPEC.from_complete(a));
+        assert_eq!(run1(&[a], |_, x| x[0]), expected);
+    }
+}
+
+/// Wrapping `0 - x` is the two's complement of `x` on the complete width.
+#[test]
+fn wrapping_plaintext_sub_from_zero_negates() {
+    for a in 0..=SPEC.complete_mask() {
+        let expected = Some(SPEC.from_complete(a.wrapping_neg() & SPEC.complete_mask()));
+        let got = run1(&[a], |bd, x| {
+            let zero = bd.block_let_plaintext(0);
+            bd.block_wrapping_plaintext_sub(zero, x[0])
+        });
+        assert_eq!(got, expected);
     }
 }
 
@@ -376,7 +375,7 @@ fn flavored_instructions_format_with_prefix() {
     builder.block_add(a, b);
     builder.block_temper_sub(a, b);
     builder.block_wrapping_mul_plaintext(a, p);
-    builder.block_neg(a);
+    builder.block_wrapping_plaintext_sub(p, a);
     builder.block_temper_shl(a, 1);
     builder.block_wrapping_pack(a, b);
     let text = builder.ir().format().to_string();
@@ -384,7 +383,7 @@ fn flavored_instructions_format_with_prefix() {
         "add_ct(",
         "temper_sub_ct(",
         "wrapping_mul_pt(",
-        "neg_ct(",
+        "wrapping_pt_sub(",
         "temper_shl_ct<1>(",
         "wrapping_pack_ct<4>(",
     ] {

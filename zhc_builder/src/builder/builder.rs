@@ -960,7 +960,8 @@ impl Builder {
     ///
     /// The `value` is stored as a trivially-encrypted block (zero noise). This is useful
     /// for initializing accumulators or providing constant operands in arithmetic. The
-    /// value's bit-width must fit within the block's message bits.
+    /// value spans the complete block width (padding, carry and message bits) and must
+    /// fit within it.
     ///
     /// # Examples
     ///
@@ -1188,26 +1189,6 @@ impl Builder {
         src_b: impl AsRef<CiphertextBlock>,
     ) -> CiphertextBlock {
         self.block_sub_with(src_a, src_b, Flavor::Wrapping)
-    }
-
-    /// Negates a ciphertext block on its complete width.
-    ///
-    /// Computes the two's complement of `src` modulo `2^complete_size`. Negation is
-    /// inherently wrapping: the padding bit may be freely set or cleared, so there is no
-    /// flavor to choose. This is the block-level primitive behind negacyclic tricks such
-    /// as sign extraction.
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// # use zhc_builder::*;
-    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.ciphertext_input(4);
-    /// let blocks = builder.ciphertext_split(&ct);
-    /// let negated = builder.block_neg(&blocks[0]);
-    /// ```
-    pub fn block_neg(&self, src: impl AsRef<CiphertextBlock>) -> CiphertextBlock {
-        self.emit_block(IopInstructionSet::NegCt, svec![src.as_ref().valid])
     }
 
     /// Shifts a ciphertext block left by `amount` bits with the given flavor.

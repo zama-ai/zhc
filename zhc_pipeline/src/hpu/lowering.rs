@@ -118,10 +118,6 @@ pub(crate) fn lower_iop_to_hpu(ir: &IR<IopLang>) -> Translation<HpuLang> {
             IopInstructionSet::SubCt { .. } => {
                 translator.direct_translation(&op, HpuInstructionSet::SubCt);
             }
-            IopInstructionSet::NegCt => {
-                // 0 - x on the complete block width.
-                translator.direct_translation(&op, HpuInstructionSet::CstSub { cst: Immediate(0) });
-            }
             IopInstructionSet::ShlCt { amount, .. } => {
                 translator.direct_translation(
                     &op,

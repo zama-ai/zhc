@@ -107,10 +107,6 @@ pub fn lower_iop_to_vm(ir: &IR<IopLang>) -> IR<VmLang> {
             IopInstructionSet::SubCt { .. } => {
                 translator.direct_translation(&op, VmInstructionSet::SubCt);
             }
-            IopInstructionSet::NegCt => {
-                // 0 - x on the complete block width.
-                translator.direct_translation(&op, VmInstructionSet::CstSub { cst: 0 });
-            }
             IopInstructionSet::ShlCt { amount, .. } => {
                 translator.direct_translation(
                     &op,

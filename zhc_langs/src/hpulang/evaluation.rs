@@ -162,7 +162,7 @@ impl Evaluable<HpuValue> for super::HpuInstructionSet {
                 svec![HpuValue::CtRegister(
                     context
                         .spec
-                        .from_message(cst.0 as EmulatedCiphertextBlockStorage)
+                        .from_complete(cst.0 as EmulatedCiphertextBlockStorage)
                 )]
             }
 

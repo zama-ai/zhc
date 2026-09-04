@@ -93,7 +93,11 @@ impl EmulatedPlaintextBlock {
 }
 
 impl EmulatedCiphertextBlock {
-    /// Negates the ciphertext block. This can freely set or unset the padding bit.
+    /// Negates the ciphertext block on its complete width. This can freely set or unset the
+    /// padding bit.
+    ///
+    /// Used to emulate the negacyclic folding of lookups. Circuits should express negation as
+    /// a wrapping `0 - x` plaintext subtraction, which computes the same value.
     pub fn neg(mut self) -> Self {
         let a = !self.raw_complete_bits() & self.spec().complete_mask();
         let raw_out = (a + 1) & self.spec().complete_mask();

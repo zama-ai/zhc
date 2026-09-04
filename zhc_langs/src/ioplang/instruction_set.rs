@@ -22,9 +22,9 @@ use crate::ioplang::IopTypeSystem;
 /// `LetCiphertextBlock` produce scalar block constants.
 ///
 /// **Block arithmetic.** Ciphertext-ciphertext operations (`AddCt`,
-/// `SubCt`, `NegCt`, `ShlCt`, `PackCt`) and mixed ciphertext-plaintext
+/// `SubCt`, `ShlCt`, `PackCt`) and mixed ciphertext-plaintext
 /// operations (`AddPt`, `SubPt`, `PtSub`, `MulPt`) all operate on
-/// individual blocks. Every linear operation except `NegCt` carries a
+/// individual blocks. Every linear operation carries a
 /// [`Flavor`] selecting its overflow policy: `Protect` asserts the padding
 /// bit stays clear on both inputs and output, `Temper` allows the padding
 /// bit to absorb overflow but forbids carry beyond it, and `Wrapping`
@@ -67,7 +67,8 @@ pub enum IopInstructionSet {
     DeclareCiphertext { int_size: u16 },
     /// Plaintext block constant. `() → (PlaintextBlock)`
     LetPlaintextBlock { value: u8 },
-    /// Ciphertext block constant. `() → (CiphertextBlock)`
+    /// Ciphertext block constant. The value spans the complete block
+    /// width (padding, carry and message bits). `() → (CiphertextBlock)`
     LetCiphertextBlock { value: u8 },
     /// Addition of two ciphertext blocks.
     /// `(CiphertextBlock, CiphertextBlock) → (CiphertextBlock)`
@@ -75,10 +76,6 @@ pub enum IopInstructionSet {
     /// Subtraction of two ciphertext blocks.
     /// `(CiphertextBlock, CiphertextBlock) → (CiphertextBlock)`
     SubCt { flavor: Flavor },
-    /// Two's-complement negation of a ciphertext block on its complete
-    /// width. Inherently wrapping: the padding bit may be freely set or
-    /// cleared. `(CiphertextBlock) → (CiphertextBlock)`
-    NegCt,
     /// Left shift of a ciphertext block by `amount` bits.
     /// `(CiphertextBlock) → (CiphertextBlock)`
     ShlCt { amount: u8, flavor: Flavor },
@@ -166,7 +163,6 @@ impl Format for IopInstructionSet {
             LetCiphertextBlock { value } => write!(f, "let_ct_block<{value}>"),
             AddCt { flavor } => write!(f, "{}add_ct", flavor.prefix()),
             SubCt { flavor } => write!(f, "{}sub_ct", flavor.prefix()),
-            NegCt => write!(f, "neg_ct"),
             ShlCt { amount, flavor } => write!(f, "{}shl_ct<{amount}>", flavor.prefix()),
             PackCt { mul, flavor } => write!(f, "{}pack_ct<{mul}>", flavor.prefix()),
             AddPt { flavor } => write!(f, "{}add_pt", flavor.prefix()),
@@ -208,7 +204,7 @@ impl DialectInstructionSet for IopInstructionSet {
             AddCt { .. } | SubCt { .. } | PackCt { .. } => {
                 sig![(CiphertextBlock, CiphertextBlock) -> (CiphertextBlock)]
             }
-            NegCt | ShlCt { .. } => sig![(CiphertextBlock) -> (CiphertextBlock)],
+            ShlCt { .. } => sig![(CiphertextBlock) -> (CiphertextBlock)],
             AddPt { .. } | SubPt { .. } | MulPt { .. } => {
                 sig![(CiphertextBlock, PlaintextBlock) -> (CiphertextBlock)]
             }

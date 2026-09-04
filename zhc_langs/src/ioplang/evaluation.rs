@@ -221,7 +221,7 @@ impl Evaluable<IopValue> for super::IopInstructionSet {
                 )]
             }
             LetCiphertextBlock { value } => {
-                svec![ct(context.spec.from_message((*value).sas()))]
+                svec![ct(context.spec.from_complete((*value).sas()))]
             }
             AddCt { flavor } => {
                 svec![ct(ct_arg(&arguments, 0).add(ct_arg(&arguments, 1), *flavor))]
@@ -229,7 +229,6 @@ impl Evaluable<IopValue> for super::IopInstructionSet {
             SubCt { flavor } => {
                 svec![ct(ct_arg(&arguments, 0).sub(ct_arg(&arguments, 1), *flavor))]
             }
-            NegCt => svec![ct(ct_arg(&arguments, 0).neg())],
             ShlCt { amount, flavor } => svec![ct(ct_arg(&arguments, 0).shl(*amount, *flavor))],
             PackCt { mul, flavor } => {
                 svec![ct(ct_arg(&arguments, 0).mac(
