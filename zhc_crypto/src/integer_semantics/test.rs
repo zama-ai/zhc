@@ -661,42 +661,6 @@ fn wrapping_shl_overflow_wraps() {
 }
 
 #[test]
-fn protect_shr_basic() {
-    let spec = CiphertextBlockSpec(2, 3);
-    let block = EmulatedCiphertextBlock {
-        storage: 0b0_10_100,
-        spec,
-    };
-
-    let result = block.protect_shr(1);
-    assert_eq!(result.storage, 0b0_01_010);
-}
-
-#[test]
-#[should_panic(expected = "lhs has active padding bit")]
-fn protect_shr_padding_panics() {
-    let spec = CiphertextBlockSpec(2, 3);
-    let block = EmulatedCiphertextBlock {
-        storage: 0b1_10_100,
-        spec,
-    };
-
-    block.protect_shr(1);
-}
-
-#[test]
-fn wrapping_shr_basic() {
-    let spec = CiphertextBlockSpec(2, 3);
-    let block = EmulatedCiphertextBlock {
-        storage: 0b1_10_100,
-        spec,
-    };
-
-    let result = block.wrapping_shr(1);
-    assert_eq!(result.storage, 0b0_11_010);
-}
-
-#[test]
 fn protect_sub_pt_ct_basic() {
     let ct_spec = CiphertextBlockSpec(2, 3);
     let pt_spec = PlaintextBlockSpec(3);
@@ -855,9 +819,7 @@ fn shift_operations_preserve_spec() {
     };
 
     assert_eq!(block.protect_shl(1).spec, spec);
-    assert_eq!(block.protect_shr(1).spec, spec);
     assert_eq!(block.wrapping_shl(1).spec, spec);
-    assert_eq!(block.wrapping_shr(1).spec, spec);
 }
 
 #[test]
@@ -900,54 +862,6 @@ fn temper_shl_padding_overflow_panics() {
     };
 
     block.temper_shl(1);
-}
-
-#[test]
-fn temper_shr_accepts_padding() {
-    let spec = CiphertextBlockSpec(2, 3);
-    let block = EmulatedCiphertextBlock {
-        storage: 0b1_10_100,
-        spec,
-    };
-
-    let result = block.temper_shr(1);
-    assert_eq!(result.storage, 0b0_11_010);
-}
-
-#[test]
-#[should_panic(expected = "Underflow occured while performing protect-shr")]
-fn protect_shr_underflow_panics() {
-    let spec = CiphertextBlockSpec(2, 3);
-    let block = EmulatedCiphertextBlock {
-        storage: 0b0_10_101,
-        spec,
-    };
-
-    block.protect_shr(1);
-}
-
-#[test]
-#[should_panic(expected = "Underflow occured while performing temper-shr")]
-fn temper_shr_underflow_panics() {
-    let spec = CiphertextBlockSpec(2, 3);
-    let block = EmulatedCiphertextBlock {
-        storage: 0b1_10_110,
-        spec,
-    };
-
-    block.temper_shr(2);
-}
-
-#[test]
-fn wrapping_shr_underflow_drops_bits() {
-    let spec = CiphertextBlockSpec(2, 3);
-    let block = EmulatedCiphertextBlock {
-        storage: 0b0_10_101,
-        spec,
-    };
-
-    let result = block.wrapping_shr(1);
-    assert_eq!(result.storage, 0b0_01_010);
 }
 
 #[test]
@@ -1054,14 +968,13 @@ fn flavor_dispatch_matches_prefixed_operations() {
         for b in spec.iter_message_space() {
             let pt = pt_spec.from_message(b.raw_message_bits());
             for flavor in [Flavor::Protect, Flavor::Temper, Flavor::Wrapping] {
-                let (add, sub, add_pt, mul_pt, shl, shr, pt_sub) = match flavor {
+                let (add, sub, add_pt, mul_pt, shl, pt_sub) = match flavor {
                     Flavor::Protect => (
                         a.protect_add(b),
                         a.protect_add(b).protect_sub(b),
                         a.protect_add_pt(pt),
                         a.protect_mul_pt(pt),
                         a.protect_shl(1),
-                        a.protect_shl(1).protect_shr(1),
                         pt.protect_sub_ct(a.protect_sub(a)),
                     ),
                     Flavor::Temper => (
@@ -1070,7 +983,6 @@ fn flavor_dispatch_matches_prefixed_operations() {
                         a.temper_add_pt(pt),
                         a.temper_mul_pt(pt),
                         a.temper_shl(1),
-                        a.temper_shl(1).temper_shr(1),
                         pt.temper_sub_ct(a.temper_sub(a)),
                     ),
                     Flavor::Wrapping => (
@@ -1079,7 +991,6 @@ fn flavor_dispatch_matches_prefixed_operations() {
                         a.wrapping_add_pt(pt),
                         a.wrapping_mul_pt(pt),
                         a.wrapping_shl(1),
-                        a.wrapping_shl(1).wrapping_shr(1),
                         pt.wrapping_sub_ct(a.wrapping_sub(a)),
                     ),
                 };
@@ -1088,7 +999,6 @@ fn flavor_dispatch_matches_prefixed_operations() {
                 assert_eq!(a.add_pt(pt, flavor), add_pt);
                 assert_eq!(a.mul_pt(pt, flavor), mul_pt);
                 assert_eq!(a.shl(1, flavor), shl);
-                assert_eq!(a.shl(1, flavor).shr(1, flavor), shr);
                 assert_eq!(pt.sub_ct(a.sub(a, flavor), flavor), pt_sub);
             }
         }

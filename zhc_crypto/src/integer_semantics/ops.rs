@@ -1,4 +1,4 @@
-use std::ops::{Add, Mul, Shl, Shr, Sub};
+use std::ops::{Add, Mul, Shl, Sub};
 
 use zhc_utils::SafeAs;
 
@@ -65,15 +65,6 @@ impl EmulatedCiphertextBlock {
             Flavor::Protect => self.protect_shl(amount),
             Flavor::Temper => self.temper_shl(amount),
             Flavor::Wrapping => self.wrapping_shl(amount),
-        }
-    }
-
-    /// Shifts a ciphertext block right by `amount` bits with the given flavor.
-    pub fn shr(self, amount: u8, flavor: Flavor) -> Self {
-        match flavor {
-            Flavor::Protect => self.protect_shr(amount),
-            Flavor::Temper => self.temper_shr(amount),
-            Flavor::Wrapping => self.wrapping_shr(amount),
         }
     }
 
@@ -351,51 +342,6 @@ impl EmulatedCiphertextBlock {
     /// Shifts a ciphertext block left with overflow wrapping.
     pub fn wrapping_shl(&self, rhs: u8) -> Self {
         let storage = self.raw_complete_bits().shl(rhs) & self.spec.complete_mask();
-        Self {
-            storage,
-            spec: self.spec,
-        }
-    }
-
-    /// Shifts a ciphertext block right while protecting the padding bit from writes and
-    /// preventing underflow.
-    ///
-    /// A homomorphic right shift is only exact when the value is divisible by `2^rhs`: dropping
-    /// a set bit is the shift analogue of a subtraction going below zero.
-    pub fn protect_shr(&self, rhs: u8) -> Self {
-        assert!(
-            self.raw_padding_bits() == 0,
-            "Tried to protect-shr, but lhs has active padding bit."
-        );
-        assert!(
-            self.raw_complete_bits() & ((1 << rhs) - 1) == 0,
-            "Underflow occured while performing protect-shr."
-        );
-        let storage = self.raw_complete_bits().shr(rhs);
-        Self {
-            storage,
-            spec: self.spec,
-        }
-    }
-
-    /// Shifts a ciphertext block right while preventing underflow.
-    ///
-    /// Unlike [`protect_shr`](Self::protect_shr), the operand may have its padding bit set.
-    pub fn temper_shr(&self, rhs: u8) -> Self {
-        assert!(
-            self.raw_complete_bits() & ((1 << rhs) - 1) == 0,
-            "Underflow occured while performing temper-shr."
-        );
-        let storage = self.raw_complete_bits().shr(rhs);
-        Self {
-            storage,
-            spec: self.spec,
-        }
-    }
-
-    /// Shifts a ciphertext block right with underflow wrapping.
-    pub fn wrapping_shr(&self, rhs: u8) -> Self {
-        let storage = self.raw_complete_bits().shr(rhs);
         Self {
             storage,
             spec: self.spec,
