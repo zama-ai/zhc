@@ -207,6 +207,11 @@ impl Iop {
         }
     }
 
+    /// Returns associated opcode
+    pub fn get_opcode(&self) -> usize {
+        self.clone() as usize
+    }
+
     pub fn get_hpu_pipeline(&self, hpu_config: &HpuConfig, spec: CiphertextSpec) -> Pipeline {
         let pipeline = Pipeline::new()
             .with_builder(self.to_builder(spec))
