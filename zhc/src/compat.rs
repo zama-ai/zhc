@@ -207,19 +207,18 @@ impl Iop {
         }
     }
 
-    pub fn get_translation_table(&self, hpu_config: &HpuConfig, spec: CiphertextSpec) -> Vec<u32> {
+    pub fn get_hpu_pipeline(&self, hpu_config: &HpuConfig, spec: CiphertextSpec) -> Pipeline {
         let pipeline = Pipeline::new()
             .with_builder(self.to_builder(spec))
             .with_hpu_config(hpu_config.clone());
-        let mut pipeline = match (self, spec.int_size()) {
+        match (self, spec.int_size()) {
             (Iop::Mul, _)
             | (Iop::OvfMul, _)
             | (Iop::RightRot | Iop::LeftRot | Iop::LeftShift | Iop::RightShift, 128) => {
                 pipeline.with_legacy_hpu_scheduler()
             }
             _ => pipeline,
-        };
-        pipeline.get_hpu_stream().to_owned()
+        }
     }
 
     pub fn compute_latency(&self, hpu_config: &HpuConfig, spec: CiphertextSpec) -> Microseconds {
