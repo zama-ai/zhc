@@ -1,5 +1,26 @@
+//! Finite sets of small unsigned integers with modular arithmetic.
+//!
+//! A [`ValueSet`] tracks which values of an `n`-bit unsigned domain, `0..=2^n - 1`, are
+//! possible. The width `n` is fixed at construction and bounded to at most 7 bits, so every
+//! member fits in a `u8`. Sets are `Copy` and compare equal when both their width and their
+//! members match.
+//!
+//! The API has three layers. Construction and membership (`new_*`, `from_single`, `insert`,
+//! `remove`, `contains`, `union`, `intersection`) treat the type as a plain set. Scalar
+//! operations (`*_scalar`, `apply`) map every member through a function on the domain. Set
+//! operations (`wrapping_add`, `wrapping_sub`, `wrapping_mul`) combine two sets pairwise. All
+//! arithmetic wraps modulo `2^n`, so results always stay inside the domain of the operands.
+//!
+//! Binary operations require both operands to share the same width; mixing widths is a
+//! programming error and panics.
+
 use std::fmt;
 
+/// A set of `u8` values drawn from an `n`-bit unsigned domain, `n <= 7`.
+///
+/// The width is fixed at construction. Every operation that takes a value asserts that the value
+/// lies in `0..=domain_max()`, and every operation that takes a second set asserts that the widths
+/// match. Two sets are equal iff they have the same width and the same members.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct ValueSet {
     set: u128,
@@ -7,29 +28,64 @@ pub struct ValueSet {
 }
 
 impl ValueSet {
+    /// Computes the pairwise wrapping sum of two sets.
+    ///
+    /// Returns the set of `(a + b) mod 2^n` for every `a` in `lhs` and every `b` in `rhs`. The
+    /// result has the same width as the operands and is empty when either operand is empty.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `lhs` and `rhs` have different widths.
     pub fn wrapping_add(lhs: Self, rhs: Self) -> Self {
         assert_eq!(lhs.n_bits, rhs.n_bits);
-        rhs.iter_values().fold(ValueSet::new_empty(lhs.n_bits), |acc, v| {
-            acc.union(lhs.wrapping_add_scalar(v))
-        })
+        rhs.iter_values()
+            .fold(ValueSet::new_empty(lhs.n_bits), |acc, v| {
+                acc.union(lhs.wrapping_add_scalar(v))
+            })
     }
 
+    /// Computes the pairwise wrapping difference of two sets.
+    ///
+    /// Returns the set of `(a - b) mod 2^n` for every `a` in `lhs` and every `b` in `rhs`. The
+    /// result has the same width as the operands and is empty when either operand is empty.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `lhs` and `rhs` have different widths.
     pub fn wrapping_sub(lhs: Self, rhs: Self) -> Self {
         assert_eq!(lhs.n_bits, rhs.n_bits);
-        rhs.iter_values().fold(ValueSet::new_empty(lhs.n_bits), |acc, v| {
-            acc.union(lhs.wrapping_sub_scalar(v))
-        })
+        rhs.iter_values()
+            .fold(ValueSet::new_empty(lhs.n_bits), |acc, v| {
+                acc.union(lhs.wrapping_sub_scalar(v))
+            })
     }
 
+    /// Computes the pairwise wrapping product of two sets.
+    ///
+    /// Returns the set of `(a * b) mod 2^n` for every `a` in `lhs` and every `b` in `rhs`. The
+    /// result has the same width as the operands and is empty when either operand is empty.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `lhs` and `rhs` have different widths.
     pub fn wrapping_mul(lhs: Self, rhs: Self) -> Self {
         assert_eq!(lhs.n_bits, rhs.n_bits);
-        rhs.iter_values().fold(ValueSet::new_empty(lhs.n_bits), |acc, v| {
-            acc.union(lhs.wrapping_mul_scalar(v))
-        })
+        rhs.iter_values()
+            .fold(ValueSet::new_empty(lhs.n_bits), |acc, v| {
+                acc.union(lhs.wrapping_mul_scalar(v))
+            })
     }
 }
 
 impl ValueSet {
+    /// Computes the wrapping sum of every member with a scalar.
+    ///
+    /// Returns the set of `(a + value) mod 2^n` for every `a` in `self`. The result has the same
+    /// width and the same number of members as `self`; an empty set stays empty.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `value` exceeds [`domain_max`](Self::domain_max).
     pub fn wrapping_add_scalar(mut self, value: u8) -> Self {
         assert!(value <= self.domain_max());
         let size = self.domain_size();
@@ -42,6 +98,15 @@ impl ValueSet {
         self
     }
 
+    /// Computes the wrapping difference of every member with a scalar.
+    ///
+    /// Returns the set of `(a - value) mod 2^n` for every `a` in `self`. The result has the same
+    /// width and the same number of members as `self`; an empty set stays empty. This is the
+    /// inverse of [`wrapping_add_scalar`](Self::wrapping_add_scalar) for the same `value`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `value` exceeds [`domain_max`](Self::domain_max).
     pub fn wrapping_sub_scalar(self, value: u8) -> Self {
         assert!(value <= self.domain_max());
         if value == 0 {
@@ -50,6 +115,15 @@ impl ValueSet {
         self.wrapping_add_scalar((self.domain_size() - value as u32) as u8)
     }
 
+    /// Computes the wrapping product of every member with a scalar.
+    ///
+    /// Returns the set of `(a * value) mod 2^n` for every `a` in `self`. The result has the same
+    /// width as `self` and at most as many members, since distinct inputs may collide; an empty
+    /// set stays empty.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `value` exceeds [`domain_max`](Self::domain_max).
     pub fn wrapping_mul_scalar(self, value: u8) -> Self {
         assert!(value <= self.domain_max());
         if value == 1 {
@@ -63,7 +137,54 @@ impl ValueSet {
         out
     }
 
+    /// Computes the truncating left shift of every member by a scalar amount.
+    ///
+    /// Returns the set of `(a << amount) mod 2^n` for every `a` in `self`. The result has the same
+    /// width as `self` and at most as many members. Any `amount` is accepted: when `amount` is at
+    /// least the width, every member shifts out, so a non-empty set maps to the singleton `{0}`.
+    /// An empty set stays empty.
+    pub fn wrapping_shl_scalar(self, amount: u8) -> Self {
+        if amount == 0 {
+            return self;
+        }
+        if amount >= self.n_bits {
+            return if self.is_empty() {
+                self
+            } else {
+                Self::from_single(self.n_bits, 0)
+            };
+        }
+        let mask = self.domain_max() as u16;
+        self.apply(|v| (((v as u16) << amount) & mask) as u8)
+    }
 
+    /// Re-interprets the set over a wider domain.
+    ///
+    /// Returns a set of width `n_bits` with exactly the same members as `self`. Widening never
+    /// changes the members, since every member of an `n`-bit domain is also a member of any wider
+    /// domain. Use it to combine a set with another set of a wider domain.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `n_bits` is smaller than the current width or exceeds 7.
+    pub fn widen(self, n_bits: u8) -> Self {
+        assert!(n_bits >= self.n_bits, "Tried to narrow a value set.");
+        assert!(n_bits <= 7);
+        ValueSet {
+            set: self.set,
+            n_bits,
+        }
+    }
+
+    /// Computes the image of the set under an arbitrary function on the domain.
+    ///
+    /// Returns the set of `func(a)` for every `a` in `self`. The result has the same width as
+    /// `self` and at most as many members. `func` is called once per member, in ascending order.
+    /// An empty set stays empty and `func` is never called.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `func` returns a value that exceeds [`domain_max`](Self::domain_max).
     pub fn apply(self, func: impl Fn(u8) -> u8) -> Self {
         let mut out = ValueSet::new_empty(self.n_bits);
         for v in self.iter_values() {
@@ -76,64 +197,113 @@ impl ValueSet {
 }
 
 impl ValueSet {
+    /// Creates an empty set over an `n_bits`-wide domain.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `n_bits` exceeds 7.
     pub fn new_empty(n_bits: u8) -> Self {
         assert!(n_bits <= 7);
         ValueSet { set: 0, n_bits }
     }
 
+    /// Creates a set over an `n_bits`-wide domain that contains every value of the domain.
+    ///
+    /// The result has `2^n_bits` members, from `0` to [`domain_max`](Self::domain_max) inclusive.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `n_bits` exceeds 7.
     pub fn new_full(n_bits: u8) -> Self {
         let empty = Self::new_empty(n_bits);
-        ValueSet { set: empty.mask(), n_bits }
+        ValueSet {
+            set: empty.mask(),
+            n_bits,
+        }
     }
 
+    /// Creates a set over an `n_bits`-wide domain that contains exactly one value.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `n_bits` exceeds 7 or if `value` exceeds `2^n_bits - 1`.
     pub fn from_single(n_bits: u8, value: u8) -> Self {
         let mut vs = Self::new_empty(n_bits);
         vs.insert(value);
         vs
     }
 
-    /// Number of values in the domain, `2^n_bits`.
     fn domain_size(&self) -> u32 {
         1u32 << self.n_bits
     }
 
-    /// Bitmask covering the whole domain.
     fn mask(&self) -> u128 {
         let size = self.domain_size();
-        if size == 128 { u128::MAX } else { (1u128 << size) - 1 }
+        if size == 128 {
+            u128::MAX
+        } else {
+            (1u128 << size) - 1
+        }
     }
 
+    /// Returns the width of the domain in bits.
     pub fn n_bits(&self) -> u8 {
         self.n_bits
     }
 
+    /// Returns the largest value of the domain, `2^n_bits - 1`.
+    ///
+    /// This is the upper bound accepted by every method that takes a value, independent of which
+    /// values are currently members.
     pub fn domain_max(&self) -> u8 {
         ((1u16 << self.n_bits) - 1) as u8
     }
 
+    /// Adds a value to the set.
+    ///
+    /// Inserting a value that is already a member is a no-op.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `value` exceeds [`domain_max`](Self::domain_max).
     pub fn insert(&mut self, value: u8) {
         assert!(value <= self.domain_max());
         self.set |= 1u128 << value;
     }
 
+    /// Removes a value from the set.
+    ///
+    /// Removing a value that is not a member is a no-op.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `value` exceeds [`domain_max`](Self::domain_max).
     pub fn remove(&mut self, value: u8) {
         assert!(value <= self.domain_max());
         self.set &= !(1u128 << value);
     }
 
+    /// Returns whether a value is a member of the set.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `value` exceeds [`domain_max`](Self::domain_max).
     pub fn contains(&self, value: u8) -> bool {
         assert!(value <= self.domain_max());
         (self.set >> value) & 1 != 0
     }
 
+    /// Returns whether the set has no members.
     pub fn is_empty(&self) -> bool {
         self.set == 0
     }
 
+    /// Returns the number of members, from `0` to `2^n_bits` inclusive.
     pub fn count(&self) -> u32 {
         self.set.count_ones()
     }
 
+    /// Returns the smallest member, or `None` if the set is empty.
     pub fn min(&self) -> Option<u8> {
         if self.is_empty() {
             None
@@ -142,6 +312,7 @@ impl ValueSet {
         }
     }
 
+    /// Returns the largest member, or `None` if the set is empty.
     pub fn max(&self) -> Option<u8> {
         if self.is_empty() {
             None
@@ -150,19 +321,43 @@ impl ValueSet {
         }
     }
 
+    /// Returns an iterator over the members in ascending order.
+    ///
+    /// Each member is yielded exactly once. The iterator does not borrow `self`, so the set may be
+    /// mutated while the iterator is alive without affecting the yielded sequence.
     pub fn iter_values(&self) -> impl Iterator<Item = u8> {
         let set = self.set;
         (0..=self.domain_max()).filter(move |&v| (set >> v) & 1 != 0)
     }
 
+    /// Computes the set of values that are members of `self` or `other`.
+    ///
+    /// The result has the same width as the operands.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` and `other` have different widths.
     pub fn union(self, other: Self) -> Self {
         assert_eq!(self.n_bits, other.n_bits);
-        ValueSet { set: self.set | other.set, n_bits: self.n_bits }
+        ValueSet {
+            set: self.set | other.set,
+            n_bits: self.n_bits,
+        }
     }
 
+    /// Computes the set of values that are members of both `self` and `other`.
+    ///
+    /// The result has the same width as the operands.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` and `other` have different widths.
     pub fn intersection(self, other: Self) -> Self {
         assert_eq!(self.n_bits, other.n_bits);
-        ValueSet { set: self.set & other.set, n_bits: self.n_bits }
+        ValueSet {
+            set: self.set & other.set,
+            n_bits: self.n_bits,
+        }
     }
 }
 
@@ -257,7 +452,10 @@ mod test {
     #[test]
     fn domain_max_is_two_pow_n_minus_one() {
         for n_bits in 0..=7u8 {
-            assert_eq!(ValueSet::new_empty(n_bits).domain_max() as u32, (1u32 << n_bits) - 1);
+            assert_eq!(
+                ValueSet::new_empty(n_bits).domain_max() as u32,
+                (1u32 << n_bits) - 1
+            );
         }
     }
 
@@ -353,8 +551,14 @@ mod test {
                     assert_eq!(i.contains(v), a.contains(v) && b.contains(v));
                 }
                 assert_eq!(a.union(ValueSet::new_empty(n_bits)), a);
-                assert_eq!(a.union(ValueSet::new_full(n_bits)), ValueSet::new_full(n_bits));
-                assert_eq!(a.intersection(ValueSet::new_empty(n_bits)), ValueSet::new_empty(n_bits));
+                assert_eq!(
+                    a.union(ValueSet::new_full(n_bits)),
+                    ValueSet::new_full(n_bits)
+                );
+                assert_eq!(
+                    a.intersection(ValueSet::new_empty(n_bits)),
+                    ValueSet::new_empty(n_bits)
+                );
                 assert_eq!(a.intersection(ValueSet::new_full(n_bits)), a);
             }
         }
@@ -404,8 +608,14 @@ mod test {
         plus_one.insert(0);
         assert_eq!(vs.wrapping_add_scalar(1), plus_one);
         assert_eq!(vs.wrapping_add_scalar(0), vs);
-        assert_eq!(ValueSet::new_full(3).wrapping_add_scalar(5), ValueSet::new_full(3));
-        assert_eq!(ValueSet::new_empty(3).wrapping_add_scalar(5), ValueSet::new_empty(3));
+        assert_eq!(
+            ValueSet::new_full(3).wrapping_add_scalar(5),
+            ValueSet::new_full(3)
+        );
+        assert_eq!(
+            ValueSet::new_empty(3).wrapping_add_scalar(5),
+            ValueSet::new_empty(3)
+        );
     }
 
     #[test]
@@ -495,7 +705,53 @@ mod test {
         times_three.insert(1);
         times_three.insert(7);
         assert_eq!(vs.wrapping_mul_scalar(3), times_three);
-        assert_eq!(ValueSet::new_empty(3).wrapping_mul_scalar(0), ValueSet::new_empty(3));
+        assert_eq!(
+            ValueSet::new_empty(3).wrapping_mul_scalar(0),
+            ValueSet::new_empty(3)
+        );
+    }
+
+    #[test]
+    fn wrapping_shl_scalar_matches_bruteforce() {
+        for n_bits in 0..=7 {
+            let modulo = 1u32 << n_bits;
+            for _ in 0..30 {
+                let mut vs = ValueSet::new_empty(n_bits);
+                for _ in 0..rand::random_range(0..=vs.domain_max()) {
+                    vs.insert(rand::random_range(0..=vs.domain_max()));
+                }
+                for amount in 0..=16u8 {
+                    let mut expected = ValueSet::new_empty(n_bits);
+                    for v in vs.iter_values() {
+                        expected.insert(
+                            ((v as u32).checked_shl(amount as u32).unwrap_or(0) % modulo) as u8,
+                        );
+                    }
+                    assert_eq!(
+                        vs.wrapping_shl_scalar(amount),
+                        expected,
+                        "n_bits={n_bits} amount={amount}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn wrapping_shl_scalar_examples() {
+        let mut vs = ValueSet::new_empty(3);
+        vs.insert(1);
+        vs.insert(3);
+        vs.insert(5);
+        assert_eq!(vs.wrapping_shl_scalar(0), vs);
+        assert_eq!(vs.wrapping_shl_scalar(1), vs.wrapping_mul_scalar(2));
+        assert_eq!(vs.wrapping_shl_scalar(2), vs.wrapping_mul_scalar(4));
+        assert_eq!(vs.wrapping_shl_scalar(3), ValueSet::from_single(3, 0));
+        assert_eq!(vs.wrapping_shl_scalar(200), ValueSet::from_single(3, 0));
+        assert_eq!(
+            ValueSet::new_empty(3).wrapping_shl_scalar(3),
+            ValueSet::new_empty(3)
+        );
     }
 
     #[test]
@@ -680,8 +936,14 @@ mod test {
                     vs.insert(rand::random_range(0..=mask));
                 }
                 for k in 0..=mask {
-                    assert_eq!(vs.apply(|v| v.wrapping_add(k) & mask), vs.wrapping_add_scalar(k));
-                    assert_eq!(vs.apply(|v| v.wrapping_sub(k) & mask), vs.wrapping_sub_scalar(k));
+                    assert_eq!(
+                        vs.apply(|v| v.wrapping_add(k) & mask),
+                        vs.wrapping_add_scalar(k)
+                    );
+                    assert_eq!(
+                        vs.apply(|v| v.wrapping_sub(k) & mask),
+                        vs.wrapping_sub_scalar(k)
+                    );
                     assert_eq!(
                         vs.apply(|v| ((v as u16 * k as u16) & mask as u16) as u8),
                         vs.wrapping_mul_scalar(k)
@@ -689,6 +951,29 @@ mod test {
                 }
             }
         }
+    }
+
+    #[test]
+    fn widen_keeps_members() {
+        for n_bits in 0..=7 {
+            for _ in 0..30 {
+                let mut vs = ValueSet::new_empty(n_bits);
+                for _ in 0..rand::random_range(0..=vs.domain_max()) {
+                    vs.insert(rand::random_range(0..=vs.domain_max()));
+                }
+                for wider in n_bits..=7 {
+                    let w = vs.widen(wider);
+                    assert_eq!(w.n_bits(), wider);
+                    assert!(w.iter_values().eq(vs.iter_values()));
+                }
+            }
+        }
+    }
+
+    #[test]
+    #[should_panic]
+    fn widen_rejects_narrowing() {
+        ValueSet::new_full(4).widen(3);
     }
 
     #[test]
@@ -702,8 +987,14 @@ mod test {
         let mut vs = ValueSet::new_empty(2);
         vs.insert(0);
         vs.insert(3);
-        assert_eq!(format!("{vs:?}"), "ValueSet(2b 2/4 \u{2593}\u{2591}\u{2591}\u{2593})");
-        assert_eq!(format!("{:?}", ValueSet::new_empty(0)), "ValueSet(0b 0/1 \u{2591})");
+        assert_eq!(
+            format!("{vs:?}"),
+            "ValueSet(2b 2/4 \u{2593}\u{2591}\u{2591}\u{2593})"
+        );
+        assert_eq!(
+            format!("{:?}", ValueSet::new_empty(0)),
+            "ValueSet(0b 0/1 \u{2591})"
+        );
     }
 
     #[test]
@@ -724,7 +1015,10 @@ mod test {
     fn debug_alternate_grid_covers_whole_domain() {
         for n_bits in 0..=7u8 {
             let s = format!("{:#?}", ValueSet::new_full(n_bits));
-            assert_eq!(s.chars().filter(|&c| c == '\u{2593}').count() / 2, 1 << n_bits);
+            assert_eq!(
+                s.chars().filter(|&c| c == '\u{2593}').count() / 2,
+                1 << n_bits
+            );
             assert_eq!(s.lines().count(), 1 << (n_bits / 2));
         }
     }

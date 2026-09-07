@@ -106,4 +106,22 @@ impl PlaintextBlockSpec {
     pub fn plaintext_spec(&self, int_size: u16) -> PlaintextSpec {
         PlaintextSpec::new(int_size, self.message_size())
     }
+
+    /// Iterates over all blocks in the message space.
+    ///
+    /// Yields `2^message_size()` blocks, each with a unique message value. The blocks are
+    /// yielded in ascending order of their message value.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use zhc_crypto::integer_semantics::PlaintextBlockSpec;
+    ///
+    /// let spec = PlaintextBlockSpec(3);
+    /// let blocks: Vec<_> = spec.iter_message_space().collect();
+    /// assert_eq!(blocks.len(), 8); // 2^3 = 8
+    /// ```
+    pub fn iter_message_space(&self) -> impl Iterator<Item = EmulatedPlaintextBlock> {
+        (0..=self.message_mask()).map(|a| self.from_message(a))
+    }
 }

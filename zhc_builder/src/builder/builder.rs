@@ -40,7 +40,8 @@ use zhc_ir::{
 };
 use zhc_langs::ioplang::{
     IopInstructionSet, IopLang, IopTypeSystem, IopValue, Lut1Def, Lut2Def, Lut4Def, Lut8Def,
-    analyze_noise, check_noise, eliminate_aliases, skip_redundant_stores, skip_store_load,
+    analyze_noise, analyze_values, check_noise, eliminate_aliases, skip_redundant_stores,
+    skip_store_load,
 };
 use zhc_utils::{
     Dumpable, FastSet, SafeAs, Store,
@@ -2460,6 +2461,10 @@ impl Builder {
     /// ```
     pub fn check_noise(&self) {
         check_noise(&*self.ir(), &self.spec().matching_plaintext_block_spec());
+    }
+
+    pub fn dump_ranges(&self) {
+        analyze_values(&*self.ir(), *self.spec()).dump();
     }
 }
 

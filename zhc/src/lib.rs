@@ -30,6 +30,10 @@ pub mod prelude {
 
 #[cfg(test)]
 mod test {
+    use zhc_builder::{CiphertextSpec, add};
+
     #[test]
-    fn brrrrrr() {}
+    fn brrrrrr() {
+        add(CiphertextSpec::new(16, 2, 2)).dump_ranges();
+    }
 }

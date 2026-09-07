@@ -245,12 +245,7 @@ macro_rules! impl_dumpable_via_debug {
     };
 }
 
-impl_dumpable_via_debug!(
-    (),
-    PathBuf,
-    Duration,
-    ValueSet
-);
+impl_dumpable_via_debug!((), PathBuf, Duration, ValueSet);
 
 impl_dumpable_via_display!(
     u8,
