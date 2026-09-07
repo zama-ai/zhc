@@ -33,7 +33,7 @@ use std::{
     time::Duration,
 };
 
-use crate::units::Microseconds;
+use crate::{ValueSet, units::Microseconds};
 
 /// A type that can render itself as a human-readable string for debugging.
 ///
@@ -245,7 +245,12 @@ macro_rules! impl_dumpable_via_debug {
     };
 }
 
-impl_dumpable_via_debug!((), PathBuf, Duration);
+impl_dumpable_via_debug!(
+    (),
+    PathBuf,
+    Duration,
+    ValueSet
+);
 
 impl_dumpable_via_display!(
     u8,
