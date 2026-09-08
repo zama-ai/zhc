@@ -1,9 +1,11 @@
 use rand::RngExt;
 use zhc_utils::SafeAs;
 
-use crate::integer_semantics::PlaintextSpec;
+use crate::integer_semantics::IntegerPlaintextSpec;
 
-use super::super::{CiphertextBlockSpec, EmulatedCiphertext, EmulatedCiphertextStorage};
+use super::super::{
+    CiphertextBlockSpec, EmulatedIntegerCiphertext, EmulatedIntegerCiphertextStorage,
+};
 
 /// Specification for a multi-block radix ciphertext representing a large integer.
 ///
@@ -16,16 +18,16 @@ use super::super::{CiphertextBlockSpec, EmulatedCiphertext, EmulatedCiphertextSt
 /// can be evenly partitioned across blocks. For example, a 64-bit integer with 4-bit message
 /// blocks requires exactly 16 blocks.
 ///
-/// Use [`from_int`](Self::from_int) to create an [`EmulatedCiphertext`] from a raw integer value,
+/// Use [`from_int`](Self::from_int) to create an [`EmulatedIntegerCiphertext`] from a raw integer value,
 /// or [`random`](Self::random) to generate a random ciphertext for testing.
 ///
 /// # Examples
 ///
 /// ```
-/// use zhc_crypto::integer_semantics::CiphertextSpec;
+/// use zhc_crypto::integer_semantics::IntegerCiphertextSpec;
 ///
 /// // Create a spec for 16-bit integers using blocks with 2 carry bits and 4 message bits
-/// let spec = CiphertextSpec::new(16, 2, 4);
+/// let spec = IntegerCiphertextSpec::new(16, 2, 4);
 /// assert_eq!(spec.block_count(), 4); // 16 / 4 = 4 blocks
 ///
 /// // Create a ciphertext from an integer value
@@ -35,12 +37,12 @@ use super::super::{CiphertextBlockSpec, EmulatedCiphertext, EmulatedCiphertextSt
 /// let block_0 = ct.get_block(0); // least significant block
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct CiphertextSpec {
+pub struct IntegerCiphertextSpec {
     int_size: u16,
     block: CiphertextBlockSpec,
 }
 
-impl CiphertextSpec {
+impl IntegerCiphertextSpec {
     /// Creates a new ciphertext specification with the given parameters.
     ///
     /// The `int_size` defines the total number of message bits in the integer. The
@@ -55,8 +57,12 @@ impl CiphertextSpec {
     /// - `block_message_size` is zero
     /// - `int_size` is not divisible by `block_message_size`
     pub fn new(int_size: u16, block_carry_size: u8, block_message_size: u8) -> Self {
+        assert_ne!(
+            int_size, 0,
+            "Tried to create malformed integer ciphertext spec: precision must be non-zero."
+        );
         assert!(
-            int_size <= EmulatedCiphertextStorage::BITS.sas::<u16>(),
+            int_size <= EmulatedIntegerCiphertextStorage::BITS.sas::<u16>(),
             "Tried to create malformed ciphertext spec. Int size: {int_size}."
         );
         assert_ne!(
@@ -66,6 +72,10 @@ impl CiphertextSpec {
         assert_ne!(
             block_message_size, 0,
             "Tried to create malformed ciphertext spec."
+        );
+        assert!(
+            int_size.is_multiple_of(block_message_size.sas()),
+            "Tried to create malformed integer ciphertext spec: precision {int_size} is not a multiple of message size {block_message_size}."
         );
         Self {
             int_size,
@@ -81,8 +91,9 @@ impl CiphertextSpec {
         self.int_size
     }
 
-    pub fn int_mask(&self) -> EmulatedCiphertextStorage {
-        EmulatedCiphertextStorage::MAX >> (EmulatedCiphertextStorage::BITS as u16 - self.int_size())
+    pub fn int_mask(&self) -> EmulatedIntegerCiphertextStorage {
+        EmulatedIntegerCiphertextStorage::MAX
+            >> (EmulatedIntegerCiphertextStorage::BITS as u16 - self.int_size())
     }
 
     /// Returns the block specification shared by all blocks in this integer.
@@ -92,11 +103,9 @@ impl CiphertextSpec {
 
     /// Returns the number of blocks in this integer.
     ///
-    /// Computed as `ceil(int_size / block_message_size)`.
+    /// Computed as `int_size / block_message_size`.
     pub fn block_count(&self) -> u8 {
-        self.int_size
-            .div_ceil(self.block.1.sas::<u16>())
-            .sas::<u8>()
+        (self.int_size / self.block.1.sas::<u16>()).sas::<u8>()
     }
 
     /// Returns a bitmask selecting the message bits of the `ith` block within the integer.
@@ -107,19 +116,22 @@ impl CiphertextSpec {
     /// # Panics
     ///
     /// Panics if `ith >= block_count()`.
-    pub fn block_mask(&self, ith: u8) -> EmulatedCiphertextStorage {
+    pub fn block_mask(&self, ith: u8) -> EmulatedIntegerCiphertextStorage {
         assert!(
             ith < self.block_count(),
             "Tried to get block mask for nonexistent block"
         );
-        (self.block.message_mask().sas::<EmulatedCiphertextStorage>())
+        (self
+            .block
+            .message_mask()
+            .sas::<EmulatedIntegerCiphertextStorage>())
             << (ith * self.block.message_size())
     }
 
     /// Generates a random ciphertext with uniformly distributed message bits.
     ///
     /// Uses a thread-local PRNG seeded deterministically. Useful for testing and fuzzing.
-    pub fn random(&self) -> EmulatedCiphertext {
+    pub fn random(&self) -> EmulatedIntegerCiphertext {
         super::super::PRNG.with_borrow_mut(|prng| {
             let mut bounds = [
                 prng.random_range(1..self.int_size()),
@@ -137,7 +149,7 @@ impl CiphertextSpec {
     /// Creates a ciphertext from a raw integer value.
     ///
     /// The integer is stored directly; individual blocks can then be accessed via
-    /// [`EmulatedCiphertext::get_block`]. All blocks will have zero carry and padding bits.
+    /// [`EmulatedIntegerCiphertext::get_block`]. All blocks will have zero carry and padding bits.
     ///
     /// # Panics
     ///
@@ -146,14 +158,14 @@ impl CiphertextSpec {
     /// # Examples
     ///
     /// ```
-    /// use zhc_crypto::integer_semantics::CiphertextSpec;
+    /// use zhc_crypto::integer_semantics::IntegerCiphertextSpec;
     ///
-    /// let spec = CiphertextSpec::new(8, 2, 2);
+    /// let spec = IntegerCiphertextSpec::new(8, 2, 2);
     /// let ct = spec.from_int(0b1011_0110);
     /// assert_eq!(ct.get_block(0).spec().from_message(0b10), ct.get_block(0)); // bits [1:0]
     /// assert_eq!(ct.get_block(1).spec().from_message(0b01), ct.get_block(1)); // bits [3:2]
     /// ```
-    pub fn from_int(&self, int: EmulatedCiphertextStorage) -> EmulatedCiphertext {
+    pub fn from_int(&self, int: EmulatedIntegerCiphertextStorage) -> EmulatedIntegerCiphertext {
         let storage = int;
         if self.overflows_int(storage) {
             panic!(
@@ -162,7 +174,7 @@ impl CiphertextSpec {
                 self.int_size()
             );
         }
-        EmulatedCiphertext {
+        EmulatedIntegerCiphertext {
             storage,
             spec: *self,
         }
@@ -171,15 +183,15 @@ impl CiphertextSpec {
     /// Checks whether a value exceeds the integer's capacity.
     ///
     /// Returns true if `storage >= 2^int_size`.
-    pub fn overflows_int(&self, storage: EmulatedCiphertextStorage) -> bool {
+    pub fn overflows_int(&self, storage: EmulatedIntegerCiphertextStorage) -> bool {
         storage > self.int_mask()
     }
 
     /// Returns the corresponding plaintext specification.
     ///
-    /// The returned [`PlaintextSpec`] has the same integer size and block message size,
+    /// The returned [`IntegerPlaintextSpec`] has the same integer size and block message size,
     /// allowing plaintext integers to be used in mixed ciphertext-plaintext operations.
-    pub fn matching_plaintext_spec(&self) -> PlaintextSpec {
-        PlaintextSpec::new(self.int_size(), self.block.message_size())
+    pub fn matching_integer_plaintext_spec(&self) -> IntegerPlaintextSpec {
+        IntegerPlaintextSpec::new(self.int_size(), self.block.message_size())
     }
 }

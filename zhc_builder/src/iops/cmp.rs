@@ -1,5 +1,5 @@
-use crate::{Ciphertext, builder::Builder};
-use zhc_crypto::integer_semantics::CiphertextSpec;
+use crate::{BoolCiphertext, IntegerCiphertext, builder::Builder};
+use zhc_crypto::integer_semantics::IntegerCiphertextSpec;
 use zhc_langs::ioplang::Lut1Def;
 use zhc_utils::iter::MultiZip;
 
@@ -11,17 +11,17 @@ use zhc_utils::iter::MultiZip;
 /// # Examples
 ///
 /// ```rust,no_run
-/// # use zhc_builder::{CiphertextSpec, cmp_gt};
-/// # let spec = CiphertextSpec::new(16, 2, 2);
+/// # use zhc_builder::{IntegerCiphertextSpec, cmp_gt};
+/// # let spec = IntegerCiphertextSpec::new(16, 2, 2);
 /// let builder = cmp_gt(spec);
 /// let ir = builder.optimize_ir();
 /// ```
-pub fn cmp_gt(spec: CiphertextSpec) -> Builder {
+pub fn cmp_gt(spec: IntegerCiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src_a = builder.ciphertext_input(spec.int_size());
-    let src_b = builder.ciphertext_input(spec.int_size());
+    let src_a = builder.integer_ciphertext_input(spec.int_size());
+    let src_b = builder.integer_ciphertext_input(spec.int_size());
     let output = builder.iop_cmp(&src_a, &src_b, CmpKind::Greater);
-    builder.ciphertext_output(output);
+    builder.bool_ciphertext_output(output);
     builder
 }
 
@@ -33,17 +33,17 @@ pub fn cmp_gt(spec: CiphertextSpec) -> Builder {
 /// # Examples
 ///
 /// ```rust,no_run
-/// # use zhc_builder::{CiphertextSpec, cmp_gte};
-/// # let spec = CiphertextSpec::new(16, 2, 2);
+/// # use zhc_builder::{IntegerCiphertextSpec, cmp_gte};
+/// # let spec = IntegerCiphertextSpec::new(16, 2, 2);
 /// let builder = cmp_gte(spec);
 /// let ir = builder.optimize_ir();
 /// ```
-pub fn cmp_gte(spec: CiphertextSpec) -> Builder {
+pub fn cmp_gte(spec: IntegerCiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src_a = builder.ciphertext_input(spec.int_size());
-    let src_b = builder.ciphertext_input(spec.int_size());
+    let src_a = builder.integer_ciphertext_input(spec.int_size());
+    let src_b = builder.integer_ciphertext_input(spec.int_size());
     let output = builder.iop_cmp(&src_a, &src_b, CmpKind::GreaterOrEqual);
-    builder.ciphertext_output(output);
+    builder.bool_ciphertext_output(output);
     builder
 }
 
@@ -55,17 +55,17 @@ pub fn cmp_gte(spec: CiphertextSpec) -> Builder {
 /// # Examples
 ///
 /// ```rust,no_run
-/// # use zhc_builder::{CiphertextSpec, cmp_lt};
-/// # let spec = CiphertextSpec::new(16, 2, 2);
+/// # use zhc_builder::{IntegerCiphertextSpec, cmp_lt};
+/// # let spec = IntegerCiphertextSpec::new(16, 2, 2);
 /// let builder = cmp_lt(spec);
 /// let ir = builder.optimize_ir();
 /// ```
-pub fn cmp_lt(spec: CiphertextSpec) -> Builder {
+pub fn cmp_lt(spec: IntegerCiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src_a = builder.ciphertext_input(spec.int_size());
-    let src_b = builder.ciphertext_input(spec.int_size());
+    let src_a = builder.integer_ciphertext_input(spec.int_size());
+    let src_b = builder.integer_ciphertext_input(spec.int_size());
     let output = builder.iop_cmp(&src_a, &src_b, CmpKind::Lower);
-    builder.ciphertext_output(output);
+    builder.bool_ciphertext_output(output);
     builder
 }
 
@@ -77,17 +77,17 @@ pub fn cmp_lt(spec: CiphertextSpec) -> Builder {
 /// # Examples
 ///
 /// ```rust,no_run
-/// # use zhc_builder::{CiphertextSpec, cmp_lte};
-/// # let spec = CiphertextSpec::new(16, 2, 2);
+/// # use zhc_builder::{IntegerCiphertextSpec, cmp_lte};
+/// # let spec = IntegerCiphertextSpec::new(16, 2, 2);
 /// let builder = cmp_lte(spec);
 /// let ir = builder.optimize_ir();
 /// ```
-pub fn cmp_lte(spec: CiphertextSpec) -> Builder {
+pub fn cmp_lte(spec: IntegerCiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src_a = builder.ciphertext_input(spec.int_size());
-    let src_b = builder.ciphertext_input(spec.int_size());
+    let src_a = builder.integer_ciphertext_input(spec.int_size());
+    let src_b = builder.integer_ciphertext_input(spec.int_size());
     let output = builder.iop_cmp(&src_a, &src_b, CmpKind::LowerOrEqual);
-    builder.ciphertext_output(output);
+    builder.bool_ciphertext_output(output);
     builder
 }
 
@@ -99,17 +99,17 @@ pub fn cmp_lte(spec: CiphertextSpec) -> Builder {
 /// # Examples
 ///
 /// ```rust,no_run
-/// # use zhc_builder::{CiphertextSpec, cmp_eq};
-/// # let spec = CiphertextSpec::new(16, 2, 2);
+/// # use zhc_builder::{IntegerCiphertextSpec, cmp_eq};
+/// # let spec = IntegerCiphertextSpec::new(16, 2, 2);
 /// let builder = cmp_eq(spec);
 /// let ir = builder.optimize_ir();
 /// ```
-pub fn cmp_eq(spec: CiphertextSpec) -> Builder {
+pub fn cmp_eq(spec: IntegerCiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src_a = builder.ciphertext_input(spec.int_size());
-    let src_b = builder.ciphertext_input(spec.int_size());
+    let src_a = builder.integer_ciphertext_input(spec.int_size());
+    let src_b = builder.integer_ciphertext_input(spec.int_size());
     let output = builder.iop_cmp(&src_a, &src_b, CmpKind::Equal);
-    builder.ciphertext_output(output);
+    builder.bool_ciphertext_output(output);
     builder
 }
 
@@ -121,17 +121,17 @@ pub fn cmp_eq(spec: CiphertextSpec) -> Builder {
 /// # Examples
 ///
 /// ```rust,no_run
-/// # use zhc_builder::{CiphertextSpec, cmp_neq};
-/// # let spec = CiphertextSpec::new(16, 2, 2);
+/// # use zhc_builder::{IntegerCiphertextSpec, cmp_neq};
+/// # let spec = IntegerCiphertextSpec::new(16, 2, 2);
 /// let builder = cmp_neq(spec);
 /// let ir = builder.optimize_ir();
 /// ```
-pub fn cmp_neq(spec: CiphertextSpec) -> Builder {
+pub fn cmp_neq(spec: IntegerCiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src_a = builder.ciphertext_input(spec.int_size());
-    let src_b = builder.ciphertext_input(spec.int_size());
+    let src_a = builder.integer_ciphertext_input(spec.int_size());
+    let src_b = builder.integer_ciphertext_input(spec.int_size());
     let output = builder.iop_cmp(&src_a, &src_b, CmpKind::NotEqual);
-    builder.ciphertext_output(output);
+    builder.bool_ciphertext_output(output);
     builder
 }
 
@@ -187,23 +187,28 @@ impl Builder {
     /// selects which relation is evaluated (see [`CmpKind`]).
     ///
     /// Both `src_a` and `src_b` must have the same block decomposition. The
-    /// returned [`Ciphertext`] is a single-block integer encoding the boolean
-    /// result: 1 when the relation holds, 0 otherwise.
+    /// returned [`BoolCiphertext`] encodes `true` when the relation holds and `false`
+    /// otherwise.
     ///
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use zhc_builder::{CiphertextSpec, Builder, CmpKind};
-    /// # let spec = CiphertextSpec::new(16, 2, 2);
+    /// # use zhc_builder::{IntegerCiphertextSpec, Builder, CmpKind};
+    /// # let spec = IntegerCiphertextSpec::new(16, 2, 2);
     /// # let builder = Builder::new(spec.block_spec());
-    /// # let a = builder.ciphertext_input(spec.int_size());
-    /// # let b = builder.ciphertext_input(spec.int_size());
+    /// # let a = builder.integer_ciphertext_input(spec.int_size());
+    /// # let b = builder.integer_ciphertext_input(spec.int_size());
     /// let is_eq = builder.iop_cmp(&a, &b, CmpKind::Equal);
     /// ```
-    pub fn iop_cmp(&self, src_a: &Ciphertext, src_b: &Ciphertext, kind: CmpKind) -> Ciphertext {
+    pub fn iop_cmp(
+        &self,
+        src_a: &IntegerCiphertext,
+        src_b: &IntegerCiphertext,
+        kind: CmpKind,
+    ) -> BoolCiphertext {
         // get input as array of blk
-        let src_a_blocks = self.ciphertext_split(&src_a);
-        let src_b_blocks = self.ciphertext_split(&src_b);
+        let src_a_blocks = self.integer_ciphertext_split(&src_a);
+        let src_b_blocks = self.integer_ciphertext_split(&src_b);
 
         // pack cts
         let packed_a = self.comment("Pack A").vector_pack_then_clean(src_a_blocks);
@@ -244,14 +249,14 @@ impl Builder {
             _ => unreachable!(),
         };
 
-        self.ciphertext_join([cmp_res], None)
+        self.bool_ciphertext_from_block(cmp_res)
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use zhc_crypto::integer_semantics::CiphertextSpec;
+    use zhc_crypto::integer_semantics::IntegerCiphertextSpec;
     use zhc_langs::ioplang::IopValue;
     use zhc_utils::assert_display_is;
 
@@ -259,7 +264,7 @@ mod test {
 
     #[test]
     fn test_cmp() {
-        let spec = CiphertextSpec::new(16, 2, 2);
+        let spec = IntegerCiphertextSpec::new(16, 2, 2);
         let ir = cmp_eq(spec);
         assert_display_is!(
             ir.optimize_ir()
@@ -322,9 +327,8 @@ mod test {
                 %53 = pbs<Protect, Lut1("CmpReduce")>(%52);
                 %54 = pack_ct<4>(%53, %51);
                 %55 = pbs<Protect, Lut1("CmpEqMrg")>(%54);
-                %56 = decl_ct<2>();
-                %59 = store_ct_block<0>(%55, %56);
-                output<0>(%59);
+                %56 = bool_from_block(%55);
+                output_bool<0>(%56);
             "#
         );
     }
@@ -333,145 +337,169 @@ mod test {
     fn bitwise_or_16() {
         let spec = zhc_crypto::integer_semantics::CiphertextBlockSpec(2, 2);
         let builder = crate::Builder::new(spec);
-        let lhs = builder.ciphertext_input(4);
-        let rhs = builder.ciphertext_input(4);
+        let lhs = builder.integer_ciphertext_input(4);
+        let rhs = builder.integer_ciphertext_input(4);
         println!("{rhs:?}");
-        let lhs_blocks = builder.ciphertext_split(lhs);
-        let rhs_blocks = builder.ciphertext_split(rhs);
+        let lhs_blocks = builder.integer_ciphertext_split(lhs);
+        let rhs_blocks = builder.integer_ciphertext_split(rhs);
         let res = builder.vector_zip_then_lookup(
             lhs_blocks,
             rhs_blocks,
             zhc_langs::ioplang::Lut1Def::BwOr,
             crate::ExtensionBehavior::Panic,
         );
-        let res = builder.ciphertext_join(res, None);
-        builder.ciphertext_output(res);
+        let res = builder.integer_ciphertext_join(res, None);
+        builder.integer_ciphertext_output(res);
         builder.draw(crate::IrKind::Original);
     }
 
     #[test]
     fn correctness_cmp_gt() {
         fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::Ciphertext(lhs), IopValue::Ciphertext(rhs)] = inp else {
+            let [
+                IopValue::IntegerCiphertext(lhs),
+                IopValue::IntegerCiphertext(rhs),
+            ] = inp
+            else {
                 unreachable!()
             };
             let res = lhs.cgt(*rhs);
-            Some(vec![IopValue::Ciphertext(res)])
+            Some(vec![IopValue::BoolCiphertext(res)])
         }
         for size in (2..128).step_by(2) {
-            cmp_gt(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+            cmp_gt(IntegerCiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
         }
     }
 
     #[test]
     fn correctness_cmp_gte() {
         fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::Ciphertext(lhs), IopValue::Ciphertext(rhs)] = inp else {
+            let [
+                IopValue::IntegerCiphertext(lhs),
+                IopValue::IntegerCiphertext(rhs),
+            ] = inp
+            else {
                 unreachable!()
             };
             let res = lhs.cgte(*rhs);
-            Some(vec![IopValue::Ciphertext(res)])
+            Some(vec![IopValue::BoolCiphertext(res)])
         }
         for size in (2..128).step_by(2) {
-            cmp_gte(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+            cmp_gte(IntegerCiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
         }
     }
 
     #[test]
     fn correctness_cmp_lt() {
         fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::Ciphertext(lhs), IopValue::Ciphertext(rhs)] = inp else {
+            let [
+                IopValue::IntegerCiphertext(lhs),
+                IopValue::IntegerCiphertext(rhs),
+            ] = inp
+            else {
                 unreachable!()
             };
             let res = lhs.clt(*rhs);
-            Some(vec![IopValue::Ciphertext(res)])
+            Some(vec![IopValue::BoolCiphertext(res)])
         }
         for size in (2..128).step_by(2) {
-            cmp_lt(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+            cmp_lt(IntegerCiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
         }
     }
 
     #[test]
     fn correctness_cmp_lte() {
         fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::Ciphertext(lhs), IopValue::Ciphertext(rhs)] = inp else {
+            let [
+                IopValue::IntegerCiphertext(lhs),
+                IopValue::IntegerCiphertext(rhs),
+            ] = inp
+            else {
                 unreachable!()
             };
             let res = lhs.clte(*rhs);
-            Some(vec![IopValue::Ciphertext(res)])
+            Some(vec![IopValue::BoolCiphertext(res)])
         }
         for size in (2..128).step_by(2) {
-            cmp_lte(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+            cmp_lte(IntegerCiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
         }
     }
 
     #[test]
     fn correctness_cmp_eq() {
         fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::Ciphertext(lhs), IopValue::Ciphertext(rhs)] = inp else {
+            let [
+                IopValue::IntegerCiphertext(lhs),
+                IopValue::IntegerCiphertext(rhs),
+            ] = inp
+            else {
                 unreachable!()
             };
             let res = lhs.equal(*rhs);
-            Some(vec![IopValue::Ciphertext(res)])
+            Some(vec![IopValue::BoolCiphertext(res)])
         }
         for size in (2..128).step_by(2) {
-            cmp_eq(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+            cmp_eq(IntegerCiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
         }
     }
 
     #[test]
     fn correctness_cmp_neq() {
         fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::Ciphertext(lhs), IopValue::Ciphertext(rhs)] = inp else {
+            let [
+                IopValue::IntegerCiphertext(lhs),
+                IopValue::IntegerCiphertext(rhs),
+            ] = inp
+            else {
                 unreachable!()
             };
             let res = lhs.not_equal(*rhs);
-            Some(vec![IopValue::Ciphertext(res)])
+            Some(vec![IopValue::BoolCiphertext(res)])
         }
         for size in (2..128).step_by(2) {
-            cmp_neq(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+            cmp_neq(IntegerCiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
         }
     }
 
     #[test]
     fn noise_cmp_gt() {
         for size in (2..128).step_by(2) {
-            cmp_gt(CiphertextSpec::new(size, 2, 2)).check_noise();
+            cmp_gt(IntegerCiphertextSpec::new(size, 2, 2)).check_noise();
         }
     }
 
     #[test]
     fn noise_cmp_gte() {
         for size in (2..128).step_by(2) {
-            cmp_gte(CiphertextSpec::new(size, 2, 2)).check_noise();
+            cmp_gte(IntegerCiphertextSpec::new(size, 2, 2)).check_noise();
         }
     }
 
     #[test]
     fn noise_cmp_lt() {
         for size in (2..128).step_by(2) {
-            cmp_lt(CiphertextSpec::new(size, 2, 2)).check_noise();
+            cmp_lt(IntegerCiphertextSpec::new(size, 2, 2)).check_noise();
         }
     }
 
     #[test]
     fn noise_cmp_lte() {
         for size in (2..128).step_by(2) {
-            cmp_lte(CiphertextSpec::new(size, 2, 2)).check_noise();
+            cmp_lte(IntegerCiphertextSpec::new(size, 2, 2)).check_noise();
         }
     }
 
     #[test]
     fn noise_cmp_eq() {
         for size in (2..128).step_by(2) {
-            cmp_eq(CiphertextSpec::new(size, 2, 2)).check_noise();
+            cmp_eq(IntegerCiphertextSpec::new(size, 2, 2)).check_noise();
         }
     }
 
     #[test]
     fn noise_cmp_neq() {
         for size in (2..128).step_by(2) {
-            cmp_neq(CiphertextSpec::new(size, 2, 2)).check_noise();
+            cmp_neq(IntegerCiphertextSpec::new(size, 2, 2)).check_noise();
         }
     }
 }

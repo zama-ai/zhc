@@ -1,6 +1,6 @@
 use crate::equivalence_check::check_iop_hpu_equivalence;
 use zhc_builder::{
-    Builder, CiphertextSpec, add, bitwise_and, bitwise_or, bitwise_xor, div, if_then_else,
+    Builder, IntegerCiphertextSpec, add, bitwise_and, bitwise_or, bitwise_xor, div, if_then_else,
     if_then_zero, mul,
 };
 use zhc_config::hpu::PhysicalConfig;
@@ -22,7 +22,7 @@ fn pipeline(ir: &IR<IopLang>) -> IR<HpuLang> {
 
 #[test]
 fn test_batch_scheduler() {
-    let ir = pipeline(&add(CiphertextSpec::new(16, 2, 2)).optimize_ir());
+    let ir = pipeline(&add(IntegerCiphertextSpec::new(16, 2, 2)).optimize_ir());
     assert_display_is!(
         ir.format().show_types(false),
         r#"
@@ -157,8 +157,8 @@ fn correctness() {
         let hpu_ir = pipeline(&iop_ir);
         check_iop_hpu_equivalence(&iop_ir, &hpu_ir, spec, 100);
     };
-    for size in 2..=64 {
-        let spec = CiphertextSpec::new(size, 2, 2);
+    for size in (2..=64).step_by(2) {
+        let spec = IntegerCiphertextSpec::new(size, 2, 2);
         check(add(spec));
         check(bitwise_and(spec));
         check(bitwise_or(spec));

@@ -5,9 +5,9 @@ use zhc_utils::{FastMap, svec};
 /// Eliminates redundant store-load pairs on ciphertext blocks.
 ///
 /// Performs forward dataflow analysis to track which value was last stored at each block index
-/// of each ciphertext. When an [`ExtractCtBlock`](super::IopInstructionSet::ExtractCtBlock)
+/// of each ciphertext. When an [`ExtractIntegerCiphertextBlock`](super::IopInstructionSet::ExtractIntegerCiphertextBlock)
 /// reads from an index that was previously written by a
-/// [`StoreCtBlock`](super::IopInstructionSet::StoreCtBlock), all uses of the extracted value
+/// [`StoreIntegerCiphertextBlock`](super::IopInstructionSet::StoreIntegerCiphertextBlock), all uses of the extracted value
 /// are replaced with the originally stored value, bypassing the memory round-trip.
 pub fn skip_store_load(ir: &mut IR<IopLang>) {
     #[derive(Debug, PartialEq, Eq, Clone)]
@@ -20,9 +20,11 @@ pub fn skip_store_load(ir: &mut IR<IopLang>) {
     let ann_ir = ir.forward_dataflow_analysis(|op| {
         use super::IopInstructionSet::*;
         match op.get_instruction() {
-            DeclareCiphertext { .. } => ((), svec![ValAnn::StoresBlocks(FastMap::default())]),
-            InputCiphertext { .. } => ((), svec![ValAnn::StoresBlocks(FastMap::default())]),
-            StoreCtBlock { index } => {
+            DeclareIntegerCiphertext { .. } => {
+                ((), svec![ValAnn::StoresBlocks(FastMap::default())])
+            }
+            InputIntegerCiphertext { .. } => ((), svec![ValAnn::StoresBlocks(FastMap::default())]),
+            StoreIntegerCiphertextBlock { index } => {
                 let ValAnn::StoresBlocks(map) = op
                     .get_args_iter()
                     .nth(1)
@@ -53,7 +55,7 @@ pub fn skip_store_load(ir: &mut IR<IopLang>) {
 
                 ((), svec![ValAnn::StoresBlocks(map)])
             }
-            ExtractCtBlock { index } => {
+            ExtractIntegerCiphertextBlock { index } => {
                 let ValAnn::StoresBlocks(map) = op
                     .get_args_iter()
                     .nth(0)
@@ -97,15 +99,15 @@ mod tests {
 
         let (_, block) = ir.add_op(IopInstructionSet::LetCiphertextBlock { value: 42 }, svec![]);
         let (_, ct) = ir.add_op(
-            IopInstructionSet::DeclareCiphertext { int_size: 2 },
+            IopInstructionSet::DeclareIntegerCiphertext { int_size: 2 },
             svec![],
         );
         let (_, ct_stored) = ir.add_op(
-            IopInstructionSet::StoreCtBlock { index: 0 },
+            IopInstructionSet::StoreIntegerCiphertextBlock { index: 0 },
             svec![block[0], ct[0]],
         );
         let (_, extracted) = ir.add_op(
-            IopInstructionSet::ExtractCtBlock { index: 0 },
+            IopInstructionSet::ExtractIntegerCiphertextBlock { index: 0 },
             svec![ct_stored[0]],
         );
         ir.add_op(
@@ -145,15 +147,15 @@ mod tests {
 
         let (_, block) = ir.add_op(IopInstructionSet::LetCiphertextBlock { value: 42 }, svec![]);
         let (_, ct) = ir.add_op(
-            IopInstructionSet::DeclareCiphertext { int_size: 2 },
+            IopInstructionSet::DeclareIntegerCiphertext { int_size: 2 },
             svec![],
         );
         let (_, ct_stored) = ir.add_op(
-            IopInstructionSet::StoreCtBlock { index: 0 },
+            IopInstructionSet::StoreIntegerCiphertextBlock { index: 0 },
             svec![block[0], ct[0]],
         );
         let (_, extracted) = ir.add_op(
-            IopInstructionSet::ExtractCtBlock { index: 1 },
+            IopInstructionSet::ExtractIntegerCiphertextBlock { index: 1 },
             svec![ct_stored[0]],
         );
         ir.add_op(
@@ -178,23 +180,23 @@ mod tests {
         let (_, b0) = ir.add_op(IopInstructionSet::LetCiphertextBlock { value: 10 }, svec![]);
         let (_, b1) = ir.add_op(IopInstructionSet::LetCiphertextBlock { value: 20 }, svec![]);
         let (_, ct) = ir.add_op(
-            IopInstructionSet::DeclareCiphertext { int_size: 4 },
+            IopInstructionSet::DeclareIntegerCiphertext { int_size: 4 },
             svec![],
         );
         let (_, ct1) = ir.add_op(
-            IopInstructionSet::StoreCtBlock { index: 0 },
+            IopInstructionSet::StoreIntegerCiphertextBlock { index: 0 },
             svec![b0[0], ct[0]],
         );
         let (_, ct2) = ir.add_op(
-            IopInstructionSet::StoreCtBlock { index: 1 },
+            IopInstructionSet::StoreIntegerCiphertextBlock { index: 1 },
             svec![b1[0], ct1[0]],
         );
         let (_, e0) = ir.add_op(
-            IopInstructionSet::ExtractCtBlock { index: 0 },
+            IopInstructionSet::ExtractIntegerCiphertextBlock { index: 0 },
             svec![ct2[0]],
         );
         let (_, e1) = ir.add_op(
-            IopInstructionSet::ExtractCtBlock { index: 1 },
+            IopInstructionSet::ExtractIntegerCiphertextBlock { index: 1 },
             svec![ct2[0]],
         );
         let (_, sum) = ir.add_op(
@@ -247,19 +249,19 @@ mod tests {
         let (_, b0) = ir.add_op(IopInstructionSet::LetCiphertextBlock { value: 10 }, svec![]);
         let (_, b1) = ir.add_op(IopInstructionSet::LetCiphertextBlock { value: 20 }, svec![]);
         let (_, ct) = ir.add_op(
-            IopInstructionSet::DeclareCiphertext { int_size: 4 },
+            IopInstructionSet::DeclareIntegerCiphertext { int_size: 4 },
             svec![],
         );
         let (_, ct1) = ir.add_op(
-            IopInstructionSet::StoreCtBlock { index: 0 },
+            IopInstructionSet::StoreIntegerCiphertextBlock { index: 0 },
             svec![b0[0], ct[0]],
         );
         let (_, ct2) = ir.add_op(
-            IopInstructionSet::StoreCtBlock { index: 0 },
+            IopInstructionSet::StoreIntegerCiphertextBlock { index: 0 },
             svec![b1[0], ct1[0]],
         );
         let (_, extracted) = ir.add_op(
-            IopInstructionSet::ExtractCtBlock { index: 0 },
+            IopInstructionSet::ExtractIntegerCiphertextBlock { index: 0 },
             svec![ct2[0]],
         );
         ir.add_op(
@@ -300,14 +302,16 @@ mod tests {
         let mut ir: IR<IopLang> = IR::empty();
 
         let (_, ct) = ir.add_op(
-            IopInstructionSet::InputCiphertext {
+            IopInstructionSet::InputIntegerCiphertext {
                 pos: 0,
                 int_size: 2,
             },
             svec![],
         );
-        let (_, extracted) =
-            ir.add_op(IopInstructionSet::ExtractCtBlock { index: 0 }, svec![ct[0]]);
+        let (_, extracted) = ir.add_op(
+            IopInstructionSet::ExtractIntegerCiphertextBlock { index: 0 },
+            svec![ct[0]],
+        );
         ir.add_op(
             IopInstructionSet::_Consume {
                 typ: IopTypeSystem::CiphertextBlock,
@@ -328,7 +332,7 @@ mod tests {
         let mut ir: IR<IopLang> = IR::empty();
 
         let (_, ct) = ir.add_op(
-            IopInstructionSet::InputCiphertext {
+            IopInstructionSet::InputIntegerCiphertext {
                 pos: 0,
                 int_size: 2,
             },
@@ -336,11 +340,11 @@ mod tests {
         );
         let (_, block) = ir.add_op(IopInstructionSet::LetCiphertextBlock { value: 99 }, svec![]);
         let (_, ct_stored) = ir.add_op(
-            IopInstructionSet::StoreCtBlock { index: 0 },
+            IopInstructionSet::StoreIntegerCiphertextBlock { index: 0 },
             svec![block[0], ct[0]],
         );
         let (_, extracted) = ir.add_op(
-            IopInstructionSet::ExtractCtBlock { index: 0 },
+            IopInstructionSet::ExtractIntegerCiphertextBlock { index: 0 },
             svec![ct_stored[0]],
         );
         ir.add_op(
@@ -382,27 +386,27 @@ mod tests {
 
         let (_, block) = ir.add_op(IopInstructionSet::LetCiphertextBlock { value: 42 }, svec![]);
         let (_, ct_a) = ir.add_op(
-            IopInstructionSet::DeclareCiphertext { int_size: 2 },
+            IopInstructionSet::DeclareIntegerCiphertext { int_size: 2 },
             svec![],
         );
         let (_, a_stored) = ir.add_op(
-            IopInstructionSet::StoreCtBlock { index: 0 },
+            IopInstructionSet::StoreIntegerCiphertextBlock { index: 0 },
             svec![block[0], ct_a[0]],
         );
         let (_, a_extracted) = ir.add_op(
-            IopInstructionSet::ExtractCtBlock { index: 0 },
+            IopInstructionSet::ExtractIntegerCiphertextBlock { index: 0 },
             svec![a_stored[0]],
         );
         let (_, ct_b) = ir.add_op(
-            IopInstructionSet::DeclareCiphertext { int_size: 2 },
+            IopInstructionSet::DeclareIntegerCiphertext { int_size: 2 },
             svec![],
         );
         let (_, b_stored) = ir.add_op(
-            IopInstructionSet::StoreCtBlock { index: 0 },
+            IopInstructionSet::StoreIntegerCiphertextBlock { index: 0 },
             svec![a_extracted[0], ct_b[0]],
         );
         let (_, b_extracted) = ir.add_op(
-            IopInstructionSet::ExtractCtBlock { index: 0 },
+            IopInstructionSet::ExtractIntegerCiphertextBlock { index: 0 },
             svec![b_stored[0]],
         );
         ir.add_op(
@@ -474,23 +478,23 @@ mod tests {
         let (_, b0) = ir.add_op(IopInstructionSet::LetCiphertextBlock { value: 10 }, svec![]);
         let (_, b1) = ir.add_op(IopInstructionSet::LetCiphertextBlock { value: 20 }, svec![]);
         let (_, ct) = ir.add_op(
-            IopInstructionSet::DeclareCiphertext { int_size: 4 },
+            IopInstructionSet::DeclareIntegerCiphertext { int_size: 4 },
             svec![],
         );
         let (_, ct1) = ir.add_op(
-            IopInstructionSet::StoreCtBlock { index: 0 },
+            IopInstructionSet::StoreIntegerCiphertextBlock { index: 0 },
             svec![b0[0], ct[0]],
         );
         let (_, ct2) = ir.add_op(
-            IopInstructionSet::StoreCtBlock { index: 0 },
+            IopInstructionSet::StoreIntegerCiphertextBlock { index: 0 },
             svec![b1[0], ct1[0]],
         );
         let (_, e1) = ir.add_op(
-            IopInstructionSet::ExtractCtBlock { index: 0 },
+            IopInstructionSet::ExtractIntegerCiphertextBlock { index: 0 },
             svec![ct1[0]],
         );
         let (_, e2) = ir.add_op(
-            IopInstructionSet::ExtractCtBlock { index: 0 },
+            IopInstructionSet::ExtractIntegerCiphertextBlock { index: 0 },
             svec![ct2[0]],
         );
         let (_, sum) = ir.add_op(

@@ -8,6 +8,13 @@ use zhc_langs::{
 };
 use zhc_utils::{Dumpable, FastMap, SafeAs};
 
+#[derive(Clone, Copy)]
+enum InputKind {
+    IntegerCiphertext(u16),
+    BoolCiphertext,
+    IntegerPlaintext(u16),
+}
+
 pub fn check_iop_hpu_equivalence(
     iop_ir: &IR<IopLang>,
     hpu_ir: &IR<HpuLang>,
@@ -15,34 +22,39 @@ pub fn check_iop_hpu_equivalence(
     nreps: usize,
 ) {
     // Discover input slots from the IOP IR.
-    let mut input_slots: Vec<(usize, bool, u16)> = Vec::new(); // (pos, is_ct, int_size)
+    let mut input_slots: Vec<(usize, InputKind)> = Vec::new();
     for op in iop_ir.walk_ops_linear() {
         match op.get_instruction() {
-            IopInstructionSet::InputCiphertext { pos, int_size } => {
-                input_slots.push((*pos, true, *int_size));
+            IopInstructionSet::InputIntegerCiphertext { pos, int_size } => {
+                input_slots.push((*pos, InputKind::IntegerCiphertext(*int_size)));
             }
-            IopInstructionSet::InputPlaintext { pos, int_size } => {
-                input_slots.push((*pos, false, *int_size));
+            IopInstructionSet::InputBoolCiphertext { pos } => {
+                input_slots.push((*pos, InputKind::BoolCiphertext));
+            }
+            IopInstructionSet::InputIntegerPlaintext { pos, int_size } => {
+                input_slots.push((*pos, InputKind::IntegerPlaintext(*int_size)));
             }
             _ => {}
         }
     }
-    input_slots.sort_by_key(|(pos, _, _)| *pos);
+    input_slots.sort_by_key(|(pos, _)| *pos);
 
     for _ in 0..nreps {
         // Generate random IOP inputs.
         let iop_inputs: Vec<IopValue> = input_slots
             .iter()
-            .map(|(_, is_ct, int_size)| {
-                if *is_ct {
-                    IopValue::Ciphertext(spec.ciphertext_spec(*int_size).random())
-                } else {
-                    IopValue::Plaintext(
-                        spec.matching_plaintext_block_spec()
-                            .plaintext_spec(*int_size)
-                            .random(),
-                    )
+            .map(|(_, kind)| match kind {
+                InputKind::IntegerCiphertext(int_size) => {
+                    IopValue::IntegerCiphertext(spec.integer_ciphertext_spec(*int_size).random())
                 }
+                InputKind::BoolCiphertext => IopValue::BoolCiphertext(
+                    zhc_crypto::integer_semantics::EmulatedBoolCiphertext::random(spec),
+                ),
+                InputKind::IntegerPlaintext(int_size) => IopValue::IntegerPlaintext(
+                    spec.matching_plaintext_block_spec()
+                        .integer_plaintext_spec(*int_size)
+                        .random(),
+                ),
             })
             .collect();
 
@@ -62,7 +74,7 @@ pub fn check_iop_hpu_equivalence(
         let mut pt_idx = 0usize;
         for val in iop_inputs.iter() {
             match val {
-                IopValue::Ciphertext(ct) => {
+                IopValue::IntegerCiphertext(ct) => {
                     for i in 0..ct.len() {
                         hpu_ctx.sources.insert(
                             TSrcId {
@@ -74,7 +86,7 @@ pub fn check_iop_hpu_equivalence(
                     }
                     ct_idx += 1;
                 }
-                IopValue::Plaintext(pt) => {
+                IopValue::IntegerPlaintext(pt) => {
                     for i in 0..pt.len() {
                         hpu_ctx.immediates.insert(
                             TImmId {
@@ -85,6 +97,16 @@ pub fn check_iop_hpu_equivalence(
                         );
                     }
                     pt_idx += 1;
+                }
+                IopValue::BoolCiphertext(ct) => {
+                    hpu_ctx.sources.insert(
+                        TSrcId {
+                            src_pos: ct_idx.sas(),
+                            block_pos: 0,
+                        },
+                        ct.get_block(),
+                    );
+                    ct_idx += 1;
                 }
                 _ => panic!("Unexpected input type"),
             }
@@ -98,10 +120,14 @@ pub fn check_iop_hpu_equivalence(
 
         // Compare: check each output block matches.
         for (pos, iop_output) in &iop_ctx.outputs {
-            let IopValue::Ciphertext(expected_ct) = iop_output else {
-                panic!("Expected Ciphertext output at position {pos}");
+            let expected_blocks = match iop_output {
+                IopValue::IntegerCiphertext(ct) => {
+                    (0..ct.len()).map(|i| ct.get_block(i)).collect::<Vec<_>>()
+                }
+                IopValue::BoolCiphertext(ct) => vec![ct.get_block()],
+                _ => panic!("Expected ciphertext output at position {pos}"),
             };
-            for i in 0..expected_ct.len() {
+            for (i, expected_block) in expected_blocks.into_iter().enumerate() {
                 let tdst = TDstId {
                     dst_pos: (*pos).sas(),
                     block_pos: i.sas(),
@@ -112,7 +138,7 @@ pub fn check_iop_hpu_equivalence(
                     .unwrap_or_else(|| panic!("Missing HPU output at {tdst}"));
                 assert_eq!(
                     hpu_block.mask_message(),
-                    expected_ct.get_block(i),
+                    expected_block,
                     "Output mismatch at pos={pos}, block={i}"
                 );
             }
@@ -129,34 +155,39 @@ pub fn check_iop_dop_equivalence(
     nreps: usize,
 ) {
     // Discover input slots from the IOP IR.
-    let mut input_slots: Vec<(usize, bool, u16)> = Vec::new();
+    let mut input_slots: Vec<(usize, InputKind)> = Vec::new();
     for op in iop_ir.walk_ops_linear() {
         match op.get_instruction() {
-            IopInstructionSet::InputCiphertext { pos, int_size } => {
-                input_slots.push((*pos, true, *int_size));
+            IopInstructionSet::InputIntegerCiphertext { pos, int_size } => {
+                input_slots.push((*pos, InputKind::IntegerCiphertext(*int_size)));
             }
-            IopInstructionSet::InputPlaintext { pos, int_size } => {
-                input_slots.push((*pos, false, *int_size));
+            IopInstructionSet::InputBoolCiphertext { pos } => {
+                input_slots.push((*pos, InputKind::BoolCiphertext));
+            }
+            IopInstructionSet::InputIntegerPlaintext { pos, int_size } => {
+                input_slots.push((*pos, InputKind::IntegerPlaintext(*int_size)));
             }
             _ => {}
         }
     }
-    input_slots.sort_by_key(|(pos, _, _)| *pos);
+    input_slots.sort_by_key(|(pos, _)| *pos);
 
     for _ in 0..nreps {
         // Generate random IOP inputs.
         let iop_inputs: Vec<IopValue> = input_slots
             .iter()
-            .map(|(_, is_ct, int_size)| {
-                if *is_ct {
-                    IopValue::Ciphertext(spec.ciphertext_spec(*int_size).random())
-                } else {
-                    IopValue::Plaintext(
-                        spec.matching_plaintext_block_spec()
-                            .plaintext_spec(*int_size)
-                            .random(),
-                    )
+            .map(|(_, kind)| match kind {
+                InputKind::IntegerCiphertext(int_size) => {
+                    IopValue::IntegerCiphertext(spec.integer_ciphertext_spec(*int_size).random())
                 }
+                InputKind::BoolCiphertext => IopValue::BoolCiphertext(
+                    zhc_crypto::integer_semantics::EmulatedBoolCiphertext::random(spec),
+                ),
+                InputKind::IntegerPlaintext(int_size) => IopValue::IntegerPlaintext(
+                    spec.matching_plaintext_block_spec()
+                        .integer_plaintext_spec(*int_size)
+                        .random(),
+                ),
             })
             .collect();
 
@@ -176,19 +207,23 @@ pub fn check_iop_dop_equivalence(
         let mut pt_idx = 0usize;
         for val in iop_inputs.iter() {
             match val {
-                IopValue::Ciphertext(ct) => {
+                IopValue::IntegerCiphertext(ct) => {
                     for i in 0..ct.len() {
                         dop_ctx.sources.insert((ct_idx, i.sas()), ct.get_block(i));
                     }
                     ct_idx += 1;
                 }
-                IopValue::Plaintext(pt) => {
+                IopValue::IntegerPlaintext(pt) => {
                     for i in 0..pt.len() {
                         dop_ctx
                             .pt_sources
                             .insert((pt_idx, i.sas()), pt.get_block(i));
                     }
                     pt_idx += 1;
+                }
+                IopValue::BoolCiphertext(ct) => {
+                    dop_ctx.sources.insert((ct_idx, 0), ct.get_block());
+                    ct_idx += 1;
                 }
                 _ => panic!("Unexpected input type"),
             }
@@ -202,17 +237,21 @@ pub fn check_iop_dop_equivalence(
 
         // Compare: check each output block matches.
         for (pos, iop_output) in &iop_ctx.outputs {
-            let IopValue::Ciphertext(expected_ct) = iop_output else {
-                panic!("Expected Ciphertext output at position {pos}");
+            let expected_blocks = match iop_output {
+                IopValue::IntegerCiphertext(ct) => {
+                    (0..ct.len()).map(|i| ct.get_block(i)).collect::<Vec<_>>()
+                }
+                IopValue::BoolCiphertext(ct) => vec![ct.get_block()],
+                _ => panic!("Expected ciphertext output at position {pos}"),
             };
-            for i in 0..expected_ct.len() {
+            for (i, expected_block) in expected_blocks.into_iter().enumerate() {
                 let dop_block = dop_ctx
                     .destinations
                     .get(&(*pos, i.sas()))
                     .unwrap_or_else(|| panic!("Missing DOP output at pos={pos}, block={i}"));
                 assert_eq!(
                     dop_block.mask_message(),
-                    expected_ct.get_block(i),
+                    expected_block,
                     "Output mismatch at pos={pos}, block={i}"
                 );
             }

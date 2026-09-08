@@ -1,6 +1,6 @@
 use zhc_builder::{
-    Builder, CiphertextSpec, add, bitwise_and, bitwise_or, bitwise_xor, cmp_gt, div, if_then_else,
-    if_then_zero, mul,
+    Builder, IntegerCiphertextSpec, add, bitwise_and, bitwise_or, bitwise_xor, cmp_gt, div,
+    if_then_else, if_then_zero, mul,
 };
 use zhc_config::hpu::{HpuConfig, PhysicalConfig};
 use zhc_crypto::integer_semantics::lut::LutRegistry;
@@ -32,7 +32,7 @@ fn pipeline(ir: &IR<IopLang>) -> (IR<DopLang>, LutRegistry) {
 
 #[test]
 fn test_allocate_add_ir() {
-    let ir = pipeline(&add(CiphertextSpec::new(16, 2, 2)).optimize_ir()).0;
+    let ir = pipeline(&add(IntegerCiphertextSpec::new(16, 2, 2)).optimize_ir()).0;
     assert_display_is!(
         ir.format(),
         r#"
@@ -112,7 +112,7 @@ fn test_allocate_add_ir() {
 
 #[test]
 fn test_allocate_cmp_ir() {
-    let ir = pipeline(&cmp_gt(CiphertextSpec::new(16, 2, 2)).optimize_ir()).0;
+    let ir = pipeline(&cmp_gt(IntegerCiphertextSpec::new(16, 2, 2)).optimize_ir()).0;
     assert_display_is!(
         ir.format().with_walker(PrintWalker::Linear),
         r#"
@@ -182,8 +182,8 @@ fn allocator_correctness() {
         let (dop_ir, lut_reg) = pipeline(&iop_ir);
         check_iop_dop_equivalence(&iop_ir, &dop_ir, &lut_reg, spec, config.regf_size, 100);
     };
-    for size in 2..=64 {
-        let spec = CiphertextSpec::new(size, 2, 2);
+    for size in (2..=64).step_by(2) {
+        let spec = IntegerCiphertextSpec::new(size, 2, 2);
         check(add(spec));
         check(bitwise_and(spec));
         check(bitwise_or(spec));

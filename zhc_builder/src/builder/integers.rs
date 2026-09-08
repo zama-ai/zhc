@@ -1,7 +1,8 @@
 use std::fmt::Debug;
 use zhc_crypto::integer_semantics::{
-    CiphertextBlockSpec, CiphertextSpec, EmulatedCiphertextBlockStorage, EmulatedCiphertextStorage,
-    EmulatedPlaintextBlockStorage, EmulatedPlaintextStorage, PlaintextBlockSpec, PlaintextSpec,
+    CiphertextBlockSpec, EmulatedBoolCiphertext, EmulatedCiphertextBlockStorage,
+    EmulatedIntegerCiphertextStorage, EmulatedIntegerPlaintextStorage,
+    EmulatedPlaintextBlockStorage, IntegerCiphertextSpec, IntegerPlaintextSpec, PlaintextBlockSpec,
 };
 use zhc_ir::ValId;
 use zhc_langs::ioplang::IopValue;
@@ -15,9 +16,9 @@ use zhc_utils::Dumpable;
 /// See the [module-level documentation](super::super) for the full layout diagram.
 ///
 /// Blocks are produced by
-/// [`Builder::ciphertext_split`](`super::Builder::ciphertext_split`) or by block-level
-/// arithmetic methods, and can be recombined into a full [`Ciphertext`] via
-/// [`Builder::ciphertext_join`](`super::Builder::ciphertext_join`).
+/// [`Builder::integer_ciphertext_split`](`super::Builder::integer_ciphertext_split`) or by block-level
+/// arithmetic methods, and can be recombined into a full [`IntegerCiphertext`] via
+/// [`Builder::integer_ciphertext_join`](`super::Builder::integer_ciphertext_join`).
 ///
 /// This type cannot be constructed directly — it is always returned by
 /// [`Builder`](`super::Builder`) methods. Use [`make_value`](Self::make_value) to create a test
@@ -65,56 +66,93 @@ impl CiphertextBlock {
     }
 }
 
-/// An opaque handle to a multi-block encrypted integer in the IR graph.
-///
-/// A [`Ciphertext`] represents an integer stored as a radix-`2^message_size` decomposition
-/// across multiple [`CiphertextBlock`]s (one block per digit). Its [`CiphertextSpec`]
-/// records the total integer bit-width (`int_size`) and the per-block layout; the number
-/// of blocks is `int_size / message_size`.
-///
-/// Use [`Builder::ciphertext_split`](`super::Builder::ciphertext_split`) to decompose it
-/// into individual radix digits for block-level operations, and
-/// [`Builder::ciphertext_join`](`super::Builder::ciphertext_join`) to reassemble.
-///
-/// This type cannot be constructed directly — it is always returned by
-/// [`Builder`](`super::Builder`) methods. Use [`make_value`](Self::make_value) to create a test
-/// [`IopValue`] for [`Interpreter::with_inputs`](`super::Interpreter::with_inputs`).
+/// An opaque handle to an encrypted Boolean backed by one clean ciphertext block.
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub struct Ciphertext {
+pub struct BoolCiphertext {
     pub(crate) valid: ValId,
-    pub(super) spec: CiphertextSpec,
+    pub(super) spec: CiphertextBlockSpec,
 }
 
-impl Debug for Ciphertext {
+impl Debug for BoolCiphertext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}_ct", self.valid)
+        write!(f, "{}_bool_ct", self.valid)
     }
 }
 
-impl AsRef<Ciphertext> for Ciphertext {
-    fn as_ref(&self) -> &Ciphertext {
+impl AsRef<BoolCiphertext> for BoolCiphertext {
+    fn as_ref(&self) -> &BoolCiphertext {
         self
     }
 }
 
-impl Dumpable for Ciphertext {
+impl Dumpable for BoolCiphertext {
     fn dump_to_string(&self) -> String {
         format!("{:?}", self)
     }
 }
 
-impl Ciphertext {
+impl BoolCiphertext {
+    /// Returns the layout of the block backing this Boolean.
+    pub fn spec(&self) -> CiphertextBlockSpec {
+        self.spec
+    }
+
+    /// Creates a compatible Boolean value for interpretation.
+    pub fn make_value(&self, value: bool) -> IopValue {
+        IopValue::BoolCiphertext(EmulatedBoolCiphertext::from_bool(value, self.spec))
+    }
+}
+
+/// An opaque handle to a multi-block encrypted integer in the IR graph.
+///
+/// A [`IntegerCiphertext`] represents an integer stored as a radix-`2^message_size` decomposition
+/// across multiple [`CiphertextBlock`]s (one block per digit). Its [`IntegerCiphertextSpec`]
+/// records the total integer bit-width (`int_size`) and the per-block layout; the number
+/// of blocks is `int_size / message_size`.
+///
+/// Use [`Builder::integer_ciphertext_split`](`super::Builder::integer_ciphertext_split`) to decompose it
+/// into individual radix digits for block-level operations, and
+/// [`Builder::integer_ciphertext_join`](`super::Builder::integer_ciphertext_join`) to reassemble.
+///
+/// This type cannot be constructed directly — it is always returned by
+/// [`Builder`](`super::Builder`) methods. Use [`make_value`](Self::make_value) to create a test
+/// [`IopValue`] for [`Interpreter::with_inputs`](`super::Interpreter::with_inputs`).
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct IntegerCiphertext {
+    pub(crate) valid: ValId,
+    pub(super) spec: IntegerCiphertextSpec,
+}
+
+impl Debug for IntegerCiphertext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}_ct", self.valid)
+    }
+}
+
+impl AsRef<IntegerCiphertext> for IntegerCiphertext {
+    fn as_ref(&self) -> &IntegerCiphertext {
+        self
+    }
+}
+
+impl Dumpable for IntegerCiphertext {
+    fn dump_to_string(&self) -> String {
+        format!("{:?}", self)
+    }
+}
+
+impl IntegerCiphertext {
     /// Returns the specification describing the integer bit-width and per-block layout.
-    pub fn spec(&self) -> CiphertextSpec {
+    pub fn spec(&self) -> IntegerCiphertextSpec {
         self.spec
     }
 
     /// Creates a compatible value to be used in interpretation.
     ///
     /// The `val` argument is the integer to be encoded. It is decomposed into
-    /// blocks according to this ciphertext's [`CiphertextSpec`].
-    pub fn make_value(&self, val: EmulatedCiphertextStorage) -> IopValue {
-        IopValue::Ciphertext(self.spec().from_int(val))
+    /// blocks according to this ciphertext's [`IntegerCiphertextSpec`].
+    pub fn make_value(&self, val: EmulatedIntegerCiphertextStorage) -> IopValue {
+        IopValue::IntegerCiphertext(self.spec().from_int(val))
     }
 }
 
@@ -174,50 +212,50 @@ impl PlaintextBlock {
 
 /// An opaque handle to a multi-block plaintext integer in the IR graph.
 ///
-/// A [`Plaintext`] represents an unencrypted integer stored as a radix-`2^message_size`
-/// decomposition across multiple [`PlaintextBlock`]s. Its [`PlaintextSpec`] records the
+/// A [`IntegerPlaintext`] represents an unencrypted integer stored as a radix-`2^message_size`
+/// decomposition across multiple [`PlaintextBlock`]s. Its [`IntegerPlaintextSpec`] records the
 /// total integer bit-width and the
-/// per-block layout. Use [`Builder::plaintext_split`](`super::Builder::plaintext_split`) to
+/// per-block layout. Use [`Builder::integer_plaintext_split`](`super::Builder::integer_plaintext_split`) to
 /// decompose it into individual blocks.
 ///
 /// This type cannot be constructed directly — it is always returned by
 /// [`Builder`](`super::Builder`) methods. Use [`make_value`](Self::make_value) to create a test
 /// [`IopValue`] for [`Interpreter::with_inputs`](`super::Interpreter::with_inputs`).
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub struct Plaintext {
+pub struct IntegerPlaintext {
     pub(crate) valid: ValId,
-    pub(super) spec: PlaintextSpec,
+    pub(super) spec: IntegerPlaintextSpec,
 }
 
-impl Debug for Plaintext {
+impl Debug for IntegerPlaintext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}_pt", self.valid)
     }
 }
 
-impl AsRef<Plaintext> for Plaintext {
-    fn as_ref(&self) -> &Plaintext {
+impl AsRef<IntegerPlaintext> for IntegerPlaintext {
+    fn as_ref(&self) -> &IntegerPlaintext {
         self
     }
 }
 
-impl Dumpable for Plaintext {
+impl Dumpable for IntegerPlaintext {
     fn dump_to_string(&self) -> String {
         format!("{:?}", self)
     }
 }
 
-impl Plaintext {
+impl IntegerPlaintext {
     /// Returns the specification describing the integer bit-width and per-block layout.
-    pub fn spec(&self) -> PlaintextSpec {
+    pub fn spec(&self) -> IntegerPlaintextSpec {
         self.spec
     }
 
     /// Creates a compatible value to be used in interpretation.
     ///
     /// The `val` argument is the integer to be encoded. It is decomposed into
-    /// blocks according to this plaintext's [`PlaintextSpec`].
-    pub fn make_value(&self, val: EmulatedPlaintextStorage) -> IopValue {
-        IopValue::Plaintext(self.spec.from_int(val))
+    /// blocks according to this plaintext's [`IntegerPlaintextSpec`].
+    pub fn make_value(&self, val: EmulatedIntegerPlaintextStorage) -> IopValue {
+        IopValue::IntegerPlaintext(self.spec.from_int(val))
     }
 }

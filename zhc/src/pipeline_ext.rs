@@ -12,8 +12,8 @@ pub trait PipelineExt {
     /// use zhc::prelude::*;
     ///
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let input = builder.ciphertext_input(8);
-    /// builder.ciphertext_output(&input);
+    /// let input = builder.integer_ciphertext_input(8);
+    /// builder.integer_ciphertext_output(&input);
     /// let mut pipeline = Pipeline::new().with_builder(builder);
     /// assert_eq!(pipeline.get_prototype().get_args_arity(), 1);
     /// ```
