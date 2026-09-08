@@ -140,6 +140,7 @@ struct ArtifactsValids {
     pbs_metrics: ValId,
     partitions: ValId,
     prototype: ValId,
+    ciphertext_block_spec: ValId,
     lut_registry: ValId,
     hpu_lut_relocation: ValId,
     hpu_config: ValId,
@@ -273,6 +274,7 @@ static PIPELINE: LazyLock<(IR<PipelineLang>, ArtifactsValids)> = LazyLock::new(|
             slack_drawing,
             partitions,
             prototype,
+            ciphertext_block_spec,
             lut_registry,
             hpu_lut_relocation,
             hpu_config,
@@ -731,6 +733,22 @@ impl Pipeline {
             .get_val(VALIDS().prototype)
             .unwrap()
             .unwrap_prototype_ref()
+    }
+
+    /// Returns the ciphertext block specification supplied to the pipeline.
+    ///
+    /// # Panics
+    ///
+    /// Panics if no specification was supplied with
+    /// [`with_ciphertext_block_spec`](Self::with_ciphertext_block_spec).
+    pub fn get_ciphertext_block_spec(&mut self) -> &CiphertextBlockSpec {
+        self.eval
+            .pull_val(&mut self.context, VALIDS().ciphertext_block_spec);
+        self.eventually_report_failure();
+        self.eval
+            .get_val(VALIDS().ciphertext_block_spec)
+            .unwrap()
+            .unwrap_ciphertext_block_spec_ref()
     }
 
     /// Returns the configuration of the target HPU.
@@ -1712,6 +1730,24 @@ impl Pipeline {
             .into_val(VALIDS().prototype)
             .unwrap()
             .unwrap_prototype()
+    }
+
+    /// Consumes the pipeline and returns its ciphertext block specification.
+    ///
+    /// The owning counterpart of
+    /// [`get_ciphertext_block_spec`](Self::get_ciphertext_block_spec).
+    ///
+    /// # Panics
+    ///
+    /// See [`get_ciphertext_block_spec`](Self::get_ciphertext_block_spec).
+    pub fn into_ciphertext_block_spec(mut self) -> CiphertextBlockSpec {
+        self.eval
+            .pull_val(&mut self.context, VALIDS().ciphertext_block_spec);
+        self.eventually_report_failure();
+        self.eval
+            .into_val(VALIDS().ciphertext_block_spec)
+            .unwrap()
+            .unwrap_ciphertext_block_spec()
     }
 
     /// Consumes the pipeline and returns the owned HPU configuration.
