@@ -26,7 +26,7 @@ pub mod cse;
 pub mod dce;
 pub mod evaluation;
 pub mod height_depth;
-pub mod partition;
+pub mod partitioning;
 pub mod scheduler;
 pub mod slack;
 pub mod split;

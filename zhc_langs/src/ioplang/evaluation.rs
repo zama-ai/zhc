@@ -206,7 +206,7 @@ impl Evaluable<IopValue> for super::IopInstructionSet {
                 svec![]
             }
             _Consume { .. } => panic!("Tried to interpret a _consume operation"),
-            Inspect { .. } => arguments.iter().map(|a| (*a).clone()).cosvec(),
+            Inspect { .. } | _Copy { .. } => arguments.iter().map(|a| (*a).clone()).cosvec(),
             DeclareCiphertext { int_size } => {
                 svec![IopValue::Ciphertext(
                     context.spec.ciphertext_spec(*int_size).from_int(0)

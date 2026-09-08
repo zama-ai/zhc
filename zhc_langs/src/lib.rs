@@ -19,5 +19,6 @@ pub mod doplang;
 pub mod hpulang;
 pub mod ioplang;
 pub mod pipelinelang;
+pub mod tasklang;
 pub mod vmlang;
 pub use zhc_ir::visualization::layoutlang;

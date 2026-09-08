@@ -40,3 +40,7 @@ path = "test/hpu_schedule_legacy.rs"
 [[test]]
 name = "lower_iop_to_hpu"
 path = "test/lower_iop_to_hpu.rs"
+
+[[test]]
+name = "partitioning"
+path = "test/partitioning.rs"

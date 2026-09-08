@@ -44,6 +44,14 @@ pub enum Analysing<A> {
 }
 
 impl<A> Analysing<A> {
+    /// Converts from `&Analysing<A>` to `Analysing<&A>`, keeping the slot state.
+    pub fn as_ref(&self) -> Analysing<&A> {
+        match self {
+            Analysing::Pending => Analysing::Pending,
+            Analysing::Analyzed(a) => Analysing::Analyzed(a),
+        }
+    }
+
     /// Extracts the inner value.
     ///
     /// # Panics

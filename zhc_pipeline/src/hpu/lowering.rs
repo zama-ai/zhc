@@ -105,6 +105,9 @@ pub fn lower_iop_to_hpu(ir: &IR<IopLang>) -> Translation<HpuLang> {
                 // should be no aliases remaining here,
                 panic!("Unexpected Alias op encountered.");
             }
+            IopInstructionSet::_Copy { .. } => {
+                todo!()
+            }
             IopInstructionSet::LetCiphertextBlock { value } => {
                 translator.direct_translation(
                     &op,

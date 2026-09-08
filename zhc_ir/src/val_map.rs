@@ -23,7 +23,7 @@ pub struct ValMap<T> {
 }
 
 impl<T> ValMap<T> {
-    fn may_store(&self, k: impl AsValId) -> bool {
+    pub(crate) fn may_store(&self, k: impl AsValId) -> bool {
         let k = k.val_id();
         k.0 < self.store.len() && self.store[&k].is_active()
     }

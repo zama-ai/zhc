@@ -1,6 +1,6 @@
-use zhc_ir::{IR, OpMap, partition::PartitionId, translation::Translation};
+use zhc_ir::{IR, OpMap, partitioning::PartitionId, translation::Translation};
 use zhc_langs::{
-    hpulang::{HpuId, HpuInstructionSet, HpuLang, HpuLocality, insert_transfers},
+    hpulang::{HpuId, HpuInstructionSet, HpuLang, HpuLocality},
     ioplang::IopLang,
 };
 use zhc_utils::{
@@ -37,7 +37,6 @@ pub fn lower_iop_to_multi_hpu<'a>(
                 .get(op.get_predecessors_iter().next().unwrap())
                 .unwrap();
         });
-    insert_transfers(&mut ir, &hid_map);
     let localities = ir.totally_mapped_opmap(|opref| {
         use HpuInstructionSet::*;
         match opref.get_instruction() {

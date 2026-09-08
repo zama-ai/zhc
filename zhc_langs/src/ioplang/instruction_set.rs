@@ -63,6 +63,9 @@ pub enum IopInstructionSet {
     /// Eliminated by [`eliminate_aliases`](super::eliminate_aliases)
     /// before downstream passes.
     Inspect { typ: IopTypeSystem },
+    /// Copy of a value from one partition into another. Evaluates as
+    /// the identity. `(typ) → (typ)`
+    _Copy { typ: IopTypeSystem },
     /// Zero-initialized composite ciphertext. `() → (Ciphertext)`
     DeclareCiphertext { int_size: u16 },
     /// Plaintext block constant. `() → (PlaintextBlock)`
@@ -158,6 +161,7 @@ impl Format for IopInstructionSet {
             OutputCiphertext { pos } => write!(f, "output<{pos}>"),
             _Consume { typ } => write!(f, "_consume<{typ}>"),
             Inspect { .. } => write!(f, "inspect"),
+            _Copy { .. } => write!(f, "_copy"),
             DeclareCiphertext { int_size } => write!(f, "decl_ct<{int_size}>"),
             LetPlaintextBlock { value } => write!(f, "let_pt_block<{value}>"),
             LetCiphertextBlock { value } => write!(f, "let_ct_block<{value}>"),
@@ -198,6 +202,7 @@ impl DialectInstructionSet for IopInstructionSet {
             OutputCiphertext { .. } => sig![(Ciphertext) -> ()],
             _Consume { typ } => sig![(typ.clone()) -> ()],
             Inspect { typ } => sig![(typ.clone()) -> (typ.clone())],
+            _Copy { typ } => sig![(typ.clone()) -> (typ.clone())],
             DeclareCiphertext { .. } => sig![() -> (Ciphertext)],
             LetPlaintextBlock { .. } => sig![() -> (PlaintextBlock)],
             LetCiphertextBlock { .. } => sig![() -> (CiphertextBlock)],

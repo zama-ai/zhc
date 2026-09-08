@@ -1,13 +1,13 @@
 use zhc_config::{hpu::HpuConfig, multi_hpu::MultiHpuConfig, vm::VmConfig};
 use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type, lut::LutId};
-use zhc_ir::{IR, OpMap, Signature, partition::PartitionId};
+use zhc_ir::{IR, OpMap, Signature, partitioning::PartitionAnnotation};
 use zhc_langs::ioplang::IopLang;
 use zhc_utils::topology::Topology;
 
 #[derive(Debug)]
 pub struct PipelineContext {
     pub unchecked_ioplang: Option<IR<IopLang>>,
-    pub partitions: Option<OpMap<PartitionId>>,
+    pub partitions: Option<OpMap<PartitionAnnotation>>,
     pub prototype: Option<Signature<Type>>,
     pub ciphertext_block_spec: Option<CiphertextBlockSpec>,
     pub hpu_config: Option<HpuConfig>,

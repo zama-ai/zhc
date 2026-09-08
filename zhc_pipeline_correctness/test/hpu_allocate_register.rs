@@ -30,7 +30,7 @@ fn pipeline(ir: &IR<IopLang>) -> (IR<DopLang>, LutRegistry) {
 }
 
 #[test]
-fn test_allocate_add_ir() {
+fn smoke1() {
     let ir = pipeline(&add(CiphertextSpec::new(16, 2, 2)).optimize_ir()).0;
     assert_display_is!(
         ir.format(),
@@ -110,7 +110,7 @@ fn test_allocate_add_ir() {
 }
 
 #[test]
-fn test_allocate_cmp_ir() {
+fn smoke2() {
     let ir = pipeline(&cmp_gt(CiphertextSpec::new(16, 2, 2)).optimize_ir()).0;
     assert_display_is!(
         ir.format().with_walker(PrintWalker::Linear),

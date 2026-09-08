@@ -106,10 +106,8 @@
 use zhc_config::{hpu::HpuConfig, multi_hpu::MultiHpuConfig, vm::VmConfig};
 use zhc_crypto::integer_semantics::lut::{LutId, LutRegistry};
 use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
-use zhc_ir::{
-    IR, OpMap, Signature, evaluation::LazyEvaluator, partition::PartitionId,
-    visualization::Hierarchy,
-};
+use zhc_ir::partitioning::PartitionAnnotation;
+use zhc_ir::{IR, OpMap, Signature, evaluation::LazyEvaluator, visualization::Hierarchy};
 use zhc_langs::{
     doplang::DopLang,
     hpulang::{HpuLang, HpuLocality},
@@ -123,9 +121,8 @@ use zhc_utils::{
 };
 
 use crate::{
-    Fingerprint,
+    Fingerprint, PbsMetrics,
     hpu::{metrics::HpuMetrics, translation_table::DOpRepr},
-    misc::PbsMetrics,
     multi_hpu::metrics::MultiHpuMetrics,
     vm::scheduler::VmExecutionPlan,
 };
@@ -278,8 +275,10 @@ impl Pipeline {
 
     /// Supplies partition assignments for multi-HPU compilation.
     ///
-    /// The map must refer to the operations of the supplied unchecked IR.
-    pub fn with_partitions(mut self, partitions: OpMap<PartitionId>) -> Self {
+    /// The map must refer to the operations of the supplied unchecked IR. It is ignored unless
+    /// [`with_builder_partitions(true)`](Self::with_builder_partitions) is set, in which case it
+    /// replaces the automatic partitioning.
+    pub fn with_partitions(mut self, partitions: OpMap<PartitionAnnotation>) -> Self {
         self.context.partitions = Some(partitions);
         self.eval.invalidate_from_val(VALIDS().partitions);
         self
@@ -1055,7 +1054,7 @@ impl Pipeline {
     /// let partitions = pipeline.get_partitions();
     /// println!("{} operations placed in partitions", partitions.iter().count());
     /// ```
-    pub fn get_partitions(&mut self) -> &OpMap<PartitionId> {
+    pub fn get_partitions(&mut self) -> &OpMap<PartitionAnnotation> {
         self.eval.pull_val(&mut self.context, VALIDS().partitions);
         self.eventually_report_failure();
         self.eval
@@ -1875,7 +1874,7 @@ impl Pipeline {
     /// # Panics
     ///
     /// See [`get_partitions`](Self::get_partitions).
-    pub fn into_partitions(mut self) -> OpMap<PartitionId> {
+    pub fn into_partitions(mut self) -> OpMap<PartitionAnnotation> {
         self.eval.pull_val(&mut self.context, VALIDS().partitions);
         self.eventually_report_failure();
         self.eval

@@ -304,7 +304,7 @@ impl<A> std::iter::FromIterator<A> for SmallVec<A> {
                 std::mem::size_of::<A>(),
                 STACK_BYTES
             );
-            // eprintln!("Backtrace:\n{}", std::backtrace::Backtrace::capture());
+            eprintln!("Backtrace:\n{}", std::backtrace::Backtrace::capture());
         }
         // Same sentinel caveat as in `with_capacity`: capacity 0 means `A` does not fit on the
         // stack at all, so an empty iterator must still go to the heap.

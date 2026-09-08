@@ -98,6 +98,9 @@ pub fn lower_iop_to_vm(ir: &IR<IopLang>) -> IR<VmLang> {
                 // should be no aliases remaining here,
                 panic!("Unexpected Alias op encountered.");
             }
+            IopInstructionSet::_Copy { .. } => {
+                todo!()
+            }
             IopInstructionSet::LetCiphertextBlock { value } => {
                 translator.direct_translation(&op, VmInstructionSet::CstCt { cst: *value });
             }
