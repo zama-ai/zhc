@@ -285,7 +285,7 @@ pub(crate) fn lower_iop_to_hpu(ir: &IR<IopLang>) -> Translation<HpuLang> {
 #[cfg(test)]
 mod test {
     use zhc_builder::{
-        Builder, CiphertextSpec, add, bitwise_and, bitwise_or, bitwise_xor, cmp_gt, count_0,
+        Builder, CiphertextSpec, add, add_hillis_steele, bitwise_and, bitwise_or, bitwise_xor, cmp_gt, count_0,
         count_1, if_then_else, if_then_zero, mul,
     };
     use zhc_ir::IR;
@@ -300,7 +300,7 @@ mod test {
 
     #[test]
     fn test_translate_add_ir() {
-        let ir = pipeline(&add(CiphertextSpec::new(16, 2, 2)).optimize_ir());
+        let ir = pipeline(&add_hillis_steele(CiphertextSpec::new(16, 2, 2)).optimize_ir());
         assert_display_is!(
             ir.format(),
             r#"

@@ -37,7 +37,7 @@ pub fn allocate_registers(
 #[cfg(test)]
 mod test {
     use zhc_builder::{
-        Builder, CiphertextSpec, add, bitwise_and, bitwise_or, bitwise_xor, cmp_gt, div,
+        Builder, CiphertextSpec, add, add_hillis_steele, bitwise_and, bitwise_or, bitwise_xor, cmp_gt, div,
         if_then_else, if_then_zero, mul,
     };
     use zhc_config::hpu::{HpuConfig, PhysicalConfig};
@@ -70,7 +70,7 @@ mod test {
 
     #[test]
     fn test_allocate_add_ir() {
-        let ir = pipeline(&add(CiphertextSpec::new(16, 2, 2)).optimize_ir()).0;
+        let ir = pipeline(&add_hillis_steele(CiphertextSpec::new(16, 2, 2)).optimize_ir()).0;
         assert_display_is!(
             ir.format(),
             r#"

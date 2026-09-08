@@ -383,7 +383,7 @@ pub fn batch<'a, 'b>(
 mod test {
     use crate::{hpu::lowering::lower_iop_to_hpu, test::check_iop_hpu_equivalence};
     use zhc_builder::{
-        Builder, CiphertextSpec, add, bitwise_and, bitwise_or, bitwise_xor, div, if_then_else,
+        Builder, CiphertextSpec, add, add_hillis_steele, bitwise_and, bitwise_or, bitwise_xor, div, if_then_else,
         if_then_zero, mul,
     };
     use zhc_config::hpu::PhysicalConfig;
@@ -401,7 +401,7 @@ mod test {
 
     #[test]
     fn test_batch_scheduler() {
-        let ir = pipeline(&add(CiphertextSpec::new(16, 2, 2)).optimize_ir());
+        let ir = pipeline(&add_hillis_steele(CiphertextSpec::new(16, 2, 2)).optimize_ir());
         assert_display_is!(
             ir.format().show_types(false),
             r#"

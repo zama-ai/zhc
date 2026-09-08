@@ -99,13 +99,16 @@ pub fn overflow_add(spec: CiphertextSpec) -> Builder {
 impl Builder {
     /// Adds two encrypted integers, automatically selecting the best algorithm.
     ///
-    /// Chooses between ripple-carry, Hillis-Steele, and Kogge-Stone based on the
-    /// operand bit-width: ripple-carry for small integers (< 8 bits), Hillis-Steele
-    /// for medium (8–16 bits), and Kogge-Stone for larger widths. The result is the
-    /// wrapping sum of the two operands.
+    /// Without a carry-in and with 2-bit messages and 2-bit carries, uses the
+    /// carry-lookahead tree adder ([`iop_add_tree`](Self::iop_add_tree)), which needs
+    /// about half the PBS of the Hillis-Steele adder on wide integers. Otherwise falls
+    /// back to [`iop_overflow_add`](Self::iop_overflow_add) (ripple-carry below 8 bits,
+    /// Hillis-Steele above), which supports a carry-in. The result is the wrapping sum
+    /// of the two operands.
     ///
     /// Both operands must have the same [`CiphertextSpec`]. For explicit algorithm
-    /// selection, use [`iop_add_ripple_carry`](Self::iop_add_ripple_carry) or
+    /// selection, use [`iop_add_tree`](Self::iop_add_tree),
+    /// [`iop_add_ripple_carry`](Self::iop_add_ripple_carry) or
     /// [`iop_add_hillis_steele`](Self::iop_add_hillis_steele).
     ///
     /// # Examples
@@ -124,6 +127,9 @@ impl Builder {
         rhs: &Ciphertext,
         cin: Option<&CiphertextBlock>,
     ) -> Ciphertext {
+        if cin.is_none() && self.spec().carry_size() == 2 && self.spec().message_size() == 2 {
+            return self.iop_add_tree(lhs, rhs);
+        }
         self.iop_overflow_add(lhs, rhs, cin).0
     }
 
@@ -514,9 +520,9 @@ mod test {
     use zhc_utils::assert_display_is;
 
     #[test]
-    fn test_add() {
+    fn test_add_hillis_steele() {
         let spec = CiphertextSpec::new(18, 2, 2);
-        let ir = add(spec).optimize_ir();
+        let ir = add_hillis_steele(spec).optimize_ir();
         assert_display_is!(
             ir.format()
                 .with_walker(zhc_ir::PrintWalker::Linear)

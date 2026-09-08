@@ -606,7 +606,7 @@ pub fn generate_translation_table(
 #[cfg(test)]
 mod test {
 
-    use zhc_builder::{CiphertextSpec, add, cmp_gt};
+    use zhc_builder::{CiphertextSpec, add_hillis_steele, cmp_gt};
     use zhc_config::hpu::{HpuConfig, PhysicalConfig};
     use zhc_ir::IR;
     use zhc_langs::ioplang::IopLang;
@@ -642,7 +642,7 @@ mod test {
 
     #[test]
     fn test_hex_add_ir() {
-        let hex = pipeline(&add(CiphertextSpec::new(16, 2, 2)).optimize_ir());
+        let hex = pipeline(&add_hillis_steele(CiphertextSpec::new(16, 2, 2)).optimize_ir());
         assert_display_is!(
             format_binary_vec(&hex),
             r#"
