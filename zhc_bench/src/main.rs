@@ -7,9 +7,12 @@ use std::sync::Mutex;
 use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
+use zhc::{
+    compat::Iop,
+    prelude::{Pipeline, PipelineExt},
+};
 use zhc_builder::{Builder, CiphertextSpec};
 use zhc_config::hpu::HpuConfig;
-use zhc_pipeline::{Pipeline, compat::Iop};
 use zhc_utils::{data_visulization::DynamicTable, units::Microseconds};
 
 const ALL_BITS: &[u16] = &[8, 16, 32, 64, 128];

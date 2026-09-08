@@ -28,8 +28,7 @@ use std::{
     rc::Rc,
 };
 use zhc_crypto::integer_semantics::{
-    CiphertextBlockSpec, CiphertextSpec, Flavor, PlaintextBlockSpec, PlaintextSpec,
-    lut::LookupCheck,
+    CiphertextBlockSpec, Flavor, PlaintextBlockSpec, lut::LookupCheck,
 };
 use zhc_ir::{
     AnnIR, IR, OpId, OpMap, PrintWalker, Signature, ValId,
@@ -50,51 +49,7 @@ use zhc_utils::{
     svec,
 };
 
-/// A circuit I/O type, either encrypted or plaintext.
-///
-/// [`Type`] is used in [`Signature`] to describe the types of a circuit's inputs and
-/// outputs. Each variant carries the corresponding specification that fully describes the
-/// integer's bit-width and per-block layout.
-#[derive(Clone, PartialEq, Eq)]
-pub enum Type {
-    /// An encrypted integer with the given [`CiphertextSpec`].
-    Ciphertext(CiphertextSpec),
-    /// A plaintext integer with the given [`PlaintextSpec`].
-    Plaintext(PlaintextSpec),
-}
-
-impl Type {
-    /// Generates a random [`IopValue`] conforming to this type's specification.
-    ///
-    /// Useful for fuzz-testing circuits by generating randomized inputs that respect the
-    /// declared bit-widths and block layouts.
-    pub fn random_value(&self) -> IopValue {
-        match self {
-            Type::Ciphertext(spec) => IopValue::Ciphertext(spec.random()),
-            Type::Plaintext(spec) => IopValue::Plaintext(spec.random()),
-        }
-    }
-}
-
-impl Debug for Type {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Type::Ciphertext(spec) => write!(
-                f,
-                "Ciphertext<{}, {}, {}>",
-                spec.int_size(),
-                spec.block_spec().carry_size(),
-                spec.block_spec().message_size()
-            ),
-            Type::Plaintext(spec) => write!(
-                f,
-                "Plaintext<{}, {}>",
-                spec.int_size(),
-                spec.block_spec().message_size()
-            ),
-        }
-    }
-}
+pub use zhc_crypto::integer_semantics::Type;
 
 /// What kind of IR to work on.
 ///
@@ -330,7 +285,10 @@ impl Builder {
                 .signature()
                 .get_args()
                 .iter()
-                .map(|a| a.random_value())
+                .map(|typ| match typ {
+                    Type::Ciphertext(spec) => IopValue::Ciphertext(spec.random()),
+                    Type::Plaintext(spec) => IopValue::Plaintext(spec.random()),
+                })
                 .cosvec();
             if let Some(expectations) = gen_expect(inputs.as_slice()) {
                 let outputs = match std::panic::catch_unwind(AssertUnwindSafe(|| {

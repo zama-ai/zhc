@@ -25,7 +25,6 @@ use super::PipelineArtifact;
 impl EvaluatesTo<PipelineArtifact> for PipelineTypeSystem {
     fn type_of(interp: &PipelineArtifact) -> Self {
         match interp {
-            PipelineArtifact::Builder(_) => PipelineTypeSystem::Builder,
             PipelineArtifact::UncheckedIopLang(_) => PipelineTypeSystem::UncheckedIopLang,
             PipelineArtifact::IopLang(_) => PipelineTypeSystem::IopLang,
             PipelineArtifact::HpuConfig(_) => PipelineTypeSystem::HpuConfig,
@@ -71,13 +70,6 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
         arguments: SmallVec<&PipelineArtifact>,
     ) -> SmallVec<PipelineArtifact> {
         match self {
-            PipelineInstructionSet::InputBuilder => {
-                interval_begin(c"InputBuilder", 0);
-                let builder = context.builder.clone().unwrap();
-                let result = svec![PipelineArtifact::Builder(builder)];
-                interval_end(c"InputBuilder", 0);
-                result
-            }
             PipelineInstructionSet::InputHpuConfig => {
                 interval_begin(c"InputHpuConfig", 0);
                 let config = context.hpu_config.clone().unwrap();
@@ -85,12 +77,14 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                 interval_end(c"InputHpuConfig", 0);
                 result
             }
-            PipelineInstructionSet::BuilderToUncheckedIopLang => {
-                interval_begin(c"BuilderToUncheckedIopLang", 0);
-                let builder = arguments[0].unwrap_builder_ref();
-                let unchecked = builder.optimize_ir();
+            PipelineInstructionSet::InputUncheckedIopLang => {
+                interval_begin(c"InputUncheckedIopLang", 0);
+                let unchecked = context
+                    .unchecked_ioplang
+                    .clone()
+                    .expect("Missing pipeline input: unchecked_ioplang");
                 let result = svec![PipelineArtifact::UncheckedIopLang(unchecked)];
-                interval_end(c"BuilderToUncheckedIopLang", 0);
+                interval_end(c"InputUncheckedIopLang", 0);
                 result
             }
             PipelineInstructionSet::CheckIopLang => {
@@ -102,28 +96,34 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                 interval_end(c"CheckIopLang", 0);
                 result
             }
-            PipelineInstructionSet::BuilderToPartitions => {
-                interval_begin(c"BuilderToPartitions", 0);
-                let builder = arguments[0].unwrap_builder_ref();
-                let partitions = builder.partitions(zhc_builder::IrKind::Optimized);
+            PipelineInstructionSet::InputPartitions => {
+                interval_begin(c"InputPartitions", 0);
+                let partitions = context
+                    .partitions
+                    .clone()
+                    .expect("Missing pipeline input: partitions");
                 let result = svec![PipelineArtifact::Partitions(partitions)];
-                interval_end(c"BuilderToPartitions", 0);
+                interval_end(c"InputPartitions", 0);
                 result
             }
-            PipelineInstructionSet::BuilderToPrototype => {
-                interval_begin(c"BuilderToPrototype", 0);
-                let builder = arguments[0].unwrap_builder_ref();
-                let prototype = builder.signature();
+            PipelineInstructionSet::InputPrototype => {
+                interval_begin(c"InputPrototype", 0);
+                let prototype = context
+                    .prototype
+                    .clone()
+                    .expect("Missing pipeline input: prototype");
                 let result = svec![PipelineArtifact::Prototype(prototype)];
-                interval_end(c"BuilderToPrototype", 0);
+                interval_end(c"InputPrototype", 0);
                 result
             }
-            PipelineInstructionSet::BuilderToCiphertextBlockSpec => {
-                interval_begin(c"BuilderToCiphertextBlockSpec", 0);
-                let builder = arguments[0].unwrap_builder_ref();
-                let spec = builder.spec().clone();
+            PipelineInstructionSet::InputCiphertextBlockSpec => {
+                interval_begin(c"InputCiphertextBlockSpec", 0);
+                let spec = context
+                    .ciphertext_block_spec
+                    .clone()
+                    .expect("Missing pipeline input: ciphertext_block_spec");
                 let result = svec![PipelineArtifact::CiphertextBlockSpec(spec)];
-                interval_end(c"BuilderToCiphertextBlockSpec", 0);
+                interval_end(c"InputCiphertextBlockSpec", 0);
                 result
             }
             PipelineInstructionSet::IopLangToHpuLang => {

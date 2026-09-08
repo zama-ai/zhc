@@ -1,19 +1,16 @@
 [package]
-name = "zhc_bench"
+name = "zhc_pipeline_correctness"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 publish = false
 
-[dependencies]
-zhc_config.workspace = true
+[dev-dependencies]
 zhc_pipeline.workspace = true
 zhc_builder.workspace = true
-zhc_sim.workspace = true
-zhc_utils.workspace = true
-zhc_langs.workspace = true
+zhc_config.workspace = true
+zhc_crypto.workspace = true
 zhc_ir.workspace = true
-zhc.workspace = true
-serde.workspace = true
-serde_json.workspace = true
+zhc_langs.workspace = true
+zhc_utils.workspace = true

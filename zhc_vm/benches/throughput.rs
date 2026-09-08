@@ -8,7 +8,7 @@ use tfhe::{
 };
 use zhc::{
     builder::CiphertextSpec,
-    prelude::{Builder, Pipeline, VmExecutionPlan},
+    prelude::{Builder, Pipeline, PipelineExt, VmExecutionPlan},
 };
 use zhc_langs::vmlang::VmByteCode;
 use zhc_utils::{Dumpable, SafeAs, topology::Topology};

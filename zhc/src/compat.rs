@@ -1,3 +1,4 @@
+use crate::PipelineExt;
 use std::str::FromStr;
 
 use zhc_builder::{
@@ -7,9 +8,8 @@ use zhc_builder::{
     overflow_sub, rem, rotate_left, rotate_right, shift_left, shift_right, sub, trail0, trail1,
 };
 use zhc_config::{hpu::HpuConfig, multi_hpu::MultiHpuConfig};
+use zhc_pipeline::Pipeline;
 use zhc_utils::units::Microseconds;
-
-use crate::{Pipeline, hpu::translation_table::DOpRepr};
 
 /// Iops supported by the pipeline.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
@@ -207,11 +207,7 @@ impl Iop {
         }
     }
 
-    pub fn get_translation_table(
-        &self,
-        hpu_config: &HpuConfig,
-        spec: CiphertextSpec,
-    ) -> Vec<DOpRepr> {
+    pub fn get_translation_table(&self, hpu_config: &HpuConfig, spec: CiphertextSpec) -> Vec<u32> {
         let pipeline = Pipeline::new()
             .with_builder(self.to_builder(spec))
             .with_hpu_config(hpu_config.clone());

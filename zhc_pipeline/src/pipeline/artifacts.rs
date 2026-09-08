@@ -3,9 +3,9 @@ use crate::{
     misc::PbsMetrics,
     vm::scheduler::VmExecutionPlan,
 };
-use zhc_builder::{Builder, CiphertextBlockSpec, Type};
 use zhc_config::{hpu::HpuConfig, multi_hpu::MultiHpuConfig, vm::VmConfig};
 use zhc_crypto::integer_semantics::lut::{LutId, LutRegistry};
+use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
 use zhc_ir::{
     IR, OpMap, Signature,
     evaluation::Evaluation,
@@ -25,7 +25,6 @@ use zhc_utils::{existential_enum, topology::Topology};
 #[existential_enum]
 pub enum PipelineArtifact {
     // Commons
-    Builder(Builder),
     UncheckedIopLang(IR<IopLang>),
     IopLang(IR<IopLang>),
     PbsMetrics(PbsMetrics),

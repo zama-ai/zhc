@@ -1,5 +1,8 @@
+use zhc::{
+    compat::Iop,
+    prelude::{Pipeline, PipelineExt},
+};
 use zhc_builder::CiphertextSpec;
-use zhc_pipeline::{Pipeline, compat::Iop};
 
 fn main() {
     let bd = Iop::Mul.to_builder(CiphertextSpec::new(64, 2, 2));

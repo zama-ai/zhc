@@ -77,6 +77,7 @@ pub mod lut;
 mod ciphertext;
 mod ciphertext_block;
 mod flavor;
+mod io_type;
 mod ops;
 mod plaintext;
 mod plaintext_block;
@@ -84,6 +85,7 @@ mod plaintext_block;
 pub use ciphertext::*;
 pub use ciphertext_block::*;
 pub use flavor::*;
+pub use io_type::Type;
 pub use plaintext::*;
 pub use plaintext_block::*;
 

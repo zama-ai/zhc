@@ -1492,6 +1492,7 @@ version = "0.9.1"
 dependencies = [
  "serde",
  "serde_json",
+ "zhc",
  "zhc_builder",
  "zhc_config",
  "zhc_ir",
@@ -1557,13 +1558,25 @@ dependencies = [
  "bitfield-struct",
  "rand",
  "serde",
- "zhc_builder",
  "zhc_config",
  "zhc_crypto",
  "zhc_ir",
  "zhc_langs",
  "zhc_profiling",
  "zhc_sim",
+ "zhc_utils",
+]
+
+[[package]]
+name = "zhc_pipeline_correctness"
+version = "0.9.1"
+dependencies = [
+ "zhc_builder",
+ "zhc_config",
+ "zhc_crypto",
+ "zhc_ir",
+ "zhc_langs",
+ "zhc_pipeline",
  "zhc_utils",
 ]
 

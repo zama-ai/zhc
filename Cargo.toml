@@ -13,6 +13,7 @@ members = [
     "zhc_config",
     "zhc_vm",
     "zhc_profiling",
+    "zhc_pipeline_correctness",
 ]
 default-members = [
     "zhc",
@@ -26,7 +27,8 @@ default-members = [
     "zhc_crypto",
     "zhc_bench",
     "zhc_config",
-    "zhc_profiling"
+    "zhc_profiling",
+    "zhc_pipeline_correctness",
 ]
 resolver = "3"
 

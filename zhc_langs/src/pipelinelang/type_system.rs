@@ -4,8 +4,8 @@ use zhc_utils::DisplayVariant;
 /// Type system for the pipeline meta-dialect.
 ///
 /// Each variant names one kind of compilation artifact flowing through the pipeline, grouped by
-/// [`Affinity`](super::Affinity) branch: the shared frontend artifacts (the source `Builder`
-/// circuit and what is derived from it), the single-HPU branch (its configuration and the
+/// [`Affinity`](super::Affinity) branch: the shared frontend artifacts (the input IR, its metadata,
+/// and the artifacts derived from them), the single-HPU branch (its configuration and the
 /// successive `HpuLang*`/`DopLang` IR forms down to streams, assembly, metrics, and traces), the
 /// multi-HPU branch (the same shapes prefixed `Multi`, plus the `MultiHpuLocalities` placement
 /// information), and the VM branch (its configuration, machine `Topology`, `VmLang` IR, and final
@@ -13,7 +13,6 @@ use zhc_utils::DisplayVariant;
 #[derive(DisplayVariant, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PipelineTypeSystem {
     // Commons
-    Builder,
     CiphertextBlockSpec,
     UncheckedIopLang,
     IopLang,

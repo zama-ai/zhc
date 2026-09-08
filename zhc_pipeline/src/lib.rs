@@ -6,7 +6,6 @@
 //! operation scheduling, register allocation, and final code generation.
 
 mod commons;
-pub mod compat;
 mod hpu;
 mod misc;
 mod multi_hpu;
@@ -19,5 +18,14 @@ pub use misc::*;
 pub use pipeline::Pipeline;
 pub use vm::scheduler::VmExecutionPlan;
 
-#[cfg(test)]
-mod test;
+#[doc(hidden)]
+pub mod passes {
+    pub use crate::hpu::allocator::allocate_registers as hpu_allocate_registers;
+    pub use crate::hpu::lowering::lower_iop_to_hpu;
+    pub use crate::hpu::scheduler::legacy::{
+        batch as hpu_batch_legacy, schedule as hpu_schedule_legacy,
+        schedule_batched as hpu_schedule_batched_legacy,
+    };
+    pub use crate::hpu::scheduler::regular::schedule as hpu_schedule;
+    pub use crate::hpu::translation_table::generate_translation_table as hpu_generate_translation_table;
+}

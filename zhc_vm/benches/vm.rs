@@ -7,7 +7,11 @@ use tfhe::{
     integer::RadixCiphertext,
     shortint::parameters::v1_6::V1_6_PARAM_MESSAGE_2_CARRY_2_KS32_PBS_TUNIFORM_2M128,
 };
-use zhc::{builder::CiphertextSpec, pipeline::compat::Iop, prelude::Pipeline};
+use zhc::{
+    builder::CiphertextSpec,
+    compat::Iop,
+    prelude::{Pipeline, PipelineExt},
+};
 use zhc_vm::{Value, ValueMut, Vm, VmConfigExt};
 
 fn bench_vm(c: &mut Criterion) {

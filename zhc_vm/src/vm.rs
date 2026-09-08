@@ -169,7 +169,7 @@ impl Vm {
     /// ```rust,no_run
     /// # use tfhe::integer::RadixCiphertext;
     /// # use tfhe::shortint::parameters::v1_6::V1_6_PARAM_MESSAGE_2_CARRY_2_KS32_PBS_TUNIFORM_2M128;
-    /// # use zhc::{builder::CiphertextSpec, prelude::{Pipeline, compat::Iop}};
+    /// # use zhc::{builder::CiphertextSpec, prelude::{Pipeline, PipelineExt, Iop}};
     /// # use zhc_config::vm::VmConfig;
     /// # use zhc_utils::svec;
     /// # use zhc_vm::{Value, ValueMut, Vm, VmConfigExt};

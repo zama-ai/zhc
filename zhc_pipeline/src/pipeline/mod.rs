@@ -1,7 +1,7 @@
 //! On-demand compilation of homomorphic circuits into HPU programs.
 //!
-//! This module exposes [`Pipeline`], the entry point for turning a circuit — a `Builder` from
-//! the `zhc_builder` crate — into everything the compiler can derive from it: intermediate
+//! This module exposes [`Pipeline`], the entry point for turning integer-level IR and separately
+//! supplied metadata into everything the compiler can derive from them: intermediate
 //! representations at every abstraction level, binary instruction streams, assembly listings,
 //! performance metrics, execution traces, and interactive graph drawings.
 //!
@@ -43,11 +43,14 @@
 //!
 //! ```rust,no_run
 //! # use zhc_pipeline::Pipeline;
-//! # use zhc_builder::{Builder, CiphertextBlockSpec};
+//! # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
 //! # use zhc_config::hpu::HpuConfig;
-//! # let builder = Builder::new(CiphertextBlockSpec(2, 2));
+//! # let ir = zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty();
 //! let mut pipeline = Pipeline::new()
-//!     .with_builder(builder)
+//!     .with_unchecked_ioplang(ir)
+//! #     .with_prototype(zhc_ir::Signature::empty())
+//! #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
+//!     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
 //!     .with_hpu_config(HpuConfig::default());
 //!
 //! let stream = pipeline.get_hpu_stream().clone();
@@ -63,11 +66,14 @@
 //!
 //! ```rust,no_run
 //! # use zhc_pipeline::Pipeline;
-//! # use zhc_builder::{Builder, CiphertextBlockSpec};
+//! # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
 //! # use zhc_config::multi_hpu::MultiHpuConfig;
-//! # let builder = Builder::new(CiphertextBlockSpec(2, 2));
+//! # let ir = zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty();
 //! let mut pipeline = Pipeline::new()
-//!     .with_builder(builder)
+//!     .with_unchecked_ioplang(ir)
+//! #     .with_prototype(zhc_ir::Signature::empty())
+//! #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
+//!     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
 //!     .with_multi_hpu_config(MultiHpuConfig::default());
 //!
 //! // One instruction stream per HPU of the system.
@@ -82,12 +88,15 @@
 //!
 //! ```rust,no_run
 //! # use zhc_pipeline::Pipeline;
-//! # use zhc_builder::{Builder, CiphertextBlockSpec};
+//! # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
 //! # use zhc_config::vm::VmConfig;
-//! # let builder = Builder::new(CiphertextBlockSpec(2, 2));
+//! # let ir = zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty();
 //! # let vm_config: VmConfig = unimplemented!();
 //! let mut pipeline = Pipeline::new()
-//!     .with_builder(builder)
+//!     .with_unchecked_ioplang(ir)
+//! #     .with_prototype(zhc_ir::Signature::empty())
+//! #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
+//!     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
 //!     .with_vm_config(vm_config);
 //!
 //! let plan = pipeline.get_vm_execution_plan();
@@ -96,9 +105,9 @@
 
 use std::sync::LazyLock;
 
-use zhc_builder::{Builder, Type};
 use zhc_config::{hpu::HpuConfig, multi_hpu::MultiHpuConfig, vm::VmConfig};
 use zhc_crypto::integer_semantics::lut::{LutId, LutRegistry};
+use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
 use zhc_ir::{
     IR, OpMap, Signature, ValId, evaluation::LazyEvaluator, partition::PartitionId,
     visualization::Hierarchy,
@@ -123,7 +132,7 @@ use crate::{
 };
 
 struct ArtifactsValids {
-    builder: ValId,
+    unchecked_ioplang: ValId,
     ioplang: ValId,
     slack_drawing: ValId,
     pbs_metrics: ValId,
@@ -159,15 +168,13 @@ static PIPELINE: LazyLock<(IR<PipelineLang>, ArtifactsValids)> = LazyLock::new(|
     let mut ir = IR::<PipelineLang>::empty();
 
     // Commons
-    let (_, rets) = ir.add_op(InputBuilder, svec![]);
-    let builder = rets[0];
-    let (_, rets) = ir.add_op(BuilderToUncheckedIopLang, svec![builder]);
+    let (_, rets) = ir.add_op(InputUncheckedIopLang, svec![]);
     let unchecked_ioplang = rets[0];
-    let (_, rets) = ir.add_op(BuilderToPartitions, svec![builder]);
+    let (_, rets) = ir.add_op(InputPartitions, svec![]);
     let partitions = rets[0];
-    let (_, rets) = ir.add_op(BuilderToPrototype, svec![builder]);
+    let (_, rets) = ir.add_op(InputPrototype, svec![]);
     let prototype = rets[0];
-    let (_, rets) = ir.add_op(BuilderToCiphertextBlockSpec, svec![builder]);
+    let (_, rets) = ir.add_op(InputCiphertextBlockSpec, svec![]);
     let ciphertext_block_spec = rets[0];
     let (_, rets) = ir.add_op(DrawSlack, svec![unchecked_ioplang]);
     let slack_drawing = rets[0];
@@ -255,7 +262,7 @@ static PIPELINE: LazyLock<(IR<PipelineLang>, ArtifactsValids)> = LazyLock::new(|
     (
         ir,
         ArtifactsValids {
-            builder,
+            unchecked_ioplang,
             ioplang,
             pbs_metrics,
             slack_drawing,
@@ -342,20 +349,23 @@ impl Pipeline {
     /// Creates a pipeline with no circuit and no target configuration.
     ///
     /// Nothing is compiled at this point: every step of the flow starts out pending. The inputs
-    /// must be declared with [`with_builder`](Self::with_builder) and one of
-    /// [`with_hpu_config`](Self::with_hpu_config) or
-    /// [`with_multi_hpu_config`](Self::with_multi_hpu_config) before an artifact that needs them
-    /// is requested.
+    /// are supplied independently through the `with_*` methods. Checked IR requires the input
+    /// IR and ciphertext block specification; target compilation additionally requires its
+    /// configuration, and multi-HPU compilation requires partitions. The prototype is only
+    /// needed when requesting the signature.
     ///
     /// # Examples
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_builder::{Builder, CiphertextBlockSpec};
+    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
     /// # use zhc_config::hpu::HpuConfig;
-    /// # let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// # let ir = zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty();
     /// let pipeline = Pipeline::new()
-    ///     .with_builder(builder)
+    ///     .with_unchecked_ioplang(ir)
+    /// #     .with_prototype(zhc_ir::Signature::empty())
+    /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
+    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
     ///     .with_hpu_config(HpuConfig::default());
     /// ```
     pub fn new() -> Self {
@@ -421,24 +431,34 @@ impl Pipeline {
         self.eval.as_view().draw_to_html(Some(opmap))
     }
 
-    /// Sets the circuit to compile.
+    /// Supplies the integer-level IR before noise checking.
     ///
-    /// The `builder` argument holds the integer-level circuit as recorded by the `zhc_builder`
-    /// crate: its inputs, the integer operations applied to them, and its outputs. Every artifact
-    /// but the target configurations descends from it. The circuit is optimized on the way in, so
-    /// the IR returned by [`get_ioplang`](Self::get_ioplang) is the optimized form of what is
-    /// given here.
+    /// The caller must perform any desired IR optimizations before supplying it. Compilation
+    /// checks noise lazily using [`with_ciphertext_block_spec`](Self::with_ciphertext_block_spec).
+    pub fn with_unchecked_ioplang(mut self, ir: IR<IopLang>) -> Self {
+        self.context.unchecked_ioplang = Some(ir);
+        self
+    }
+
+    /// Supplies partition assignments for multi-HPU compilation.
     ///
-    /// # Examples
+    /// The map must refer to the operations of the supplied unchecked IR.
+    pub fn with_partitions(mut self, partitions: OpMap<PartitionId>) -> Self {
+        self.context.partitions = Some(partitions);
+        self
+    }
+
+    /// Supplies the circuit's input and output signature.
     ///
-    /// ```rust,no_run
-    /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_builder::{Builder, CiphertextBlockSpec};
-    /// # let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let pipeline = Pipeline::new().with_builder(builder);
-    /// ```
-    pub fn with_builder(mut self, builder: Builder) -> Self {
-        self.context.builder = Some(builder);
+    /// The signature must match the supplied IR. It is only required when requesting the prototype.
+    pub fn with_prototype(mut self, prototype: Signature<Type>) -> Self {
+        self.context.prototype = Some(prototype);
+        self
+    }
+
+    /// Supplies the ciphertext block layout used to check the input IR's noise.
+    pub fn with_ciphertext_block_spec(mut self, spec: CiphertextBlockSpec) -> Self {
+        self.context.ciphertext_block_spec = Some(spec);
         self
     }
 
@@ -534,11 +554,14 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_builder::{Builder, CiphertextBlockSpec};
+    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
     /// # use zhc_config::hpu::HpuConfig;
-    /// # let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// # let ir = zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty();
     /// let mut pipeline = Pipeline::new()
-    ///     .with_builder(builder)
+    ///     .with_unchecked_ioplang(ir)
+    /// #     .with_prototype(zhc_ir::Signature::empty())
+    /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
+    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
     ///     .with_hpu_config(HpuConfig::default())
     ///     .with_legacy_hpu_scheduler();
     ///
@@ -570,11 +593,14 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_builder::{Builder, CiphertextBlockSpec};
+    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
     /// # use zhc_config::hpu::HpuConfig;
-    /// # let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// # let ir = zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty();
     /// let mut pipeline = Pipeline::new()
-    ///     .with_builder(builder)
+    ///     .with_unchecked_ioplang(ir)
+    /// #     .with_prototype(zhc_ir::Signature::empty())
+    /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
+    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
     ///     .with_hpu_config(HpuConfig::default())
     ///     .with_trace_hpu_events();
     ///
@@ -606,12 +632,15 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_builder::{Builder, CiphertextBlockSpec};
+    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
     /// # use zhc_config::hpu::HpuConfig;
     /// # use zhc_crypto::integer_semantics::lut::LutId;
-    /// # let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// # let ir = zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty();
     /// let mut pipeline = Pipeline::new()
-    ///     .with_builder(builder)
+    ///     .with_unchecked_ioplang(ir)
+    /// #     .with_prototype(zhc_ir::Signature::empty())
+    /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
+    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
     ///     .with_hpu_config(HpuConfig::default())
     ///     .with_hpu_lut_relocation(vec![LutId(4), LutId(2)]);
     ///
@@ -646,31 +675,19 @@ impl Pipeline {
         self
     }
 
-    /// Returns the circuit being compiled.
-    ///
-    /// Hands back the circuit given to [`with_builder`](Self::with_builder), which is convenient
-    /// when the circuit was produced elsewhere and only the pipeline holds on to it.
+    /// Returns the supplied IR without running noise checking or optimization.
     ///
     /// # Panics
     ///
-    /// Panics if no circuit was set with [`with_builder`](Self::with_builder).
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_builder::{Builder, CiphertextBlockSpec};
-    /// # let mut pipeline = Pipeline::new()
-    /// #     .with_builder(Builder::new(CiphertextBlockSpec(2, 2)));
-    /// let builder: &Builder = pipeline.get_builder();
-    /// ```
-    pub fn get_builder(&mut self) -> &Builder {
-        self.eval.pull_val(&mut self.context, VALIDS().builder);
+    /// Panics if no unchecked IR was supplied.
+    pub fn get_unchecked_ioplang(&mut self) -> &IR<IopLang> {
+        self.eval
+            .pull_val(&mut self.context, VALIDS().unchecked_ioplang);
         self.eventually_report_failure();
         self.eval
-            .get_val(VALIDS().builder)
+            .get_val(VALIDS().unchecked_ioplang)
             .unwrap()
-            .unwrap_builder_ref()
+            .unwrap_unchecked_iop_lang_ref()
     }
 
     /// Returns the input and output types of the circuit.
@@ -681,21 +698,24 @@ impl Pipeline {
     /// compiled program needs to know to run it — which values to encrypt, in which order to hand
     /// them over, and what to expect back.
     ///
-    /// The signature is read straight from the circuit, so asking for it triggers no compilation
-    /// work.
+    /// The signature is supplied through [`with_prototype`](Self::with_prototype), so asking
+    /// for it triggers no compilation work.
     ///
     /// # Panics
     ///
-    /// Panics if no circuit was set with [`with_builder`](Self::with_builder), or if a step this
+    /// Panics if a required input was not supplied, or if a step this
     /// artifact depends on panics, in which case the message names the failing step.
     ///
     /// # Examples
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_builder::{Builder, CiphertextBlockSpec};
+    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
     /// # let mut pipeline = Pipeline::new()
-    /// #     .with_builder(Builder::new(CiphertextBlockSpec(2, 2)));
+    /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
+    /// #     .with_prototype(zhc_ir::Signature::empty())
+    /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
+    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2));
     /// let prototype = pipeline.get_prototype();
     /// println!("{:?} -> {:?}", prototype.get_args(), prototype.get_returns());
     /// ```
@@ -757,25 +777,27 @@ impl Pipeline {
             .unwrap_hpu_lut_relocation_ref()
     }
 
-    /// Returns the optimized integer-level IR of the circuit.
+    /// Returns the integer-level IR after noise checking.
     ///
-    /// This is the first artifact derived from the circuit: an IR in the IOP language, whose
-    /// operations still work on whole encrypted integers rather than on radix blocks, as left by
-    /// the optimization passes of the builder. Every other artifact of the pipeline is compiled
-    /// from it, so it is the right place to look at what is actually being compiled.
+    /// Checks the supplied IR against the ciphertext block specification. Optimization is the
+    /// caller's responsibility; this step preserves the supplied graph. Backend lowering starts
+    /// from this checked IR.
     ///
     /// # Panics
     ///
-    /// Panics if no circuit was set with [`with_builder`](Self::with_builder), or if a step this
+    /// Panics if a required input was not supplied, or if a step this
     /// artifact depends on panics, in which case the message names the failing step.
     ///
     /// # Examples
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_builder::{Builder, CiphertextBlockSpec};
+    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
     /// # let mut pipeline = Pipeline::new()
-    /// #     .with_builder(Builder::new(CiphertextBlockSpec(2, 2)));
+    /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
+    /// #     .with_prototype(zhc_ir::Signature::empty())
+    /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
+    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2));
     /// println!("{} integer operations", pipeline.get_ioplang().n_ops());
     /// ```
     pub fn get_ioplang(&mut self) -> &IR<IopLang> {
@@ -797,16 +819,19 @@ impl Pipeline {
     ///
     /// # Panics
     ///
-    /// Panics if no circuit was set with [`with_builder`](Self::with_builder), or if a step this
+    /// Panics if a required input was not supplied, or if a step this
     /// artifact depends on panics, in which case the message names the failing step.
     ///
     /// # Examples
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_builder::{Builder, CiphertextBlockSpec};
+    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
     /// # let mut pipeline = Pipeline::new()
-    /// #     .with_builder(Builder::new(CiphertextBlockSpec(2, 2)));
+    /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
+    /// #     .with_prototype(zhc_ir::Signature::empty())
+    /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
+    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2));
     /// println!("{} block operations", pipeline.get_translated_hpulang().n_ops());
     /// ```
     pub fn get_translated_hpulang(&mut self) -> &IR<HpuLang> {
@@ -831,7 +856,7 @@ impl Pipeline {
     ///
     /// # Panics
     ///
-    /// Panics if no circuit was set with [`with_builder`](Self::with_builder), if no configuration
+    /// Panics if a required input was not supplied, if no configuration
     /// was set with [`with_hpu_config`](Self::with_hpu_config), or if a step this artifact depends
     /// on panics, in which case the message names the failing step.
     ///
@@ -839,10 +864,13 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_builder::{Builder, CiphertextBlockSpec};
+    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
     /// # use zhc_config::hpu::HpuConfig;
     /// # let mut pipeline = Pipeline::new()
-    /// #     .with_builder(Builder::new(CiphertextBlockSpec(2, 2)))
+    /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
+    /// #     .with_prototype(zhc_ir::Signature::empty())
+    /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
+    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
     /// #     .with_hpu_config(HpuConfig::default());
     /// // Draws the scheduled program, whose operations are laid out in execution order.
     /// pipeline.get_scheduled_hpulang().draw_to_html(None).open().unwrap();
@@ -867,7 +895,7 @@ impl Pipeline {
     ///
     /// # Panics
     ///
-    /// Panics if no circuit was set with [`with_builder`](Self::with_builder), if no configuration
+    /// Panics if a required input was not supplied, if no configuration
     /// was set with [`with_hpu_config`](Self::with_hpu_config), or if a step this artifact depends
     /// on panics, in which case the message names the failing step.
     ///
@@ -875,10 +903,13 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_builder::{Builder, CiphertextBlockSpec};
+    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
     /// # use zhc_config::hpu::HpuConfig;
     /// # let mut pipeline = Pipeline::new()
-    /// #     .with_builder(Builder::new(CiphertextBlockSpec(2, 2)))
+    /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
+    /// #     .with_prototype(zhc_ir::Signature::empty())
+    /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
+    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
     /// #     .with_hpu_config(HpuConfig::default());
     /// println!("{} device operations", pipeline.get_doplang().n_ops());
     /// ```
@@ -899,7 +930,7 @@ impl Pipeline {
     ///
     /// # Panics
     ///
-    /// Panics if no circuit was set with [`with_builder`](Self::with_builder), if no configuration
+    /// Panics if a required input was not supplied, if no configuration
     /// was set with [`with_hpu_config`](Self::with_hpu_config), or if a step this artifact depends
     /// on panics, in which case the message names the failing step.
     ///
@@ -907,10 +938,13 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_builder::{Builder, CiphertextBlockSpec};
+    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
     /// # use zhc_config::hpu::HpuConfig;
     /// # let mut pipeline = Pipeline::new()
-    /// #     .with_builder(Builder::new(CiphertextBlockSpec(2, 2)))
+    /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
+    /// #     .with_prototype(zhc_ir::Signature::empty())
+    /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
+    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
     /// #     .with_hpu_config(HpuConfig::default());
     /// let stream = pipeline.get_hpu_stream();
     /// println!("{} instructions in {} words", stream[0], stream.len());
@@ -934,16 +968,19 @@ impl Pipeline {
     ///
     /// # Panics
     ///
-    /// Panics if no circuit was set with [`with_builder`](Self::with_builder), or if a step this
+    /// Panics if a required input was not supplied, or if a step this
     /// artifact depends on panics, in which case the message names the failing step.
     ///
     /// # Examples
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_builder::{Builder, CiphertextBlockSpec};
+    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
     /// # let mut pipeline = Pipeline::new()
-    /// #     .with_builder(Builder::new(CiphertextBlockSpec(2, 2)));
+    /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
+    /// #     .with_prototype(zhc_ir::Signature::empty())
+    /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
+    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2));
     /// let metrics = pipeline.get_pbs_metrics();
     /// println!("{} bootstrappings, {} deep", metrics.count, metrics.critical_length);
     /// ```
@@ -959,7 +996,7 @@ impl Pipeline {
     /// Returns the registry of the lookup tables of the circuit.
     ///
     /// Collects every distinct lookup table the circuit's programmable bootstrappings apply,
-    /// reading the optimized integer-level IR, and assigns each one the id the compiled program
+    /// reading the supplied integer-level IR, and assigns each one the id the compiled program
     /// refers to it by. This is the table to consult to know which function an id seen in an
     /// assembly listing stands for, and it is what a relocation table given to
     /// [`with_hpu_lut_relocation`](Self::with_hpu_lut_relocation) is indexed by. The registry
@@ -967,17 +1004,20 @@ impl Pipeline {
     ///
     /// # Panics
     ///
-    /// Panics if no circuit was set with [`with_builder`](Self::with_builder), or if a step this
+    /// Panics if a required input was not supplied, or if a step this
     /// artifact depends on panics, in which case the message names the failing step.
     ///
     /// # Examples
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_builder::{Builder, CiphertextBlockSpec};
+    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
     /// # use zhc_crypto::integer_semantics::lut::LutId;
     /// # let mut pipeline = Pipeline::new()
-    /// #     .with_builder(Builder::new(CiphertextBlockSpec(2, 2)));
+    /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
+    /// #     .with_prototype(zhc_ir::Signature::empty())
+    /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
+    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2));
     /// let registry = pipeline.get_lut_registry();
     /// println!("{:?}", registry.get_raw_lut(&LutId(0)));
     /// ```
@@ -999,7 +1039,7 @@ impl Pipeline {
     ///
     /// # Panics
     ///
-    /// Panics if no circuit was set with [`with_builder`](Self::with_builder), if no configuration
+    /// Panics if a required input was not supplied, if no configuration
     /// was set with [`with_hpu_config`](Self::with_hpu_config), or if a step this artifact depends
     /// on panics, in which case the message names the failing step.
     ///
@@ -1007,10 +1047,13 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_builder::{Builder, CiphertextBlockSpec};
+    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
     /// # use zhc_config::hpu::HpuConfig;
     /// # let mut pipeline = Pipeline::new()
-    /// #     .with_builder(Builder::new(CiphertextBlockSpec(2, 2)))
+    /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
+    /// #     .with_prototype(zhc_ir::Signature::empty())
+    /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
+    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
     /// #     .with_hpu_config(HpuConfig::default());
     /// let metrics = pipeline.get_hpu_metrics();
     /// println!("{} (lower bound {})", metrics.latency, metrics.lower_bound);
@@ -1034,7 +1077,7 @@ impl Pipeline {
     ///
     /// # Panics
     ///
-    /// Panics if no circuit was set with [`with_builder`](Self::with_builder), if no configuration
+    /// Panics if a required input was not supplied, if no configuration
     /// was set with [`with_hpu_config`](Self::with_hpu_config), or if a step this artifact depends
     /// on panics, in which case the message names the failing step.
     ///
@@ -1042,10 +1085,13 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_builder::{Builder, CiphertextBlockSpec};
+    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
     /// # use zhc_config::hpu::HpuConfig;
     /// # let mut pipeline = Pipeline::new()
-    /// #     .with_builder(Builder::new(CiphertextBlockSpec(2, 2)))
+    /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
+    /// #     .with_prototype(zhc_ir::Signature::empty())
+    /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
+    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
     /// #     .with_hpu_config(HpuConfig::default());
     /// pipeline.get_hpu_trace().open().unwrap();
     /// ```
@@ -1067,16 +1113,19 @@ impl Pipeline {
     ///
     /// # Panics
     ///
-    /// Panics if no circuit was set with [`with_builder`](Self::with_builder), or if a step this
+    /// Panics if a required input was not supplied, or if a step this
     /// artifact depends on panics, in which case the message names the failing step.
     ///
     /// # Examples
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_builder::{Builder, CiphertextBlockSpec};
+    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
     /// # let mut pipeline = Pipeline::new()
-    /// #     .with_builder(Builder::new(CiphertextBlockSpec(2, 2)));
+    /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
+    /// #     .with_prototype(zhc_ir::Signature::empty())
+    /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
+    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2));
     /// pipeline.get_slack_drawing().open().unwrap();
     /// ```
     pub fn get_slack_drawing(&mut self) -> &FileHandle {
@@ -1093,22 +1142,25 @@ impl Pipeline {
     ///
     /// A partition is a labelled cluster of neighbouring operations, declared while building the
     /// circuit, that the compiler treats as a single unit of work; the returned map associates
-    /// every operation of the optimized integer-level IR with its own. The multi-HPU flow reads
+    /// every operation of the supplied integer-level IR with its own. The multi-HPU flow reads
     /// this map to decide which HPU runs what, so partitioning a circuit is how its placement is
     /// steered.
     ///
     /// # Panics
     ///
-    /// Panics if no circuit was set with [`with_builder`](Self::with_builder), or if a step this
+    /// Panics if a required input was not supplied, or if a step this
     /// artifact depends on panics, in which case the message names the failing step.
     ///
     /// # Examples
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_builder::{Builder, CiphertextBlockSpec};
+    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
     /// # let mut pipeline = Pipeline::new()
-    /// #     .with_builder(Builder::new(CiphertextBlockSpec(2, 2)));
+    /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
+    /// #     .with_prototype(zhc_ir::Signature::empty())
+    /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
+    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2));
     /// let partitions = pipeline.get_partitions();
     /// println!("{} operations placed in partitions", partitions.iter().count());
     /// ```
@@ -1130,7 +1182,7 @@ impl Pipeline {
     ///
     /// # Panics
     ///
-    /// Panics if no circuit was set with [`with_builder`](Self::with_builder), if no configuration
+    /// Panics if a required input was not supplied, if no configuration
     /// was set with [`with_hpu_config`](Self::with_hpu_config), or if a step this artifact depends
     /// on panics, in which case the message names the failing step.
     ///
@@ -1138,10 +1190,13 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_builder::{Builder, CiphertextBlockSpec};
+    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
     /// # use zhc_config::hpu::HpuConfig;
     /// # let mut pipeline = Pipeline::new()
-    /// #     .with_builder(Builder::new(CiphertextBlockSpec(2, 2)))
+    /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
+    /// #     .with_prototype(zhc_ir::Signature::empty())
+    /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
+    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
     /// #     .with_hpu_config(HpuConfig::default());
     /// pipeline.get_hpu_assembly().open().unwrap();
     /// ```
@@ -1219,16 +1274,19 @@ impl Pipeline {
     ///
     /// # Panics
     ///
-    /// Panics if no circuit was set with [`with_builder`](Self::with_builder), or if a step this
+    /// Panics if a required input was not supplied, or if a step this
     /// artifact depends on panics, in which case the message names the failing step.
     ///
     /// # Examples
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_builder::{Builder, CiphertextBlockSpec};
+    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
     /// # let mut pipeline = Pipeline::new()
-    /// #     .with_builder(Builder::new(CiphertextBlockSpec(2, 2)));
+    /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
+    /// #     .with_prototype(zhc_ir::Signature::empty())
+    /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
+    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2));
     /// let ir = pipeline.get_translated_multi_hpulang();
     /// println!("{} block operations, transfers included", ir.n_ops());
     /// ```
@@ -1252,17 +1310,20 @@ impl Pipeline {
     ///
     /// # Panics
     ///
-    /// Panics if no circuit was set with [`with_builder`](Self::with_builder), or if a step this
+    /// Panics if a required input was not supplied, or if a step this
     /// artifact depends on panics, in which case the message names the failing step.
     ///
     /// # Examples
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_builder::{Builder, CiphertextBlockSpec};
+    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
     /// # use zhc_langs::hpulang::HpuLocality;
     /// # let mut pipeline = Pipeline::new()
-    /// #     .with_builder(Builder::new(CiphertextBlockSpec(2, 2)));
+    /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
+    /// #     .with_prototype(zhc_ir::Signature::empty())
+    /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
+    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2));
     /// let transfers = pipeline
     ///     .get_multi_hpu_localities()
     ///     .iter()
@@ -1289,7 +1350,7 @@ impl Pipeline {
     ///
     /// # Panics
     ///
-    /// Panics if no circuit was set with [`with_builder`](Self::with_builder), if no configuration
+    /// Panics if a required input was not supplied, if no configuration
     /// was set with [`with_multi_hpu_config`](Self::with_multi_hpu_config), or if a step this
     /// artifact depends on panics, in which case the message names the failing step.
     ///
@@ -1297,10 +1358,13 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_builder::{Builder, CiphertextBlockSpec};
+    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
     /// # use zhc_config::multi_hpu::MultiHpuConfig;
     /// # let mut pipeline = Pipeline::new()
-    /// #     .with_builder(Builder::new(CiphertextBlockSpec(2, 2)))
+    /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
+    /// #     .with_prototype(zhc_ir::Signature::empty())
+    /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
+    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
     /// #     .with_multi_hpu_config(MultiHpuConfig::default());
     /// for (hpu, ir) in pipeline.get_scheduled_multi_hpulang().iter().enumerate() {
     ///     println!("HPU {hpu}: {} block operations", ir.n_ops());
@@ -1325,7 +1389,7 @@ impl Pipeline {
     ///
     /// # Panics
     ///
-    /// Panics if no circuit was set with [`with_builder`](Self::with_builder), if no configuration
+    /// Panics if a required input was not supplied, if no configuration
     /// was set with [`with_multi_hpu_config`](Self::with_multi_hpu_config), or if a step this
     /// artifact depends on panics, in which case the message names the failing step.
     ///
@@ -1333,10 +1397,13 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_builder::{Builder, CiphertextBlockSpec};
+    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
     /// # use zhc_config::multi_hpu::MultiHpuConfig;
     /// # let mut pipeline = Pipeline::new()
-    /// #     .with_builder(Builder::new(CiphertextBlockSpec(2, 2)))
+    /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
+    /// #     .with_prototype(zhc_ir::Signature::empty())
+    /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
+    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
     /// #     .with_multi_hpu_config(MultiHpuConfig::default());
     /// for (hpu, ir) in pipeline.get_multi_doplang().iter().enumerate() {
     ///     println!("HPU {hpu}: {} device operations", ir.n_ops());
@@ -1362,7 +1429,7 @@ impl Pipeline {
     ///
     /// # Panics
     ///
-    /// Panics if no circuit was set with [`with_builder`](Self::with_builder), if no configuration
+    /// Panics if a required input was not supplied, if no configuration
     /// was set with [`with_multi_hpu_config`](Self::with_multi_hpu_config), or if a step this
     /// artifact depends on panics, in which case the message names the failing step.
     ///
@@ -1370,10 +1437,13 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_builder::{Builder, CiphertextBlockSpec};
+    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
     /// # use zhc_config::multi_hpu::MultiHpuConfig;
     /// # let mut pipeline = Pipeline::new()
-    /// #     .with_builder(Builder::new(CiphertextBlockSpec(2, 2)))
+    /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
+    /// #     .with_prototype(zhc_ir::Signature::empty())
+    /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
+    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
     /// #     .with_multi_hpu_config(MultiHpuConfig::default());
     /// pipeline.get_multi_hpu_trace().open().unwrap();
     /// ```
@@ -1396,7 +1466,7 @@ impl Pipeline {
     ///
     /// # Panics
     ///
-    /// Panics if no circuit was set with [`with_builder`](Self::with_builder), if no configuration
+    /// Panics if a required input was not supplied, if no configuration
     /// was set with [`with_multi_hpu_config`](Self::with_multi_hpu_config), or if a step this
     /// artifact depends on panics, in which case the message names the failing step.
     ///
@@ -1404,10 +1474,13 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_builder::{Builder, CiphertextBlockSpec};
+    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
     /// # use zhc_config::multi_hpu::MultiHpuConfig;
     /// # let mut pipeline = Pipeline::new()
-    /// #     .with_builder(Builder::new(CiphertextBlockSpec(2, 2)))
+    /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
+    /// #     .with_prototype(zhc_ir::Signature::empty())
+    /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
+    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
     /// #     .with_multi_hpu_config(MultiHpuConfig::default());
     /// for (hpu, stream) in pipeline.get_multi_hpu_stream().iter().enumerate() {
     ///     println!("HPU {hpu}: {} instructions", stream[0]);
@@ -1432,7 +1505,7 @@ impl Pipeline {
     ///
     /// # Panics
     ///
-    /// Panics if no circuit was set with [`with_builder`](Self::with_builder), if no configuration
+    /// Panics if a required input was not supplied, if no configuration
     /// was set with [`with_multi_hpu_config`](Self::with_multi_hpu_config), or if a step this
     /// artifact depends on panics, in which case the message names the failing step.
     ///
@@ -1440,10 +1513,13 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_builder::{Builder, CiphertextBlockSpec};
+    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
     /// # use zhc_config::multi_hpu::MultiHpuConfig;
     /// # let mut pipeline = Pipeline::new()
-    /// #     .with_builder(Builder::new(CiphertextBlockSpec(2, 2)))
+    /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
+    /// #     .with_prototype(zhc_ir::Signature::empty())
+    /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
+    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
     /// #     .with_multi_hpu_config(MultiHpuConfig::default());
     /// for listing in pipeline.get_multi_hpu_assembly() {
     ///     println!("{listing:?}");
@@ -1512,7 +1588,7 @@ impl Pipeline {
 
     /// Returns the IR of the circuit as the software VM executes it.
     ///
-    /// Lowers the optimized integer-level IR directly into the VM language, bypassing the HPU
+    /// Lowers the supplied integer-level IR directly into the VM language, bypassing the HPU
     /// language and the device-level IR entirely: values live in ciphertext registers with no
     /// spilling, and keyswitching is an explicit instruction feeding every bootstrapping. This is
     /// the last representation shared across VM topologies — the same IR is scheduled by
@@ -1520,16 +1596,19 @@ impl Pipeline {
     ///
     /// # Panics
     ///
-    /// Panics if no circuit was set with [`with_builder`](Self::with_builder), or if a step this
+    /// Panics if a required input was not supplied, or if a step this
     /// artifact depends on panics, in which case the message names the failing step.
     ///
     /// # Examples
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_builder::{Builder, CiphertextBlockSpec};
+    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
     /// # let mut pipeline = Pipeline::new()
-    /// #     .with_builder(Builder::new(CiphertextBlockSpec(2, 2)));
+    /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
+    /// #     .with_prototype(zhc_ir::Signature::empty())
+    /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
+    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2));
     /// println!("{} VM operations", pipeline.get_vmlang().n_ops());
     /// ```
     pub fn get_vmlang(&mut self) -> &IR<VmLang> {
@@ -1551,7 +1630,7 @@ impl Pipeline {
     ///
     /// # Panics
     ///
-    /// Panics if no circuit was set with [`with_builder`](Self::with_builder), if no configuration
+    /// Panics if a required input was not supplied, if no configuration
     /// was set with [`with_vm_config`](Self::with_vm_config), or if a step this artifact depends
     /// on panics, in which case the message names the failing step.
     ///
@@ -1559,11 +1638,14 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_builder::{Builder, CiphertextBlockSpec};
+    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
     /// # use zhc_config::vm::VmConfig;
     /// # let config: VmConfig = unimplemented!();
     /// # let mut pipeline = Pipeline::new()
-    /// #     .with_builder(Builder::new(CiphertextBlockSpec(2, 2)))
+    /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
+    /// #     .with_prototype(zhc_ir::Signature::empty())
+    /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
+    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
     /// #     .with_vm_config(config);
     /// let plan = pipeline.get_vm_execution_plan();
     /// println!("{} worker threads", plan.irs.len());
@@ -1578,20 +1660,19 @@ impl Pipeline {
             .unwrap_vm_execution_plan_ref()
     }
 
-    /// Consumes the pipeline and returns the owned circuit.
-    ///
-    /// The owning counterpart of [`get_builder`](Self::get_builder).
+    /// Consumes the pipeline and returns the supplied unchecked IR.
     ///
     /// # Panics
     ///
-    /// See [`get_builder`](Self::get_builder).
-    pub fn into_builder(mut self) -> Builder {
-        self.eval.pull_val(&mut self.context, VALIDS().builder);
+    /// See [`get_unchecked_ioplang`](Self::get_unchecked_ioplang).
+    pub fn into_unchecked_ioplang(mut self) -> IR<IopLang> {
+        self.eval
+            .pull_val(&mut self.context, VALIDS().unchecked_ioplang);
         self.eventually_report_failure();
         self.eval
-            .into_val(VALIDS().builder)
+            .into_val(VALIDS().unchecked_ioplang)
             .unwrap()
-            .unwrap_builder()
+            .unwrap_unchecked_iop_lang()
     }
 
     /// Consumes the pipeline and returns the owned prototype.
@@ -1718,10 +1799,13 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_builder::{Builder, CiphertextBlockSpec};
+    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
     /// # use zhc_config::hpu::HpuConfig;
     /// # let pipeline = Pipeline::new()
-    /// #     .with_builder(Builder::new(CiphertextBlockSpec(2, 2)))
+    /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
+    /// #     .with_prototype(zhc_ir::Signature::empty())
+    /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
+    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
     /// #     .with_hpu_config(HpuConfig::default());
     /// // The stream is now owned, and the pipeline it came from can no longer be used.
     /// let stream: Vec<_> = pipeline.into_hpu_stream();

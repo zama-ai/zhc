@@ -11,11 +11,11 @@ use super::PipelineTypeSystem;
 /// [`PipelineTypeSystem`] artifacts according to the fixed signature exposed by the
 /// [`DialectInstructionSet`] impl. Instructions fall into the four [`Affinity`] branches:
 ///
-/// **Commons.** `InputBuilder` introduces the source circuit; from it, `BuilderToUncheckedIopLang`,
-/// `BuilderToPartitions`, `BuilderToPrototype`, and `BuilderToCiphertextBlockSpec` derive the
-/// unchecked integer-level IR, the multi-HPU partitioning, the call prototype, and the ciphertext
-/// block specification. `CheckIopLang` runs the noise analysis on the unchecked IR against that
-/// specification and yields the checked IR every backend consumes. `ComputePbsMetrics` and
+/// **Commons.** `InputUncheckedIopLang`, `InputPartitions`, `InputPrototype`, and
+/// `InputCiphertextBlockSpec` independently introduce the unchecked integer-level IR, the
+/// multi-HPU partitioning, the call prototype, and the ciphertext block specification.
+/// `CheckIopLang` runs the noise analysis on the unchecked IR against that specification and
+/// yields the checked IR every backend consumes. `ComputePbsMetrics` and
 /// `DrawSlack` each analyze the unchecked IR, producing PBS metrics and a slack drawing
 /// respectively, and `IopLangToLutRegistry` collects the lookup tables of the checked IR.
 ///
@@ -38,12 +38,11 @@ use super::PipelineTypeSystem;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PipelineInstructionSet {
     // Commons
-    InputBuilder,
-    BuilderToUncheckedIopLang,
+    InputUncheckedIopLang,
     CheckIopLang,
-    BuilderToPartitions,
-    BuilderToPrototype,
-    BuilderToCiphertextBlockSpec,
+    InputPartitions,
+    InputPrototype,
+    InputCiphertextBlockSpec,
     ComputePbsMetrics,
     IopLangToLutRegistry,
     DrawSlack,
@@ -82,12 +81,11 @@ impl PipelineInstructionSet {
     pub fn get_affinity(&self) -> Affinity {
         use PipelineInstructionSet::*;
         match self {
-            InputBuilder
-            | BuilderToUncheckedIopLang
+            InputUncheckedIopLang
             | CheckIopLang
-            | BuilderToPartitions
-            | BuilderToPrototype
-            | BuilderToCiphertextBlockSpec
+            | InputPartitions
+            | InputPrototype
+            | InputCiphertextBlockSpec
             | ComputePbsMetrics
             | DrawSlack
             | IopLangToLutRegistry => Affinity::Commons,
@@ -120,12 +118,11 @@ impl Format for PipelineInstructionSet {
         use PipelineInstructionSet::*;
         match self {
             // Commons
-            InputBuilder => write!(f, "input_builder"),
-            BuilderToUncheckedIopLang => write!(f, "builder_to_unchecked_ioplang"),
+            InputUncheckedIopLang => write!(f, "input_unchecked_ioplang"),
             CheckIopLang => write!(f, "check_ioplang"),
-            BuilderToPartitions => write!(f, "builder_to_partitions"),
-            BuilderToPrototype => write!(f, "builder_to_prototype"),
-            BuilderToCiphertextBlockSpec => write!(f, "builder_to_ciphertext_block_spec"),
+            InputPartitions => write!(f, "input_partitions"),
+            InputPrototype => write!(f, "input_prototype"),
+            InputCiphertextBlockSpec => write!(f, "input_ciphertext_block_spec"),
             ComputePbsMetrics => write!(f, "compute_pbs_metrics"),
             IopLangToLutRegistry => write!(f, "ioplang_to_lut_registry"),
             DrawSlack => write!(f, "draw_slack"),
@@ -171,12 +168,11 @@ impl DialectInstructionSet for PipelineInstructionSet {
         use PipelineTypeSystem::*;
         match self {
             // Commons
-            InputBuilder => sig![() -> (Builder)],
-            BuilderToUncheckedIopLang => sig![(Builder) -> (UncheckedIopLang)],
+            InputUncheckedIopLang => sig![() -> (UncheckedIopLang)],
             CheckIopLang => sig![(UncheckedIopLang, CiphertextBlockSpec) -> (IopLang)],
-            BuilderToPartitions => sig![(Builder) -> (Partitions)],
-            BuilderToPrototype => sig![(Builder) -> (Prototype)],
-            BuilderToCiphertextBlockSpec => sig![(Builder) -> (CiphertextBlockSpec)],
+            InputPartitions => sig![() -> (Partitions)],
+            InputPrototype => sig![() -> (Prototype)],
+            InputCiphertextBlockSpec => sig![() -> (CiphertextBlockSpec)],
             ComputePbsMetrics => sig![(UncheckedIopLang) -> (PbsMetrics)],
             IopLangToLutRegistry => sig![(IopLang) -> (LutRegistry)],
             DrawSlack => sig![(UncheckedIopLang) -> (SlackDrawing)],

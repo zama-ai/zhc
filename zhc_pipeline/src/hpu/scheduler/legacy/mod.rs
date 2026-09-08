@@ -28,3 +28,6 @@ pub fn small_schedule(
 ) -> IR<HpuLang> {
     scheduler::schedule(&ir, config, sched_policy)
 }
+
+pub use batcher::batch;
+pub use scheduler::schedule as schedule_batched;
