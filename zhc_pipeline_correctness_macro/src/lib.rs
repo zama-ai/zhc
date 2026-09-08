@@ -13,6 +13,15 @@ mod presets {
     use proc_macro2::TokenStream;
     use quote::quote;
 
+    pub fn all_schedps() -> TokenStream {
+        quote! {
+            [
+                sched_asap = SchedPolicy::AsSoonAsPossible,
+                sched_alap = SchedPolicy::AsLateAsPossible,
+            ]
+        }
+    }
+
     pub fn all_iops() -> TokenStream {
         quote! {
             [
@@ -150,6 +159,7 @@ impl Parse for Axis {
             let tokens = match name.to_string().as_str() {
                 "all_iops" => presets::all_iops(),
                 "all_precs" => presets::all_precs(),
+                "all_schedps" => presets::all_schedps(),
                 other => {
                     return Err(syn::Error::new(
                         name.span(),

@@ -34,7 +34,7 @@ use zhc_ir::{
     AnnIR, IR, OpId, OpMap, PrintWalker, Signature, ValId,
     cse::eliminate_common_subexpressions,
     dce::eliminate_dead_code,
-    partition::{PartitionId, PartitionIdRaw, PartitionTable},
+    partitioning::{PartitionAnnotation, PartitionId, PartitionPlacement, PartitionTable},
     visualization::{Hierarchy, draw_ann_ir_to_html, draw_ir_to_html},
 };
 use zhc_langs::ioplang::{
@@ -42,7 +42,7 @@ use zhc_langs::ioplang::{
     analyze_noise, check_noise, eliminate_aliases, skip_redundant_stores, skip_store_load,
 };
 use zhc_utils::{
-    Dumpable, FastSet, SafeAs, Store,
+    Dumpable, FastSet, SafeAs, Store, StoreIndex,
     files::FileHandle,
     iter::{Chunk, ChunkIt},
     small::SmallVec,
@@ -66,7 +66,7 @@ pub enum IrKind {
 pub(super) struct InnerBuilder {
     pub(super) ir: IR<IopLang>,
     pub(super) hierarchies: Store<OpId, Hierarchy>,
-    pub(super) partitions: Store<OpId, PartitionId>,
+    pub(super) partitions: Store<OpId, PartitionAnnotation>,
     pub(super) sig: Signature<Type>,
 }
 
@@ -76,7 +76,7 @@ impl InnerBuilder {
         op: IopInstructionSet,
         args: SmallVec<zhc_ir::ValId>,
         hierarchy: Hierarchy,
-        partition: PartitionId,
+        partition: PartitionAnnotation,
     ) -> (zhc_ir::OpId, SmallVec<zhc_ir::ValId>) {
         if !hierarchy.is_root() {
             let (opid, rets) = self.ir.add_op_with_comment(op, args, hierarchy.to_string());
@@ -150,7 +150,7 @@ pub struct Builder {
     spec: CiphertextBlockSpec,
     inner: Rc<RefCell<InnerBuilder>>,
     hierarchy: RefCell<Hierarchy>,
-    partition: RefCell<PartitionId>,
+    partition: RefCell<PartitionAnnotation>,
 }
 
 impl Builder {
@@ -166,7 +166,7 @@ impl Builder {
         self.hierarchy.borrow().clone()
     }
 
-    fn current_partition(&self) -> PartitionId {
+    fn current_partition(&self) -> PartitionAnnotation {
         self.partition.borrow().clone()
     }
 
@@ -192,7 +192,7 @@ impl Builder {
                 sig: Signature::empty(),
             })),
             hierarchy: RefCell::new(Hierarchy::new()),
-            partition: RefCell::new(PartitionId::new(0, "Inputs")),
+            partition: RefCell::new(PartitionAnnotation::new_irrelevant()),
         }
     }
 
@@ -437,10 +437,14 @@ impl Builder {
     /// // Operations built from here on belong to the "Stage 1" partition.
     /// let ct = builder.ciphertext_input(4);
     /// ```
-    pub fn new_partition(&self, metadata: impl AsRef<str>) -> PartitionId {
+    pub fn new_partition(&self, metadata: impl AsRef<str>) -> PartitionAnnotation {
         let mut partition = self.partition.borrow_mut();
-        let new_partition_id = partition.id + 1;
-        *partition = PartitionId::new(new_partition_id, metadata);
+        let new_partition_id = match partition.placement {
+            PartitionPlacement::Irrelevant => PartitionId(0),
+            PartitionPlacement::Exclusive(pid) => PartitionId(pid.as_raw() + 1),
+            _ => unreachable!(),
+        };
+        *partition = PartitionAnnotation::new_exclusive(new_partition_id, metadata);
         partition.clone()
     }
 
@@ -465,12 +469,15 @@ impl Builder {
     /// let ct = builder.ciphertext_input(4);
     /// assert_eq!(builder.get_partition_by_id(stage.id), Some(stage));
     /// ```
-    pub fn get_partition_by_id(&self, id: PartitionIdRaw) -> Option<PartitionId> {
+    pub fn get_partition_by_id(
+        &self,
+        id: <PartitionId as StoreIndex>::Raw,
+    ) -> Option<PartitionAnnotation> {
         let mut part_set = self
             .partitions(IrKind::Original)
             .into_iter()
             .map(|p| p.1)
-            .filter(|p| p.id == id)
+            .filter(|p| p.placement == PartitionPlacement::Exclusive(PartitionId(id)))
             .collect::<FastSet<_>>();
         assert!(
             part_set.len() <= 1,
@@ -496,15 +503,19 @@ impl Builder {
     /// let b = builder.new_partition("Stage 2");
     /// let merged = builder.merge_partitions(a, b);
     /// ```
-    pub fn merge_partitions(&self, part_a: PartitionId, part_b: PartitionId) -> PartitionId {
-        let fused = PartitionId::fuse(&part_a, &part_b);
+    pub fn merge_partitions(
+        &self,
+        part_a: PartitionAnnotation,
+        part_b: PartitionAnnotation,
+    ) -> PartitionAnnotation {
+        let merged = PartitionAnnotation::merge(&part_a, &part_b);
 
         self.inner_mut().partitions.iter_mut().for_each(|p| {
             if (*p == part_a) || (*p == part_b) {
-                *p = fused.clone()
+                *p = merged.clone()
             }
         });
-        fused
+        merged
     }
 
     /// Merges every partition named by the given identities into a single one.
@@ -524,7 +535,10 @@ impl Builder {
     /// let b = builder.new_partition("Stage 2");
     /// let grouped = builder.group_partitions_id([a.id, b.id]);
     /// ```
-    pub fn group_partitions_id(&self, ids: impl AsRef<[PartitionIdRaw]>) -> Option<PartitionId> {
+    pub fn group_partitions_id(
+        &self,
+        ids: impl AsRef<[<PartitionId as StoreIndex>::Raw]>,
+    ) -> Option<PartitionAnnotation> {
         ids.as_ref()
             .iter()
             .filter_map(|id| self.get_partition_by_id(*id))
@@ -546,7 +560,7 @@ impl Builder {
     /// # let ct = builder.ciphertext_input(4);
     /// let per_op = builder.partitions(IrKind::Original);
     /// ```
-    pub fn partitions(&self, kind: IrKind) -> OpMap<PartitionId> {
+    pub fn partitions(&self, kind: IrKind) -> OpMap<PartitionAnnotation> {
         let ir = match kind {
             IrKind::Original => &self.ir(),
             IrKind::Optimized => &self.optimize_ir(),

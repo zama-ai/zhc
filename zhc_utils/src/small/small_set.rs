@@ -1,5 +1,7 @@
 use std::hash::Hash;
 
+use serde::Serialize;
+
 use crate::{
     FastSet,
     small::{VArrayIntoIter, stack_set::StackSet},
@@ -120,6 +122,21 @@ impl<T: Eq + Hash, const N: usize> SmallSet<T, N> {
         }
     }
 
+    /// Visits the values contained in either this set or `other`.
+    ///
+    /// Each value is yielded exactly once. The iteration order is unspecified.
+    pub fn union<'a>(&'a self, other: &'a Self) -> impl Iterator<Item = &'a T> {
+        self.iter()
+            .chain(other.iter().filter(|value| !self.contains(value)))
+    }
+
+    /// Visits the values contained in both this set and `other`.
+    ///
+    /// The iteration order is unspecified.
+    pub fn intersection<'a>(&'a self, other: &'a Self) -> impl Iterator<Item = &'a T> {
+        self.iter().filter(|value| other.contains(value))
+    }
+
     /// Returns an iterator that takes ownership of the elements.
     pub fn into_iter(self) -> SmallSetIntoIter<T, N> {
         match self {
@@ -186,6 +203,28 @@ impl<T: Eq + Hash, const N: usize> PartialEq for SmallSet<T, N> {
 }
 
 impl<T: Eq + Hash, const N: usize> Eq for SmallSet<T, N> {}
+
+impl<T: Eq + Hash + Serialize, const N: usize> Serialize for SmallSet<T, N> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.collect_seq(self.iter())
+    }
+}
+
+impl<T: Eq + Hash, const N: usize> Hash for SmallSet<T, N> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        let mut combined: u64 = 0;
+        for item in self.iter() {
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            item.hash(&mut hasher);
+            combined = combined.wrapping_add(std::hash::Hasher::finish(&hasher));
+        }
+        state.write_u64(combined);
+        state.write_usize(self.len());
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -490,5 +529,217 @@ mod tests {
         assert!(set.insert(large_val2.clone()));
         assert!(set.contains(&large_val1));
         assert!(set.contains(&large_val2));
+    }
+
+    #[test]
+    fn test_union() {
+        let mut left: SmallSet<i32, 3> = SmallSet::with_capacity();
+        for value in [1, 2, 3] {
+            left.insert(value);
+        }
+        let mut right: SmallSet<i32, 3> = SmallSet::with_capacity();
+        for value in [3, 4, 5, 6] {
+            right.insert(value);
+        }
+
+        let union: FastSet<_> = left.union(&right).copied().collect();
+
+        assert_eq!(union, [1, 2, 3, 4, 5, 6].into_iter().collect());
+    }
+
+    #[test]
+    fn test_intersection() {
+        let mut left: SmallSet<i32, 3> = SmallSet::with_capacity();
+        for value in [1, 2, 3] {
+            left.insert(value);
+        }
+        let mut right: SmallSet<i32, 3> = SmallSet::with_capacity();
+        for value in [2, 3, 4, 5] {
+            right.insert(value);
+        }
+
+        let intersection: FastSet<_> = left.intersection(&right).copied().collect();
+
+        assert_eq!(intersection, [2, 3].into_iter().collect());
+    }
+
+    #[test]
+    fn test_serialize_stack() {
+        let mut set: SmallSet<i32, 3> = SmallSet::with_capacity();
+        for value in [1, 2, 3] {
+            set.insert(value);
+        }
+
+        assert_eq!(
+            serde_json::to_value(set).unwrap(),
+            serde_json::json!([1, 2, 3])
+        );
+    }
+
+    #[test]
+    fn test_serialize_heap() {
+        let mut set: SmallSet<i32, 2> = SmallSet::with_capacity();
+        for value in [1, 2, 3] {
+            set.insert(value);
+        }
+        let mut serialized = serde_json::to_value(set)
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|value| value.as_i64().unwrap())
+            .collect::<Vec<_>>();
+        serialized.sort_unstable();
+
+        assert_eq!(serialized, [1, 2, 3]);
+    }
+
+    #[test]
+    fn test_hash_equal_sets_same_order() {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let mut a: SmallSet<i32, 3> = SmallSet::with_capacity();
+        let mut b: SmallSet<i32, 3> = SmallSet::with_capacity();
+        for value in [1, 2, 3] {
+            a.insert(value);
+            b.insert(value);
+        }
+
+        let mut ha = DefaultHasher::new();
+        a.hash(&mut ha);
+        let mut hb = DefaultHasher::new();
+        b.hash(&mut hb);
+
+        assert_eq!(ha.finish(), hb.finish());
+    }
+
+    #[test]
+    fn test_hash_equal_sets_different_insertion_order() {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let mut a: SmallSet<i32, 5> = SmallSet::with_capacity();
+        for value in [1, 2, 3, 4] {
+            a.insert(value);
+        }
+        let mut b: SmallSet<i32, 5> = SmallSet::with_capacity();
+        for value in [4, 3, 2, 1] {
+            b.insert(value);
+        }
+
+        assert_eq!(a, b);
+
+        let mut ha = DefaultHasher::new();
+        a.hash(&mut ha);
+        let mut hb = DefaultHasher::new();
+        b.hash(&mut hb);
+
+        assert_eq!(ha.finish(), hb.finish());
+    }
+
+    #[test]
+    fn test_hash_stack_and_heap_equal_sets() {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        // Same values but different storage strategies (different N).
+        let mut stack: SmallSet<i32, 10> = SmallSet::with_capacity();
+        for value in [1, 2, 3] {
+            stack.insert(value);
+        }
+        assert!(matches!(stack, SmallSet::Stack(_)));
+
+        let mut heap: SmallSet<i32, 2> = SmallSet::with_capacity();
+        for value in [1, 2, 3] {
+            heap.insert(value);
+        }
+        assert!(matches!(heap, SmallSet::Heap(_)));
+
+        let mut hs = DefaultHasher::new();
+        stack.hash(&mut hs);
+        let mut hh = DefaultHasher::new();
+        heap.hash(&mut hh);
+
+        assert_eq!(hs.finish(), hh.finish());
+    }
+
+    #[test]
+    fn test_hash_different_sets() {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let mut a: SmallSet<i32, 5> = SmallSet::with_capacity();
+        for value in [1, 2, 3] {
+            a.insert(value);
+        }
+        let mut b: SmallSet<i32, 5> = SmallSet::with_capacity();
+        for value in [1, 2, 4] {
+            b.insert(value);
+        }
+
+        let mut ha = DefaultHasher::new();
+        a.hash(&mut ha);
+        let mut hb = DefaultHasher::new();
+        b.hash(&mut hb);
+
+        assert_ne!(ha.finish(), hb.finish());
+    }
+
+    #[test]
+    fn test_hash_different_lengths() {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let mut a: SmallSet<i32, 5> = SmallSet::with_capacity();
+        for value in [1, 2] {
+            a.insert(value);
+        }
+        let mut b: SmallSet<i32, 5> = SmallSet::with_capacity();
+        for value in [1, 2, 3] {
+            b.insert(value);
+        }
+
+        let mut ha = DefaultHasher::new();
+        a.hash(&mut ha);
+        let mut hb = DefaultHasher::new();
+        b.hash(&mut hb);
+
+        assert_ne!(ha.finish(), hb.finish());
+    }
+
+    #[test]
+    fn test_hash_empty_sets_equal() {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let a: SmallSet<i32, 5> = SmallSet::with_capacity();
+        let b: SmallSet<i32, 5> = SmallSet::with_capacity();
+
+        let mut ha = DefaultHasher::new();
+        a.hash(&mut ha);
+        let mut hb = DefaultHasher::new();
+        b.hash(&mut hb);
+
+        assert_eq!(ha.finish(), hb.finish());
+    }
+
+    #[test]
+    fn test_hash_usable_in_hashset() {
+        let mut outer: FastSet<SmallSet<i32, 3>> = FastSet::default();
+
+        let mut a: SmallSet<i32, 3> = SmallSet::with_capacity();
+        for value in [1, 2, 3] {
+            a.insert(value);
+        }
+        let mut b: SmallSet<i32, 3> = SmallSet::with_capacity();
+        for value in [3, 2, 1] {
+            b.insert(value);
+        }
+
+        assert!(outer.insert(a));
+        // `b` is equal to `a`, so it should not be inserted again.
+        assert!(!outer.insert(b));
+        assert_eq!(outer.len(), 1);
     }
 }

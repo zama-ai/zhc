@@ -1,6 +1,7 @@
 use std::fmt::Debug;
 
 use crate::{
+    OpId, ValId,
     evaluation::{Evaluation, ValState},
     visualization::{
         NoClass, TextBox,
@@ -21,6 +22,9 @@ pub trait VisualAnnotation: Debug + 'static {
     }
 }
 
+impl VisualAnnotation for OpId {}
+impl VisualAnnotation for ValId {}
+
 impl VisualAnnotation for () {
     fn widget(&self) -> Option<Box<dyn DynamicElement>> {
         None
@@ -39,6 +43,21 @@ impl<V: Evaluation + VisualAnnotation> VisualAnnotation for ValState<V> {
         match self {
             ValState::Evaluated(v) => v.widget(),
             _ => None,
+        }
+    }
+}
+
+impl<V: VisualAnnotation> VisualAnnotation for Option<V> {
+    fn style_modifier(&self) -> Option<StyleModifier> {
+        match self {
+            Some(v) => v.style_modifier(),
+            None => None,
+        }
+    }
+    fn widget(&self) -> Option<Box<dyn DynamicElement>> {
+        match self {
+            Some(v) => v.widget(),
+            None => None,
         }
     }
 }

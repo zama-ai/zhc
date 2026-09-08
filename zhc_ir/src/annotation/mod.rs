@@ -44,6 +44,13 @@ pub enum Analysing<A> {
 }
 
 impl<A> Analysing<A> {
+    pub fn as_ref(&self) -> Analysing<&A> {
+        match self {
+            Analysing::Pending => Analysing::Pending,
+            Analysing::Analyzed(a) => Analysing::Analyzed(a),
+        }
+    }
+
     /// Extracts the inner value.
     ///
     /// # Panics

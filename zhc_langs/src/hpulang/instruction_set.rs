@@ -228,16 +228,16 @@ impl HpuInstructionSet {
         matches!(self, HpuInstructionSet::Transfer { .. })
     }
 
-    /// Returns whether this instruction may be replicated across HPUs.
-    ///
-    /// Replicable instructions produce a ciphertext or immediate with no
-    /// ciphertext input (`CstCt`, `ImmLd`, `SrcLd`), so a value they define
-    /// can be re-materialized on each HPU that uses it instead of being
-    /// transferred across the partition boundary.
-    pub fn is_replicable(&self) -> bool {
-        use HpuInstructionSet::*;
-        matches!(self, CstCt { .. } | ImmLd { .. } | SrcLd { .. })
-    }
+    // /// Returns whether this instruction may be replicated across HPUs.
+    // ///
+    // /// Replicable instructions produce a ciphertext or immediate with no
+    // /// ciphertext input (`CstCt`, `ImmLd`, `SrcLd`), so a value they define
+    // /// can be re-materialized on each HPU that uses it instead of being
+    // /// transferred across the partition boundary.
+    // pub fn is_replicable(&self) -> bool {
+    //     use HpuInstructionSet::*;
+    //     matches!(self, CstCt { .. } | ImmLd { .. } | SrcLd { .. })
+    // }
 }
 
 impl Format for HpuInstructionSet {

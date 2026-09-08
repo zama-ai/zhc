@@ -14,7 +14,7 @@ use zhc_utils::{
 
 use crate::{
     Fingerprint, SchedPolicy, hpu,
-    misc::{self, extract_lut_registry},
+    iop::{self, extract_lut_registry},
     multi_hpu,
     pipeline::context::PipelineContext,
     vm,
@@ -194,7 +194,7 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
             PipelineInstructionSet::ComputePbsMetrics => {
                 interval_begin(c"ComputePbsMetrics", 0);
                 let ioplang = arguments[0].unwrap_unchecked_iop_lang_ref();
-                let metrics = misc::compute_pbs_metrics(ioplang);
+                let metrics = iop::compute_pbs_metrics(ioplang);
                 let result = svec![PipelineArtifact::PbsMetrics(Box::new(metrics))];
                 interval_end(c"ComputePbsMetrics", 0);
                 result
@@ -221,7 +221,7 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
             PipelineInstructionSet::DrawSlack => {
                 interval_begin(c"DrawSlack", 0);
                 let ioplang = arguments[0].unwrap_unchecked_iop_lang_ref();
-                let file = misc::draw_slack(ioplang);
+                let file = iop::draw_slack(ioplang);
                 let result = svec![PipelineArtifact::SlackDrawing(file)];
                 interval_end(c"DrawSlack", 0);
                 result
@@ -250,8 +250,8 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                 interval_begin(c"IopLangToMultiHpu", 0);
                 let ioplang = arguments[0].unwrap_iop_lang_ref();
                 let partitions = arguments[1].unwrap_partitions_ref();
-                let (hpulang, localities) =
-                    multi_hpu::translation::lower_iop_to_multi_hpu(ioplang, partitions);
+                let (hpulang, localities) = todo!();
+                // multi_hpu::translation::lower_iop_to_multi_hpu(ioplang, partitions);
                 let result = svec![
                     PipelineArtifact::MultiHpuLangTranslated(Box::new(hpulang)),
                     PipelineArtifact::MultiHpuLocalities(localities)

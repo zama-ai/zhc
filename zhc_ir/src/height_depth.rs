@@ -5,13 +5,15 @@ use zhc_utils::svec;
 
 use crate::{Analysing, AnnIR, AnnOpRef, AsOpRef, Dialect, IR, OpIdRaw, OpRef};
 
+pub type Cost = OpIdRaw;
+
 /// Scores toward sinks (height) and from sources (depth).
 #[derive(PartialEq, Eq, Debug, Clone, Serialize)]
 pub struct HeightDepth {
     /// Score accumulated backward through users, including this operation.
-    pub height: OpIdRaw,
+    pub height: Cost,
     /// Score accumulated forward through predecessors, including this operation.
-    pub depth: OpIdRaw,
+    pub depth: Cost,
 }
 
 /// Computes height backward and depth forward using the same scoring policy.
@@ -24,9 +26,9 @@ pub struct HeightDepth {
 /// Values receive unit annotations.
 pub fn analyze_height_depth<D: Dialect>(
     ir: &IR<D>,
-    advance: impl Fn(OpRef<'_, D>, OpIdRaw) -> OpIdRaw,
+    advance: impl Fn(OpRef<'_, D>, Cost) -> Cost,
 ) -> AnnIR<'_, D, HeightDepth, ()> {
-    let heighted = ir.backward_dataflow_analysis::<OpIdRaw, ()>(|op| {
+    let heighted = ir.backward_dataflow_analysis::<Cost, ()>(|op| {
         let score = op
             .get_users_iter()
             .map(|user| user.get_annotation().clone().unwrap_analyzed())

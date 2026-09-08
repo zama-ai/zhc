@@ -140,7 +140,7 @@ pub fn analyze_noise<'a>(
                 InputPlaintext { .. } => svec![Ann::UnknownPlaintext(())],
                 OutputCiphertext { .. } => svec![],
                 _Consume { .. } => svec![],
-                Inspect { .. } => svec![
+                Inspect { .. } | _Copy { .. } => svec![
                     op.get_args_iter()
                         .nth(0)
                         .unwrap()

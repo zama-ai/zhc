@@ -7,14 +7,14 @@
 
 mod commons;
 mod hpu;
-mod misc;
+mod iop;
 mod multi_hpu;
 mod pipeline;
 mod vm;
 
 pub use commons::*;
 pub use hpu::metrics::HpuMetrics;
-pub use misc::*;
+pub use iop::*;
 pub use multi_hpu::metrics::MultiHpuMetrics;
 pub use pipeline::Pipeline;
 pub use vm::scheduler::VmExecutionPlan;
@@ -31,4 +31,5 @@ pub mod passes {
     pub use crate::hpu::translation_table::decode_translation_table as hpu_decode_translation_table;
     pub use crate::hpu::translation_table::generate_translation_table as hpu_generate_translation_table;
     pub use crate::hpu::translation_table::instruction_from_dop_repr as hpu_decode_dop_repr;
+    pub use crate::iop::partition_and_materialize;
 }

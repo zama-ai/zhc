@@ -8,6 +8,59 @@ use zhc_langs::{
 };
 use zhc_utils::{Dumpable, FastMap, SafeAs};
 
+pub fn check_iop_equivalence(
+    reference_ir: &IR<IopLang>,
+    candidate_ir: &IR<IopLang>,
+    spec: CiphertextBlockSpec,
+    nreps: usize,
+) {
+    let mut input_slots = reference_ir
+        .walk_ops_linear()
+        .filter_map(|op| match op.get_instruction() {
+            IopInstructionSet::InputCiphertext { pos, int_size } => Some((*pos, true, *int_size)),
+            IopInstructionSet::InputPlaintext { pos, int_size } => Some((*pos, false, *int_size)),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    input_slots.sort_by_key(|(pos, _, _)| *pos);
+
+    for _ in 0..nreps {
+        let inputs: FastMap<usize, IopValue> = input_slots
+            .iter()
+            .map(|(pos, is_ct, int_size)| {
+                let value = if *is_ct {
+                    IopValue::Ciphertext(spec.ciphertext_spec(*int_size).random())
+                } else {
+                    IopValue::Plaintext(
+                        spec.matching_plaintext_block_spec()
+                            .plaintext_spec(*int_size)
+                            .random(),
+                    )
+                };
+                (*pos, value)
+            })
+            .collect();
+
+        let evaluate = |ir: &IR<IopLang>| {
+            let mut context = IopInterepreterContext {
+                spec,
+                inputs: inputs.clone(),
+                outputs: FastMap::default(),
+            };
+            if let Err(eval_ir) = ir.evaluate::<IopValue>(&mut context) {
+                eval_ir.dump_and_panic();
+            }
+            context.outputs
+        };
+
+        assert_eq!(
+            evaluate(candidate_ir),
+            evaluate(reference_ir),
+            "IOP outputs differ"
+        );
+    }
+}
+
 pub fn check_iop_hpu_equivalence(
     iop_ir: &IR<IopLang>,
     hpu_ir: &IR<HpuLang>,

@@ -30,7 +30,6 @@
 mod batch_statistics;
 mod dialect;
 pub mod evaluation;
-mod insert_transfers;
 mod instruction_set;
 mod locality;
 mod type_system;
@@ -38,7 +37,6 @@ mod type_system;
 pub use batch_statistics::*;
 pub use dialect::*;
 pub use evaluation::*;
-pub use insert_transfers::*;
 pub use instruction_set::*;
 pub use locality::*;
 pub use type_system::*;

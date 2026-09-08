@@ -1,7 +1,6 @@
 use crate::{
-    Fingerprint,
+    Fingerprint, PbsMetrics,
     hpu::{metrics::HpuMetrics, translation_table::DOpRepr},
-    misc::PbsMetrics,
     multi_hpu::metrics::MultiHpuMetrics,
     vm::scheduler::VmExecutionPlan,
 };
@@ -11,7 +10,7 @@ use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
 use zhc_ir::{
     IR, OpMap, Signature,
     evaluation::Evaluation,
-    partition::PartitionId,
+    partitioning::PartitionAnnotation,
     visualization::{DynamicElement, VisualAnnotation},
 };
 use zhc_langs::{
@@ -32,7 +31,7 @@ pub enum PipelineArtifact {
     Fingerprint(Fingerprint),
     PbsMetrics(Box<PbsMetrics>),
     SlackDrawing(FileHandle),
-    Partitions(OpMap<PartitionId>),
+    Partitions(OpMap<PartitionAnnotation>),
     Prototype(Box<Signature<Type>>),
     CiphertextBlockSpec(CiphertextBlockSpec),
     LutRegistry(LutRegistry),
