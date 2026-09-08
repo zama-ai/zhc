@@ -1,6 +1,6 @@
 use zhc_crypto::integer_semantics::PlaintextBlockSpec;
 use zhc_ir::{AnnIR, AnnOpRef, IR};
-use zhc_utils::{Dumpable, SafeAs, existential_enum, iter::CollectInSmallVec, svec};
+use zhc_utils::{Dumpable, existential_enum, iter::CollectInSmallVec, svec};
 
 use super::{IopInstructionSet, IopLang};
 
@@ -63,6 +63,19 @@ impl Noise {
 
     pub const fn mul_constant(lhs: Noise, pt: u8) -> Noise {
         Noise(lhs.0.saturating_mul(pt))
+    }
+
+    pub const fn shl(lhs: Noise, amount: u8) -> Noise {
+        if lhs.0 == 0 {
+            return Noise::NONE;
+        }
+        if amount >= u8::BITS as u8 {
+            return Noise::MAX;
+        }
+        match lhs.0.checked_shl(amount as u32) {
+            Some(v) if v >> amount == lhs.0 => Noise(v),
+            _ => Noise::MAX,
+        }
     }
 }
 
@@ -259,10 +272,7 @@ pub fn analyze_noise<'a>(
                         .get_annotation()
                         .unwrap_analyzed()
                         .unwrap_noised();
-                    svec![Ann::Noised(Noise::mul_constant(
-                        noise,
-                        2u8.pow((*amount).sas())
-                    ))]
+                    svec![Ann::Noised(Noise::shl(noise, *amount))]
                 }
             };
             ((), noises)
@@ -299,6 +309,17 @@ mod tests {
         assert_eq!(Noise::mul_constant(Noise::FRESH, 0), Noise::NONE);
         assert_eq!(Noise::mul_constant(Noise(100), 3), Noise::MAX);
         assert_eq!(Noise::mul_constant(Noise::MAX, 2), Noise::MAX);
+    }
+
+    #[test]
+    fn shl_is_exact_and_saturating() {
+        assert_eq!(Noise::shl(Noise(3), 0), Noise(3));
+        assert_eq!(Noise::shl(Noise(3), 2), Noise(12));
+        assert_eq!(Noise::shl(Noise::NONE, 200), Noise::NONE);
+        assert_eq!(Noise::shl(Noise(3), 7), Noise::MAX);
+        assert_eq!(Noise::shl(Noise::FRESH, 8), Noise::MAX);
+        assert_eq!(Noise::shl(Noise::FRESH, 255), Noise::MAX);
+        assert_eq!(Noise::shl(Noise::MAX, 1), Noise::MAX);
     }
 
     #[test]
