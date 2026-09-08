@@ -7,14 +7,14 @@
 
 mod commons;
 mod hpu;
-mod misc;
+mod iop;
 mod multi_hpu;
 mod pipeline;
 mod vm;
 
 pub use commons::*;
 pub use hpu::metrics::HpuMetrics;
-pub use misc::*;
+pub use iop::*;
 pub use pipeline::Pipeline;
 pub use vm::scheduler::VmExecutionPlan;
 

@@ -1,7 +1,7 @@
 use crate::{
     Fingerprint,
     hpu::{metrics::HpuMetrics, translation_table::DOpRepr},
-    misc::PbsMetrics,
+    iop::PbsMetrics,
     vm::scheduler::VmExecutionPlan,
 };
 use zhc_config::{hpu::HpuConfig, multi_hpu::MultiHpuConfig, vm::VmConfig};

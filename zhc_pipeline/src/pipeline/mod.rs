@@ -128,7 +128,7 @@ use zhc_utils::{
 use crate::{
     Fingerprint,
     hpu::{metrics::HpuMetrics, translation_table::DOpRepr},
-    misc::PbsMetrics,
+    iop::PbsMetrics,
     vm::scheduler::VmExecutionPlan,
 };
 
