@@ -15,7 +15,8 @@ use super::PipelineTypeSystem;
 /// `InputCiphertextBlockSpec` independently introduce the unchecked integer-level IR, the
 /// multi-HPU partitioning, the call prototype, and the ciphertext block specification.
 /// `CheckIopLang` runs the noise analysis on the unchecked IR against that specification and
-/// yields the checked IR every backend consumes. `ComputePbsMetrics` and
+/// yields the checked IR every backend consumes. `ComputeFingerprint` hashes that checked IR.
+/// `ComputePbsMetrics` and
 /// `DrawSlack` each analyze the unchecked IR, producing PBS metrics and a slack drawing
 /// respectively, and `IopLangToLutRegistry` collects the lookup tables of the checked IR.
 ///
@@ -43,6 +44,7 @@ pub enum PipelineInstructionSet {
     InputPartitions,
     InputPrototype,
     InputCiphertextBlockSpec,
+    ComputeFingerprint,
     ComputePbsMetrics,
     IopLangToLutRegistry,
     DrawSlack,
@@ -86,6 +88,7 @@ impl PipelineInstructionSet {
             | InputPartitions
             | InputPrototype
             | InputCiphertextBlockSpec
+            | ComputeFingerprint
             | ComputePbsMetrics
             | DrawSlack
             | IopLangToLutRegistry => Affinity::Commons,
@@ -123,6 +126,7 @@ impl Format for PipelineInstructionSet {
             InputPartitions => write!(f, "input_partitions"),
             InputPrototype => write!(f, "input_prototype"),
             InputCiphertextBlockSpec => write!(f, "input_ciphertext_block_spec"),
+            ComputeFingerprint => write!(f, "compute_fingerprint"),
             ComputePbsMetrics => write!(f, "compute_pbs_metrics"),
             IopLangToLutRegistry => write!(f, "ioplang_to_lut_registry"),
             DrawSlack => write!(f, "draw_slack"),
@@ -173,6 +177,7 @@ impl DialectInstructionSet for PipelineInstructionSet {
             InputPartitions => sig![() -> (Partitions)],
             InputPrototype => sig![() -> (Prototype)],
             InputCiphertextBlockSpec => sig![() -> (CiphertextBlockSpec)],
+            ComputeFingerprint => sig![(IopLang) -> (Fingerprint)],
             ComputePbsMetrics => sig![(UncheckedIopLang) -> (PbsMetrics)],
             IopLangToLutRegistry => sig![(IopLang) -> (LutRegistry)],
             DrawSlack => sig![(UncheckedIopLang) -> (SlackDrawing)],

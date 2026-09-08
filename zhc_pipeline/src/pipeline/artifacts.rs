@@ -1,4 +1,5 @@
 use crate::{
+    Fingerprint,
     hpu::{metrics::HpuMetrics, translation_table::DOpRepr},
     misc::PbsMetrics,
     vm::scheduler::VmExecutionPlan,
@@ -27,6 +28,7 @@ pub enum PipelineArtifact {
     // Commons
     UncheckedIopLang(IR<IopLang>),
     IopLang(IR<IopLang>),
+    Fingerprint(Fingerprint),
     PbsMetrics(PbsMetrics),
     SlackDrawing(FileHandle),
     Partitions(OpMap<PartitionId>),

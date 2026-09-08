@@ -126,6 +126,7 @@ use zhc_utils::{
 };
 
 use crate::{
+    Fingerprint,
     hpu::{metrics::HpuMetrics, translation_table::DOpRepr},
     misc::PbsMetrics,
     vm::scheduler::VmExecutionPlan,
@@ -134,6 +135,7 @@ use crate::{
 struct ArtifactsValids {
     unchecked_ioplang: ValId,
     ioplang: ValId,
+    fingerprint: ValId,
     slack_drawing: ValId,
     pbs_metrics: ValId,
     partitions: ValId,
@@ -185,6 +187,8 @@ static PIPELINE: LazyLock<(IR<PipelineLang>, ArtifactsValids)> = LazyLock::new(|
         svec![unchecked_ioplang, ciphertext_block_spec],
     );
     let ioplang = rets[0];
+    let (_, rets) = ir.add_op(ComputeFingerprint, svec![ioplang]);
+    let fingerprint = rets[0];
     let (_, rets) = ir.add_op(IopLangToLutRegistry, svec![ioplang]);
     let lut_registry = rets[0];
 
@@ -264,6 +268,7 @@ static PIPELINE: LazyLock<(IR<PipelineLang>, ArtifactsValids)> = LazyLock::new(|
         ArtifactsValids {
             unchecked_ioplang,
             ioplang,
+            fingerprint,
             pbs_metrics,
             slack_drawing,
             partitions,
@@ -807,6 +812,24 @@ impl Pipeline {
             .get_val(VALIDS().ioplang)
             .unwrap()
             .unwrap_iop_lang_ref()
+    }
+
+    /// Returns a fast, non-cryptographic hash of the checked integer-level IR.
+    ///
+    /// Equal IRs produce equal fingerprints. The value is intended for in-process indexing and
+    /// is not a stable digest for persistence or interchange.
+    ///
+    /// # Panics
+    ///
+    /// See [`get_ioplang`](Self::get_ioplang).
+    pub fn get_fingerprint(&mut self) -> Fingerprint {
+        self.eval.pull_val(&mut self.context, VALIDS().fingerprint);
+        self.eventually_report_failure();
+        *self
+            .eval
+            .get_val(VALIDS().fingerprint)
+            .unwrap()
+            .unwrap_fingerprint_ref()
     }
 
     /// Returns the block-level HPU IR of the circuit, before scheduling.
@@ -1735,6 +1758,22 @@ impl Pipeline {
             .into_val(VALIDS().ioplang)
             .unwrap()
             .unwrap_iop_lang()
+    }
+
+    /// Consumes the pipeline and returns the fingerprint of the checked integer-level IR.
+    ///
+    /// The owning counterpart of [`get_fingerprint`](Self::get_fingerprint).
+    ///
+    /// # Panics
+    ///
+    /// See [`get_fingerprint`](Self::get_fingerprint).
+    pub fn into_fingerprint(mut self) -> Fingerprint {
+        self.eval.pull_val(&mut self.context, VALIDS().fingerprint);
+        self.eventually_report_failure();
+        self.eval
+            .into_val(VALIDS().fingerprint)
+            .unwrap()
+            .unwrap_fingerprint()
     }
 
     /// Consumes the pipeline and returns the owned block-level HPU IR, before scheduling.

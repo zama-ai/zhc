@@ -35,8 +35,8 @@ fn op_active<'a, D: Dialect>(op: &OpRef<'a, D>) -> bool {
 /// relationships, and active/inactive lifecycle state. Operations are added
 /// via [`add_op`](Self::add_op), queried via [`get_op`](Self::get_op) and
 /// walker iterators, and removed via [`delete_op`](Self::delete_op). Equality
-/// and hashing are based on identity (pointer equality).
-#[derive(Clone)]
+/// and hashing are based on the complete stored representation.
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct IR<D: Dialect> {
     pub(super) op_operations: Store<OpId, D::InstructionSet>,
     pub(super) op_signatures: Store<OpId, Signature<D::TypeSystem>>,
@@ -63,20 +63,6 @@ impl<D: Dialect> Debug for IR<D> {
         } else {
             write!(f, "IR<{}>", std::any::type_name::<D>())
         }
-    }
-}
-
-impl<D: Dialect> PartialEq for IR<D> {
-    fn eq(&self, other: &Self) -> bool {
-        std::ptr::eq(self, other)
-    }
-}
-
-impl<D: Dialect> Eq for IR<D> {}
-
-impl<D: Dialect> std::hash::Hash for IR<D> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        std::ptr::hash(self, state);
     }
 }
 

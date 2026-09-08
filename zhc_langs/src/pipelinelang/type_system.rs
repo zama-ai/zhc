@@ -16,6 +16,7 @@ pub enum PipelineTypeSystem {
     CiphertextBlockSpec,
     UncheckedIopLang,
     IopLang,
+    Fingerprint,
     Partitions,
     Prototype,
     PbsMetrics,

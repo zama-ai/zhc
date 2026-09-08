@@ -6,14 +6,14 @@ use zhc_langs::{
 };
 use zhc_profiling::{interval_begin, interval_end};
 use zhc_utils::{
-    Dumpable,
+    Dumpable, fast_hash,
     files::{Extension, FileHandle, PerfettoTrace},
     small::SmallVec,
     svec,
 };
 
 use crate::{
-    SchedPolicy, hpu,
+    Fingerprint, SchedPolicy, hpu,
     misc::{self, extract_lut_registry},
     multi_hpu,
     pipeline::context::PipelineContext,
@@ -27,6 +27,7 @@ impl EvaluatesTo<PipelineArtifact> for PipelineTypeSystem {
         match interp {
             PipelineArtifact::UncheckedIopLang(_) => PipelineTypeSystem::UncheckedIopLang,
             PipelineArtifact::IopLang(_) => PipelineTypeSystem::IopLang,
+            PipelineArtifact::Fingerprint(_) => PipelineTypeSystem::Fingerprint,
             PipelineArtifact::HpuConfig(_) => PipelineTypeSystem::HpuConfig,
             PipelineArtifact::HpuLangTranslated(_) => PipelineTypeSystem::HpuLangTranslated,
             PipelineArtifact::HpuLangScheduled(_) => PipelineTypeSystem::HpuLangScheduled,
@@ -94,6 +95,15 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                 check_noise(unchecked, &spec.matching_plaintext_block_spec());
                 let result = svec![PipelineArtifact::IopLang(unchecked.clone())];
                 interval_end(c"CheckIopLang", 0);
+                result
+            }
+            PipelineInstructionSet::ComputeFingerprint => {
+                interval_begin(c"ComputeFingerprint", 0);
+                let ioplang = arguments[0].unwrap_iop_lang_ref();
+                let result = svec![PipelineArtifact::Fingerprint(Fingerprint(fast_hash(
+                    ioplang
+                )))];
+                interval_end(c"ComputeFingerprint", 0);
                 result
             }
             PipelineInstructionSet::InputPartitions => {

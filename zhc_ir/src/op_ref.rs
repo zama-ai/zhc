@@ -24,7 +24,8 @@ pub struct OpRef<'ir, D: Dialect> {
 
 impl<'ir, D: Dialect> Hash for OpRef<'ir, D> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.id.hash(state)
+        std::ptr::hash(self.ir, state);
+        self.id.hash(state);
     }
 }
 

@@ -25,7 +25,8 @@ pub struct ValRef<'ir, D: Dialect> {
 
 impl<'ir, D: Dialect> Hash for ValRef<'ir, D> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.id.hash(state)
+        std::ptr::hash(self.ir, state);
+        self.id.hash(state);
     }
 }
 

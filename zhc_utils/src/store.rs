@@ -12,7 +12,7 @@ use crate::Dumpable;
 /// The `Store` provides safe, typed access to elements using custom index types
 /// that implement `StoreIndex`. This prevents mixing up indices between different
 /// stores and provides better type safety than raw `usize` indices.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 pub struct Store<I: StoreIndex, V>(pub Vec<V>, PhantomData<I>);
 
 impl<I: StoreIndex, V> Store<I, V> {
