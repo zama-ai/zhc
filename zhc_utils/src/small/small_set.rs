@@ -120,6 +120,21 @@ impl<T: Eq + Hash, const N: usize> SmallSet<T, N> {
         }
     }
 
+    /// Visits the values contained in either this set or `other`.
+    ///
+    /// Each value is yielded exactly once. The iteration order is unspecified.
+    pub fn union<'a>(&'a self, other: &'a Self) -> impl Iterator<Item = &'a T> {
+        self.iter()
+            .chain(other.iter().filter(|value| !self.contains(value)))
+    }
+
+    /// Visits the values contained in both this set and `other`.
+    ///
+    /// The iteration order is unspecified.
+    pub fn intersection<'a>(&'a self, other: &'a Self) -> impl Iterator<Item = &'a T> {
+        self.iter().filter(|value| other.contains(value))
+    }
+
     /// Returns an iterator that takes ownership of the elements.
     pub fn into_iter(self) -> SmallSetIntoIter<T, N> {
         match self {
@@ -490,5 +505,37 @@ mod tests {
         assert!(set.insert(large_val2.clone()));
         assert!(set.contains(&large_val1));
         assert!(set.contains(&large_val2));
+    }
+
+    #[test]
+    fn test_union() {
+        let mut left: SmallSet<i32, 3> = SmallSet::with_capacity();
+        for value in [1, 2, 3] {
+            left.insert(value);
+        }
+        let mut right: SmallSet<i32, 3> = SmallSet::with_capacity();
+        for value in [3, 4, 5, 6] {
+            right.insert(value);
+        }
+
+        let union: FastSet<_> = left.union(&right).copied().collect();
+
+        assert_eq!(union, [1, 2, 3, 4, 5, 6].into_iter().collect());
+    }
+
+    #[test]
+    fn test_intersection() {
+        let mut left: SmallSet<i32, 3> = SmallSet::with_capacity();
+        for value in [1, 2, 3] {
+            left.insert(value);
+        }
+        let mut right: SmallSet<i32, 3> = SmallSet::with_capacity();
+        for value in [2, 3, 4, 5] {
+            right.insert(value);
+        }
+
+        let intersection: FastSet<_> = left.intersection(&right).copied().collect();
+
+        assert_eq!(intersection, [2, 3].into_iter().collect());
     }
 }

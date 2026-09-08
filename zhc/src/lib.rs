@@ -26,6 +26,17 @@ pub mod prelude {
 
 #[cfg(test)]
 mod test {
+    use zhc_builder::{CiphertextBlockSpec, add};
+    use zhc_config::hpu::HpuConfig;
+    use zhc_langs::coarselang::coarsen_ioplang;
+    use zhc_pipeline::Pipeline;
+    use zhc_utils::{Dumpable, iter::CollectInVec};
+
     #[test]
-    fn brrrrrr() {}
+    fn brrrrrr() {
+        let BLOCK_SPEC = CiphertextBlockSpec(2, 2);
+        let ir = add(BLOCK_SPEC.ciphertext_spec(16)).optimize_ir();
+        ir.draw_to_html(None).open();
+        coarsen_ioplang(&ir).annotated_output().draw_to_html(None).open();
+    }
 }

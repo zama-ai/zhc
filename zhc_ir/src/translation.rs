@@ -11,12 +11,11 @@
 //! | Plain | [`translate`]       | [`translate_ann`]        |
 
 use crate::{
-    AnnIRView, AnnOpRef, Annotation, AsOpId, AsValId, Dialect, IR, OpId, OpMap, OpRef, State,
-    ValId, ValMap,
+    AnnIR, AnnIRView, AnnOpRef, Annotation, AsValId, Dialect, IR, OpId, OpMap, OpRef,
+    State, ValId, ValMap,
 };
-use std::{marker::PhantomData, ops::Index};
+use std::marker::PhantomData;
 use zhc_utils::{
-    SafeAs,
     iter::{CollectInSmallVec, MultiZip},
     small::SmallVec,
 };
@@ -37,15 +36,17 @@ pub enum Order {
     Custom(Vec<OpId>),
 }
 
-/// The source-IR operation that a translated output operation originated from.
-pub struct Provenance(pub OpId);
 
-/// Maps each operation in a [`Translation`]'s output IR back to its source operation.
+/// Maps operations and registered values in a [`Translation`]'s output IR back to their source.
 ///
 /// Indexing with an output-IR operation ID yields the [`Provenance`] recording which source
 /// operation produced it. Use [`project_opmap`](Self::project_opmap) to re-key an [`OpMap`]
-/// indexed by source operations into one indexed by the corresponding output operations.
-pub struct ProvenanceMap(Vec<Provenance>);
+/// indexed by source operations into one indexed by the corresponding output operations. Value
+/// provenance is exposed through [`Translation::annotated_output`].
+pub struct ProvenanceMap {
+    operations: OpMap<OpId>,
+    values: ValMap<ValId>,
+}
 
 impl ProvenanceMap {
     /// Re-keys `opmap`, indexed by source operations, into one indexed by output operations.
@@ -53,39 +54,80 @@ impl ProvenanceMap {
     /// For every operation in this translation's output IR, looks up the value `opmap` stores for
     /// the source operation it was translated from and clones it into the result at that
     /// position; if `opmap` has no value there, the resulting entry is left empty. The returned
-    /// map has an active slot for every output operation and no inactive slots.
+    /// map preserves the active/inactive structure of the provenance map.
     pub fn project_opmap<T: Clone>(&self, opmap: &OpMap<T>) -> OpMap<T> {
+        let mut n_stored = 0;
         let store = self
-            .0
+            .operations
+            .store
             .iter()
-            .map(|from| State::Active(opmap.get(from.0).cloned()))
+            .map(|state| match state {
+                State::Active(from) => {
+                    let projected = from.as_ref().and_then(|from| opmap.get(from).cloned());
+                    if projected.is_some() {
+                        n_stored += 1;
+                    }
+                    State::Active(projected)
+                }
+                State::Inactive(_) => State::Inactive(None),
+            })
             .collect();
         OpMap {
             store,
-            n_stored: self.0.len().sas(),
-            n_inactive: 0,
+            n_stored,
+            n_inactive: self.operations.n_inactive,
         }
     }
-}
 
-impl<A: AsOpId> Index<A> for ProvenanceMap {
-    type Output = Provenance;
+    /// Returns the output-operation to source-operation provenance map.
+    pub fn operations(&self) -> &OpMap<OpId> {
+        &self.operations
+    }
 
-    fn index(&self, index: A) -> &Self::Output {
-        &self.0[index.op_id().0 as usize]
+    /// Returns the output-value to source-value provenance map.
+    pub fn values(&self) -> &ValMap<ValId> {
+        &self.values
     }
 }
 
-/// The result of translating an IR: the output IR together with its operation provenance.
+/// The result of translating an IR: the output IR together with its provenance.
 ///
 /// Pairs the [`IR<OD>`] produced by [`translate`] or [`translate_ann`] with an
-/// [`ProvenanceMap`] recording, for every operation in `output`, which source operation it was
-/// translated from.
+/// [`ProvenanceMap`] recording the source operations and registered source values from which its
+/// contents were translated.
 pub struct Translation<OD: Dialect> {
     /// The translated output IR.
     pub output: IR<OD>,
-    /// Maps each operation in `output` back to the source operation it was translated from.
+    /// Maps operations and registered values in `output` back to their source IDs.
     pub provenance_map: ProvenanceMap,
+}
+
+impl<OD: Dialect> Translation<OD> {
+    /// Borrows the output IR with its source operation and value IDs as annotations.
+    ///
+    /// Operations and values created during the translation are annotated with the source ID
+    /// registered for them. Elements added to [`output`](Self::output) after the translation, and
+    /// output values for which the driver registered no translation, are annotated with `None`.
+    pub fn annotated_output(&self) -> AnnIR<'_, OD, Option<OpId>, Option<ValId>> {
+        let op_annotations = self.output.totally_mapped_opmap(|op| {
+            if self.provenance_map.operations.may_store(&op) {
+                self.provenance_map
+                    .operations
+                    .get(&op)
+                    .map(|provenance| *provenance)
+            } else {
+                None
+            }
+        });
+        let val_annotations = self.output.totally_mapped_valmap(|val| {
+            if self.provenance_map.values.may_store(&val) {
+                self.provenance_map.values.get(&val).copied()
+            } else {
+                None
+            }
+        });
+        AnnIR::new(&self.output, op_annotations, val_annotations)
+    }
 }
 
 /// Mutable translation state for dialect-to-dialect IR translation.
@@ -96,7 +138,8 @@ pub struct Translation<OD: Dialect> {
 pub struct Translator<ID: Dialect, OD: Dialect> {
     pub output: IR<OD>,
     valmap: ValMap<ValId>,
-    provenance_map: ProvenanceMap,
+    operation_provenance: Vec<Option<OpId>>,
+    value_provenance: Vec<Option<ValId>>,
     current: Option<OpId>,
     phantom: PhantomData<ID>,
 }
@@ -120,10 +163,13 @@ impl<ID: Dialect, OD: Dialect> Translator<ID, OD> {
     /// or [`translate_val`](Self::translate_val) calls. The number of returned values is
     /// determined by `instr`'s signature.
     pub fn add_op(&mut self, instr: OD::InstructionSet, args: SmallVec<ValId>) -> SmallVec<ValId> {
-        let (_, valids) = self.output.add_op(instr, args);
-        self.provenance_map
-            .0
-            .push(Provenance(self.current.unwrap()));
+        let (opid, valids) = self.output.add_op(instr, args);
+        self.operation_provenance
+            .resize_with(opid.0 as usize + 1, || None);
+        self.operation_provenance[opid.0 as usize] = Some(self.current.unwrap());
+        if let Some(last) = valids.last() {
+            self.value_provenance.resize(last.0 as usize + 1, None);
+        }
         valids
     }
 
@@ -144,6 +190,8 @@ impl<ID: Dialect, OD: Dialect> Translator<ID, OD> {
             self.valmap.insert(old, new).is_none(),
             "Tried to register a translation twice for {old}"
         );
+        self.value_provenance.resize(new.0 as usize + 1, None);
+        self.value_provenance[new.0 as usize] = Some(old);
     }
 
     /// Performs a one-to-one operation translation.
@@ -170,9 +218,21 @@ impl<ID: Dialect, OD: Dialect> Translator<ID, OD> {
     }
 
     fn into_translation(self) -> Translation<OD> {
+        let mut operations = self.output.empty_opmap();
+        for op in self.output.walk_ops_linear() {
+            if let Some(Some(provenance)) = self.operation_provenance.get(op.get_id().0 as usize) {
+                operations.insert(&op, *provenance);
+            }
+        }
+        let mut values = self.output.empty_valmap();
+        for val in self.output.walk_vals_linear() {
+            if let Some(Some(provenance)) = self.value_provenance.get(val.get_id().0 as usize) {
+                values.insert(&val, *provenance);
+            }
+        }
         Translation {
             output: self.output,
-            provenance_map: self.provenance_map,
+            provenance_map: ProvenanceMap { operations, values },
         }
     }
 }
@@ -191,12 +251,12 @@ pub fn translate<'a, ID: Dialect, OD: Dialect>(
 ) -> Translation<OD> {
     let output = IR::empty();
     let valmap = ir.empty_valmap();
-    let provenance_map = ProvenanceMap(Vec::new());
     let current = None;
     let mut translator = Translator {
         output,
         valmap,
-        provenance_map,
+        operation_provenance: Vec::new(),
+        value_provenance: Vec::new(),
         current,
         phantom: PhantomData,
     };
@@ -236,12 +296,12 @@ pub fn translate_ann<'a, 'b, ID: Dialect, OpAnn: Annotation, ValAnn: Annotation,
 ) -> Translation<OD> {
     let output = IR::with_capacity(ir.n_vals(), ir.n_ops());
     let valmap = ir.empty_valmap();
-    let provenance_map = ProvenanceMap(Vec::new());
     let current = None;
     let mut translator = Translator {
         output,
         valmap,
-        provenance_map,
+        operation_provenance: Vec::new(),
+        value_provenance: Vec::new(),
         current,
         phantom: PhantomData,
     };
@@ -266,4 +326,60 @@ pub fn translate_ann<'a, 'b, ID: Dialect, OpAnn: Annotation, ValAnn: Annotation,
         }
     }
     translator.into_translation()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testlang::{TestInstructionSet, TestLang};
+    use zhc_utils::svec;
+
+    #[test]
+    fn annotated_output_tracks_operation_and_value_provenance() {
+        let mut source = IR::<TestLang>::empty();
+        let (input_op, input_vals) =
+            source.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![]);
+        let (inc_op, inc_vals) = source.add_op(TestInstructionSet::Inc, svec![input_vals[0]]);
+
+        let mut translation: Translation<TestLang> =
+            translate(&source, Order::Linear, |op, translator| {
+                match op.get_instruction() {
+                    TestInstructionSet::IntInput { pos } => {
+                        translator
+                            .output
+                            .add_op(TestInstructionSet::BoolConstant { val: true }, svec![]);
+                        let translated =
+                            translator.add_op(TestInstructionSet::IntInput { pos: *pos }, svec![]);
+                        translator.register_translation(op.get_return_valids()[0], translated[0]);
+                    }
+                    instruction => translator.direct_translation(&op, instruction.clone()),
+                }
+            });
+
+        let translated_inc = translation
+            .output
+            .walk_vals_linear()
+            .last()
+            .unwrap()
+            .get_id();
+        translation
+            .output
+            .add_op(TestInstructionSet::Inc, svec![translated_inc]);
+
+        let annotated = translation.annotated_output();
+        let op_annotations: Vec<_> = annotated
+            .walk_ops_linear()
+            .map(|op| *op.get_annotation())
+            .collect();
+        let val_annotations: Vec<_> = annotated
+            .walk_vals_linear()
+            .map(|val| *val.get_annotation())
+            .collect();
+
+        assert_eq!(op_annotations, [None, Some(input_op), Some(inc_op), None]);
+        assert_eq!(
+            val_annotations,
+            [None, Some(input_vals[0]), Some(inc_vals[0]), None]
+        );
+    }
 }

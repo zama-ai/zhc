@@ -15,6 +15,7 @@
 //! [`pipelinelang`] is an auxiliary dialect used for compilation pipeline
 //! construction.
 
+pub mod coarselang;
 pub mod doplang;
 pub mod hpulang;
 pub mod ioplang;
