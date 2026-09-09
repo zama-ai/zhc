@@ -8,7 +8,7 @@ use tfhe::{
     shortint::parameters::v1_6::V1_6_PARAM_MESSAGE_2_CARRY_2_KS32_PBS_TUNIFORM_2M128,
 };
 use zhc::{
-    builder::CiphertextSpec,
+    builder::IntegerCiphertextSpec,
     compat::Iop,
     prelude::{Pipeline, PipelineExt},
 };
@@ -16,7 +16,7 @@ use zhc_vm::{Value, ValueMut, Vm, VmConfigExt};
 
 fn bench_vm(c: &mut Criterion) {
     let p = V1_6_PARAM_MESSAGE_2_CARRY_2_KS32_PBS_TUNIFORM_2M128;
-    let spec = CiphertextSpec::new(64, 2, 2);
+    let spec = IntegerCiphertextSpec::new(64, 2, 2);
     let n_blocks = 64 / 2; // 2 message bits per block over a 64-bit integer.
 
     let config = VmConfig::from_ks32_params(p, 1024);

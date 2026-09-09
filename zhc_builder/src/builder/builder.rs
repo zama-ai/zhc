@@ -9,17 +9,19 @@
 //! ```rust,no_run
 //! # use zhc_builder::*;
 //! let builder = Builder::new(CiphertextBlockSpec(2, 2));
-//! let input = builder.ciphertext_input(8);
-//! let blocks = builder.ciphertext_split(&input);
+//! let input = builder.integer_ciphertext_input(8);
+//! let blocks = builder.integer_ciphertext_split(&input);
 //! let doubled: Vec<_> = blocks.iter().map(|b| builder.block_add(b, b)).collect();
-//! let output = builder.ciphertext_join(&doubled, None);
-//! builder.ciphertext_output(&output);
+//! let output = builder.integer_ciphertext_join(&doubled, None);
+//! builder.integer_ciphertext_output(&output);
 //! let ir = builder.optimize_ir();
 //! ```
 
 use crate::{
     Interpreter,
-    builder::{Ciphertext, CiphertextBlock, Plaintext, PlaintextBlock},
+    builder::{
+        BoolCiphertext, CiphertextBlock, IntegerCiphertext, IntegerPlaintext, PlaintextBlock,
+    },
 };
 use std::{
     cell::{Ref, RefCell, RefMut},
@@ -116,10 +118,10 @@ impl InnerBuilder {
 /// # Input / Output Ordering
 ///
 /// Inputs and outputs are **positional**: they are recorded in the order they are
-/// declared. The first call to [`ciphertext_input`](Self::ciphertext_input)
-/// or [`plaintext_input`](Self::plaintext_input) becomes input 0, the
+/// declared. The first call to [`integer_ciphertext_input`](Self::integer_ciphertext_input)
+/// or [`integer_plaintext_input`](Self::integer_plaintext_input) becomes input 0, the
 /// second becomes input 1, and so on — both kinds share the same index space. Likewise,
-/// the first [`ciphertext_output`](Self::ciphertext_output) becomes
+/// the first [`integer_ciphertext_output`](Self::integer_ciphertext_output) becomes
 /// output 0. This ordering defines the circuit's [`signature`](Self::signature) and must
 /// match the order of values passed to [`Interpreter::with_inputs`].
 ///
@@ -138,11 +140,11 @@ impl InnerBuilder {
 /// ```rust,no_run
 /// # use zhc_builder::*;
 /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-/// let input = builder.ciphertext_input(8);
-/// let blocks = builder.ciphertext_split(&input);
+/// let input = builder.integer_ciphertext_input(8);
+/// let blocks = builder.integer_ciphertext_split(&input);
 /// // ... operate on blocks ...
-/// let output = builder.ciphertext_join(&blocks, None);
-/// builder.ciphertext_output(&output);
+/// let output = builder.integer_ciphertext_join(&blocks, None);
+/// builder.integer_ciphertext_output(&output);
 /// let ir = builder.optimize_ir();
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -248,8 +250,8 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let a = builder.ciphertext_input(8);
-    /// builder.ciphertext_output(&a);
+    /// let a = builder.integer_ciphertext_input(8);
+    /// builder.integer_ciphertext_output(&a);
     /// let outputs = builder.interpret()
     ///     .with_inputs(&[a.make_value(42)])
     ///     .get_outputs();
@@ -286,8 +288,11 @@ impl Builder {
                 .get_args()
                 .iter()
                 .map(|typ| match typ {
-                    Type::Ciphertext(spec) => IopValue::Ciphertext(spec.random()),
-                    Type::Plaintext(spec) => IopValue::Plaintext(spec.random()),
+                    Type::IntegerCiphertext(spec) => IopValue::IntegerCiphertext(spec.random()),
+                    Type::BoolCiphertext(spec) => IopValue::BoolCiphertext(
+                        zhc_crypto::integer_semantics::EmulatedBoolCiphertext::random(*spec),
+                    ),
+                    Type::IntegerPlaintext(spec) => IopValue::IntegerPlaintext(spec.random()),
                 })
                 .cosvec();
             if let Some(expectations) = gen_expect(inputs.as_slice()) {
@@ -337,7 +342,7 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// # let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// # let ct = builder.ciphertext_input(4);
+    /// # let ct = builder.integer_ciphertext_input(4);
     /// builder.draw(IrKind::Original).open().unwrap();
     /// ```
     pub fn draw(&self, kind: IrKind) -> FileHandle {
@@ -371,7 +376,7 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// # let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// # let ct = builder.ciphertext_input(4);
+    /// # let ct = builder.integer_ciphertext_input(4);
     /// builder.draw_partitions(IrKind::Original).open().unwrap();
     /// ```
     pub fn draw_partitions(&self, kind: IrKind) -> FileHandle {
@@ -405,7 +410,7 @@ impl Builder {
     /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
     /// let commented = builder.comment("add phase");
-    /// let ct = commented.ciphertext_input(4);
+    /// let ct = commented.integer_ciphertext_input(4);
     /// // Instructions through `commented` carry the "add phase" annotation.
     /// ```
     pub fn comment(&self, comment: impl Into<String>) -> Builder {
@@ -435,7 +440,7 @@ impl Builder {
     /// # let builder = Builder::new(CiphertextBlockSpec(2, 2));
     /// let stage = builder.new_partition("Stage 1");
     /// // Operations built from here on belong to the "Stage 1" partition.
-    /// let ct = builder.ciphertext_input(4);
+    /// let ct = builder.integer_ciphertext_input(4);
     /// ```
     pub fn new_partition(&self, metadata: impl AsRef<str>) -> PartitionId {
         let mut partition = self.partition.borrow_mut();
@@ -462,7 +467,7 @@ impl Builder {
     /// # use zhc_builder::*;
     /// # let builder = Builder::new(CiphertextBlockSpec(2, 2));
     /// let stage = builder.new_partition("Stage 1");
-    /// let ct = builder.ciphertext_input(4);
+    /// let ct = builder.integer_ciphertext_input(4);
     /// assert_eq!(builder.get_partition_by_id(stage.id), Some(stage));
     /// ```
     pub fn get_partition_by_id(&self, id: PartitionIdRaw) -> Option<PartitionId> {
@@ -543,7 +548,7 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// # let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// # let ct = builder.ciphertext_input(4);
+    /// # let ct = builder.integer_ciphertext_input(4);
     /// let per_op = builder.partitions(IrKind::Original);
     /// ```
     pub fn partitions(&self, kind: IrKind) -> OpMap<PartitionId> {
@@ -565,7 +570,7 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// # let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// # let ct = builder.ciphertext_input(4);
+    /// # let ct = builder.integer_ciphertext_input(4);
     /// let table = builder.partitions_table(IrKind::Original);
     /// ```
     pub fn partitions_table(&self, kind: IrKind) -> PartitionTable {
@@ -602,8 +607,8 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.ciphertext_input(4);
-    /// let blocks = builder.ciphertext_split(&ct);
+    /// let ct = builder.integer_ciphertext_input(4);
+    /// let blocks = builder.integer_ciphertext_split(&ct);
     /// let result = builder.with_comment("carry propagation", || {
     ///     builder.block_add(&blocks[0], &blocks[1])
     /// });
@@ -629,25 +634,89 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let input = builder.ciphertext_input(8);
-    /// let blocks = builder.ciphertext_split(&input);
+    /// let input = builder.integer_ciphertext_input(8);
+    /// let blocks = builder.integer_ciphertext_split(&input);
     /// ```
-    pub fn ciphertext_input(&self, int_size: u16) -> Ciphertext {
-        let spec = self.spec.ciphertext_spec(int_size);
-        let pos = self.inner_mut().push_arg_type(Type::Ciphertext(spec));
+    pub fn integer_ciphertext_input(&self, int_size: u16) -> IntegerCiphertext {
+        let spec = self.spec.integer_ciphertext_spec(int_size);
+        let pos = self
+            .inner_mut()
+            .push_arg_type(Type::IntegerCiphertext(spec));
         let (_, inp) = self.inner_mut().insert_op(
-            IopInstructionSet::InputCiphertext { pos, int_size },
+            IopInstructionSet::InputIntegerCiphertext { pos, int_size },
             svec![],
             self.current_hierarchy(),
             self.current_partition(),
         );
-        Ciphertext {
+        IntegerCiphertext {
             valid: inp[0],
             spec,
         }
     }
 
-    /// Decomposes a [`Ciphertext`] into its individual radix blocks.
+    /// Declares an encrypted Boolean input backed by one clean ciphertext block.
+    pub fn bool_ciphertext_input(&self) -> BoolCiphertext {
+        let pos = self
+            .inner_mut()
+            .push_arg_type(Type::BoolCiphertext(self.spec));
+        let (_, inp) = self.inner_mut().insert_op(
+            IopInstructionSet::InputBoolCiphertext { pos },
+            svec![],
+            self.current_hierarchy(),
+            self.current_partition(),
+        );
+        BoolCiphertext {
+            valid: inp[0],
+            spec: self.spec,
+        }
+    }
+
+    /// Wraps a block known to contain a clean zero-or-one value as a Boolean ciphertext.
+    pub fn bool_ciphertext_from_block(&self, block: impl AsRef<CiphertextBlock>) -> BoolCiphertext {
+        let block = block.as_ref();
+        assert_eq!(block.spec(), self.spec, "Spec mismatch.");
+        let (_, ret) = self.inner_mut().insert_op(
+            IopInstructionSet::BoolFromBlock,
+            svec![block.valid],
+            self.current_hierarchy(),
+            self.current_partition(),
+        );
+        BoolCiphertext {
+            valid: ret[0],
+            spec: self.spec,
+        }
+    }
+
+    /// Returns the sole clean block backing an encrypted Boolean.
+    pub fn bool_ciphertext_get_block(&self, value: impl AsRef<BoolCiphertext>) -> CiphertextBlock {
+        let value = value.as_ref();
+        let (_, ret) = self.inner_mut().insert_op(
+            IopInstructionSet::ExtractBoolBlock,
+            svec![value.valid],
+            self.current_hierarchy(),
+            self.current_partition(),
+        );
+        CiphertextBlock {
+            valid: ret[0],
+            spec: value.spec,
+        }
+    }
+
+    /// Declares an encrypted Boolean output.
+    pub fn bool_ciphertext_output(&self, value: impl AsRef<BoolCiphertext>) {
+        let value = value.as_ref();
+        let pos = self
+            .inner_mut()
+            .push_ret_type(Type::BoolCiphertext(value.spec));
+        self.inner_mut().insert_op(
+            IopInstructionSet::OutputBoolCiphertext { pos },
+            svec![value.valid],
+            self.current_hierarchy(),
+            self.current_partition(),
+        );
+    }
+
+    /// Decomposes an [`IntegerCiphertext`] into its individual radix blocks.
     ///
     /// Returns one [`CiphertextBlock`] per block in the radix-decomposed
     /// representation, ordered from least-significant to most-significant digit. The
@@ -658,16 +727,19 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.ciphertext_input(8);
-    /// let blocks = builder.ciphertext_split(&ct);
+    /// let ct = builder.integer_ciphertext_input(8);
+    /// let blocks = builder.integer_ciphertext_split(&ct);
     /// assert_eq!(blocks.len(), 4); // 8 bits / 2-bit message = 4 blocks
     /// ```
-    pub fn ciphertext_split(&self, inp: impl AsRef<Ciphertext>) -> Vec<CiphertextBlock> {
+    pub fn integer_ciphertext_split(
+        &self,
+        inp: impl AsRef<IntegerCiphertext>,
+    ) -> Vec<CiphertextBlock> {
         let inp = inp.as_ref();
         (0..inp.spec().block_count())
             .map(|index| {
                 let (_, ret) = self.inner_mut().insert_op(
-                    IopInstructionSet::ExtractCtBlock { index },
+                    IopInstructionSet::ExtractIntegerCiphertextBlock { index },
                     svec![inp.valid],
                     self.current_hierarchy(),
                     self.current_partition(),
@@ -694,31 +766,31 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.ciphertext_input(8);
-    /// let pt = builder.plaintext_input(8);
-    /// let ct_blocks = builder.ciphertext_split(&ct);
-    /// let pt_blocks = builder.plaintext_split(&pt);
+    /// let ct = builder.integer_ciphertext_input(8);
+    /// let pt = builder.integer_plaintext_input(8);
+    /// let ct_blocks = builder.integer_ciphertext_split(&ct);
+    /// let pt_blocks = builder.integer_plaintext_split(&pt);
     /// let sum = builder.block_add_plaintext(&ct_blocks[0], &pt_blocks[0]);
     /// ```
-    pub fn plaintext_input(&self, int_size: u16) -> Plaintext {
+    pub fn integer_plaintext_input(&self, int_size: u16) -> IntegerPlaintext {
         let spec = self
             .spec
             .matching_plaintext_block_spec()
-            .plaintext_spec(int_size);
-        let pos = self.inner_mut().push_arg_type(Type::Plaintext(spec));
+            .integer_plaintext_spec(int_size);
+        let pos = self.inner_mut().push_arg_type(Type::IntegerPlaintext(spec));
         let (_, inp) = self.inner_mut().insert_op(
-            IopInstructionSet::InputPlaintext { pos, int_size },
+            IopInstructionSet::InputIntegerPlaintext { pos, int_size },
             svec![],
             self.current_hierarchy(),
             self.current_partition(),
         );
-        Plaintext {
+        IntegerPlaintext {
             valid: inp[0],
             spec,
         }
     }
 
-    /// Decomposes a [`Plaintext`] into its individual radix blocks.
+    /// Decomposes an [`IntegerPlaintext`] into its individual radix blocks.
     ///
     /// Returns one [`PlaintextBlock`] per digit in the radix-decomposed
     /// representation, ordered from least-significant to most-significant digit. The
@@ -729,16 +801,19 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let pt = builder.plaintext_input(8);
-    /// let blocks = builder.plaintext_split(&pt);
+    /// let pt = builder.integer_plaintext_input(8);
+    /// let blocks = builder.integer_plaintext_split(&pt);
     /// assert_eq!(blocks.len(), 4); // 8 bits / 2-bit message = 4 blocks
     /// ```
-    pub fn plaintext_split(&self, inp: impl AsRef<Plaintext>) -> Vec<PlaintextBlock> {
+    pub fn integer_plaintext_split(
+        &self,
+        inp: impl AsRef<IntegerPlaintext>,
+    ) -> Vec<PlaintextBlock> {
         let inp = inp.as_ref();
         (0..inp.spec().block_count())
             .map(|index| {
                 let (_, ret) = self.inner_mut().insert_op(
-                    IopInstructionSet::ExtractPtBlock { index },
+                    IopInstructionSet::ExtractIntegerPlaintextBlock { index },
                     svec![inp.valid],
                     self.current_hierarchy(),
                     self.current_partition(),
@@ -751,13 +826,12 @@ impl Builder {
             .collect()
     }
 
-    /// Reassembles a slice of radix blocks into a single [`Ciphertext`].
+    /// Reassembles a slice of radix blocks into a single [`IntegerCiphertext`].
     ///
     /// The blocks are stored in order, with block 0 as the least-significant radix block.
     /// When `int_size` is None, the total bit-width is inferred as
-    /// `blocks.len() * message_size`. When `int_size` is `Some`, it overrides the
-    /// bit-width explicitly. This is useful if the expected bit-width is not a multiple of
-    /// the message size.
+    /// `blocks.len() * message_size`. When `int_size` is `Some`, it selects a larger
+    /// block-aligned precision and missing high blocks are filled with zero.
     ///
     /// # Panics
     ///
@@ -769,21 +843,25 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let input = builder.ciphertext_input(8);
-    /// let blocks = builder.ciphertext_split(&input);
+    /// let input = builder.integer_ciphertext_input(8);
+    /// let blocks = builder.integer_ciphertext_split(&input);
     /// // ... operate on blocks ...
-    /// let ct = builder.ciphertext_join(&blocks, None);
-    /// builder.ciphertext_output(&ct);
+    /// let ct = builder.integer_ciphertext_join(&blocks, None);
+    /// builder.integer_ciphertext_output(&ct);
     /// ```
-    pub fn ciphertext_join(
+    pub fn integer_ciphertext_join(
         &self,
         blocks: impl AsRef<[CiphertextBlock]>,
         int_size: Option<u16>,
-    ) -> Ciphertext {
+    ) -> IntegerCiphertext {
         let blocks = blocks.as_ref();
         let int_size = match int_size {
             Some(int_size) => {
-                let max_blocks_count = int_size.div_ceil(self.spec().message_size().sas::<u16>());
+                assert!(
+                    int_size.is_multiple_of(self.spec().message_size().sas()),
+                    "Tried to join an integer ciphertext whose precision is not a multiple of the message size."
+                );
+                let max_blocks_count = int_size / self.spec().message_size().sas::<u16>();
                 if max_blocks_count < blocks.len().sas::<u16>() {
                     panic!(
                         "Tried to join ciphertext with specific int_size, but was given more blocks then expected. Expected {max_blocks_count}, found {}.",
@@ -794,9 +872,9 @@ impl Builder {
             }
             None => blocks.len().sas::<u16>() * self.spec.message_size().sas::<u16>(),
         };
-        let spec = self.spec.ciphertext_spec(int_size);
+        let spec = self.spec.integer_ciphertext_spec(int_size);
         let (_, acc) = self.inner_mut().insert_op(
-            IopInstructionSet::DeclareCiphertext { int_size },
+            IopInstructionSet::DeclareIntegerCiphertext { int_size },
             svec![],
             self.current_hierarchy(),
             self.current_partition(),
@@ -811,7 +889,7 @@ impl Builder {
         for index in 0..spec.block_count() {
             let index = index.sas::<u8>();
             let (_, ret) = self.inner_mut().insert_op(
-                IopInstructionSet::StoreCtBlock { index },
+                IopInstructionSet::StoreIntegerCiphertextBlock { index },
                 svec![zero[0], acc],
                 self.current_hierarchy(),
                 self.current_partition(),
@@ -821,14 +899,14 @@ impl Builder {
         for (index, block) in blocks.iter().enumerate() {
             let index = index.sas::<u8>();
             let (_, ret) = self.inner_mut().insert_op(
-                IopInstructionSet::StoreCtBlock { index },
+                IopInstructionSet::StoreIntegerCiphertextBlock { index },
                 svec![block.valid, acc],
                 self.current_hierarchy(),
                 self.current_partition(),
             );
             acc = ret[0];
         }
-        Ciphertext { valid: acc, spec }
+        IntegerCiphertext { valid: acc, spec }
     }
 
     /// Creates a new IR node that aliases an existing ciphertext.
@@ -842,20 +920,23 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let input = builder.ciphertext_input(8);
-    /// let labeled = builder.comment("after input").ciphertext_inspect(&input);
+    /// let input = builder.integer_ciphertext_input(8);
+    /// let labeled = builder.comment("after input").integer_ciphertext_inspect(&input);
     /// ```
-    pub fn ciphertext_inspect(&self, src: impl AsRef<Ciphertext>) -> Ciphertext {
+    pub fn integer_ciphertext_inspect(
+        &self,
+        src: impl AsRef<IntegerCiphertext>,
+    ) -> IntegerCiphertext {
         let src = src.as_ref();
         let (_node, ret) = self.inner_mut().insert_op(
             IopInstructionSet::Inspect {
-                typ: IopTypeSystem::Ciphertext,
+                typ: IopTypeSystem::IntegerCiphertext,
             },
             svec![src.valid],
             self.current_hierarchy(),
             self.current_partition(),
         );
-        Ciphertext {
+        IntegerCiphertext {
             valid: ret[0],
             spec: src.spec(),
         }
@@ -872,14 +953,16 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let input = builder.ciphertext_input(8);
-    /// builder.ciphertext_output(&input);
+    /// let input = builder.integer_ciphertext_input(8);
+    /// builder.integer_ciphertext_output(&input);
     /// ```
-    pub fn ciphertext_output(&self, ct: impl AsRef<Ciphertext>) {
+    pub fn integer_ciphertext_output(&self, ct: impl AsRef<IntegerCiphertext>) {
         let ct = ct.as_ref();
-        let pos = self.inner_mut().push_ret_type(Type::Ciphertext(ct.spec()));
+        let pos = self
+            .inner_mut()
+            .push_ret_type(Type::IntegerCiphertext(ct.spec()));
         self.inner_mut().insert_op(
-            IopInstructionSet::OutputCiphertext { pos },
+            IopInstructionSet::OutputIntegerCiphertext { pos },
             svec![ct.valid],
             self.current_hierarchy(),
             self.current_partition(),
@@ -896,8 +979,8 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.ciphertext_input(4);
-    /// let blocks = builder.ciphertext_split(&ct);
+    /// let ct = builder.integer_ciphertext_input(4);
+    /// let blocks = builder.integer_ciphertext_split(&ct);
     /// let one = builder.block_let_plaintext(1);
     /// let incremented = builder.block_add_plaintext(&blocks[0], &one);
     /// ```
@@ -932,8 +1015,8 @@ impl Builder {
     /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
     /// let zero = builder.block_let_ciphertext(0);
-    /// let ct = builder.ciphertext_input(4);
-    /// let blocks = builder.ciphertext_split(&ct);
+    /// let ct = builder.integer_ciphertext_input(4);
+    /// let blocks = builder.integer_ciphertext_split(&ct);
     /// let sum = builder.block_add(&zero, &blocks[0]); // 0 + blocks[0]
     /// ```
     pub fn block_let_ciphertext(&self, value: u8) -> CiphertextBlock {
@@ -955,8 +1038,8 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.ciphertext_input(4);
-    /// let blocks = builder.ciphertext_split(&ct);
+    /// let ct = builder.integer_ciphertext_input(4);
+    /// let blocks = builder.integer_ciphertext_split(&ct);
     /// let labeled = builder.comment("lsb").block_inspect(&blocks[0]);
     /// ```
     pub fn block_inspect(&self, src: impl AsRef<CiphertextBlock>) -> CiphertextBlock {
@@ -1029,8 +1112,8 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.ciphertext_input(4);
-    /// let blocks = builder.ciphertext_split(&ct);
+    /// let ct = builder.integer_ciphertext_input(4);
+    /// let blocks = builder.integer_ciphertext_split(&ct);
     /// let sum = builder.block_add(&blocks[0], &blocks[1]);
     /// ```
     pub fn block_add(
@@ -1051,8 +1134,8 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.ciphertext_input(4);
-    /// let blocks = builder.ciphertext_split(&ct);
+    /// let ct = builder.integer_ciphertext_input(4);
+    /// let blocks = builder.integer_ciphertext_split(&ct);
     /// let sum = builder.block_temper_add(&blocks[0], &blocks[1]);
     /// ```
     pub fn block_temper_add(
@@ -1073,8 +1156,8 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.ciphertext_input(4);
-    /// let blocks = builder.ciphertext_split(&ct);
+    /// let ct = builder.integer_ciphertext_input(4);
+    /// let blocks = builder.integer_ciphertext_split(&ct);
     /// let sum = builder.block_wrapping_add(&blocks[0], &blocks[1]);
     /// ```
     pub fn block_wrapping_add(
@@ -1111,8 +1194,8 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.ciphertext_input(4);
-    /// let blocks = builder.ciphertext_split(&ct);
+    /// let ct = builder.integer_ciphertext_input(4);
+    /// let blocks = builder.integer_ciphertext_split(&ct);
     /// let diff = builder.block_sub(&blocks[1], &blocks[0]);
     /// ```
     pub fn block_sub(
@@ -1147,8 +1230,8 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.ciphertext_input(4);
-    /// let blocks = builder.ciphertext_split(&ct);
+    /// let ct = builder.integer_ciphertext_input(4);
+    /// let blocks = builder.integer_ciphertext_split(&ct);
     /// let diff = builder.block_wrapping_sub(&blocks[0], &blocks[1]);
     /// ```
     pub fn block_wrapping_sub(
@@ -1192,8 +1275,8 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.ciphertext_input(4);
-    /// let blocks = builder.ciphertext_split(&ct);
+    /// let ct = builder.integer_ciphertext_input(4);
+    /// let blocks = builder.integer_ciphertext_split(&ct);
     /// let shifted = builder.block_shl(&blocks[0], 1);
     /// ```
     pub fn block_shl(&self, src: impl AsRef<CiphertextBlock>, amount: u8) -> CiphertextBlock {
@@ -1250,8 +1333,8 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.ciphertext_input(4);
-    /// let blocks = builder.ciphertext_split(&ct);
+    /// let ct = builder.integer_ciphertext_input(4);
+    /// let blocks = builder.integer_ciphertext_split(&ct);
     /// let one = builder.block_let_plaintext(1);
     /// let incremented = builder.block_add_plaintext(&blocks[0], &one);
     /// ```
@@ -1285,8 +1368,8 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.ciphertext_input(4);
-    /// let blocks = builder.ciphertext_split(&ct);
+    /// let ct = builder.integer_ciphertext_input(4);
+    /// let blocks = builder.integer_ciphertext_split(&ct);
     /// let one = builder.block_let_plaintext(1);
     /// let incremented = builder.block_wrapping_add_plaintext(&blocks[0], &one);
     /// ```
@@ -1324,8 +1407,8 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.ciphertext_input(4);
-    /// let blocks = builder.ciphertext_split(&ct);
+    /// let ct = builder.integer_ciphertext_input(4);
+    /// let blocks = builder.integer_ciphertext_split(&ct);
     /// let one = builder.block_let_plaintext(1);
     /// let decremented = builder.block_sub_plaintext(&blocks[0], &one);
     /// ```
@@ -1389,8 +1472,8 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.ciphertext_input(4);
-    /// let blocks = builder.ciphertext_split(&ct);
+    /// let ct = builder.integer_ciphertext_input(4);
+    /// let blocks = builder.integer_ciphertext_split(&ct);
     /// let three = builder.block_let_plaintext(3);
     /// let result = builder.block_plaintext_sub(&three, &blocks[0]); // 3 - blocks[0]
     /// ```
@@ -1452,8 +1535,8 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.ciphertext_input(1);
-    /// let blocks = builder.ciphertext_split(&ct);
+    /// let ct = builder.integer_ciphertext_input(1);
+    /// let blocks = builder.integer_ciphertext_split(&ct);
     /// let two = builder.block_let_plaintext(2);
     /// let doubled = builder.block_mul_plaintext(&blocks[0], &two);
     /// ```
@@ -1523,8 +1606,8 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.ciphertext_input(4);
-    /// let blocks = builder.ciphertext_split(&ct);
+    /// let ct = builder.integer_ciphertext_input(4);
+    /// let blocks = builder.integer_ciphertext_split(&ct);
     /// // Compute blocks[0] * 3 + blocks[1]
     /// let mac = builder.block_mac(&blocks[0], &blocks[1], 3);
     /// ```
@@ -1607,8 +1690,8 @@ impl Builder {
     /// # use zhc_builder::*;
     /// # use zhc_langs::ioplang::Lut1Def;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.ciphertext_input(4);
-    /// let blocks = builder.ciphertext_split(&ct);
+    /// let ct = builder.integer_ciphertext_input(4);
+    /// let blocks = builder.integer_ciphertext_split(&ct);
     /// let packed = builder.block_pack(&blocks[1], &blocks[0]);
     /// let result = builder.block_lookup(&packed, Lut1Def::MsgOnly);
     /// ```
@@ -1661,8 +1744,8 @@ impl Builder {
     /// # use zhc_builder::*;
     /// # use zhc_langs::ioplang::Lut1Def;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.ciphertext_input(4);
-    /// let blocks = builder.ciphertext_split(&ct);
+    /// let ct = builder.integer_ciphertext_input(4);
+    /// let blocks = builder.integer_ciphertext_split(&ct);
     /// let result = builder.block_pack_then_lookup(&blocks[1], &blocks[0], Lut1Def::MsgOnly);
     /// ```
     pub fn block_pack_then_lookup(
@@ -1687,8 +1770,8 @@ impl Builder {
     /// # use zhc_builder::*;
     /// # use zhc_langs::ioplang::Lut1Def;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.ciphertext_input(4);
-    /// let blocks = builder.ciphertext_split(&ct);
+    /// let ct = builder.integer_ciphertext_input(4);
+    /// let blocks = builder.integer_ciphertext_split(&ct);
     /// // Compute blocks[0] * 2 + blocks[1], then extract the message
     /// let result = builder.block_mac_then_lookup(&blocks[0], &blocks[1], 2, Lut1Def::MsgOnly);
     /// ```
@@ -1720,8 +1803,8 @@ impl Builder {
     /// # use zhc_builder::*;
     /// # use zhc_langs::ioplang::Lut1Def;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.ciphertext_input(4);
-    /// let blocks = builder.ciphertext_split(&ct);
+    /// let ct = builder.integer_ciphertext_input(4);
+    /// let blocks = builder.integer_ciphertext_split(&ct);
     /// let out = builder.block_lookup_with(&blocks[0], Lut1Def::MsgOnly, LookupCheck::AllowInputPadding);
     /// ```
     pub fn block_lookup_with(
@@ -1750,8 +1833,8 @@ impl Builder {
     /// # use zhc_builder::*;
     /// # use zhc_langs::ioplang::Lut1Def;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.ciphertext_input(4);
-    /// let blocks = builder.ciphertext_split(&ct);
+    /// let ct = builder.integer_ciphertext_input(4);
+    /// let blocks = builder.integer_ciphertext_split(&ct);
     /// // Extract only the message bits, clearing the carry.
     /// let clean = builder.block_lookup(&blocks[0], Lut1Def::MsgOnly);
     /// ```
@@ -1772,8 +1855,8 @@ impl Builder {
     /// # use zhc_builder::*;
     /// # use zhc_langs::ioplang::Lut1Def;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.ciphertext_input(4);
-    /// let blocks = builder.ciphertext_split(&ct);
+    /// let ct = builder.integer_ciphertext_input(4);
+    /// let blocks = builder.integer_ciphertext_split(&ct);
     /// let result = builder.block_padding_lookup(&blocks[0], Lut1Def::MsgOnly);
     /// ```
     pub fn block_padding_lookup(
@@ -1796,8 +1879,8 @@ impl Builder {
     /// # use zhc_builder::*;
     /// # use zhc_langs::ioplang::Lut1Def;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.ciphertext_input(4);
-    /// let blocks = builder.ciphertext_split(&ct);
+    /// let ct = builder.integer_ciphertext_input(4);
+    /// let blocks = builder.integer_ciphertext_split(&ct);
     /// let result = builder.block_wrapping_lookup(&blocks[0], Lut1Def::MsgOnly);
     /// ```
     pub fn block_wrapping_lookup(
@@ -1842,8 +1925,8 @@ impl Builder {
     /// # use zhc_builder::*;
     /// # use zhc_langs::ioplang::Lut2Def;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.ciphertext_input(4);
-    /// let blocks = builder.ciphertext_split(&ct);
+    /// let ct = builder.integer_ciphertext_input(4);
+    /// let blocks = builder.integer_ciphertext_split(&ct);
     /// let packed = builder.block_pack(&blocks[1], &blocks[0]);
     /// let (msg, carry) = builder.block_lookup2(&packed, Lut2Def::ManyCarryMsg);
     /// ```
@@ -1884,8 +1967,8 @@ impl Builder {
     /// # use zhc_builder::*;
     /// # use zhc_langs::ioplang::Lut4Def;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.ciphertext_input(2);
-    /// let blocks = builder.ciphertext_split(&ct);
+    /// let ct = builder.integer_ciphertext_input(2);
+    /// let blocks = builder.integer_ciphertext_split(&ct);
     /// let def = Lut4Def::custom("shifts", [
     ///     |b| b,
     ///     |b| b.spec().from_data((b.raw_message_bits() << 1) & b.spec().data_mask()),
@@ -1953,8 +2036,8 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.ciphertext_input(8);
-    /// let blocks = builder.ciphertext_split(&ct); // 4 blocks
+    /// let ct = builder.integer_ciphertext_input(8);
+    /// let blocks = builder.integer_ciphertext_split(&ct); // 4 blocks
     /// let packed = builder.vector_pack(&blocks);  // 2 packed blocks
     /// ```
     pub fn vector_pack(&self, blocks: impl AsRef<[CiphertextBlock]>) -> Vec<CiphertextBlock> {
@@ -1985,8 +2068,8 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.ciphertext_input(8);
-    /// let blocks = builder.ciphertext_split(&ct);
+    /// let ct = builder.integer_ciphertext_input(8);
+    /// let blocks = builder.integer_ciphertext_split(&ct);
     /// let cleaned = builder.vector_pack_then_clean(&blocks);
     /// ```
     pub fn vector_pack_then_clean(
@@ -2015,8 +2098,8 @@ impl Builder {
     /// # use zhc_builder::*;
     /// # use zhc_langs::ioplang::Lut1Def;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.ciphertext_input(8);
-    /// let blocks = builder.ciphertext_split(&ct);
+    /// let ct = builder.integer_ciphertext_input(8);
+    /// let blocks = builder.integer_ciphertext_split(&ct);
     /// let results = builder.vector_pack_then_lookup(&blocks, Lut1Def::MsgOnly);
     /// ```
     pub fn vector_pack_then_lookup(
@@ -2058,10 +2141,10 @@ impl Builder {
     /// # use zhc_builder::*;
     /// # use zhc_langs::ioplang::Lut1Def;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let a = builder.ciphertext_input(8);
-    /// let b = builder.ciphertext_input(8);
-    /// let a_blocks = builder.ciphertext_split(&a);
-    /// let b_blocks = builder.ciphertext_split(&b);
+    /// let a = builder.integer_ciphertext_input(8);
+    /// let b = builder.integer_ciphertext_input(8);
+    /// let a_blocks = builder.integer_ciphertext_split(&a);
+    /// let b_blocks = builder.integer_ciphertext_split(&b);
     /// let results = builder.vector_zip_then_lookup(
     ///     &a_blocks,
     ///     &b_blocks,
@@ -2107,8 +2190,8 @@ impl Builder {
     /// # use zhc_builder::*;
     /// # use zhc_langs::ioplang::Lut1Def;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.ciphertext_input(8);
-    /// let blocks = builder.ciphertext_split(&ct);
+    /// let ct = builder.integer_ciphertext_input(8);
+    /// let blocks = builder.integer_ciphertext_split(&ct);
     /// let cleaned = builder.vector_lookup(&blocks, Lut1Def::MsgOnly);
     /// ```
     pub fn vector_lookup(
@@ -2134,8 +2217,8 @@ impl Builder {
     /// # use zhc_builder::*;
     /// # use zhc_langs::ioplang::Lut2Def;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.ciphertext_input(8);
-    /// let blocks = builder.ciphertext_split(&ct);
+    /// let ct = builder.integer_ciphertext_input(8);
+    /// let blocks = builder.integer_ciphertext_split(&ct);
     /// let packed = builder.vector_pack(&blocks);
     /// let pairs = builder.vector_lookup2(&packed, Lut2Def::ManyCarryMsg);
     /// ```
@@ -2242,10 +2325,10 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let a = builder.ciphertext_input(8);
-    /// let b = builder.ciphertext_input(8);
-    /// let a_blocks = builder.ciphertext_split(&a);
-    /// let b_blocks = builder.ciphertext_split(&b);
+    /// let a = builder.integer_ciphertext_input(8);
+    /// let b = builder.integer_ciphertext_input(8);
+    /// let a_blocks = builder.integer_ciphertext_split(&a);
+    /// let b_blocks = builder.integer_ciphertext_split(&b);
     /// let sums = builder.vector_add(&a_blocks, &b_blocks, ExtensionBehavior::Panic);
     /// ```
     pub fn vector_add(
@@ -2287,8 +2370,8 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.ciphertext_input(4);        // 2 blocks
-    /// let blocks = builder.ciphertext_split(&ct);
+    /// let ct = builder.integer_ciphertext_input(4);        // 2 blocks
+    /// let blocks = builder.integer_ciphertext_split(&ct);
     /// let extended = builder.vector_unsigned_extension(&blocks, 4); // now 4 blocks
     /// ```
     pub fn vector_unsigned_extension(
@@ -2322,8 +2405,8 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.ciphertext_input(8);
-    /// let blocks = builder.ciphertext_split(&ct);
+    /// let ct = builder.integer_ciphertext_input(8);
+    /// let blocks = builder.integer_ciphertext_split(&ct);
     /// let total = builder.vector_add_reduce(&blocks);
     /// ```
     pub fn vector_add_reduce(&self, inp: impl AsRef<[CiphertextBlock]>) -> CiphertextBlock {
@@ -2348,8 +2431,8 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let ct = builder.ciphertext_input(8);
-    /// let blocks = builder.ciphertext_split(&ct);
+    /// let ct = builder.integer_ciphertext_input(8);
+    /// let blocks = builder.integer_ciphertext_split(&ct);
     /// let labeled = builder.comment("radix digits").vector_inspect(&blocks);
     /// ```
     pub fn vector_inspect(&self, inp: impl AsRef<[CiphertextBlock]>) -> Vec<CiphertextBlock> {
@@ -2367,7 +2450,7 @@ impl Builder {
     /// listed with a bar showing how much of the allowed noise budget it consumes, expressed as a
     /// percentage. A fresh ciphertext (input or bootstrap output) uses one unit; ciphertext
     /// additions add the operands' budgets; plaintext multiplications and packings scale them. A
-    /// value whose estimate exceeds the budget is flagged with a warning mark. Plaintext values
+    /// value whose estimate exceeds the budget is flagged with a warning mark. IntegerPlaintext values
     /// carry no noise and always show 0%.
     ///
     /// This is a debugging aid: use it to find where a circuit runs out of noise budget and where
@@ -2379,8 +2462,8 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let a = builder.ciphertext_split(builder.ciphertext_input(8));
-    /// let b = builder.ciphertext_split(builder.ciphertext_input(8));
+    /// let a = builder.integer_ciphertext_split(builder.integer_ciphertext_input(8));
+    /// let b = builder.integer_ciphertext_split(builder.integer_ciphertext_input(8));
     /// let sum = builder.vector_add(&a, &b, ExtensionBehavior::Panic);
     /// builder.dump_noise(); // each block of `sum` shows 17%
     /// ```
@@ -2410,10 +2493,10 @@ impl Builder {
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// let a = builder.ciphertext_split(builder.ciphertext_input(8));
-    /// let b = builder.ciphertext_split(builder.ciphertext_input(8));
+    /// let a = builder.integer_ciphertext_split(builder.integer_ciphertext_input(8));
+    /// let b = builder.integer_ciphertext_split(builder.integer_ciphertext_input(8));
     /// let sum = builder.vector_add(&a, &b, ExtensionBehavior::Panic);
-    /// builder.ciphertext_output(builder.ciphertext_join(&sum, None));
+    /// builder.integer_ciphertext_output(builder.integer_ciphertext_join(&sum, None));
     /// builder.check_noise(); // panics: the output was not bootstrapped
     /// ```
     pub fn check_noise(&self) {

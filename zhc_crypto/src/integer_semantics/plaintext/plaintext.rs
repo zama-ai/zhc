@@ -8,13 +8,13 @@ use super::super::{EmulatedPlaintextBlock, EmulatedPlaintextBlockStorage};
 ///
 /// This structure models a multi-block plaintext where a large integer is decomposed into
 /// multiple [`EmulatedPlaintextBlock`] values using a fixed radix. Each block holds a portion
-/// of the integer's bits according to a shared [`PlaintextSpec`].
+/// of the integer's bits according to a shared [`IntegerPlaintextSpec`].
 ///
-/// Plaintexts are created via [`PlaintextSpec::from_int`] or [`PlaintextSpec::random`].
+/// Plaintexts are created via [`IntegerPlaintextSpec::from_int`] or [`IntegerPlaintextSpec::random`].
 /// Individual blocks can be accessed with [`get_block`](Self::get_block). Block 0 is the least
 /// significant.
 ///
-/// Plaintext integers are used as scalar operands in mixed operations with ciphertexts. A
+/// Integer plaintexts are used as scalar operands in mixed operations with ciphertexts. A
 /// plaintext is compatible with a ciphertext when their specs have matching integer and block
 /// message sizes.
 ///
@@ -25,12 +25,12 @@ use super::super::{EmulatedPlaintextBlock, EmulatedPlaintextBlockStorage};
 /// - Default format: `{block_n}_.._{block_0}_pint` (decimal block values, MSB first)
 /// - Alternate format (`{:#?}`): binary representation with proper bit widths
 #[derive(Clone, Copy)]
-pub struct EmulatedPlaintext {
-    pub(crate) storage: EmulatedPlaintextStorage,
-    pub(crate) spec: PlaintextSpec,
+pub struct EmulatedIntegerPlaintext {
+    pub(crate) storage: EmulatedIntegerPlaintextStorage,
+    pub(crate) spec: IntegerPlaintextSpec,
 }
 
-impl EmulatedPlaintext {
+impl EmulatedIntegerPlaintext {
     /// Returns the number of blocks in this plaintext.
     pub fn len(&self) -> u8 {
         self.spec.block_count()
@@ -54,25 +54,25 @@ impl EmulatedPlaintext {
         }
     }
 
-    pub(crate) fn raw_mask_int(&self) -> EmulatedPlaintextStorage {
+    pub(crate) fn raw_mask_int(&self) -> EmulatedIntegerPlaintextStorage {
         self.storage & self.spec.int_mask()
     }
 
-    pub(crate) fn raw_int_bits(&self) -> EmulatedPlaintextStorage {
+    pub(crate) fn raw_int_bits(&self) -> EmulatedIntegerPlaintextStorage {
         self.raw_mask_int()
     }
 
     /// Returns the specification describing this plaintext's layout.
-    pub fn spec(&self) -> PlaintextSpec {
+    pub fn spec(&self) -> IntegerPlaintextSpec {
         self.spec
     }
 
-    pub fn as_storage(&self) -> EmulatedPlaintextStorage {
+    pub fn as_storage(&self) -> EmulatedIntegerPlaintextStorage {
         self.storage
     }
 }
 
-impl Debug for EmulatedPlaintext {
+impl Debug for EmulatedIntegerPlaintext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let alternate = f.alternate();
         (0..self.len())
@@ -95,15 +95,15 @@ impl Debug for EmulatedPlaintext {
     }
 }
 
-impl PartialEq for EmulatedPlaintext {
+impl PartialEq for EmulatedIntegerPlaintext {
     fn eq(&self, other: &Self) -> bool {
         self.raw_int_bits() == other.raw_int_bits() && self.spec == other.spec
     }
 }
 
-impl Eq for EmulatedPlaintext {}
+impl Eq for EmulatedIntegerPlaintext {}
 
-impl PartialOrd for EmulatedPlaintext {
+impl PartialOrd for EmulatedIntegerPlaintext {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         if self.spec != other.spec {
             None
@@ -113,14 +113,14 @@ impl PartialOrd for EmulatedPlaintext {
     }
 }
 
-impl std::hash::Hash for EmulatedPlaintext {
+impl std::hash::Hash for EmulatedIntegerPlaintext {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.raw_int_bits().hash(state);
         self.spec.hash(state);
     }
 }
 
-impl Dumpable for EmulatedPlaintext {
+impl Dumpable for EmulatedIntegerPlaintext {
     fn dump_to_string(&self) -> String {
         format!("{:#?}", self)
     }

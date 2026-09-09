@@ -9,9 +9,9 @@ use zhc_utils::{Dumpable, SafeAs};
 ///
 /// This structure models a multi-block ciphertext where a large integer is decomposed into
 /// multiple [`EmulatedCiphertextBlock`] values using a fixed radix. Each block holds a portion
-/// of the integer's message bits according to a shared [`CiphertextSpec`].
+/// of the integer's message bits according to a shared [`IntegerCiphertextSpec`].
 ///
-/// Ciphertexts are created via [`CiphertextSpec::from_int`] or [`CiphertextSpec::random`].
+/// Ciphertexts are created via [`IntegerCiphertextSpec::from_int`] or [`IntegerCiphertextSpec::random`].
 /// Individual blocks can be accessed with [`get_block`](Self::get_block) and modified with
 /// [`set_block`](Self::set_block). Block 0 is the least significant.
 ///
@@ -26,13 +26,13 @@ use zhc_utils::{Dumpable, SafeAs};
 /// - Default format: `{block_n}_.._{block_0}_cint` (decimal block values, MSB first)
 /// - Alternate format (`{:#?}`): binary representation with proper bit widths
 #[derive(Clone, Copy)]
-pub struct EmulatedCiphertext {
-    pub(crate) storage: EmulatedCiphertextStorage,
-    pub(crate) spec: CiphertextSpec,
+pub struct EmulatedIntegerCiphertext {
+    pub(crate) storage: EmulatedIntegerCiphertextStorage,
+    pub(crate) spec: IntegerCiphertextSpec,
 }
 
-impl EmulatedCiphertext {
-    pub fn new(storage: EmulatedCiphertextStorage, spec: CiphertextSpec) -> Self {
+impl EmulatedIntegerCiphertext {
+    pub fn new(storage: EmulatedIntegerCiphertextStorage, spec: IntegerCiphertextSpec) -> Self {
         Self { storage, spec }
     }
 
@@ -76,20 +76,20 @@ impl EmulatedCiphertext {
         assert!(block.is_message_only(), "Tried to set a dirty block.");
         let clearing = self.storage & self.spec.block_mask(ith);
         self.storage -= clearing;
-        self.storage += (block.storage.sas::<EmulatedCiphertextStorage>())
+        self.storage += (block.storage.sas::<EmulatedIntegerCiphertextStorage>())
             << (ith * self.spec.block_spec().message_size());
     }
 
-    pub(crate) fn raw_mask_int(&self) -> EmulatedCiphertextStorage {
+    pub(crate) fn raw_mask_int(&self) -> EmulatedIntegerCiphertextStorage {
         self.storage & self.spec.int_mask()
     }
 
-    pub(crate) fn raw_int_bits(&self) -> EmulatedCiphertextStorage {
+    pub(crate) fn raw_int_bits(&self) -> EmulatedIntegerCiphertextStorage {
         self.raw_mask_int()
     }
 
     /// Returns the specification describing this ciphertext's layout.
-    pub fn spec(&self) -> CiphertextSpec {
+    pub fn spec(&self) -> IntegerCiphertextSpec {
         self.spec
     }
 
@@ -97,12 +97,12 @@ impl EmulatedCiphertext {
     ///
     /// This is the integer value reconstructed from all blocks' message bits concatenated
     /// together.
-    pub fn as_storage(&self) -> EmulatedCiphertextStorage {
+    pub fn as_storage(&self) -> EmulatedIntegerCiphertextStorage {
         self.storage
     }
 }
 
-impl Debug for EmulatedCiphertext {
+impl Debug for EmulatedIntegerCiphertext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let alternate = f.alternate();
         (0..self.len())
@@ -125,22 +125,22 @@ impl Debug for EmulatedCiphertext {
     }
 }
 
-impl PartialEq for EmulatedCiphertext {
+impl PartialEq for EmulatedIntegerCiphertext {
     fn eq(&self, other: &Self) -> bool {
         self.raw_int_bits() == other.raw_int_bits() && self.spec == other.spec
     }
 }
 
-impl Eq for EmulatedCiphertext {}
+impl Eq for EmulatedIntegerCiphertext {}
 
-impl Hash for EmulatedCiphertext {
+impl Hash for EmulatedIntegerCiphertext {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.raw_int_bits().hash(state);
         self.spec.hash(state);
     }
 }
 
-impl PartialOrd for EmulatedCiphertext {
+impl PartialOrd for EmulatedIntegerCiphertext {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         if self.spec == other.spec {
             self.raw_int_bits().partial_cmp(&other.raw_int_bits())
@@ -150,7 +150,7 @@ impl PartialOrd for EmulatedCiphertext {
     }
 }
 
-impl Dumpable for EmulatedCiphertext {
+impl Dumpable for EmulatedIntegerCiphertext {
     fn dump_to_string(&self) -> String {
         format!("{:#?}", self)
     }

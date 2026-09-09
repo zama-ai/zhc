@@ -1,9 +1,9 @@
-use zhc_crypto::integer_semantics::CiphertextSpec;
+use zhc_crypto::integer_semantics::IntegerCiphertextSpec;
 use zhc_langs::ioplang::Lut1Def;
 
 use crate::{
     CiphertextBlock, NU, NU_BOOL,
-    builder::{Builder, Ciphertext},
+    builder::{Builder, IntegerCiphertext},
 };
 
 /// The kind of shift or rotate operation.
@@ -33,13 +33,13 @@ enum CondPos {
 /// Convenience wrapper that calls [`Builder::iop_shiftrot`] with
 /// [`ShiftRotKind::ShiftRight`], followed by overshift detection. When
 /// `amount >= int_size`, the result is zeroed.
-pub fn shift_right(spec: CiphertextSpec) -> Builder {
+pub fn shift_right(spec: IntegerCiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src = builder.ciphertext_input(spec.int_size());
-    let amount = builder.ciphertext_input(spec.int_size());
+    let src = builder.integer_ciphertext_input(spec.int_size());
+    let amount = builder.integer_ciphertext_input(spec.int_size());
     let shifted = builder.iop_shiftrot(&src, &amount, ShiftRotKind::ShiftRight);
     let res = builder.iop_overshift_zero(&shifted, &amount);
-    builder.ciphertext_output(res);
+    builder.integer_ciphertext_output(res);
     builder
 }
 
@@ -48,13 +48,13 @@ pub fn shift_right(spec: CiphertextSpec) -> Builder {
 /// Convenience wrapper that calls [`Builder::iop_shiftrot`] with
 /// [`ShiftRotKind::ShiftLeft`], followed by overshift detection. When
 /// `amount >= int_size`, the result is zeroed.
-pub fn shift_left(spec: CiphertextSpec) -> Builder {
+pub fn shift_left(spec: IntegerCiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src = builder.ciphertext_input(spec.int_size());
-    let amount = builder.ciphertext_input(spec.int_size());
+    let src = builder.integer_ciphertext_input(spec.int_size());
+    let amount = builder.integer_ciphertext_input(spec.int_size());
     let shifted = builder.iop_shiftrot(&src, &amount, ShiftRotKind::ShiftLeft);
     let res = builder.iop_overshift_zero(&shifted, &amount);
-    builder.ciphertext_output(res);
+    builder.integer_ciphertext_output(res);
     builder
 }
 
@@ -62,12 +62,12 @@ pub fn shift_left(spec: CiphertextSpec) -> Builder {
 ///
 /// Convenience wrapper that calls [`Builder::iop_shiftrot`] with
 /// [`ShiftRotKind::RotateRight`]. See that method for algorithm details.
-pub fn rotate_right(spec: CiphertextSpec) -> Builder {
+pub fn rotate_right(spec: IntegerCiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src = builder.ciphertext_input(spec.int_size());
-    let amount = builder.ciphertext_input(spec.int_size());
+    let src = builder.integer_ciphertext_input(spec.int_size());
+    let amount = builder.integer_ciphertext_input(spec.int_size());
     let res = builder.iop_shiftrot(&src, &amount, ShiftRotKind::RotateRight);
-    builder.ciphertext_output(res);
+    builder.integer_ciphertext_output(res);
     builder
 }
 
@@ -75,12 +75,12 @@ pub fn rotate_right(spec: CiphertextSpec) -> Builder {
 ///
 /// Convenience wrapper that calls [`Builder::iop_shiftrot`] with [`ShiftRotKind::RotateLeft`]. See
 /// that method for algorithm details.
-pub fn rotate_left(spec: CiphertextSpec) -> Builder {
+pub fn rotate_left(spec: IntegerCiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src = builder.ciphertext_input(spec.int_size());
-    let amount = builder.ciphertext_input(spec.int_size());
+    let src = builder.integer_ciphertext_input(spec.int_size());
+    let amount = builder.integer_ciphertext_input(spec.int_size());
     let res = builder.iop_shiftrot(&src, &amount, ShiftRotKind::RotateLeft);
-    builder.ciphertext_output(res);
+    builder.integer_ciphertext_output(res);
     builder
 }
 
@@ -101,21 +101,21 @@ impl Builder {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use zhc_builder::{CiphertextSpec, Builder, ShiftRotKind};
-    /// # let spec = CiphertextSpec::new(16, 2, 2);
+    /// # use zhc_builder::{IntegerCiphertextSpec, Builder, ShiftRotKind};
+    /// # let spec = IntegerCiphertextSpec::new(16, 2, 2);
     /// # let builder = Builder::new(spec.block_spec());
-    /// # let val = builder.ciphertext_input(spec.int_size());
-    /// # let amt = builder.ciphertext_input(spec.int_size());
+    /// # let val = builder.integer_ciphertext_input(spec.int_size());
+    /// # let amt = builder.integer_ciphertext_input(spec.int_size());
     /// let shifted = builder.iop_shiftrot(&val, &amt, ShiftRotKind::ShiftLeft);
     /// ```
     pub fn iop_shiftrot(
         &self,
-        src: &Ciphertext,
-        amount: &Ciphertext,
+        src: &IntegerCiphertext,
+        amount: &IntegerCiphertext,
         kind: ShiftRotKind,
-    ) -> Ciphertext {
-        let src_blocks = self.ciphertext_split(src);
-        let amount_blocks = self.ciphertext_split(amount);
+    ) -> IntegerCiphertext {
+        let src_blocks = self.integer_ciphertext_split(src);
+        let amount_blocks = self.integer_ciphertext_split(amount);
         let blk_w = src_blocks.len();
         let msg_w = self.spec().message_size() as usize;
 
@@ -206,7 +206,7 @@ impl Builder {
                 .collect();
         }
 
-        self.comment("Join").ciphertext_join(merged, None)
+        self.comment("Join").integer_ciphertext_join(merged, None)
     }
 
     /// Computes the intra-block shift for a single block.
@@ -292,8 +292,12 @@ impl Builder {
     /// stays within the carry budget), then a single IsSome PBS checks
     /// whether the sum is non-zero.  This is repeated in chunks of
     /// size NU_BOOL.
-    pub fn iop_overshift_zero(&self, shifted: &Ciphertext, amount: &Ciphertext) -> Ciphertext {
-        let amount_blocks = self.ciphertext_split(amount);
+    pub fn iop_overshift_zero(
+        &self,
+        shifted: &IntegerCiphertext,
+        amount: &IntegerCiphertext,
+    ) -> IntegerCiphertext {
+        let amount_blocks = self.integer_ciphertext_split(amount);
         let msg_w = self.spec().message_size() as usize;
         let blk_w = amount_blocks.len();
         let num_stages = (2 * blk_w).ilog2() as usize; // = log₂(int_size)
@@ -358,7 +362,7 @@ impl Builder {
         self.push_comment("return 0 if overshift");
         // nz_signals[0] is 1 if overshift, 0 otherwise.
         // IfTrueZeroed: if cond != 0 → 0; if cond == 0 → value.
-        let shifted_blocks = self.ciphertext_split(shifted);
+        let shifted_blocks = self.integer_ciphertext_split(shifted);
         let output_blocks: Vec<CiphertextBlock> = shifted_blocks
             .iter()
             .map(|b| {
@@ -367,7 +371,7 @@ impl Builder {
             })
             .collect();
         self.pop_comment();
-        self.ciphertext_join(output_blocks, None)
+        self.integer_ciphertext_join(output_blocks, None)
     }
 }
 
@@ -379,80 +383,96 @@ mod test {
     #[test]
     fn correctness_shift_right() {
         fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::Ciphertext(src), IopValue::Ciphertext(amount)] = inp else {
+            let [
+                IopValue::IntegerCiphertext(src),
+                IopValue::IntegerCiphertext(amount),
+            ] = inp
+            else {
                 unreachable!()
             };
-            Some(vec![IopValue::Ciphertext(src.shift_right(*amount))])
+            Some(vec![IopValue::IntegerCiphertext(src.shift_right(*amount))])
         }
         for size in [4, 8, 16, 32, 64] {
-            shift_right(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+            shift_right(IntegerCiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
         }
     }
 
     #[test]
     fn correctness_shift_left() {
         fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::Ciphertext(src), IopValue::Ciphertext(amount)] = inp else {
+            let [
+                IopValue::IntegerCiphertext(src),
+                IopValue::IntegerCiphertext(amount),
+            ] = inp
+            else {
                 unreachable!()
             };
-            Some(vec![IopValue::Ciphertext(src.shift_left(*amount))])
+            Some(vec![IopValue::IntegerCiphertext(src.shift_left(*amount))])
         }
         for size in [4, 8, 16, 32, 64] {
-            shift_left(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+            shift_left(IntegerCiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
         }
     }
 
     #[test]
     fn correctness_rotate_right() {
         fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::Ciphertext(src), IopValue::Ciphertext(amount)] = inp else {
+            let [
+                IopValue::IntegerCiphertext(src),
+                IopValue::IntegerCiphertext(amount),
+            ] = inp
+            else {
                 unreachable!()
             };
-            Some(vec![IopValue::Ciphertext(src.rotate_right(*amount))])
+            Some(vec![IopValue::IntegerCiphertext(src.rotate_right(*amount))])
         }
         for size in [4, 8, 16, 32, 64] {
-            rotate_right(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+            rotate_right(IntegerCiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
         }
     }
 
     #[test]
     fn correctness_rotate_left() {
         fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::Ciphertext(src), IopValue::Ciphertext(amount)] = inp else {
+            let [
+                IopValue::IntegerCiphertext(src),
+                IopValue::IntegerCiphertext(amount),
+            ] = inp
+            else {
                 unreachable!()
             };
-            Some(vec![IopValue::Ciphertext(src.rotate_left(*amount))])
+            Some(vec![IopValue::IntegerCiphertext(src.rotate_left(*amount))])
         }
         for size in [4, 8, 16, 32, 64] {
-            rotate_left(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+            rotate_left(IntegerCiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
         }
     }
 
     #[test]
     fn noise_shift_right() {
         for size in [4, 8, 16, 32, 64] {
-            shift_right(CiphertextSpec::new(size, 2, 2)).check_noise();
+            shift_right(IntegerCiphertextSpec::new(size, 2, 2)).check_noise();
         }
     }
 
     #[test]
     fn noise_shift_left() {
         for size in [4, 8, 16, 32, 64] {
-            shift_left(CiphertextSpec::new(size, 2, 2)).check_noise();
+            shift_left(IntegerCiphertextSpec::new(size, 2, 2)).check_noise();
         }
     }
 
     #[test]
     fn noise_rotate_right() {
         for size in [4, 8, 16, 32, 64] {
-            rotate_right(CiphertextSpec::new(size, 2, 2)).check_noise();
+            rotate_right(IntegerCiphertextSpec::new(size, 2, 2)).check_noise();
         }
     }
 
     #[test]
     fn noise_rotate_left() {
         for size in [4, 8, 16, 32, 64] {
-            rotate_left(CiphertextSpec::new(size, 2, 2)).check_noise();
+            rotate_left(IntegerCiphertextSpec::new(size, 2, 2)).check_noise();
         }
     }
 }

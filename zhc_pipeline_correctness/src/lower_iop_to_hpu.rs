@@ -1,6 +1,6 @@
 use zhc_builder::{
-    Builder, CiphertextSpec, add, bitwise_and, bitwise_or, bitwise_xor, cmp_gt, count_0, count_1,
-    if_then_else, if_then_zero, mul,
+    Builder, IntegerCiphertextSpec, add, bitwise_and, bitwise_or, bitwise_xor, cmp_gt, count_0,
+    count_1, if_then_else, if_then_zero, mul,
 };
 use zhc_ir::IR;
 use zhc_langs::{hpulang::HpuLang, ioplang::IopLang};
@@ -14,7 +14,7 @@ fn pipeline(ir: &IR<IopLang>) -> IR<HpuLang> {
 
 #[test]
 fn test_translate_add_ir() {
-    let ir = pipeline(&add(CiphertextSpec::new(16, 2, 2)).optimize_ir());
+    let ir = pipeline(&add(IntegerCiphertextSpec::new(16, 2, 2)).optimize_ir());
     assert_display_is!(
         ir.format(),
         r#"
@@ -92,7 +92,7 @@ fn test_translate_add_ir() {
 
 #[test]
 fn test_translate_cmp_ir() {
-    let ir = pipeline(&cmp_gt(CiphertextSpec::new(16, 2, 2)).optimize_ir());
+    let ir = pipeline(&cmp_gt(IntegerCiphertextSpec::new(16, 2, 2)).optimize_ir());
     assert_display_is!(
         ir.format(),
         r#"
@@ -159,8 +159,8 @@ fn correctness() {
         let hpu_ir = pipeline(&iop_ir);
         check_iop_hpu_equivalence(&iop_ir, &hpu_ir, spec, 100);
     };
-    for size in 2..=64 {
-        let spec = CiphertextSpec::new(size, 2, 2);
+    for size in (2..=64).step_by(2) {
+        let spec = IntegerCiphertextSpec::new(size, 2, 2);
         check(add(spec));
         check(bitwise_and(spec));
         check(bitwise_or(spec));

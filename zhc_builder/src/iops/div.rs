@@ -1,9 +1,9 @@
-use zhc_crypto::integer_semantics::CiphertextSpec;
+use zhc_crypto::integer_semantics::IntegerCiphertextSpec;
 use zhc_langs::ioplang::{Lut1Def, Lut2Def};
 
 use crate::{
     BitType, CiphertextBlock, PropagationDirection,
-    builder::{Builder, Ciphertext},
+    builder::{Builder, IntegerCiphertext},
 };
 
 /// Creates an IR for unsigned division of two encrypted integers.
@@ -14,18 +14,18 @@ use crate::{
 /// # Examples
 ///
 /// ```rust,no_run
-/// # use zhc_builder::{CiphertextSpec, div};
-/// # let spec = CiphertextSpec::new(16, 2, 2);
+/// # use zhc_builder::{IntegerCiphertextSpec, div};
+/// # let spec = IntegerCiphertextSpec::new(16, 2, 2);
 /// let builder = div(spec);
 /// let ir = builder.optimize_ir();
 /// ```
-pub fn div(spec: CiphertextSpec) -> Builder {
+pub fn div(spec: IntegerCiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src_a = builder.ciphertext_input(spec.int_size());
-    let src_b = builder.ciphertext_input(spec.int_size());
+    let src_a = builder.integer_ciphertext_input(spec.int_size());
+    let src_b = builder.integer_ciphertext_input(spec.int_size());
     let (quotient, remainder) = builder.iop_divx(&src_a, &src_b);
-    builder.ciphertext_output(quotient);
-    builder.ciphertext_output(remainder);
+    builder.integer_ciphertext_output(quotient);
+    builder.integer_ciphertext_output(remainder);
     builder
 }
 
@@ -39,14 +39,14 @@ impl Builder {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use zhc_builder::{CiphertextSpec, Builder};
-    /// # let spec = CiphertextSpec::new(16, 2, 2);
+    /// # use zhc_builder::{IntegerCiphertextSpec, Builder};
+    /// # let spec = IntegerCiphertextSpec::new(16, 2, 2);
     /// # let builder = Builder::new(spec.block_spec());
-    /// # let a = builder.ciphertext_input(spec.int_size());
-    /// # let b = builder.ciphertext_input(spec.int_size());
+    /// # let a = builder.integer_ciphertext_input(spec.int_size());
+    /// # let b = builder.integer_ciphertext_input(spec.int_size());
     /// let quotient = builder.iop_div(&a, &b);
     /// ```
-    pub fn iop_div(&self, lhs: &Ciphertext, rhs: &Ciphertext) -> Ciphertext {
+    pub fn iop_div(&self, lhs: &IntegerCiphertext, rhs: &IntegerCiphertext) -> IntegerCiphertext {
         self.iop_divx(&lhs, &rhs).0
     }
 
@@ -59,14 +59,14 @@ impl Builder {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use zhc_builder::{CiphertextSpec, Builder};
-    /// # let spec = CiphertextSpec::new(16, 2, 2);
+    /// # use zhc_builder::{IntegerCiphertextSpec, Builder};
+    /// # let spec = IntegerCiphertextSpec::new(16, 2, 2);
     /// # let builder = Builder::new(spec.block_spec());
-    /// # let a = builder.ciphertext_input(spec.int_size());
-    /// # let b = builder.ciphertext_input(spec.int_size());
+    /// # let a = builder.integer_ciphertext_input(spec.int_size());
+    /// # let b = builder.integer_ciphertext_input(spec.int_size());
     /// let remainder = builder.iop_rem(&a, &b);
     /// ```
-    pub fn iop_rem(&self, lhs: &Ciphertext, rhs: &Ciphertext) -> Ciphertext {
+    pub fn iop_rem(&self, lhs: &IntegerCiphertext, rhs: &IntegerCiphertext) -> IntegerCiphertext {
         self.iop_divx(&lhs, &rhs).1
     }
 }
@@ -78,17 +78,17 @@ impl Builder {
 /// # Examples
 ///
 /// ```rust,no_run
-/// # use zhc_builder::{CiphertextSpec, rem};
-/// # let spec = CiphertextSpec::new(16, 2, 2);
+/// # use zhc_builder::{IntegerCiphertextSpec, rem};
+/// # let spec = IntegerCiphertextSpec::new(16, 2, 2);
 /// let builder = rem(spec);
 /// let ir = builder.optimize_ir();
 /// ```
-pub fn rem(spec: CiphertextSpec) -> Builder {
+pub fn rem(spec: IntegerCiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src_a = builder.ciphertext_input(spec.int_size());
-    let src_b = builder.ciphertext_input(spec.int_size());
+    let src_a = builder.integer_ciphertext_input(spec.int_size());
+    let src_b = builder.integer_ciphertext_input(spec.int_size());
     let (_, remainder) = builder.iop_divx(&src_a, &src_b);
-    builder.ciphertext_output(remainder);
+    builder.integer_ciphertext_output(remainder);
     builder
 }
 
@@ -135,20 +135,24 @@ impl Builder {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use zhc_builder::{CiphertextSpec, Builder};
-    /// # let spec = CiphertextSpec::new(16, 2, 2);
+    /// # use zhc_builder::{IntegerCiphertextSpec, Builder};
+    /// # let spec = IntegerCiphertextSpec::new(16, 2, 2);
     /// # let builder = Builder::new(spec.block_spec());
-    /// # let a = builder.ciphertext_input(spec.int_size());
-    /// # let b = builder.ciphertext_input(spec.int_size());
+    /// # let a = builder.integer_ciphertext_input(spec.int_size());
+    /// # let b = builder.integer_ciphertext_input(spec.int_size());
     /// let (quotient, remainder) = builder.iop_divx(&a, &b);
     /// ```
-    pub fn iop_divx(&self, lhs: &Ciphertext, rhs: &Ciphertext) -> (Ciphertext, Ciphertext) {
-        let lhs_blocks = self.ciphertext_split(lhs);
-        let rhs_blocks = self.ciphertext_split(rhs);
+    pub fn iop_divx(
+        &self,
+        lhs: &IntegerCiphertext,
+        rhs: &IntegerCiphertext,
+    ) -> (IntegerCiphertext, IntegerCiphertext) {
+        let lhs_blocks = self.integer_ciphertext_split(lhs);
+        let rhs_blocks = self.integer_ciphertext_split(rhs);
         let (quotient_blocks, remain_blocks) = self.iop_div_corev(lhs_blocks, rhs_blocks);
         (
-            self.ciphertext_join(quotient_blocks, None),
-            self.ciphertext_join(remain_blocks, None),
+            self.integer_ciphertext_join(quotient_blocks, None),
+            self.integer_ciphertext_join(remain_blocks, None),
         )
     }
 
@@ -441,7 +445,11 @@ mod test {
     #[test]
     fn correctness_div() {
         fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::Ciphertext(lhs), IopValue::Ciphertext(rhs)] = inp else {
+            let [
+                IopValue::IntegerCiphertext(lhs),
+                IopValue::IntegerCiphertext(rhs),
+            ] = inp
+            else {
                 unreachable!()
             };
             if rhs.as_storage() == 0 {
@@ -450,22 +458,22 @@ mod test {
             let quotient = lhs.as_storage().div_euclid(rhs.as_storage());
             let remainder = lhs.as_storage().rem_euclid(rhs.as_storage());
             Some(vec![
-                IopValue::Ciphertext(lhs.spec().from_int(quotient)),
-                IopValue::Ciphertext(rhs.spec().from_int(remainder)),
+                IopValue::IntegerCiphertext(lhs.spec().from_int(quotient)),
+                IopValue::IntegerCiphertext(rhs.spec().from_int(remainder)),
             ])
         }
         for size in (2..128).step_by(2) {
-            div(CiphertextSpec::new(size, 2, 2)).test_random(10, semantic);
+            div(IntegerCiphertextSpec::new(size, 2, 2)).test_random(10, semantic);
         }
         for size in [16, 32, 64, 128] {
-            div(CiphertextSpec::new(size, 2, 2)).test_random(1000, semantic);
+            div(IntegerCiphertextSpec::new(size, 2, 2)).test_random(1000, semantic);
         }
     }
 
     #[test]
     fn noise_div() {
         for size in (2..128).step_by(2) {
-            div(CiphertextSpec::new(size, 2, 2)).check_noise();
+            div(IntegerCiphertextSpec::new(size, 2, 2)).check_noise();
         }
     }
 }

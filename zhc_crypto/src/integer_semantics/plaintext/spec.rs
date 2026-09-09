@@ -1,27 +1,27 @@
 use rand::RngExt;
 use zhc_utils::SafeAs;
 
-use super::super::{EmulatedPlaintext, EmulatedPlaintextStorage, PlaintextBlockSpec};
+use super::super::{EmulatedIntegerPlaintext, EmulatedIntegerPlaintextStorage, PlaintextBlockSpec};
 
 /// Specification for a multi-block plaintext representing a large integer.
 ///
-/// This is the plaintext counterpart to [`CiphertextSpec`](super::super::CiphertextSpec). It
+/// This is the plaintext counterpart to [`IntegerCiphertextSpec`](super::super::IntegerCiphertextSpec). It
 /// defines a large integer decomposed into multiple plaintext blocks, where each block holds a
 /// portion of the integer according to a shared [`PlaintextBlockSpec`].
 ///
 /// The total `int_size` must be a multiple of the block's message size — this ensures the integer
 /// can be evenly partitioned across blocks.
 ///
-/// Plaintext integers are used for scalar operations with ciphertexts, such as adding a constant
+/// Integer plaintexts are used for scalar operations with ciphertexts, such as adding a constant
 /// to an encrypted value.
 ///
 /// # Examples
 ///
 /// ```
-/// use zhc_crypto::integer_semantics::PlaintextSpec;
+/// use zhc_crypto::integer_semantics::IntegerPlaintextSpec;
 ///
 /// // Create a spec for 16-bit plaintext integers with 4-bit blocks
-/// let spec = PlaintextSpec::new(16, 4);
+/// let spec = IntegerPlaintextSpec::new(16, 4);
 /// assert_eq!(spec.block_count(), 4); // 16 / 4 = 4 blocks
 ///
 /// // Create a plaintext from an integer value
@@ -31,12 +31,12 @@ use super::super::{EmulatedPlaintext, EmulatedPlaintextStorage, PlaintextBlockSp
 /// let block_0 = pt.get_block(0); // least significant block
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct PlaintextSpec {
+pub struct IntegerPlaintextSpec {
     int_size: u16,
     block: PlaintextBlockSpec,
 }
 
-impl PlaintextSpec {
+impl IntegerPlaintextSpec {
     /// Creates a new plaintext specification with the given parameters.
     ///
     /// The `int_size` defines the total number of bits in the integer. The `block_message_size`
@@ -50,13 +50,21 @@ impl PlaintextSpec {
     /// - `block_message_size` is zero
     /// - `int_size` is not divisible by `block_message_size`
     pub fn new(int_size: u16, block_message_size: u8) -> Self {
+        assert_ne!(
+            int_size, 0,
+            "Tried to create malformed integer plaintext spec: precision must be non-zero."
+        );
         assert!(
-            int_size <= EmulatedPlaintextStorage::BITS.sas::<u16>(),
+            int_size <= EmulatedIntegerPlaintextStorage::BITS.sas::<u16>(),
             "Tried to create malformed plaintext spec."
         );
         assert_ne!(
             block_message_size, 0,
             "Tried to create malformed plaintext spec."
+        );
+        assert!(
+            int_size.is_multiple_of(block_message_size.sas()),
+            "Tried to create malformed integer plaintext spec: precision {int_size} is not a multiple of message size {block_message_size}."
         );
         Self {
             int_size,
@@ -71,8 +79,9 @@ impl PlaintextSpec {
         self.int_size
     }
 
-    pub fn int_mask(&self) -> EmulatedPlaintextStorage {
-        (1 << (self.block_count() * self.block.message_size())) - 1
+    pub fn int_mask(&self) -> EmulatedIntegerPlaintextStorage {
+        EmulatedIntegerPlaintextStorage::MAX
+            >> (EmulatedIntegerPlaintextStorage::BITS as u16 - self.int_size())
     }
 
     /// Returns the block specification shared by all blocks in this integer.
@@ -88,28 +97,29 @@ impl PlaintextSpec {
     /// # Panics
     ///
     /// Panics if `ith >= block_count()`.
-    pub fn block_mask(&self, ith: u8) -> EmulatedPlaintextStorage {
+    pub fn block_mask(&self, ith: u8) -> EmulatedIntegerPlaintextStorage {
         assert!(
             ith < self.block_count(),
             "Tried to get block mask for nonexistent block"
         );
-        (self.block.message_mask().sas::<EmulatedPlaintextStorage>())
+        (self
+            .block
+            .message_mask()
+            .sas::<EmulatedIntegerPlaintextStorage>())
             << (ith * self.block.message_size())
     }
 
     /// Returns the number of blocks in this integer.
     ///
-    /// Computed as `ceil(int_size / block_message_size)`.
+    /// Computed as `int_size / block_message_size`.
     pub fn block_count(&self) -> u8 {
-        self.int_size
-            .div_ceil(self.block.0.sas::<u16>())
-            .sas::<u8>()
+        (self.int_size / self.block.0.sas::<u16>()).sas::<u8>()
     }
 
     /// Generates a random plaintext with uniformly distributed bits.
     ///
     /// Uses a thread-local PRNG seeded deterministically. Useful for testing and fuzzing.
-    pub fn random(&self) -> EmulatedPlaintext {
+    pub fn random(&self) -> EmulatedIntegerPlaintext {
         super::super::PRNG.with_borrow_mut(|prng| {
             let mut bounds = [
                 prng.random_range(1..self.int_size()),
@@ -127,7 +137,7 @@ impl PlaintextSpec {
     /// Creates a plaintext from a raw integer value.
     ///
     /// The integer is stored directly; individual blocks can then be accessed via
-    /// [`EmulatedPlaintext::get_block`].
+    /// [`EmulatedIntegerPlaintext::get_block`].
     ///
     /// # Panics
     ///
@@ -136,14 +146,14 @@ impl PlaintextSpec {
     /// # Examples
     ///
     /// ```
-    /// use zhc_crypto::integer_semantics::PlaintextSpec;
+    /// use zhc_crypto::integer_semantics::IntegerPlaintextSpec;
     ///
-    /// let spec = PlaintextSpec::new(8, 2);
+    /// let spec = IntegerPlaintextSpec::new(8, 2);
     /// let pt = spec.from_int(0b1011_0110);
     /// assert_eq!(pt.get_block(0), spec.block_spec().from_message(0b10)); // bits [1:0]
     /// assert_eq!(pt.get_block(1), spec.block_spec().from_message(0b01)); // bits [3:2]
     /// ```
-    pub fn from_int(&self, int: EmulatedPlaintextStorage) -> EmulatedPlaintext {
+    pub fn from_int(&self, int: EmulatedIntegerPlaintextStorage) -> EmulatedIntegerPlaintext {
         let storage = int;
         if self.overflows_int(storage) {
             panic!(
@@ -152,7 +162,7 @@ impl PlaintextSpec {
                 self.int_size()
             );
         }
-        EmulatedPlaintext {
+        EmulatedIntegerPlaintext {
             storage,
             spec: *self,
         }
@@ -161,7 +171,7 @@ impl PlaintextSpec {
     /// Checks whether a value exceeds the integer's capacity.
     ///
     /// Returns true if `storage >= 2^int_size`.
-    pub fn overflows_int(&self, storage: EmulatedPlaintextStorage) -> bool {
+    pub fn overflows_int(&self, storage: EmulatedIntegerPlaintextStorage) -> bool {
         let shift = self.int_size();
         storage >= (1 << shift)
     }

@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 use zhc_crypto::integer_semantics::{
-    CiphertextBlockSpec, EmulatedCiphertext, EmulatedCiphertextBlock, EmulatedPlaintext,
-    EmulatedPlaintextBlock,
+    CiphertextBlockSpec, EmulatedBoolCiphertext, EmulatedCiphertextBlock,
+    EmulatedIntegerCiphertext, EmulatedIntegerPlaintext, EmulatedPlaintextBlock,
 };
 use zhc_ir::evaluation::{Evaluable, EvaluatesTo, Evaluation};
 use zhc_ir::visualization::{DynamicElement, VisualAnnotation};
@@ -17,34 +17,43 @@ use zhc_utils::{Dumpable, FastMap, SafeAs, svec};
 /// type.
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub enum IopValue {
-    Ciphertext(EmulatedCiphertext),
-    Plaintext(EmulatedPlaintext),
+    IntegerCiphertext(EmulatedIntegerCiphertext),
+    BoolCiphertext(EmulatedBoolCiphertext),
+    IntegerPlaintext(EmulatedIntegerPlaintext),
     CiphertextBlock(EmulatedCiphertextBlock),
     PlaintextBlock(EmulatedPlaintextBlock),
 }
 
 impl IopValue {
-    /// Extracts the inner `EmulatedCiphertext`.
+    /// Extracts the inner `EmulatedIntegerCiphertext`.
     ///
     /// # Panics
     ///
-    /// Panics if self is not the `Ciphertext` variant.
-    pub fn unwrap_ciphertext(self) -> EmulatedCiphertext {
+    /// Panics if self is not the `IntegerCiphertext` variant.
+    pub fn unwrap_ciphertext(self) -> EmulatedIntegerCiphertext {
         match self {
-            Self::Ciphertext(v) => v,
-            _ => panic!("Expected Ciphertext, got {:?}", self),
+            Self::IntegerCiphertext(v) => v,
+            _ => panic!("Expected IntegerCiphertext, got {:?}", self),
         }
     }
 
-    /// Extracts the inner `EmulatedPlaintext`.
+    /// Extracts the inner `EmulatedBoolCiphertext`.
+    pub fn unwrap_bool_ciphertext(self) -> EmulatedBoolCiphertext {
+        match self {
+            Self::BoolCiphertext(v) => v,
+            _ => panic!("Expected BoolCiphertext, got {:?}", self),
+        }
+    }
+
+    /// Extracts the inner `EmulatedIntegerPlaintext`.
     ///
     /// # Panics
     ///
-    /// Panics if self is not the `Plaintext` variant.
-    pub fn unwrap_plaintext(self) -> EmulatedPlaintext {
+    /// Panics if self is not the `IntegerPlaintext` variant.
+    pub fn unwrap_plaintext(self) -> EmulatedIntegerPlaintext {
         match self {
-            Self::Plaintext(v) => v,
-            _ => panic!("Expected Plaintext, got {:?}", self),
+            Self::IntegerPlaintext(v) => v,
+            _ => panic!("Expected IntegerPlaintext, got {:?}", self),
         }
     }
 
@@ -76,8 +85,9 @@ impl IopValue {
 impl Debug for IopValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Ciphertext(a) => a.fmt(f),
-            Self::Plaintext(a) => a.fmt(f),
+            Self::IntegerCiphertext(a) => a.fmt(f),
+            Self::BoolCiphertext(a) => a.fmt(f),
+            Self::IntegerPlaintext(a) => a.fmt(f),
             Self::CiphertextBlock(a) => a.fmt(f),
             Self::PlaintextBlock(a) => a.fmt(f),
         }
@@ -101,8 +111,9 @@ impl VisualAnnotation for IopValue {
 impl EvaluatesTo<IopValue> for super::IopTypeSystem {
     fn type_of(val: &IopValue) -> Self {
         match val {
-            IopValue::Ciphertext(..) => Self::Ciphertext,
-            IopValue::Plaintext(..) => Self::Plaintext,
+            IopValue::IntegerCiphertext(..) => Self::IntegerCiphertext,
+            IopValue::BoolCiphertext(..) => Self::BoolCiphertext,
+            IopValue::IntegerPlaintext(..) => Self::IntegerPlaintext,
             IopValue::CiphertextBlock(..) => Self::CiphertextBlock,
             IopValue::PlaintextBlock(..) => Self::PlaintextBlock,
         }
@@ -162,42 +173,54 @@ impl Evaluable<IopValue> for super::IopInstructionSet {
         use super::IopInstructionSet::*;
         let ct = |v: EmulatedCiphertextBlock| IopValue::CiphertextBlock(v);
         match self {
-            InputCiphertext { pos, int_size } => {
+            InputIntegerCiphertext { pos, int_size } => {
                 assert!(
                     context.inputs.contains_key(pos),
                     "Input {pos} is missing from context."
                 );
                 let input_value = context.inputs.get(pos).unwrap();
-                let IopValue::Ciphertext(ct) = input_value else {
-                    panic!("Expected Ciphertext, got:\n{:#?}", input_value);
+                let IopValue::IntegerCiphertext(ct) = input_value else {
+                    panic!("Expected IntegerCiphertext, got:\n{:#?}", input_value);
                 };
                 assert_eq!(
-                    context.spec.ciphertext_spec(*int_size),
+                    context.spec.integer_ciphertext_spec(*int_size),
                     ct.spec(),
                     "Spec mismatch."
                 );
                 svec![input_value.clone()]
             }
-            InputPlaintext { pos, int_size } => {
+            InputBoolCiphertext { pos } => {
                 assert!(
                     context.inputs.contains_key(pos),
                     "Input {pos} is missing from context."
                 );
                 let input_value = context.inputs.get(pos).unwrap();
-                let IopValue::Plaintext(pt) = input_value else {
-                    panic!("Expected Plaintext, got:\n{:#?}", input_value);
+                let IopValue::BoolCiphertext(ct) = input_value else {
+                    panic!("Expected BoolCiphertext, got:\n{:#?}", input_value);
+                };
+                assert_eq!(context.spec, ct.spec(), "Spec mismatch.");
+                svec![input_value.clone()]
+            }
+            InputIntegerPlaintext { pos, int_size } => {
+                assert!(
+                    context.inputs.contains_key(pos),
+                    "Input {pos} is missing from context."
+                );
+                let input_value = context.inputs.get(pos).unwrap();
+                let IopValue::IntegerPlaintext(pt) = input_value else {
+                    panic!("Expected IntegerPlaintext, got:\n{:#?}", input_value);
                 };
                 assert_eq!(
                     context
                         .spec
                         .matching_plaintext_block_spec()
-                        .plaintext_spec(*int_size),
+                        .integer_plaintext_spec(*int_size),
                     pt.spec(),
                     "Spec mismatch"
                 );
                 svec![input_value.clone()]
             }
-            OutputCiphertext { pos, .. } => {
+            OutputIntegerCiphertext { pos, .. } | OutputBoolCiphertext { pos, .. } => {
                 assert!(
                     !context.outputs.contains_key(pos),
                     "Output {pos} already returned in interpreter context."
@@ -207,9 +230,9 @@ impl Evaluable<IopValue> for super::IopInstructionSet {
             }
             _Consume { .. } => panic!("Tried to interpret a _consume operation"),
             Inspect { .. } => arguments.iter().map(|a| (*a).clone()).cosvec(),
-            DeclareCiphertext { int_size } => {
-                svec![IopValue::Ciphertext(
-                    context.spec.ciphertext_spec(*int_size).from_int(0)
+            DeclareIntegerCiphertext { int_size } => {
+                svec![IopValue::IntegerCiphertext(
+                    context.spec.integer_ciphertext_spec(*int_size).from_int(0)
                 )]
             }
             LetPlaintextBlock { value } => {
@@ -257,29 +280,38 @@ impl Evaluable<IopValue> for super::IopInstructionSet {
                     ct_arg(&arguments, 0).mul_pt(pt_arg(&arguments, 1), *flavor)
                 )]
             }
-            ExtractCtBlock { index } => {
-                let IopValue::Ciphertext(ct) = arguments[0] else {
-                    panic!("Expected Ciphertext, got:\n{:#?}", arguments)
+            ExtractIntegerCiphertextBlock { index } => {
+                let IopValue::IntegerCiphertext(ct) = arguments[0] else {
+                    panic!("Expected IntegerCiphertext, got:\n{:#?}", arguments)
                 };
                 svec![IopValue::CiphertextBlock(ct.get_block(*index))]
             }
-            ExtractPtBlock { index } => {
-                let IopValue::Plaintext(pt) = arguments[0] else {
-                    panic!("Expected Plaintext, got:\n{:#?}", arguments)
+            ExtractIntegerPlaintextBlock { index } => {
+                let IopValue::IntegerPlaintext(pt) = arguments[0] else {
+                    panic!("Expected IntegerPlaintext, got:\n{:#?}", arguments)
                 };
                 svec![IopValue::PlaintextBlock(pt.get_block(*index))]
             }
-            StoreCtBlock { index } => {
-                let (IopValue::CiphertextBlock(ctblock), IopValue::Ciphertext(mut ct)) =
+            StoreIntegerCiphertextBlock { index } => {
+                let (IopValue::CiphertextBlock(ctblock), IopValue::IntegerCiphertext(mut ct)) =
                     (arguments[0].clone(), arguments[1].clone())
                 else {
                     panic!(
-                        "Expected (CiphertextBlock, Ciphertext), got:\n{:#?}",
+                        "Expected (CiphertextBlock, IntegerCiphertext), got:\n{:#?}",
                         arguments
                     )
                 };
                 ct.set_block(*index, ctblock);
-                svec![IopValue::Ciphertext(ct)]
+                svec![IopValue::IntegerCiphertext(ct)]
+            }
+            BoolFromBlock => svec![IopValue::BoolCiphertext(
+                EmulatedBoolCiphertext::from_block(ct_arg(&arguments, 0),)
+            )],
+            ExtractBoolBlock => {
+                let IopValue::BoolCiphertext(ct) = arguments[0] else {
+                    panic!("Expected BoolCiphertext, got:\n{:#?}", arguments)
+                };
+                svec![IopValue::CiphertextBlock(ct.get_block())]
             }
             Pbs { check, lut } => svec![ct(lut.lookup(ct_arg(&arguments, 0), *check))],
             Pbs2 { check, lut } => {

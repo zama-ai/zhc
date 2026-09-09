@@ -5,8 +5,8 @@ use zhc_utils::{small::SmallSet, svec};
 /// Eliminates redundant store operations that are overwritten before output.
 ///
 /// Performs backward dataflow analysis from
-/// [`OutputCiphertext`](super::IopInstructionSet::OutputCiphertext) operations, tracking which
-/// block indices have been stored. When a [`StoreCtBlock`](super::IopInstructionSet::StoreCtBlock)
+/// [`OutputIntegerCiphertext`](super::IopInstructionSet::OutputIntegerCiphertext) operations, tracking which
+/// block indices have been stored. When a [`StoreIntegerCiphertextBlock`](super::IopInstructionSet::StoreIntegerCiphertextBlock)
 /// writes to an index that will be overwritten by a later store before the output, the earlier
 /// store is redundant and removed.
 pub fn skip_redundant_stores(ir: &mut IR<IopLang>) {
@@ -20,12 +20,12 @@ pub fn skip_redundant_stores(ir: &mut IR<IopLang>) {
     let ann_ir = ir.backward_dataflow_analysis(|op| {
         use super::IopInstructionSet::*;
         match op.get_instruction() {
-            OutputCiphertext { .. } => (
+            OutputIntegerCiphertext { .. } => (
                 OpAnn::ShouldKeep(SmallSet::new()),
                 svec![(); op.get_return_arity()],
             ),
-            StoreCtBlock { index } => {
-                // (CiphertextBlock, Ciphertext) -> (Ciphertext)
+            StoreIntegerCiphertextBlock { index } => {
+                // (CiphertextBlock, IntegerCiphertext) -> (IntegerCiphertext)
                 // We assume linear chains for stores
                 let output_ct = op.get_returns_iter().next().unwrap();
 
@@ -84,19 +84,19 @@ mod tests {
         let (_, b0) = ir.add_op(IopInstructionSet::LetCiphertextBlock { value: 10 }, svec![]);
         let (_, b1) = ir.add_op(IopInstructionSet::LetCiphertextBlock { value: 20 }, svec![]);
         let (_, ct) = ir.add_op(
-            IopInstructionSet::DeclareCiphertext { int_size: 2 },
+            IopInstructionSet::DeclareIntegerCiphertext { int_size: 2 },
             svec![],
         );
         let (_, ct1) = ir.add_op(
-            IopInstructionSet::StoreCtBlock { index: 0 },
+            IopInstructionSet::StoreIntegerCiphertextBlock { index: 0 },
             svec![b0[0], ct[0]],
         );
         let (_, ct2) = ir.add_op(
-            IopInstructionSet::StoreCtBlock { index: 0 },
+            IopInstructionSet::StoreIntegerCiphertextBlock { index: 0 },
             svec![b1[0], ct1[0]],
         );
         ir.add_op(
-            IopInstructionSet::OutputCiphertext { pos: 0 },
+            IopInstructionSet::OutputIntegerCiphertext { pos: 0 },
             svec![ct2[0]],
         );
 
@@ -134,19 +134,19 @@ mod tests {
         let (_, b0) = ir.add_op(IopInstructionSet::LetCiphertextBlock { value: 10 }, svec![]);
         let (_, b1) = ir.add_op(IopInstructionSet::LetCiphertextBlock { value: 20 }, svec![]);
         let (_, ct) = ir.add_op(
-            IopInstructionSet::DeclareCiphertext { int_size: 4 },
+            IopInstructionSet::DeclareIntegerCiphertext { int_size: 4 },
             svec![],
         );
         let (_, ct1) = ir.add_op(
-            IopInstructionSet::StoreCtBlock { index: 0 },
+            IopInstructionSet::StoreIntegerCiphertextBlock { index: 0 },
             svec![b0[0], ct[0]],
         );
         let (_, ct2) = ir.add_op(
-            IopInstructionSet::StoreCtBlock { index: 1 },
+            IopInstructionSet::StoreIntegerCiphertextBlock { index: 1 },
             svec![b1[0], ct1[0]],
         );
         ir.add_op(
-            IopInstructionSet::OutputCiphertext { pos: 0 },
+            IopInstructionSet::OutputIntegerCiphertext { pos: 0 },
             svec![ct2[0]],
         );
 
@@ -174,23 +174,23 @@ mod tests {
         let (_, b1) = ir.add_op(IopInstructionSet::LetCiphertextBlock { value: 20 }, svec![]);
         let (_, b2) = ir.add_op(IopInstructionSet::LetCiphertextBlock { value: 30 }, svec![]);
         let (_, ct) = ir.add_op(
-            IopInstructionSet::DeclareCiphertext { int_size: 2 },
+            IopInstructionSet::DeclareIntegerCiphertext { int_size: 2 },
             svec![],
         );
         let (_, ct1) = ir.add_op(
-            IopInstructionSet::StoreCtBlock { index: 0 },
+            IopInstructionSet::StoreIntegerCiphertextBlock { index: 0 },
             svec![b0[0], ct[0]],
         );
         let (_, ct2) = ir.add_op(
-            IopInstructionSet::StoreCtBlock { index: 0 },
+            IopInstructionSet::StoreIntegerCiphertextBlock { index: 0 },
             svec![b1[0], ct1[0]],
         );
         let (_, ct3) = ir.add_op(
-            IopInstructionSet::StoreCtBlock { index: 0 },
+            IopInstructionSet::StoreIntegerCiphertextBlock { index: 0 },
             svec![b2[0], ct2[0]],
         );
         ir.add_op(
-            IopInstructionSet::OutputCiphertext { pos: 0 },
+            IopInstructionSet::OutputIntegerCiphertext { pos: 0 },
             svec![ct3[0]],
         );
 
@@ -231,23 +231,23 @@ mod tests {
         let (_, b1) = ir.add_op(IopInstructionSet::LetCiphertextBlock { value: 20 }, svec![]);
         let (_, b2) = ir.add_op(IopInstructionSet::LetCiphertextBlock { value: 30 }, svec![]);
         let (_, ct) = ir.add_op(
-            IopInstructionSet::DeclareCiphertext { int_size: 4 },
+            IopInstructionSet::DeclareIntegerCiphertext { int_size: 4 },
             svec![],
         );
         let (_, ct1) = ir.add_op(
-            IopInstructionSet::StoreCtBlock { index: 0 },
+            IopInstructionSet::StoreIntegerCiphertextBlock { index: 0 },
             svec![b0[0], ct[0]],
         );
         let (_, ct2) = ir.add_op(
-            IopInstructionSet::StoreCtBlock { index: 1 },
+            IopInstructionSet::StoreIntegerCiphertextBlock { index: 1 },
             svec![b1[0], ct1[0]],
         );
         let (_, ct3) = ir.add_op(
-            IopInstructionSet::StoreCtBlock { index: 0 },
+            IopInstructionSet::StoreIntegerCiphertextBlock { index: 0 },
             svec![b2[0], ct2[0]],
         );
         ir.add_op(
-            IopInstructionSet::OutputCiphertext { pos: 0 },
+            IopInstructionSet::OutputIntegerCiphertext { pos: 0 },
             svec![ct3[0]],
         );
 
@@ -287,13 +287,16 @@ mod tests {
         let mut ir: IR<IopLang> = IR::empty();
 
         let (_, ct) = ir.add_op(
-            IopInstructionSet::InputCiphertext {
+            IopInstructionSet::InputIntegerCiphertext {
                 pos: 0,
                 int_size: 2,
             },
             svec![],
         );
-        ir.add_op(IopInstructionSet::OutputCiphertext { pos: 0 }, svec![ct[0]]);
+        ir.add_op(
+            IopInstructionSet::OutputIntegerCiphertext { pos: 0 },
+            svec![ct[0]],
+        );
 
         skip_redundant_stores(&mut ir);
 
@@ -306,7 +309,7 @@ mod tests {
         );
     }
 
-    /// Redundant stores with _Consume sink (not OutputCiphertext)
+    /// Redundant stores with _Consume sink (not OutputIntegerCiphertext)
     #[test]
     fn test_consume_sink() {
         let mut ir: IR<IopLang> = IR::empty();
@@ -314,20 +317,20 @@ mod tests {
         let (_, b0) = ir.add_op(IopInstructionSet::LetCiphertextBlock { value: 10 }, svec![]);
         let (_, b1) = ir.add_op(IopInstructionSet::LetCiphertextBlock { value: 20 }, svec![]);
         let (_, ct) = ir.add_op(
-            IopInstructionSet::DeclareCiphertext { int_size: 2 },
+            IopInstructionSet::DeclareIntegerCiphertext { int_size: 2 },
             svec![],
         );
         let (_, ct1) = ir.add_op(
-            IopInstructionSet::StoreCtBlock { index: 0 },
+            IopInstructionSet::StoreIntegerCiphertextBlock { index: 0 },
             svec![b0[0], ct[0]],
         );
         let (_, ct2) = ir.add_op(
-            IopInstructionSet::StoreCtBlock { index: 0 },
+            IopInstructionSet::StoreIntegerCiphertextBlock { index: 0 },
             svec![b1[0], ct1[0]],
         );
         ir.add_op(
             IopInstructionSet::_Consume {
-                typ: IopTypeSystem::Ciphertext,
+                typ: IopTypeSystem::IntegerCiphertext,
             },
             svec![ct2[0]],
         );
@@ -341,7 +344,7 @@ mod tests {
                 %1 = let_ct_block<20>();
                 %2 = decl_ct<2>();
                 %4 = store_ct_block<0>(%1, %2);
-                _consume<Ciphertext>(%4);
+                _consume<IntegerCiphertext>(%4);
             "#
         );
     }
@@ -352,7 +355,7 @@ mod tests {
         let mut ir: IR<IopLang> = IR::empty();
 
         let (_, ct) = ir.add_op(
-            IopInstructionSet::InputCiphertext {
+            IopInstructionSet::InputIntegerCiphertext {
                 pos: 0,
                 int_size: 2,
             },
@@ -361,15 +364,15 @@ mod tests {
         let (_, b0) = ir.add_op(IopInstructionSet::LetCiphertextBlock { value: 10 }, svec![]);
         let (_, b1) = ir.add_op(IopInstructionSet::LetCiphertextBlock { value: 20 }, svec![]);
         let (_, ct1) = ir.add_op(
-            IopInstructionSet::StoreCtBlock { index: 0 },
+            IopInstructionSet::StoreIntegerCiphertextBlock { index: 0 },
             svec![b0[0], ct[0]],
         );
         let (_, ct2) = ir.add_op(
-            IopInstructionSet::StoreCtBlock { index: 0 },
+            IopInstructionSet::StoreIntegerCiphertextBlock { index: 0 },
             svec![b1[0], ct1[0]],
         );
         ir.add_op(
-            IopInstructionSet::OutputCiphertext { pos: 0 },
+            IopInstructionSet::OutputIntegerCiphertext { pos: 0 },
             svec![ct2[0]],
         );
 
