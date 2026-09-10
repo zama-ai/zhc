@@ -14,7 +14,7 @@ use zhc_utils::{
 
 use crate::{
     Fingerprint, SchedPolicy, hpu,
-    misc::{self, extract_lut_registry},
+    iop::{self, extract_lut_registry},
     multi_hpu,
     pipeline::context::PipelineContext,
     vm,

@@ -67,6 +67,7 @@ pub fn coarsen_ioplang(ir: &IR<IopLang>) -> Translation<CoarseLang> {
                     CoarseInstructionSet::Op {
                         inp_size: args.len().sas(),
                         oup_size: opref.get_return_arity().sas(),
+                        work: 1
                     },
                     args,
                 );

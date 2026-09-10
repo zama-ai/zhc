@@ -6,7 +6,7 @@ use crate::coarselang::CoarseTypeSystem;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum CoarseInstructionSet {
-    Op { inp_size: u16, oup_size: u16 },
+    Op { inp_size: u16, oup_size: u16, work: u32 },
 }
 
 impl CoarseInstructionSet {}
@@ -31,7 +31,7 @@ impl DialectInstructionSet for CoarseInstructionSet {
     fn get_signature(&self) -> Signature<Self::TypeSystem> {
         use CoarseInstructionSet::*;
         match self {
-            Op { inp_size, oup_size } => Signature(
+            Op { inp_size, oup_size, .. } => Signature(
                 svec![CoarseTypeSystem::Val; *inp_size as usize],
                 svec![CoarseTypeSystem::Val; *oup_size as usize],
             ),
