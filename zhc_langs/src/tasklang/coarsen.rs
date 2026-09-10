@@ -11,7 +11,7 @@ use zhc_utils::{
 };
 
 use crate::{
-    coarselang::{CoarseInstructionSet, CoarseLang},
+    tasklang::{TaskInstructionSet, TaskLang},
     ioplang::{IopInstructionSet, IopLang},
 };
 
@@ -19,7 +19,7 @@ use crate::{
 pub struct Ann(SmallSet<ValId>);
 impl VisualAnnotation for Ann {}
 
-pub fn coarsen_ioplang(ir: &IR<IopLang>) -> Translation<CoarseLang> {
+pub fn coarsen_ioplang(ir: &IR<IopLang>) -> Translation<TaskLang> {
     use IopInstructionSet::*;
     let analyzed = ir.forward_dataflow_analysis(
         |opref: AnnOpRef<'_, '_, IopLang, zhc_ir::Analysing<()>, zhc_ir::Analysing<Ann>>| {
@@ -49,6 +49,18 @@ pub fn coarsen_ioplang(ir: &IR<IopLang>) -> Translation<CoarseLang> {
         },
     );
 
+    let mut used: SmallSet<ValId> = SmallSet::new();
+    for opref in analyzed.walk_ops_linear() {
+        if matches!(
+            opref.get_instruction(),
+            Pbs { .. } | Pbs2 { .. } | Pbs4 { .. } | Pbs8 { .. }
+        ) {
+            for va in opref.get_args_iter().next().unwrap().get_annotation().0.iter() {
+                used.insert(*va);
+            }
+        }
+    }
+
     translate_ann(
         analyzed.view(),
         Order::Topological,
@@ -63,15 +75,19 @@ pub fn coarsen_ioplang(ir: &IR<IopLang>) -> Translation<CoarseLang> {
                     .iter()
                     .map(|va| translator.translate_val(va))
                     .cosvec();
+                let live_rets = opref
+                    .get_returns_iter()
+                    .filter(|ret| used.contains(&ret.get_id()))
+                    .cosvec();
                 let rets = translator.add_op(
-                    CoarseInstructionSet::Op {
+                    TaskInstructionSet::Task {
                         inp_size: args.len().sas(),
-                        oup_size: opref.get_return_arity().sas(),
+                        oup_size: live_rets.len().sas(),
                         work: 1
                     },
                     args,
                 );
-                (opref.get_returns_iter(), rets.into_iter())
+                (live_rets.into_iter(), rets.into_iter())
                     .mzip()
                     .for_each(|(old, new)| translator.register_translation(old, new));
             }

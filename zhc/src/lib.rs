@@ -28,7 +28,7 @@ pub mod prelude {
 mod test {
     use zhc_builder::{CiphertextBlockSpec, add};
     use zhc_config::hpu::HpuConfig;
-    use zhc_langs::coarselang::coarsen_ioplang;
+    use zhc_langs::tasklang::coarsen_ioplang;
     use zhc_pipeline::Pipeline;
     use zhc_utils::{Dumpable, iter::CollectInVec};
 

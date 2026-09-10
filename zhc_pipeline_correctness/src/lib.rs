@@ -9,3 +9,4 @@ mod hpu_generate_translation_table;
 mod hpu_schedule;
 mod hpu_schedule_legacy;
 mod lower_iop_to_hpu;
+mod partition;

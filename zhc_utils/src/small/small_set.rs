@@ -1,5 +1,7 @@
 use std::hash::Hash;
 
+use serde::Serialize;
+
 use crate::{
     FastSet,
     small::{VArrayIntoIter, stack_set::StackSet},
@@ -201,6 +203,15 @@ impl<T: Eq + Hash, const N: usize> PartialEq for SmallSet<T, N> {
 }
 
 impl<T: Eq + Hash, const N: usize> Eq for SmallSet<T, N> {}
+
+impl<T: Eq + Hash + Serialize, const N: usize> Serialize for SmallSet<T, N> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.collect_seq(self.iter())
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -537,5 +548,36 @@ mod tests {
         let intersection: FastSet<_> = left.intersection(&right).copied().collect();
 
         assert_eq!(intersection, [2, 3].into_iter().collect());
+    }
+
+    #[test]
+    fn test_serialize_stack() {
+        let mut set: SmallSet<i32, 3> = SmallSet::with_capacity();
+        for value in [1, 2, 3] {
+            set.insert(value);
+        }
+
+        assert_eq!(
+            serde_json::to_value(set).unwrap(),
+            serde_json::json!([1, 2, 3])
+        );
+    }
+
+    #[test]
+    fn test_serialize_heap() {
+        let mut set: SmallSet<i32, 2> = SmallSet::with_capacity();
+        for value in [1, 2, 3] {
+            set.insert(value);
+        }
+        let mut serialized = serde_json::to_value(set)
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|value| value.as_i64().unwrap())
+            .collect::<Vec<_>>();
+        serialized.sort_unstable();
+
+        assert_eq!(serialized, [1, 2, 3]);
     }
 }

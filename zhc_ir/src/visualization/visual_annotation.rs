@@ -46,11 +46,16 @@ impl<V: Evaluation + VisualAnnotation> VisualAnnotation for ValState<V> {
 }
 
 impl<V: VisualAnnotation> VisualAnnotation for Option<V> {
+    fn style_modifier(&self) -> Option<StyleModifier> {
+        match self {
+            Some(v) => v.style_modifier(),
+            None => None,
+        }
+    }
     fn widget(&self) -> Option<Box<dyn DynamicElement>> {
         match self {
             Some(v) => v.widget(),
             None => None,
         }
     }
-
 }

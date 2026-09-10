@@ -28,4 +28,5 @@ pub mod passes {
     };
     pub use crate::hpu::scheduler::regular::schedule as hpu_schedule;
     pub use crate::hpu::translation_table::generate_translation_table as hpu_generate_translation_table;
+    pub use crate::partition;
 }

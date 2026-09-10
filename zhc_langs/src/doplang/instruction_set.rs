@@ -1,5 +1,6 @@
 use super::type_system::DopTypeSystem;
 use serde::Serialize;
+use zhc_utils::Dumpable;
 use std::fmt::{Debug, Display};
 use zhc_crypto::integer_semantics::lut::{LutId, LutRegistry};
 use zhc_ir::{DialectInstructionSet, Format, FormatContext, Signature, sig};
@@ -266,6 +267,12 @@ impl Display for Affinity {
             Affinity::Ctl => write!(f, "Ctl"),
         }
     }
+}
+
+#[test]
+fn testjgdsab() {
+    size_of::<DopInstructionSet>().dump_and_wait();
+    size_of::<Argument>().dump_and_panic()
 }
 
 /// HPU hardware instruction set.
