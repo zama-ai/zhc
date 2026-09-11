@@ -12,7 +12,6 @@ name = "dop_fmt"
 path = "src/dop_fmt/main.rs"
 
 [dependencies]
-clap = { version = "4", features = ["derive"] }
 zhc_config.workspace = true
 zhc_crypto.workspace = true
 zhc_ir.workspace = true
