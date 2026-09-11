@@ -1,6 +1,6 @@
 use zhc_ir::IR;
 
-use crate::doplang::{Argument, DopInstructionSet, DopLang};
+use crate::doplang::{CtMem, DopInstructionSet, DopLang};
 
 pub fn count_spills(ir: &IR<DopLang>) -> usize {
     ir.walk_ops_linear()
@@ -8,7 +8,7 @@ pub fn count_spills(ir: &IR<DopLang>) -> usize {
             matches!(
                 op.get_instruction(),
                 DopInstructionSet::ST {
-                    dst: Argument::CtHeap { .. },
+                    dst: CtMem::Heap(_),
                     ..
                 }
             )

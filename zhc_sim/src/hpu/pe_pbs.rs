@@ -534,7 +534,7 @@ fn get_dop_number_outputs(dop: &DOp) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use zhc_langs::doplang::Argument;
+    use zhc_langs::doplang::{CtReg, LutRef};
 
     use super::*;
 
@@ -542,9 +542,9 @@ mod tests {
         if is_flush {
             DOp {
                 raw: RawDOp::PBS_F {
-                    dst: Argument::PtConst { val: 0 },
-                    src: Argument::PtConst { val: 0 },
-                    lut: Argument::LutId { id: 0 },
+                    dst: CtReg::new(0usize),
+                    src: CtReg::new(0usize),
+                    lut: LutRef::new(0usize),
                 },
                 id: DOpId(id),
             }

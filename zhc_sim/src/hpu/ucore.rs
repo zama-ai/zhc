@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 
 use zhc_langs::{
-    doplang::{Argument, DopInstructionSet},
+    doplang::{DopInstructionSet, UserFlag, VirtId},
     hpulang::TransferId,
 };
 use zhc_utils::{FastMap, fsm};
@@ -97,7 +97,7 @@ impl Simulatable for UCore {
                         }
                         Some(LD_B2B { .. }) => {
                             let LD_B2B {
-                                flag: Argument::UserFlag { flag },
+                                flag: UserFlag { flag },
                                 ..
                             } = self.dops.pop_front().unwrap().raw
                             else {
@@ -114,7 +114,7 @@ impl Simulatable for UCore {
                             }
                         }
                         Some(WAIT {
-                            flag: Argument::UserFlag { flag },
+                            flag: UserFlag { flag },
                             ..
                         }) => {
                             match self.transfers.get(&TransferId(*flag)) {
@@ -147,8 +147,8 @@ impl Simulatable for UCore {
                             let DOp {
                                 raw:
                                     NOTIFY {
-                                        virt_id: Argument::VirtId { id: hid },
-                                        flag: Argument::UserFlag { flag },
+                                        virt_id: VirtId { id: hid },
+                                        flag: UserFlag { flag },
                                         ..
                                     },
                                 id,

@@ -17,229 +17,416 @@ pub const MASK_PBS4: usize = usize::MAX << 2;
 /// octets of consecutive registers produced by an 8-output PBS.
 pub const MASK_PBS8: usize = usize::MAX << 3;
 
-/// Inline operand carried by DOP instructions.
-///
-/// Supports two stream modes. *Unpatched* streams use symbolic
-/// variables (`CtVar`, `PtVar`) that the microcontroller resolves at
-/// load time into physical addresses and constants. *Patched* streams
-/// carry resolved memory locations (`CtHeap`, `CtIo`) and constant
-/// immediates (`PtConst`), as produced by the microcontroller or read
-/// back from execution traces.
-///
-/// `CtReg` equality uses a masked comparison: only the bits selected
-/// by the intersection of both masks are compared. This allows
-/// multi-output PBS results (which occupy consecutive aligned
-/// registers) to compare equal when their masks reflect the output
-/// arity.
-#[derive(Debug, Clone, Eq, Hash)]
-pub enum Argument {
-    /// Constant immediate plaintext value.
-    PtConst {
-        val: u8,
-    },
-    /// Ciphertext block located on the heap.
-    CtHeap {
-        addr: usize,
-    },
-    /// Ciphertext block located in I/O memory.
-    CtIo {
-        addr: usize,
-    },
-    /// Symbolic ciphertext source variable, patched to a physical address by
-    /// the microcontroller.
-    CtSrcVar {
-        id: usize,
-        block: usize,
-    },
-    /// Symbolic ciphertext destination variable, patched to a physical address by
-    /// the microcontroller.
-    CtDstVar {
-        id: usize,
-        block: usize,
-    },
-    /// Symbolic plaintext source variable, patched to a `PtConst` by the
-    /// microcontroller.
-    PtSrcVar {
-        id: usize,
-        block: usize,
-    },
-    /// Physical ciphertext register with an alignment mask.
-    CtReg {
-        mask: usize,
-        addr: usize,
-    },
-    /// Lookup table identifier.
-    LutId {
-        id: usize,
-    },
-    // Event uid
-    UserFlag {
-        flag: u8,
-    },
-    // Board identifier
-    VirtId {
-        id: u8,
-    },
+// -------------------------------------------------------------------------------------------
+// Standalone operand types.
+//
+// Each of these used to be a variant of one large `Argument` enum, inlined into every
+// `DopInstructionSet` field regardless of which kinds were actually valid there — which meant
+// e.g. `ADD`'s destination could hold a `PtConst` just as well as a `CtReg`, with only a runtime
+// check (in the asm parser) telling them apart after the fact. Splitting each kind into its own
+// type lets `DopInstructionSet`'s fields declare exactly which kinds they accept, so the invalid
+// combination can no longer be constructed at all.
+// -------------------------------------------------------------------------------------------
+
+/// A constant plaintext immediate value.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct PtConst {
+    pub val: u8,
 }
 
-impl Argument {
+impl PtConst {
+    pub fn new(val: u8) -> Self {
+        Self { val }
+    }
+
+    pub fn asm(&self, _lreg: &LutRegistry) -> String {
+        format!("{}", self.val)
+    }
+}
+
+impl Display for PtConst {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "PT_I({})", self.val)
+    }
+}
+
+/// A ciphertext block located on the heap.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct CtHeap {
+    pub addr: usize,
+}
+
+impl CtHeap {
+    pub fn new(addr: usize) -> Self {
+        Self { addr }
+    }
+
+    pub fn asm(&self, _lreg: &LutRegistry) -> String {
+        format!("TH.{}", self.addr)
+    }
+}
+
+impl Display for CtHeap {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "CT_H({})", self.addr)
+    }
+}
+
+/// A ciphertext block located in I/O memory.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct CtIo {
+    pub addr: usize,
+}
+
+impl CtIo {
+    pub fn new(addr: usize) -> Self {
+        Self { addr }
+    }
+
+    pub fn asm(&self, _lreg: &LutRegistry) -> String {
+        format!("@{}", self.addr)
+    }
+}
+
+impl Display for CtIo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "CT_IO({})", self.addr)
+    }
+}
+
+/// A symbolic ciphertext source variable, patched to a physical address by
+/// the microcontroller.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct CtSrcVar {
+    pub id: usize,
+    pub block: usize,
+}
+
+impl CtSrcVar {
+    pub fn new(id: usize, block: usize) -> Self {
+        Self { id, block }
+    }
+
+    pub fn asm(&self, _lreg: &LutRegistry) -> String {
+        format!("TS[{}].{}", self.id, self.block)
+    }
+}
+
+impl Display for CtSrcVar {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "TC({}, {})", self.id, self.block)
+    }
+}
+
+/// A symbolic ciphertext destination variable, patched to a physical address
+/// by the microcontroller.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct CtDstVar {
+    pub id: usize,
+    pub block: usize,
+}
+
+impl CtDstVar {
+    pub fn new(id: usize, block: usize) -> Self {
+        Self { id, block }
+    }
+
+    pub fn asm(&self, _lreg: &LutRegistry) -> String {
+        format!("TD[{}].{}", self.id, self.block)
+    }
+}
+
+impl Display for CtDstVar {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "TC({}, {})", self.id, self.block)
+    }
+}
+
+/// A symbolic plaintext source variable, patched to a `PtConst` by the
+/// microcontroller.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct PtSrcVar {
+    pub id: usize,
+    pub block: usize,
+}
+
+impl PtSrcVar {
+    pub fn new(id: usize, block: usize) -> Self {
+        Self { id, block }
+    }
+
+    pub fn asm(&self, _lreg: &LutRegistry) -> String {
+        format!("TI[{}].{}", self.id, self.block)
+    }
+}
+
+impl Display for PtSrcVar {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "TI({}, {})", self.id, self.block)
+    }
+}
+
+/// A physical ciphertext register with an alignment mask.
+///
+/// Equality is masked: only the bits selected by the intersection of both
+/// masks are compared. This allows multi-output PBS results (which occupy
+/// consecutive aligned registers) to compare equal when their masks reflect
+/// the output arity.
+#[derive(Debug, Clone, Copy, Eq, Hash)]
+pub struct CtReg {
+    pub mask: usize,
+    pub addr: usize,
+}
+
+impl CtReg {
     /// Creates a `CtReg` with [`MASK_NONE`] (all bits significant).
-    pub fn ct_reg(addr: impl Into<usize>) -> Self {
-        Argument::CtReg {
+    pub fn new(addr: impl Into<usize>) -> Self {
+        Self {
             mask: MASK_NONE,
             addr: addr.into(),
         }
     }
 
     /// Creates a `CtReg` with [`MASK_PBS2`] (lowest bit ignored).
-    pub fn ct_reg2(addr: impl Into<usize>) -> Self {
-        Argument::CtReg {
+    pub fn ml2(addr: impl Into<usize>) -> Self {
+        Self {
             mask: MASK_PBS2,
             addr: addr.into(),
         }
     }
 
     /// Creates a `CtReg` with [`MASK_PBS4`] (two lowest bits ignored).
-    pub fn ct_reg4(addr: impl Into<usize>) -> Self {
-        Argument::CtReg {
+    pub fn ml4(addr: impl Into<usize>) -> Self {
+        Self {
             mask: MASK_PBS4,
             addr: addr.into(),
         }
     }
 
     /// Creates a `CtReg` with [`MASK_PBS8`] (three lowest bits ignored).
-    pub fn ct_reg8(addr: impl Into<usize>) -> Self {
-        Argument::CtReg {
+    pub fn ml8(addr: impl Into<usize>) -> Self {
+        Self {
             mask: MASK_PBS8,
             addr: addr.into(),
         }
     }
 
-    /// Creates a symbolic ciphertext source variable operand.
-    pub fn ct_src_var(id: usize, block: usize) -> Self {
-        Argument::CtSrcVar { id, block }
-    }
-
-    /// Creates a symbolic ciphertext destination variable operand.
-    pub fn ct_dst_var(id: usize, block: usize) -> Self {
-        Argument::CtDstVar { id, block }
-    }
-
-    /// Creates a symbolic plaintext variable operand.
-    pub fn pt_src_var(id: usize, block: usize) -> Self {
-        Argument::PtSrcVar { id, block }
-    }
-
-    /// Creates a heap-addressed ciphertext operand.
-    pub fn ct_heap(heap_slot: usize) -> Self {
-        Argument::CtHeap { addr: heap_slot }
-    }
-
-    /// Creates an I/O-addressed ciphertext operand.
-    pub fn ct_io(io_slot: usize) -> Self {
-        Argument::CtIo { addr: io_slot }
-    }
-
-    /// Creates a constant plaintext immediate operand.
-    pub fn pt_const(val: u8) -> Self {
-        Argument::PtConst { val }
-    }
-
-    /// Creates a lookup table identifier operand from a [`LutId`].
-    pub fn lut_id(val: LutId) -> Self {
-        Argument::LutId { id: val.0 }
-    }
-
-    pub fn asm(&self, registry: &LutRegistry) -> String {
-        match self {
-            Argument::PtConst { val } => format!("{val}"),
-            Argument::CtHeap { addr } => format!("TH.{addr}"),
-            Argument::CtIo { addr } => format!("@{addr}"),
-            Argument::CtSrcVar { id, block } => format!("TS[{id}].{block}"),
-            Argument::CtDstVar { id, block } => format!("TD[{id}].{block}"),
-            Argument::PtSrcVar { id, block } => format!("TI[{id}].{block}"),
-            Argument::CtReg { addr, .. } => format!("R{addr}"),
-            Argument::LutId { id } => format!("Pbs{}", registry.get_raw_lut(&LutId(*id)).name()),
-            Argument::UserFlag { flag } => format!("F{flag}"),
-            Argument::VirtId { id } => format!("N{id}"),
-        }
+    pub fn asm(&self, _lreg: &LutRegistry) -> String {
+        format!("R{}", self.addr)
     }
 }
 
-impl PartialEq for Argument {
+impl PartialEq for CtReg {
     fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Argument::PtConst { val: lhs }, Argument::PtConst { val: rhs }) => lhs == rhs,
-            (Argument::CtHeap { addr: lhs }, Argument::CtHeap { addr: rhs }) => lhs == rhs,
-            (Argument::CtIo { addr: lhs }, Argument::CtIo { addr: rhs }) => lhs == rhs,
-            (
-                Argument::CtReg {
-                    mask: lhs_m,
-                    addr: lhs,
-                },
-                Argument::CtReg {
-                    mask: rhs_m,
-                    addr: rhs,
-                },
-            ) => ((lhs ^ rhs) & (lhs_m & rhs_m)) == 0,
-            (
-                Argument::CtSrcVar {
-                    id: lhs_id,
-                    block: lhs_block,
-                },
-                Argument::CtSrcVar {
-                    id: rhs_id,
-                    block: rhs_block,
-                },
-            ) => (lhs_id, lhs_block) == (rhs_id, rhs_block),
-            (
-                Argument::CtDstVar {
-                    id: lhs_id,
-                    block: lhs_block,
-                },
-                Argument::CtDstVar {
-                    id: rhs_id,
-                    block: rhs_block,
-                },
-            ) => (lhs_id, lhs_block) == (rhs_id, rhs_block),
-            (
-                Argument::PtSrcVar {
-                    id: lhs_id,
-                    block: lhs_block,
-                },
-                Argument::PtSrcVar {
-                    id: rhs_id,
-                    block: rhs_block,
-                },
-            ) => (lhs_id, lhs_block) == (rhs_id, rhs_block),
-            (Argument::LutId { id: lhs_id }, Argument::LutId { id: rhs_id }) => lhs_id == rhs_id,
-            (Argument::UserFlag { flag: lhs_flag }, Argument::UserFlag { flag: rhs_flag }) => {
-                lhs_flag == rhs_flag
-            }
-            (Argument::VirtId { id: lhs_id }, Argument::VirtId { id: rhs_id }) => lhs_id == rhs_id,
-            _ => false,
+        ((self.addr ^ other.addr) & (self.mask & other.mask)) == 0
+    }
+}
+
+impl Display for CtReg {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.mask {
+            MASK_NONE => write!(f, "R({})", self.addr),
+            MASK_PBS2 => write!(f, "R({}, 2)", self.addr),
+            MASK_PBS4 => write!(f, "R({}, 4)", self.addr),
+            MASK_PBS8 => write!(f, "R({}, 8)", self.addr),
+            _ => unreachable!(),
         }
     }
 }
 
-impl Display for Argument {
+/// A reference to a lookup table registered in a [`LutRegistry`].
+///
+/// Named `LutRef` rather than `LutId` to stay distinct from
+/// [`zhc_crypto::integer_semantics::lut::LutId`], the registry's own compact identifier type
+/// (which this simply wraps).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct LutRef {
+    pub id: usize,
+}
+
+impl LutRef {
+    pub fn new(id: impl Into<usize>) -> Self {
+        Self { id: id.into() }
+    }
+
+    pub fn asm(&self, lreg: &LutRegistry) -> String {
+        format!("Pbs{}", lreg.get_raw_lut(&LutId(self.id)).name())
+    }
+}
+
+impl From<LutId> for LutRef {
+    fn from(value: LutId) -> Self {
+        Self { id: value.0 }
+    }
+}
+
+impl Display for LutRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "LUT({})", self.id)
+    }
+}
+
+/// A user event flag: a hash/UUID for matching Ucore instructions together.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub struct UserFlag {
+    pub flag: u8,
+}
+
+impl UserFlag {
+    pub fn new(flag: u8) -> Self {
+        Self { flag }
+    }
+
+    pub fn asm(&self, _lreg: &LutRegistry) -> String {
+        format!("F{}", self.flag)
+    }
+}
+
+impl Display for UserFlag {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "F({})", self.flag)
+    }
+}
+
+/// A board (virtual HPU) identifier.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub struct VirtId {
+    pub id: u8,
+}
+
+impl VirtId {
+    pub fn new(id: u8) -> Self {
+        Self { id }
+    }
+
+    pub fn asm(&self, _lreg: &LutRegistry) -> String {
+        format!("N{}", self.id)
+    }
+}
+
+impl Display for VirtId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "N({})", self.id)
+    }
+}
+
+// -------------------------------------------------------------------------------------------
+// Role enums: for fields that legitimately accept one of a small, fixed set of operand kinds.
+// -------------------------------------------------------------------------------------------
+
+/// A ciphertext-scalar immediate: either a literal constant or a patchable template.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PtArg {
+    Const(PtConst),
+    Var(PtSrcVar),
+}
+
+impl PtArg {
+    pub fn cst(val: u8) -> Self {
+        Self::Const(PtConst::new(val))
+    }
+
+    pub fn var(id: usize, block: usize) -> Self {
+        Self::Var(PtSrcVar::new(id, block))
+    }
+
+    pub fn asm(&self, lreg: &LutRegistry) -> String {
+        match self {
+            PtArg::Const(inner) => inner.asm(lreg),
+            PtArg::Var(inner) => inner.asm(lreg),
+        }
+    }
+}
+
+impl From<PtConst> for PtArg {
+    fn from(value: PtConst) -> Self {
+        Self::Const(value)
+    }
+}
+
+impl From<PtSrcVar> for PtArg {
+    fn from(value: PtSrcVar) -> Self {
+        Self::Var(value)
+    }
+}
+
+impl Display for PtArg {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Argument::PtConst { val } => write!(f, "PT_I({val})"),
-            Argument::CtHeap { addr } => write!(f, "CT_H({addr})"),
-            Argument::CtIo { addr } => write!(f, "CT_IO({addr})"),
-            Argument::CtReg { mask, addr } if *mask == MASK_NONE => write!(f, "R({addr})"),
-            Argument::CtReg { mask, addr } if *mask == MASK_PBS2 => write!(f, "R({addr}, 2)"),
-            Argument::CtReg { mask, addr } if *mask == MASK_PBS4 => write!(f, "R({addr}, 4)"),
-            Argument::CtReg { mask, addr } if *mask == MASK_PBS8 => write!(f, "R({addr}, 8)"),
-            Argument::CtReg { .. } => unreachable!(),
-            Argument::CtSrcVar { id, block } | Argument::CtDstVar { id, block } => {
-                write!(f, "TC({id}, {block})")
-            }
-            Argument::PtSrcVar { id, block } => write!(f, "TI({id}, {block})"),
-            Argument::LutId { id } => write!(f, "LUT({id})"),
-            Argument::UserFlag { flag } => write!(f, "F({flag})"),
-            Argument::VirtId { id } => write!(f, "N({id})"),
+            PtArg::Const(inner) => Display::fmt(inner, f),
+            PtArg::Var(inner) => Display::fmt(inner, f),
+        }
+    }
+}
+
+/// A ciphertext memory location: one of the four addressing modes a `LD`/`ST`/multi-HPU slot
+/// operand may name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CtMem {
+    Heap(CtHeap),
+    Io(CtIo),
+    Src(CtSrcVar),
+    Dst(CtDstVar),
+}
+
+impl CtMem {
+    pub fn heap(addr: usize) -> Self {
+        Self::Heap(CtHeap::new(addr))
+    }
+
+    pub fn io(addr: usize) -> Self {
+        Self::Io(CtIo::new(addr))
+    }
+
+    pub fn src(id: usize, block: usize) -> Self {
+        Self::Src(CtSrcVar::new(id, block))
+    }
+
+    pub fn dst(id: usize, block: usize) -> Self {
+        Self::Dst(CtDstVar::new(id, block))
+    }
+
+    pub fn asm(&self, lreg: &LutRegistry) -> String {
+        match self {
+            CtMem::Heap(inner) => inner.asm(lreg),
+            CtMem::Io(inner) => inner.asm(lreg),
+            CtMem::Src(inner) => inner.asm(lreg),
+            CtMem::Dst(inner) => inner.asm(lreg),
+        }
+    }
+}
+
+impl From<CtHeap> for CtMem {
+    fn from(value: CtHeap) -> Self {
+        Self::Heap(value)
+    }
+}
+
+impl From<CtIo> for CtMem {
+    fn from(value: CtIo) -> Self {
+        Self::Io(value)
+    }
+}
+
+impl From<CtSrcVar> for CtMem {
+    fn from(value: CtSrcVar) -> Self {
+        Self::Src(value)
+    }
+}
+
+impl From<CtDstVar> for CtMem {
+    fn from(value: CtDstVar) -> Self {
+        Self::Dst(value)
+    }
+}
+
+impl Display for CtMem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CtMem::Heap(inner) => Display::fmt(inner, f),
+            CtMem::Io(inner) => Display::fmt(inner, f),
+            CtMem::Src(inner) => Display::fmt(inner, f),
+            CtMem::Dst(inner) => Display::fmt(inner, f),
         }
     }
 }
@@ -271,16 +458,16 @@ impl Display for Affinity {
 /// HPU hardware instruction set.
 ///
 /// Each variant corresponds to a single hardware opcode. Operands are
-/// carried inline as [`Argument`] values rather than through IR SSA
-/// references — the DOP stream is a flat, register-allocated
-/// instruction sequence.
+/// carried inline as concretely-typed fields (e.g. [`CtReg`], [`CtMem`],
+/// [`LutRef`]) rather than through IR SSA references — the DOP stream is a
+/// flat, register-allocated instruction sequence.
 ///
 /// Instructions fall into four categories matching the [`Affinity`]
 /// lanes: register arithmetic (`ADD`, `SUB`, `MAC`, `ADDS`, `SUBS`,
 /// `SSUB`, `MULS`), memory transfer (`LD`, `ST`), programmable
 /// bootstrapping (`PBS` family), and control (`_START`, `_END`).
 /// Scalar-operand arithmetic variants (`ADDS`, `SUBS`, `SSUB`,
-/// `MULS`) take a plaintext constant in `cst`.
+/// `MULS`, `MAC`) take a plaintext immediate in `cst`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[allow(non_camel_case_types)]
 pub enum DopInstructionSet {
@@ -292,114 +479,63 @@ pub enum DopInstructionSet {
     _END,
     /// `dst = src1 + src2` — ciphertext addition.
     ADD {
-        dst: Argument,
-        src1: Argument,
-        src2: Argument,
+        dst: CtReg,
+        src1: CtReg,
+        src2: CtReg,
     },
     /// `dst = src1 - src2` — ciphertext subtraction.
     SUB {
-        dst: Argument,
-        src1: Argument,
-        src2: Argument,
+        dst: CtReg,
+        src1: CtReg,
+        src2: CtReg,
     },
     /// `dst = src1 * cst + src2` — multiply-accumulate.
     MAC {
-        dst: Argument,
-        src1: Argument,
-        src2: Argument,
-        cst: Argument,
+        dst: CtReg,
+        src1: CtReg,
+        src2: CtReg,
+        cst: PtArg,
     },
     /// `dst = src + cst` — ciphertext-scalar addition.
-    ADDS {
-        dst: Argument,
-        src: Argument,
-        cst: Argument,
-    },
+    ADDS { dst: CtReg, src: CtReg, cst: PtArg },
     /// `dst = src - cst` — ciphertext minus scalar.
-    SUBS {
-        dst: Argument,
-        src: Argument,
-        cst: Argument,
-    },
+    SUBS { dst: CtReg, src: CtReg, cst: PtArg },
     /// `dst = cst - src` — scalar minus ciphertext.
-    SSUB {
-        dst: Argument,
-        src: Argument,
-        cst: Argument,
-    },
+    SSUB { dst: CtReg, src: CtReg, cst: PtArg },
     /// `dst = src * cst` — ciphertext-scalar multiplication.
-    MULS {
-        dst: Argument,
-        src: Argument,
-        cst: Argument,
-    },
+    MULS { dst: CtReg, src: CtReg, cst: PtArg },
     /// Loads a ciphertext block from memory into a register.
-    LD { dst: Argument, src: Argument },
+    LD { dst: CtReg, src: CtMem },
     /// Stores a ciphertext register to memory.
-    ST { dst: Argument, src: Argument },
+    ST { dst: CtMem, src: CtReg },
     /// Single-output programmable bootstrapping.
-    PBS {
-        dst: Argument,
-        src: Argument,
-        lut: Argument,
-    },
+    PBS { dst: CtReg, src: CtReg, lut: LutRef },
     /// 2-output many-LUT programmable bootstrapping.
-    PBS_ML2 {
-        dst: Argument,
-        src: Argument,
-        lut: Argument,
-    },
+    PBS_ML2 { dst: CtReg, src: CtReg, lut: LutRef },
     /// 4-output many-LUT programmable bootstrapping.
-    PBS_ML4 {
-        dst: Argument,
-        src: Argument,
-        lut: Argument,
-    },
+    PBS_ML4 { dst: CtReg, src: CtReg, lut: LutRef },
     /// 8-output many-LUT programmable bootstrapping.
-    PBS_ML8 {
-        dst: Argument,
-        src: Argument,
-        lut: Argument,
-    },
+    PBS_ML8 { dst: CtReg, src: CtReg, lut: LutRef },
     /// Single-output PBS with flush (batch boundary marker).
-    PBS_F {
-        dst: Argument,
-        src: Argument,
-        lut: Argument,
-    },
+    PBS_F { dst: CtReg, src: CtReg, lut: LutRef },
     /// 2-output many-LUT PBS with flush.
-    PBS_ML2_F {
-        dst: Argument,
-        src: Argument,
-        lut: Argument,
-    },
+    PBS_ML2_F { dst: CtReg, src: CtReg, lut: LutRef },
     /// 4-output many-LUT PBS with flush.
-    PBS_ML4_F {
-        dst: Argument,
-        src: Argument,
-        lut: Argument,
-    },
+    PBS_ML4_F { dst: CtReg, src: CtReg, lut: LutRef },
     /// 8-output many-LUT PBS with flush.
-    PBS_ML8_F {
-        dst: Argument,
-        src: Argument,
-        lut: Argument,
-    },
+    PBS_ML8_F { dst: CtReg, src: CtReg, lut: LutRef },
     /// Synchronization barrier.
     SYNC,
     /// Wait virtual op for Multi-HPU
-    WAIT {
-        flag: Argument,
-        slot: Option<Argument>,
-    },
+    WAIT { flag: UserFlag, slot: Option<CtMem> },
     /// Notify virtual op for Multi-HPU
     NOTIFY {
-        virt_id: Argument,
-        flag: Argument,
-        slot: Argument,
+        virt_id: VirtId,
+        flag: UserFlag,
+        slot: CtMem,
     },
     /// Load B2B virtual op for Multi-HPU
-    LD_B2B { flag: Argument, slot: Argument },
+    LD_B2B { flag: UserFlag, slot: CtMem },
 }
 
 impl Format for DopInstructionSet {
@@ -499,141 +635,6 @@ impl DopInstructionSet {
             NOTIFY { .. } => Ctl,
             WAIT { .. } => Ctl,
             LD_B2B { .. } => Ctl,
-        }
-    }
-
-    /// Returns true if this instruction reads from the given argument.
-    ///
-    /// Only checks ciphertext source operands (`src`, `src1`, `src2`),
-    /// not `cst` or `lut` fields. Returns false for `_START`, `_END`, and `SYNC`.
-    ///
-    /// # Panics
-    ///
-    /// Panics for the Multi-HPU instructions `WAIT`, `NOTIFY`, and `LD_B2B`.
-    pub fn has_source(&self, arg: &Argument) -> bool {
-        use DopInstructionSet::*;
-        match self {
-            ADD { src1, src2, .. } => arg == src1 || arg == src2,
-            SUB { src1, src2, .. } => arg == src1 || arg == src2,
-            MAC { src1, src2, .. } => arg == src1 || arg == src2,
-            ADDS { src, .. } => arg == src,
-            SUBS { src, .. } => arg == src,
-            SSUB { src, .. } => arg == src,
-            MULS { src, .. } => arg == src,
-            LD { src, .. } => arg == src,
-            ST { src, .. } => arg == src,
-            PBS { src, .. } => arg == src,
-            PBS_ML2 { src, .. } => arg == src,
-            PBS_ML4 { src, .. } => arg == src,
-            PBS_ML8 { src, .. } => arg == src,
-            PBS_F { src, .. } => arg == src,
-            PBS_ML2_F { src, .. } => arg == src,
-            PBS_ML4_F { src, .. } => arg == src,
-            PBS_ML8_F { src, .. } => arg == src,
-            _START => false,
-            _END => false,
-            SYNC => false,
-            LD_B2B { .. } | WAIT { .. } | NOTIFY { .. } => panic!(),
-        }
-    }
-
-    /// Returns the destination operand, or `None` for `_START`, `_END`, and `SYNC`.
-    ///
-    /// # Panics
-    ///
-    /// Panics for the Multi-HPU instructions `WAIT`, `NOTIFY`, and `LD_B2B`.
-    pub fn get_dst(&self) -> Option<&Argument> {
-        use DopInstructionSet::*;
-        match self {
-            ADD { dst, .. } => Some(dst),
-            SUB { dst, .. } => Some(dst),
-            MAC { dst, .. } => Some(dst),
-            ADDS { dst, .. } => Some(dst),
-            SUBS { dst, .. } => Some(dst),
-            SSUB { dst, .. } => Some(dst),
-            MULS { dst, .. } => Some(dst),
-            LD { dst, .. } => Some(dst),
-            ST { dst, .. } => Some(dst),
-            PBS { dst, .. } => Some(dst),
-            PBS_ML2 { dst, .. } => Some(dst),
-            PBS_ML4 { dst, .. } => Some(dst),
-            PBS_ML8 { dst, .. } => Some(dst),
-            PBS_F { dst, .. } => Some(dst),
-            PBS_ML2_F { dst, .. } => Some(dst),
-            PBS_ML4_F { dst, .. } => Some(dst),
-            PBS_ML8_F { dst, .. } => Some(dst),
-            _START => None,
-            _END => None,
-            SYNC => None,
-            LD_B2B { .. } | WAIT { .. } | NOTIFY { .. } => panic!(),
-        }
-    }
-
-    /// Returns the first source operand, or `None` for `_START`, `_END`, and
-    /// `SYNC`.
-    ///
-    /// # Panics
-    ///
-    /// Panics for the Multi-HPU instructions `WAIT`, `NOTIFY`, and `LD_B2B`.
-    pub fn get_src1(&self) -> Option<&Argument> {
-        use DopInstructionSet::*;
-        match self {
-            ADD { src1, .. } => Some(src1),
-            SUB { src1, .. } => Some(src1),
-            MAC { src1, .. } => Some(src1),
-            ADDS { src, .. } => Some(src),
-            SUBS { src, .. } => Some(src),
-            SSUB { src, .. } => Some(src),
-            MULS { src, .. } => Some(src),
-            LD { src, .. } => Some(src),
-            ST { src, .. } => Some(src),
-            PBS { src, .. } => Some(src),
-            PBS_ML2 { src, .. } => Some(src),
-            PBS_ML4 { src, .. } => Some(src),
-            PBS_ML8 { src, .. } => Some(src),
-            PBS_F { src, .. } => Some(src),
-            PBS_ML2_F { src, .. } => Some(src),
-            PBS_ML4_F { src, .. } => Some(src),
-            PBS_ML8_F { src, .. } => Some(src),
-            _START => None,
-            _END => None,
-            SYNC => None,
-            LD_B2B { .. } | WAIT { .. } | NOTIFY { .. } => panic!(),
-        }
-    }
-
-    /// Returns the second source operand, or `None` for instructions
-    /// with fewer than two ciphertext sources.
-    ///
-    /// Only `ADD`, `SUB`, and `MAC` carry a second source.
-    ///
-    /// # Panics
-    ///
-    /// Panics for the Multi-HPU virtual instructions `WAIT`, `NOTIFY`, and `LD_B2B`.
-    pub fn get_src2(&self) -> Option<&Argument> {
-        use DopInstructionSet::*;
-        match self {
-            ADD { src2, .. } => Some(src2),
-            SUB { src2, .. } => Some(src2),
-            MAC { src2, .. } => Some(src2),
-            ADDS { .. } => None,
-            SUBS { .. } => None,
-            SSUB { .. } => None,
-            MULS { .. } => None,
-            LD { .. } => None,
-            ST { .. } => None,
-            PBS { .. } => None,
-            PBS_ML2 { .. } => None,
-            PBS_ML4 { .. } => None,
-            PBS_ML8 { .. } => None,
-            PBS_F { .. } => None,
-            PBS_ML2_F { .. } => None,
-            PBS_ML4_F { .. } => None,
-            PBS_ML8_F { .. } => None,
-            _START => None,
-            _END => None,
-            SYNC => None,
-            LD_B2B { .. } | WAIT { .. } | NOTIFY { .. } => panic!(),
         }
     }
 }

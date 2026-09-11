@@ -1,8 +1,8 @@
 //! Text assembly emission and parsing for the DOP dialect.
 //!
 //! Converts between a register-allocated [`IR<DopLang>`] graph and a human-readable assembly
-//! listing. Each instruction appears on its own line as `OPCODE arg0 arg1 ...`, with operands
-//! formatted via [`Argument::asm`].
+//! listing. Each instruction appears on its own line as `OPCODE arg0 arg1 ...`, with each operand
+//! formatted via its own `.asm(...)` method (e.g. [`CtReg::asm`](super::CtReg::asm)).
 
 use crate::doplang::{DopInstructionSet, DopLang};
 use std::fmt::Write;
