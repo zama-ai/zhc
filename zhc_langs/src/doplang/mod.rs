@@ -29,17 +29,29 @@
 //! (programmable bootstrapping), and control (synchronization). The
 //! scheduler uses affinity to dispatch instructions to the
 //! corresponding hardware functional unit.
+//!
+//! A handful of read-only property checks are provided as plain functions, each returning a
+//! [`Dumpable`](zhc_utils::Dumpable) report: [`count_spills`] counts heap-spilling stores,
+//! [`instruction_mix`] buckets instructions by [`Affinity`], [`pbs_usage`] splits PBS
+//! instructions into flushing/non-flushing, and [`register_usage`] reports how many registers
+//! the program requires.
 
 mod assembly;
 mod dialect;
 mod evaluation;
+mod inspection_passes;
 mod instruction_set;
+mod parser;
+mod preamble;
 mod spills;
 mod type_system;
 
 pub use assembly::*;
 pub use dialect::*;
 pub use evaluation::*;
+pub use inspection_passes::*;
 pub use instruction_set::*;
+pub use parser::*;
+pub use preamble::*;
 pub use spills::*;
 pub use type_system::*;
