@@ -28,19 +28,17 @@
 //! simulator (see [`perf::run`]) to estimate hardware latency and PBS batching behavior,
 //! reporting whichever `--perf-rpt` categories were requested (or all of them, if none were).
 
+mod args;
 mod convert;
 mod inputs;
 mod passes;
 mod perf;
 mod sim;
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::ExitCode;
 
-use clap::Parser;
-
-use inputs::InputValue;
-use passes::DopPass;
+use args::Args;
 use perf::PerfReport;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -54,50 +52,6 @@ fn kind_of(path: &Path) -> Kind {
         Some(ext) if ext.eq_ignore_ascii_case("hex") => Kind::Hex,
         _ => Kind::Asm,
     }
-}
-
-#[derive(Parser, Debug)]
-#[command(
-    version,
-    about = "Converts between dop.asm text and hex, with optional property checks, \
-             interpretation, and performance estimation."
-)]
-struct Args {
-    /// Input file. A `.hex` extension is read as hex; anything else as dop.asm text.
-    #[arg(long)]
-    from: PathBuf,
-
-    /// Output file. A `.hex` extension is written as hex; anything else as dop.asm text.
-    #[arg(long)]
-    to: PathBuf,
-
-    /// Property-check passes to run and report, e.g. `--passes Spills,PbsUsage`. Repeatable.
-    #[arg(long, value_delimiter = ',')]
-    passes: Vec<DopPass>,
-
-    /// Interpret the loaded program (a structural smoke test: does it evaluate without
-    /// panicking?). Heap/io memory starts at zero; ciphertext template sources (TS[..]) are
-    /// seeded from --inputs where given and randomly otherwise; plaintext templates (TI[..])
-    /// are always random.
-    #[arg(long)]
-    simulate: bool,
-
-    /// Whole-integer value (decimal, or hex with a `0x` prefix) for one ciphertext template
-    /// source, e.g. `--inputs 0x55 --inputs 24`. Positional: the first value seeds TS[0], the
-    /// second TS[1], and so on — dop_fmt splits each into its per-block slots itself. Any
-    /// TS[<id>] beyond the given values is drawn randomly. Ignored without --simulate.
-    #[arg(long, value_delimiter = ',', requires = "simulate")]
-    inputs: Vec<InputValue>,
-
-    /// Run the loaded program through the real discrete-event HPU simulator to estimate
-    /// hardware latency and PBS batching behavior.
-    #[arg(long)]
-    perf: bool,
-
-    /// Which --perf report(s) to print, e.g. `--perf-rpt latency,pbs-batch`. Repeatable; all
-    /// reports print if none are given. Ignored without --perf.
-    #[arg(long, value_delimiter = ',', requires = "perf")]
-    perf_rpt: Vec<PerfReport>,
 }
 
 fn run(args: &Args) -> Result<(), String> {
@@ -170,7 +124,13 @@ fn run(args: &Args) -> Result<(), String> {
 }
 
 fn main() -> ExitCode {
-    let args = Args::parse();
+    let args = match args::parse(std::env::args().skip(1)) {
+        Ok(args) => args,
+        Err(err) => {
+            eprintln!("error: {err}");
+            return ExitCode::FAILURE;
+        }
+    };
 
     match run(&args) {
         Ok(()) => ExitCode::SUCCESS,

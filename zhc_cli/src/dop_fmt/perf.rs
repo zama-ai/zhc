@@ -20,7 +20,7 @@ use zhc_utils::units::{Cycle, Microseconds};
 
 /// A `--perf-rpt` report category. Each is printed independently; passing `--perf-rpt` more than
 /// once toggles on more than one.
-#[derive(clap::ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PerfReport {
     /// Total simulated execution latency.
     Latency,
@@ -35,6 +35,50 @@ impl PerfReport {
     /// Every report category, in the order they print by default when `--perf` is given without
     /// an explicit `--perf-rpt`.
     pub const ALL: &[PerfReport] = &[PerfReport::Latency, PerfReport::LowerBound, PerfReport::PbsBatch];
+
+    /// The name this report is selected by from `--perf-rpt`.
+    pub fn name(&self) -> &'static str {
+        match self {
+            PerfReport::Latency => "latency",
+            PerfReport::LowerBound => "lower-bound",
+            PerfReport::PbsBatch => "pbs-batch",
+        }
+    }
+}
+
+impl std::str::FromStr for PerfReport {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        PerfReport::ALL
+            .iter()
+            .find(|report| report.name().eq_ignore_ascii_case(s))
+            .copied()
+            .ok_or_else(|| {
+                let available = PerfReport::ALL
+                    .iter()
+                    .map(PerfReport::name)
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("unknown --perf-rpt report `{s}` (available: {available})")
+            })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_report_names_case_insensitively() {
+        assert_eq!("latency".parse::<PerfReport>().unwrap(), PerfReport::Latency);
+        assert_eq!(
+            "Lower-Bound".parse::<PerfReport>().unwrap(),
+            PerfReport::LowerBound
+        );
+        assert_eq!("pbs-batch".parse::<PerfReport>().unwrap(), PerfReport::PbsBatch);
+        assert!("bogus".parse::<PerfReport>().is_err());
+    }
 }
 
 /// Performance metrics for one simulated run of a `DopLang` program.
