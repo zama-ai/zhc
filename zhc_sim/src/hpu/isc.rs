@@ -2,8 +2,226 @@ use super::*;
 use crate::Dispatch;
 use serde::{Deserialize, Serialize};
 use std::{collections::VecDeque, fmt::Display};
-use zhc_langs::doplang::Affinity;
+use zhc_langs::doplang::{
+    Affinity, CtDstVar, CtHeap, CtIo, CtMem, CtReg, CtSrcVar, DopInstructionSet, LutRef, PtArg,
+    PtConst, PtSrcVar, UserFlag, VirtId,
+};
 use zhc_utils::{FastSet, SafeAs};
+
+/// The operand of a [`RawDOp`], whatever kind it is.
+///
+/// `DopInstructionSet`'s own fields each name the concrete kind (or the narrower `CtMem`/`PtArg`)
+/// they accept, but the ISC's hazard tracking below needs to compare "the operand, whatever kind
+/// it is" across arbitrary instructions — this is the only place in the simulator that needs
+/// that, so it lives here rather than in `zhc_langs` alongside `DopInstructionSet` itself.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Argument {
+    PtConst(PtConst),
+    CtHeap(CtHeap),
+    CtIo(CtIo),
+    CtSrcVar(CtSrcVar),
+    CtDstVar(CtDstVar),
+    PtSrcVar(PtSrcVar),
+    CtReg(CtReg),
+    LutRef(LutRef),
+    UserFlag(UserFlag),
+    VirtId(VirtId),
+}
+
+impl From<CtReg> for Argument {
+    fn from(v: CtReg) -> Self {
+        Self::CtReg(v)
+    }
+}
+impl From<CtMem> for Argument {
+    fn from(v: CtMem) -> Self {
+        match v {
+            CtMem::Heap(inner) => Self::CtHeap(inner),
+            CtMem::Io(inner) => Self::CtIo(inner),
+            CtMem::Src(inner) => Self::CtSrcVar(inner),
+            CtMem::Dst(inner) => Self::CtDstVar(inner),
+        }
+    }
+}
+impl From<PtArg> for Argument {
+    fn from(v: PtArg) -> Self {
+        match v {
+            PtArg::Const(inner) => Self::PtConst(inner),
+            PtArg::Var(inner) => Self::PtSrcVar(inner),
+        }
+    }
+}
+impl From<LutRef> for Argument {
+    fn from(v: LutRef) -> Self {
+        Self::LutRef(v)
+    }
+}
+impl From<UserFlag> for Argument {
+    fn from(v: UserFlag) -> Self {
+        Self::UserFlag(v)
+    }
+}
+impl From<VirtId> for Argument {
+    fn from(v: VirtId) -> Self {
+        Self::VirtId(v)
+    }
+}
+
+/// Cross-instruction operand accessors used for hazard tracking (see [`Pool::init_read_lock`]
+/// and [`Pool::init_write_lock`]).
+///
+/// Moved here (rather than living on `DopInstructionSet` in `zhc_langs`) because the ISC is the
+/// only place that needs "the operand, whatever kind it is" — everywhere else works against
+/// each field's concrete type directly.
+trait DopOperandExt {
+    /// Returns true if this instruction reads from the given argument.
+    ///
+    /// Only checks ciphertext source operands (`src`, `src1`, `src2`),
+    /// not `cst` or `lut` fields. Returns false for `_START`, `_END`, and `SYNC`.
+    ///
+    /// # Panics
+    ///
+    /// Panics for the Multi-HPU instructions `WAIT`, `NOTIFY`, and `LD_B2B`.
+    fn has_source(&self, arg: &Argument) -> bool;
+
+    /// Returns the destination operand, or `None` for `_START`, `_END`, and `SYNC`.
+    ///
+    /// # Panics
+    ///
+    /// Panics for the Multi-HPU instructions `WAIT`, `NOTIFY`, and `LD_B2B`.
+    fn get_dst(&self) -> Option<Argument>;
+
+    /// Returns the first source operand, or `None` for `_START`, `_END`, and
+    /// `SYNC`.
+    ///
+    /// # Panics
+    ///
+    /// Panics for the Multi-HPU instructions `WAIT`, `NOTIFY`, and `LD_B2B`.
+    fn get_src1(&self) -> Option<Argument>;
+
+    /// Returns the second source operand, or `None` for instructions
+    /// with fewer than two ciphertext sources.
+    ///
+    /// Only `ADD`, `SUB`, and `MAC` carry a second source.
+    ///
+    /// # Panics
+    ///
+    /// Panics for the Multi-HPU virtual instructions `WAIT`, `NOTIFY`, and `LD_B2B`.
+    fn get_src2(&self) -> Option<Argument>;
+}
+
+impl DopOperandExt for DopInstructionSet {
+    fn has_source(&self, arg: &Argument) -> bool {
+        use DopInstructionSet::*;
+        fn eq<T: Into<Argument>>(a: &Argument, b: T) -> bool {
+            *a == b.into()
+        }
+        match self {
+            ADD { src1, src2, .. } => eq(arg, *src1) || eq(arg, *src2),
+            SUB { src1, src2, .. } => eq(arg, *src1) || eq(arg, *src2),
+            MAC { src1, src2, .. } => eq(arg, *src1) || eq(arg, *src2),
+            ADDS { src, .. } => eq(arg, *src),
+            SUBS { src, .. } => eq(arg, *src),
+            SSUB { src, .. } => eq(arg, *src),
+            MULS { src, .. } => eq(arg, *src),
+            LD { src, .. } => eq(arg, *src),
+            ST { src, .. } => eq(arg, *src),
+            PBS { src, .. } => eq(arg, *src),
+            PBS_ML2 { src, .. } => eq(arg, *src),
+            PBS_ML4 { src, .. } => eq(arg, *src),
+            PBS_ML8 { src, .. } => eq(arg, *src),
+            PBS_F { src, .. } => eq(arg, *src),
+            PBS_ML2_F { src, .. } => eq(arg, *src),
+            PBS_ML4_F { src, .. } => eq(arg, *src),
+            PBS_ML8_F { src, .. } => eq(arg, *src),
+            _START => false,
+            _END => false,
+            SYNC => false,
+            LD_B2B { .. } | WAIT { .. } | NOTIFY { .. } => panic!(),
+        }
+    }
+
+    fn get_dst(&self) -> Option<Argument> {
+        use DopInstructionSet::*;
+        match self {
+            ADD { dst, .. } => Some((*dst).into()),
+            SUB { dst, .. } => Some((*dst).into()),
+            MAC { dst, .. } => Some((*dst).into()),
+            ADDS { dst, .. } => Some((*dst).into()),
+            SUBS { dst, .. } => Some((*dst).into()),
+            SSUB { dst, .. } => Some((*dst).into()),
+            MULS { dst, .. } => Some((*dst).into()),
+            LD { dst, .. } => Some((*dst).into()),
+            ST { dst, .. } => Some((*dst).into()),
+            PBS { dst, .. } => Some((*dst).into()),
+            PBS_ML2 { dst, .. } => Some((*dst).into()),
+            PBS_ML4 { dst, .. } => Some((*dst).into()),
+            PBS_ML8 { dst, .. } => Some((*dst).into()),
+            PBS_F { dst, .. } => Some((*dst).into()),
+            PBS_ML2_F { dst, .. } => Some((*dst).into()),
+            PBS_ML4_F { dst, .. } => Some((*dst).into()),
+            PBS_ML8_F { dst, .. } => Some((*dst).into()),
+            _START => None,
+            _END => None,
+            SYNC => None,
+            LD_B2B { .. } | WAIT { .. } | NOTIFY { .. } => panic!(),
+        }
+    }
+
+    fn get_src1(&self) -> Option<Argument> {
+        use DopInstructionSet::*;
+        match self {
+            ADD { src1, .. } => Some((*src1).into()),
+            SUB { src1, .. } => Some((*src1).into()),
+            MAC { src1, .. } => Some((*src1).into()),
+            ADDS { src, .. } => Some((*src).into()),
+            SUBS { src, .. } => Some((*src).into()),
+            SSUB { src, .. } => Some((*src).into()),
+            MULS { src, .. } => Some((*src).into()),
+            LD { src, .. } => Some((*src).into()),
+            ST { src, .. } => Some((*src).into()),
+            PBS { src, .. } => Some((*src).into()),
+            PBS_ML2 { src, .. } => Some((*src).into()),
+            PBS_ML4 { src, .. } => Some((*src).into()),
+            PBS_ML8 { src, .. } => Some((*src).into()),
+            PBS_F { src, .. } => Some((*src).into()),
+            PBS_ML2_F { src, .. } => Some((*src).into()),
+            PBS_ML4_F { src, .. } => Some((*src).into()),
+            PBS_ML8_F { src, .. } => Some((*src).into()),
+            _START => None,
+            _END => None,
+            SYNC => None,
+            LD_B2B { .. } | WAIT { .. } | NOTIFY { .. } => panic!(),
+        }
+    }
+
+    fn get_src2(&self) -> Option<Argument> {
+        use DopInstructionSet::*;
+        match self {
+            ADD { src2, .. } => Some((*src2).into()),
+            SUB { src2, .. } => Some((*src2).into()),
+            MAC { src2, .. } => Some((*src2).into()),
+            ADDS { .. } => None,
+            SUBS { .. } => None,
+            SSUB { .. } => None,
+            MULS { .. } => None,
+            LD { .. } => None,
+            ST { .. } => None,
+            PBS { .. } => None,
+            PBS_ML2 { .. } => None,
+            PBS_ML4 { .. } => None,
+            PBS_ML8 { .. } => None,
+            PBS_F { .. } => None,
+            PBS_ML2_F { .. } => None,
+            PBS_ML4_F { .. } => None,
+            PBS_ML8_F { .. } => None,
+            _START => None,
+            _END => None,
+            SYNC => None,
+            LD_B2B { .. } | WAIT { .. } | NOTIFY { .. } => panic!(),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct PredLock(FastSet<DOpId>);
@@ -86,7 +304,7 @@ impl Pool {
                 let raws = self
                     .slots
                     .iter()
-                    .filter(|s| s.state < State::Loaded && s.dop.raw.has_source(dst))
+                    .filter(|s| s.state < State::Loaded && s.dop.raw.has_source(&dst))
                     .map(|s| s.dop.id)
                     .collect();
                 PredLock(raws)

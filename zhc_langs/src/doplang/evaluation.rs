@@ -9,12 +9,12 @@ use zhc_ir::evaluation::{Evaluable, EvaluatesTo, Evaluation};
 use zhc_utils::small::SmallVec;
 use zhc_utils::{FastMap, SafeAs, svec};
 
-use super::{Argument, DopTypeSystem};
+use super::{CtMem, CtReg, DopTypeSystem, LutRef, PtArg};
 
 /// Interpretation domain for DOP programs.
 ///
 /// DOP uses context-threading: all data flows through inline
-/// [`Argument`] operands, not SSA values. The single `Ctx` variant
+/// operand fields, not SSA values. The single `Ctx` variant
 /// serves as an ordering token shuttled through the IR framework.
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub enum DopValue {
@@ -91,69 +91,81 @@ impl DopInterpreterContext {
         }
     }
 
-    /// Reads a ciphertext block from the machine state.
-    fn read_ct(&self, arg: &Argument) -> EmulatedCiphertextBlock {
+    /// Reads a ciphertext block from a register.
+    fn read_ct_reg(&self, arg: &CtReg) -> EmulatedCiphertextBlock {
+        // SAFETY: execution order guarantees the slot was written before read.
+        self.registers[arg.addr].unwrap()
+    }
+
+    /// Writes a ciphertext block to a register.
+    fn write_ct_reg(&mut self, arg: &CtReg, val: EmulatedCiphertextBlock) {
+        self.registers[arg.addr] = Some(val);
+    }
+
+    /// Reads a ciphertext block from memory (heap, I/O, or an unpatched source template).
+    ///
+    /// # Panics
+    ///
+    /// Panics on `CtMem::Dst`: a destination template is only ever written to, never read from.
+    fn read_ct_mem(&self, arg: &CtMem) -> EmulatedCiphertextBlock {
         match arg {
-            // SAFETY: execution order guarantees the slot was written before read.
-            Argument::CtReg { addr, .. } => self.registers[*addr].unwrap(),
-            Argument::CtHeap { addr } => self
+            CtMem::Heap(inner) => self
                 .heap
-                .get(addr)
-                .unwrap_or_else(|| panic!("Heap CT_H({addr}) not populated"))
+                .get(&inner.addr)
+                .unwrap_or_else(|| panic!("Heap CT_H({}) not populated", inner.addr))
                 .clone(),
-            Argument::CtIo { addr } => self
+            CtMem::Io(inner) => self
                 .io
-                .get(addr)
-                .unwrap_or_else(|| panic!("I/O CT_IO({addr}) not populated"))
+                .get(&inner.addr)
+                .unwrap_or_else(|| panic!("I/O CT_IO({}) not populated", inner.addr))
                 .clone(),
-            Argument::CtSrcVar { id, block } => self
+            CtMem::Src(inner) => self
                 .sources
-                .get(&(*id, *block))
-                .unwrap_or_else(|| panic!("Source TC({id}, {block}) not populated"))
+                .get(&(inner.id, inner.block))
+                .unwrap_or_else(|| panic!("Source TC({}, {}) not populated", inner.id, inner.block))
                 .clone(),
-            _ => panic!("Expected ciphertext argument, got {arg:?}"),
+            CtMem::Dst(_) => panic!("Expected a readable memory location, got {arg:?}"),
         }
     }
 
-    /// Writes a ciphertext block to the machine state.
-    fn write_ct(&mut self, arg: &Argument, val: EmulatedCiphertextBlock) {
+    /// Writes a ciphertext block to memory (heap, I/O, or an unpatched destination template).
+    ///
+    /// # Panics
+    ///
+    /// Panics on `CtMem::Src`: a source template is only ever read from, never written to.
+    fn write_ct_mem(&mut self, arg: &CtMem, val: EmulatedCiphertextBlock) {
         match arg {
-            Argument::CtReg { addr, .. } => self.registers[*addr] = Some(val),
-            Argument::CtHeap { addr } => {
-                self.heap.insert(*addr, val);
+            CtMem::Heap(inner) => {
+                self.heap.insert(inner.addr, val);
             }
-            Argument::CtIo { addr } => {
-                self.io.insert(*addr, val);
+            CtMem::Io(inner) => {
+                self.io.insert(inner.addr, val);
             }
-            Argument::CtDstVar { id, block } => {
-                self.destinations.insert((*id, *block), val);
+            CtMem::Dst(inner) => {
+                self.destinations.insert((inner.id, inner.block), val);
             }
-            _ => panic!("Expected ciphertext destination, got {arg:?}"),
+            CtMem::Src(_) => panic!("Expected a writable memory location, got {arg:?}"),
         }
     }
 
-    /// Builds a plaintext block from an inline constant argument.
-    fn read_pt(&self, arg: &Argument) -> EmulatedPlaintextBlock {
+    /// Builds a plaintext block from an inline constant or symbolic template argument.
+    fn read_pt(&self, arg: &PtArg) -> EmulatedPlaintextBlock {
         match arg {
-            Argument::PtConst { val } => self
+            PtArg::Const(inner) => self
                 .spec
                 .complete_plaintext_block_spec()
-                .from_message((*val).sas::<EmulatedPlaintextBlockStorage>()),
-            Argument::PtSrcVar { id, block } => self
+                .from_message(inner.val.sas::<EmulatedPlaintextBlockStorage>()),
+            PtArg::Var(inner) => self
                 .pt_sources
-                .get(&(*id, *block))
-                .unwrap_or_else(|| panic!("Plaintext TI({id}, {block}) not populated"))
+                .get(&(inner.id, inner.block))
+                .unwrap_or_else(|| panic!("Plaintext TI({}, {}) not populated", inner.id, inner.block))
                 .clone(),
-            _ => panic!("Expected plaintext argument, got {arg:?}"),
         }
     }
 
-    /// Extracts a LutId from an argument.
-    fn resolve_lut_id(arg: &Argument) -> LutId {
-        match arg {
-            Argument::LutId { id } => LutId(*id),
-            _ => panic!("Expected LutId, got {arg:?}"),
-        }
+    /// Resolves a `LutRef` to its registry `LutId`.
+    fn resolve_lut(arg: &LutRef) -> LutId {
+        LutId(arg.id)
     }
 }
 
@@ -169,15 +181,15 @@ impl Evaluable<DopValue> for super::DopInstructionSet {
         match self {
             // ── ALU: register arithmetic ─────────────────────────────
             ADD { dst, src1, src2 } => {
-                let left = context.read_ct(src1);
-                let right = context.read_ct(src2);
-                context.write_ct(dst, left.wrapping_add(right));
+                let left = context.read_ct_reg(src1);
+                let right = context.read_ct_reg(src2);
+                context.write_ct_reg(dst, left.wrapping_add(right));
                 svec![DopValue::Ctx]
             }
             SUB { dst, src1, src2 } => {
-                let left = context.read_ct(src1);
-                let right = context.read_ct(src2);
-                context.write_ct(dst, left.wrapping_sub(right));
+                let left = context.read_ct_reg(src1);
+                let right = context.read_ct_reg(src2);
+                context.write_ct_reg(dst, left.wrapping_sub(right));
                 svec![DopValue::Ctx]
             }
             MAC {
@@ -187,75 +199,72 @@ impl Evaluable<DopValue> for super::DopInstructionSet {
                 cst,
             } => {
                 // dst = src1 * cst + src2
-                let left = context.read_ct(src1);
-                let right = context.read_ct(src2);
-                let Argument::PtConst { val: cst } = cst else {
+                let left = context.read_ct_reg(src1);
+                let right = context.read_ct_reg(src2);
+                let PtArg::Const(cst) = cst else {
                     unreachable!()
                 };
-                assert!(cst.is_power_of_two());
-                context.write_ct(
+                assert!(cst.val.is_power_of_two());
+                context.write_ct_reg(
                     dst,
-                    left.wrapping_shl(cst.ilog2().sas()).wrapping_add(right),
+                    left.wrapping_shl(cst.val.ilog2().sas()).wrapping_add(right),
                 );
                 svec![DopValue::Ctx]
             }
             ADDS { dst, src, cst } => {
-                let ct = context.read_ct(src);
+                let ct = context.read_ct_reg(src);
                 let pt = context.read_pt(cst);
-                context.write_ct(dst, ct.wrapping_add_pt(pt));
+                context.write_ct_reg(dst, ct.wrapping_add_pt(pt));
                 svec![DopValue::Ctx]
             }
             SUBS { dst, src, cst } => {
-                let ct = context.read_ct(src);
+                let ct = context.read_ct_reg(src);
                 let pt = context.read_pt(cst);
-                context.write_ct(dst, ct.wrapping_sub_pt(pt));
+                context.write_ct_reg(dst, ct.wrapping_sub_pt(pt));
                 svec![DopValue::Ctx]
             }
             SSUB { dst, src, cst } => {
                 let pt = context.read_pt(cst);
-                let ct = context.read_ct(src);
-                context.write_ct(dst, pt.wrapping_sub_ct(ct));
+                let ct = context.read_ct_reg(src);
+                context.write_ct_reg(dst, pt.wrapping_sub_ct(ct));
                 svec![DopValue::Ctx]
             }
             MULS { dst, src, cst } => {
-                let ct = context.read_ct(src);
+                let ct = context.read_ct_reg(src);
                 let pt = context.read_pt(cst);
-                context.write_ct(dst, ct.wrapping_mul_pt(pt));
+                context.write_ct_reg(dst, ct.wrapping_mul_pt(pt));
                 svec![DopValue::Ctx]
             }
 
             // ── Memory: load / store ─────────────────────────────────
             LD { dst, src } => {
-                let ct = context.read_ct(src);
-                context.write_ct(dst, ct);
+                let ct = context.read_ct_mem(src);
+                context.write_ct_reg(dst, ct);
                 svec![DopValue::Ctx]
             }
             ST { dst, src } => {
-                let ct = context.read_ct(src);
-                context.write_ct(dst, ct);
+                let ct = context.read_ct_reg(src);
+                context.write_ct_mem(dst, ct);
                 svec![DopValue::Ctx]
             }
 
             // ── PBS: single output (regular + flush) ─────────────────
             PBS { dst, src, lut } | PBS_F { dst, src, lut } => {
-                let ct = context.read_ct(src);
-                let lut_id = DopInterpreterContext::resolve_lut_id(lut);
+                let ct = context.read_ct_reg(src);
+                let lut_id = DopInterpreterContext::resolve_lut(lut);
                 let lut_def = context.lut_reg.get_l1(&lut_id);
-                context.write_ct(dst, lut_def.lookup(ct, LookupCheck::AllowBothPadding));
+                context.write_ct_reg(dst, lut_def.lookup(ct, LookupCheck::AllowBothPadding));
                 svec![DopValue::Ctx]
             }
 
             // ── PBS: 2-output many-LUT ───────────────────────────────
             PBS_ML2 { dst, src, lut } | PBS_ML2_F { dst, src, lut } => {
-                let ct = context.read_ct(src);
-                let lut_id = DopInterpreterContext::resolve_lut_id(lut);
+                let ct = context.read_ct_reg(src);
+                let lut_id = DopInterpreterContext::resolve_lut(lut);
                 let lut_def = context.lut_reg.get_l2(&lut_id);
                 let (ct0, ct1) = lut_def.lookup(ct, LookupCheck::AllowOutputPadding);
                 // Write to consecutive registers from the aligned base.
-                let Argument::CtReg { addr, mask } = dst else {
-                    panic!("PBS_ML2 dst must be CtReg, got {dst:?}");
-                };
-                let base = addr & mask;
+                let base = dst.addr & dst.mask;
                 context.registers[base] = Some(ct0);
                 context.registers[base + 1] = Some(ct1);
                 svec![DopValue::Ctx]

@@ -8,8 +8,11 @@
 use bitfield_struct::bitfield;
 use zhc_crypto::integer_semantics::lut::LutId;
 use zhc_ir::IR;
-use zhc_langs::doplang::DopLang;
-use zhc_utils::SafeAs;
+use zhc_langs::doplang::{
+    CtDstVar, CtHeap, CtIo, CtMem, CtReg, CtSrcVar, DopInstructionSet, DopLang, LutRef, MASK_PBS2,
+    MASK_PBS4, MASK_PBS8, PtArg, PtConst, PtSrcVar, UserFlag, VirtId,
+};
+use zhc_utils::{SafeAs, svec};
 
 /// Binary representation of a device operation instruction.
 pub type DOpRepr = u32;
@@ -162,8 +165,7 @@ pub fn generate_translation_table(
     let mut output = Vec::with_capacity(ir.n_ops().sas());
     output.push(0); // reserve room for the length of the stream at the beginning of the stream.
     for op in ir.walk_ops_topological() {
-        use zhc_langs::doplang::Argument::*;
-        use zhc_langs::doplang::DopInstructionSet::*;
+        use DopInstructionSet::*;
         match op.get_instruction() {
             ADD {
                 dst: CtReg { addr: dst, .. },
@@ -197,7 +199,7 @@ pub fn generate_translation_table(
                 dst: CtReg { addr: dst, .. },
                 src1: CtReg { addr: src1, .. },
                 src2: CtReg { addr: src2, .. },
-                cst: PtConst { val: cst },
+                cst: PtArg::Const(PtConst { val: cst }),
             } => {
                 output.push(
                     PeArithHex::new()
@@ -209,10 +211,16 @@ pub fn generate_translation_table(
                         .0,
                 );
             }
+            // A `TI[..]` template multiplier has no hardware encoding: `mul_factor` is a small
+            // literal field, not a runtime-patchable slot.
+            MAC {
+                cst: PtArg::Var(_),
+                ..
+            } => panic!("MAC: a templated (TI[..]) multiplier cannot be hex-encoded"),
             ADDS {
                 dst: CtReg { addr: dst, .. },
                 src: CtReg { addr: src, .. },
-                cst: PtConst { val: cst },
+                cst: PtArg::Const(PtConst { val: cst }),
             } => output.push(
                 PeArithMsgHex::new()
                     .with_dst_rid((*dst).sas())
@@ -226,10 +234,10 @@ pub fn generate_translation_table(
                 dst: CtReg { addr: dst, .. },
                 src: CtReg { addr: src, .. },
                 cst:
-                    PtSrcVar {
+                    PtArg::Var(PtSrcVar {
                         id: tid,
                         block: bid,
-                    },
+                    }),
             } => output.push(
                 PeArithMsgHex::new()
                     .with_dst_rid((*dst).sas())
@@ -242,7 +250,7 @@ pub fn generate_translation_table(
             SUBS {
                 dst: CtReg { addr: dst, .. },
                 src: CtReg { addr: src, .. },
-                cst: PtConst { val: cst },
+                cst: PtArg::Const(PtConst { val: cst }),
             } => output.push(
                 PeArithMsgHex::new()
                     .with_dst_rid((*dst).sas())
@@ -256,10 +264,10 @@ pub fn generate_translation_table(
                 dst: CtReg { addr: dst, .. },
                 src: CtReg { addr: src, .. },
                 cst:
-                    PtSrcVar {
+                    PtArg::Var(PtSrcVar {
                         id: tid,
                         block: bid,
-                    },
+                    }),
             } => output.push(
                 PeArithMsgHex::new()
                     .with_dst_rid((*dst).sas())
@@ -272,7 +280,7 @@ pub fn generate_translation_table(
             SSUB {
                 dst: CtReg { addr: dst, .. },
                 src: CtReg { addr: src, .. },
-                cst: PtConst { val: cst },
+                cst: PtArg::Const(PtConst { val: cst }),
             } => output.push(
                 PeArithMsgHex::new()
                     .with_dst_rid((*dst).sas())
@@ -286,10 +294,10 @@ pub fn generate_translation_table(
                 dst: CtReg { addr: dst, .. },
                 src: CtReg { addr: src, .. },
                 cst:
-                    PtSrcVar {
+                    PtArg::Var(PtSrcVar {
                         id: tid,
                         block: bid,
-                    },
+                    }),
             } => output.push(
                 PeArithMsgHex::new()
                     .with_dst_rid((*dst).sas())
@@ -302,7 +310,7 @@ pub fn generate_translation_table(
             MULS {
                 dst: CtReg { addr: dst, .. },
                 src: CtReg { addr: src, .. },
-                cst: PtConst { val: cst },
+                cst: PtArg::Const(PtConst { val: cst }),
             } => output.push(
                 PeArithMsgHex::new()
                     .with_dst_rid((*dst).sas())
@@ -316,10 +324,10 @@ pub fn generate_translation_table(
                 dst: CtReg { addr: dst, .. },
                 src: CtReg { addr: src, .. },
                 cst:
-                    PtSrcVar {
+                    PtArg::Var(PtSrcVar {
                         id: tid,
                         block: bid,
-                    },
+                    }),
             } => output.push(
                 PeArithMsgHex::new()
                     .with_dst_rid((*dst).sas())
@@ -331,7 +339,7 @@ pub fn generate_translation_table(
             ),
             LD {
                 dst: CtReg { addr: dst, .. },
-                src: CtHeap { addr: src },
+                src: CtMem::Heap(CtHeap { addr: src }),
             } => {
                 output.push(
                     PeMemHex::new()
@@ -344,7 +352,7 @@ pub fn generate_translation_table(
             }
             LD {
                 dst: CtReg { addr: dst, .. },
-                src: CtIo { addr: src },
+                src: CtMem::Io(CtIo { addr: src }),
             } => {
                 output.push(
                     PeMemHex::new()
@@ -358,10 +366,10 @@ pub fn generate_translation_table(
             LD {
                 dst: CtReg { addr: dst, .. },
                 src:
-                    CtSrcVar {
+                    CtMem::Src(CtSrcVar {
                         id: tid,
                         block: bid,
-                    },
+                    }),
             } => {
                 output.push(
                     PeMemHex::new()
@@ -372,8 +380,11 @@ pub fn generate_translation_table(
                         .0,
                 );
             }
+            LD { src: CtMem::Dst(_), .. } => {
+                panic!("LD: a destination template (TD[..]) cannot be a load source")
+            }
             ST {
-                dst: CtHeap { addr: dst },
+                dst: CtMem::Heap(CtHeap { addr: dst }),
                 src: CtReg { addr: src, .. },
             } => {
                 output.push(
@@ -386,7 +397,7 @@ pub fn generate_translation_table(
                 );
             }
             ST {
-                dst: CtIo { addr: dst },
+                dst: CtMem::Io(CtIo { addr: dst }),
                 src: CtReg { addr: src, .. },
             } => {
                 output.push(
@@ -400,10 +411,10 @@ pub fn generate_translation_table(
             }
             ST {
                 dst:
-                    CtDstVar {
+                    CtMem::Dst(CtDstVar {
                         id: tid,
                         block: bid,
-                    },
+                    }),
                 src: CtReg { addr: src, .. },
             } => {
                 output.push(
@@ -415,10 +426,13 @@ pub fn generate_translation_table(
                         .0,
                 );
             }
+            ST { dst: CtMem::Src(_), .. } => {
+                panic!("ST: a source template (TS[..]) cannot be a store destination")
+            }
             PBS {
                 dst: CtReg { addr: dst, .. },
                 src: CtReg { addr: src, .. },
-                lut: LutId { id: gid },
+                lut: LutRef { id: gid },
             } => {
                 let gid = match lut_relocation {
                     Some(reloc) => reloc.get(*gid).unwrap().0,
@@ -436,7 +450,7 @@ pub fn generate_translation_table(
             PBS_ML2 {
                 dst: CtReg { addr: dst, .. },
                 src: CtReg { addr: src, .. },
-                lut: LutId { id: gid },
+                lut: LutRef { id: gid },
             } => {
                 output.push(
                     PePbsHex::new()
@@ -450,7 +464,7 @@ pub fn generate_translation_table(
             PBS_ML4 {
                 dst: CtReg { addr: dst, .. },
                 src: CtReg { addr: src, .. },
-                lut: LutId { id: gid },
+                lut: LutRef { id: gid },
             } => {
                 output.push(
                     PePbsHex::new()
@@ -464,7 +478,7 @@ pub fn generate_translation_table(
             PBS_ML8 {
                 dst: CtReg { addr: dst, .. },
                 src: CtReg { addr: src, .. },
-                lut: LutId { id: gid },
+                lut: LutRef { id: gid },
             } => {
                 output.push(
                     PePbsHex::new()
@@ -478,7 +492,7 @@ pub fn generate_translation_table(
             PBS_F {
                 dst: CtReg { addr: dst, .. },
                 src: CtReg { addr: src, .. },
-                lut: LutId { id: gid },
+                lut: LutRef { id: gid },
             } => {
                 output.push(
                     PePbsHex::new()
@@ -492,7 +506,7 @@ pub fn generate_translation_table(
             PBS_ML2_F {
                 dst: CtReg { addr: dst, .. },
                 src: CtReg { addr: src, .. },
-                lut: LutId { id: gid },
+                lut: LutRef { id: gid },
             } => {
                 output.push(
                     PePbsHex::new()
@@ -506,7 +520,7 @@ pub fn generate_translation_table(
             PBS_ML4_F {
                 dst: CtReg { addr: dst, .. },
                 src: CtReg { addr: src, .. },
-                lut: LutId { id: gid },
+                lut: LutRef { id: gid },
             } => {
                 output.push(
                     PePbsHex::new()
@@ -520,7 +534,7 @@ pub fn generate_translation_table(
             PBS_ML8_F {
                 dst: CtReg { addr: dst, .. },
                 src: CtReg { addr: src, .. },
-                lut: LutId { id: gid },
+                lut: LutRef { id: gid },
             } => {
                 output.push(
                     PePbsHex::new()
@@ -538,8 +552,8 @@ pub fn generate_translation_table(
                 flag: UserFlag { flag },
             } => {
                 let (has_data, mode_hex, slot_hex) = match slot {
-                    Some(CtIo { addr }) => (1, MEM_ADDR, *addr as u16),
-                    Some(CtHeap { addr }) => (1, MEM_HEAP, *addr as u16),
+                    Some(CtMem::Io(CtIo { addr })) => (1, MEM_ADDR, *addr as u16),
+                    Some(CtMem::Heap(CtHeap { addr })) => (1, MEM_HEAP, *addr as u16),
                     Some(_) => panic!("Unexpected slot argument in WAIT"),
                     None => (0, 0, 0),
                 };
@@ -559,14 +573,16 @@ pub fn generate_translation_table(
                 slot,
             } => {
                 let (mode, slot_hex) = match slot {
-                    CtIo { addr } => (MEM_ADDR, *addr as u16),
-                    CtHeap { addr } => (MEM_HEAP, *addr as u16),
-                    CtSrcVar { id, block } => (MEM_HEAP, ((*id as u16) << 8) + *block as u16),
+                    CtMem::Io(CtIo { addr }) => (MEM_ADDR, *addr as u16),
+                    CtMem::Heap(CtHeap { addr }) => (MEM_HEAP, *addr as u16),
+                    CtMem::Src(CtSrcVar { id, block }) => {
+                        (MEM_HEAP, ((*id as u16) << 8) + *block as u16)
+                    }
                     _ => panic!("Unexpected slot argument in NOTIFY"),
                 };
                 output.push(
                     PeUcoreHex::new()
-                        .with_slot(slot_hex as u16)
+                        .with_slot(slot_hex)
                         .with_mode(mode)
                         .with_flag(*flag)
                         .with_hid(*vid)
@@ -579,13 +595,13 @@ pub fn generate_translation_table(
                 slot,
             } => {
                 let (mode, slot_hex) = match slot {
-                    CtIo { addr } => (MEM_ADDR, *addr as u16),
-                    CtHeap { addr } => (MEM_HEAP, *addr as u16),
+                    CtMem::Io(CtIo { addr }) => (MEM_ADDR, *addr as u16),
+                    CtMem::Heap(CtHeap { addr }) => (MEM_HEAP, *addr as u16),
                     _ => panic!("Unexpected slot argument in LD_B2B"),
                 };
                 output.push(
                     PeUcoreHex::new()
-                        .with_slot(slot_hex as u16)
+                        .with_slot(slot_hex)
                         .with_mode(mode)
                         .with_flag(*flag)
                         .with_hid(0) // Unused
@@ -601,4 +617,328 @@ pub fn generate_translation_table(
     }
     output[0] = (output.len() - 1).sas();
     output
+}
+
+/// Decodes a translation-table word stream (as produced by [`generate_translation_table`]) back
+/// into an `IR<DopLang>` graph.
+///
+/// `words` must start with the instruction-count word `generate_translation_table` writes,
+/// followed by exactly that many 32-bit DOp encodings.
+///
+/// `lut_relocation`, when given, is applied in reverse to single-output `PBS`/`PBS_F`
+/// destinations only — the physical gid found in the hex is looked up by position in
+/// `lut_relocation` to recover the original logical [`LutId`]. Many-LUT `PBS_ML*` variants were
+/// never relocated by the encoder (see `generate_translation_table`), so their gid is always
+/// taken literally, matching encode.
+///
+/// # Panics
+///
+/// Panics if the word count doesn't match the declared length, if an unrecognized opcode or
+/// memory mode is encountered, or on `SYNC`: its hardware encoding needs sync metadata
+/// (`iid`/`hid`/`flag`) that `DopInstructionSet::SYNC` doesn't carry, so — like
+/// `generate_translation_table`, which has no encode arm for it either — it isn't supported in
+/// this direction.
+///
+/// Also note a pre-existing ambiguity in the `NOTIFY` encoding: both `CtHeap` and `CtSrcVar`
+/// slots encode to the same `MEM_HEAP` mode tag (see `generate_translation_table`), so this
+/// function cannot tell them apart and always decodes that mode as `CtHeap`.
+pub fn decode_translation_table(words: &[DOpRepr], lut_relocation: Option<&[LutId]>) -> IR<DopLang> {
+    use DopInstructionSet::*;
+
+    let declared_len = words.first().copied().unwrap_or(0) as usize;
+    let body: &[DOpRepr] = if words.is_empty() { &[] } else { &words[1..] };
+    assert_eq!(
+        body.len(),
+        declared_len,
+        "translation table declares {declared_len} instruction(s) but has {} word(s) following \
+         the length prefix",
+        body.len()
+    );
+
+    let resolve_gid = |gid: u16| -> usize {
+        match lut_relocation {
+            Some(reloc) => reloc
+                .iter()
+                .position(|lid| lid.0 == gid.sas::<usize>())
+                .unwrap_or_else(|| panic!("gid {gid} not found in lut_relocation table")),
+            None => gid.sas(),
+        }
+    };
+    let ct_reg = |mask: usize, addr: u8| CtReg { mask, addr: addr.sas() };
+    let var = |packed: u16| ((packed >> 8) as usize, (packed & 0xff) as usize);
+
+    let mut ir: IR<DopLang> = IR::empty();
+    let (_, start_rets) = ir.add_op(_START, svec![]);
+    let mut ctx = start_rets[0];
+
+    for &word in body {
+        let opcode = DOpRawHex::from_bits(word).opcode();
+        let instr = if opcode == DOpCode::ADD as u8 || opcode == DOpCode::SUB as u8 {
+            let hex = PeArithHex::from_bits(word);
+            let dst = ct_reg(usize::MAX, hex.dst_rid());
+            let src1 = ct_reg(usize::MAX, hex.src0_rid());
+            let src2 = ct_reg(usize::MAX, hex.src1_rid());
+            if opcode == DOpCode::ADD as u8 {
+                ADD { dst, src1, src2 }
+            } else {
+                SUB { dst, src1, src2 }
+            }
+        } else if opcode == DOpCode::MAC as u8 {
+            let hex = PeArithHex::from_bits(word);
+            MAC {
+                dst: ct_reg(usize::MAX, hex.dst_rid()),
+                src1: ct_reg(usize::MAX, hex.src0_rid()),
+                src2: ct_reg(usize::MAX, hex.src1_rid()),
+                cst: PtArg::Const(PtConst { val: hex.mul_factor() }),
+            }
+        } else if [DOpCode::ADDS, DOpCode::SUBS, DOpCode::SSUB, DOpCode::MULS]
+            .map(|c| c as u8)
+            .contains(&opcode)
+        {
+            let hex = PeArithMsgHex::from_bits(word);
+            let dst = ct_reg(usize::MAX, hex.dst_rid());
+            let src = ct_reg(usize::MAX, hex.src_rid());
+            let cst = if hex.msg_mode() == IMM_VAR {
+                let (id, block) = var(hex.msg_cst());
+                PtArg::Var(PtSrcVar { id, block })
+            } else {
+                PtArg::Const(PtConst {
+                    val: hex.msg_cst() as u8,
+                })
+            };
+            if opcode == DOpCode::ADDS as u8 {
+                ADDS { dst, src, cst }
+            } else if opcode == DOpCode::SUBS as u8 {
+                SUBS { dst, src, cst }
+            } else if opcode == DOpCode::SSUB as u8 {
+                SSUB { dst, src, cst }
+            } else {
+                MULS { dst, src, cst }
+            }
+        } else if opcode == DOpCode::LD as u8 {
+            let hex = PeMemHex::from_bits(word);
+            let dst = ct_reg(usize::MAX, hex.rid());
+            let src = match hex.mode() {
+                MEM_HEAP => CtMem::Heap(CtHeap {
+                    addr: hex.slot().sas(),
+                }),
+                MEM_ADDR => CtMem::Io(CtIo {
+                    addr: hex.slot().sas(),
+                }),
+                MEM_SRC => {
+                    let (id, block) = var(hex.slot());
+                    CtMem::Src(CtSrcVar { id, block })
+                }
+                m => panic!("LD: unsupported memory mode {m}"),
+            };
+            LD { dst, src }
+        } else if opcode == DOpCode::ST as u8 {
+            let hex = PeMemHex::from_bits(word);
+            let src = ct_reg(usize::MAX, hex.rid());
+            let dst = match hex.mode() {
+                MEM_HEAP => CtMem::Heap(CtHeap {
+                    addr: hex.slot().sas(),
+                }),
+                MEM_ADDR => CtMem::Io(CtIo {
+                    addr: hex.slot().sas(),
+                }),
+                MEM_DST => {
+                    let (id, block) = var(hex.slot());
+                    CtMem::Dst(CtDstVar { id, block })
+                }
+                m => panic!("ST: unsupported memory mode {m}"),
+            };
+            ST { dst, src }
+        } else if [
+            DOpCode::PBS,
+            DOpCode::PBS_ML2,
+            DOpCode::PBS_ML4,
+            DOpCode::PBS_ML8,
+            DOpCode::PBS_F,
+            DOpCode::PBS_ML2_F,
+            DOpCode::PBS_ML4_F,
+            DOpCode::PBS_ML8_F,
+        ]
+        .map(|c| c as u8)
+        .contains(&opcode)
+        {
+            let hex = PePbsHex::from_bits(word);
+            let src = ct_reg(usize::MAX, hex.src_rid());
+            let is_plain = opcode == DOpCode::PBS as u8 || opcode == DOpCode::PBS_F as u8;
+            let mask = if is_plain {
+                usize::MAX
+            } else if opcode == DOpCode::PBS_ML2 as u8 || opcode == DOpCode::PBS_ML2_F as u8 {
+                MASK_PBS2
+            } else if opcode == DOpCode::PBS_ML4 as u8 || opcode == DOpCode::PBS_ML4_F as u8 {
+                MASK_PBS4
+            } else {
+                MASK_PBS8
+            };
+            let dst = ct_reg(mask, hex.dst_rid());
+            let gid = if is_plain {
+                resolve_gid(hex.gid())
+            } else {
+                hex.gid().sas()
+            };
+            let lut = LutRef { id: gid };
+            if opcode == DOpCode::PBS as u8 {
+                PBS { dst, src, lut }
+            } else if opcode == DOpCode::PBS_ML2 as u8 {
+                PBS_ML2 { dst, src, lut }
+            } else if opcode == DOpCode::PBS_ML4 as u8 {
+                PBS_ML4 { dst, src, lut }
+            } else if opcode == DOpCode::PBS_ML8 as u8 {
+                PBS_ML8 { dst, src, lut }
+            } else if opcode == DOpCode::PBS_F as u8 {
+                PBS_F { dst, src, lut }
+            } else if opcode == DOpCode::PBS_ML2_F as u8 {
+                PBS_ML2_F { dst, src, lut }
+            } else if opcode == DOpCode::PBS_ML4_F as u8 {
+                PBS_ML4_F { dst, src, lut }
+            } else {
+                PBS_ML8_F { dst, src, lut }
+            }
+        } else if opcode == DOpCode::WAIT as u8 {
+            let hex = PeUcoreHex::from_bits(word);
+            let flag = UserFlag { flag: hex.flag() };
+            let slot = if hex.hid() != 0 {
+                Some(match hex.mode() {
+                    MEM_ADDR => CtMem::Io(CtIo {
+                        addr: hex.slot().sas(),
+                    }),
+                    MEM_HEAP => CtMem::Heap(CtHeap {
+                        addr: hex.slot().sas(),
+                    }),
+                    m => panic!("WAIT: unsupported memory mode {m}"),
+                })
+            } else {
+                None
+            };
+            WAIT { flag, slot }
+        } else if opcode == DOpCode::NOTIFY as u8 {
+            let hex = PeUcoreHex::from_bits(word);
+            let slot = match hex.mode() {
+                MEM_ADDR => CtMem::Io(CtIo {
+                    addr: hex.slot().sas(),
+                }),
+                // `generate_translation_table` maps both `CtHeap` and `CtSrcVar` to `MEM_HEAP`;
+                // the two aren't distinguishable from the hex alone, so this always decodes as
+                // `CtHeap` (see this function's doc comment).
+                MEM_HEAP => CtMem::Heap(CtHeap {
+                    addr: hex.slot().sas(),
+                }),
+                m => panic!("NOTIFY: unsupported memory mode {m}"),
+            };
+            NOTIFY {
+                virt_id: VirtId { id: hex.hid() },
+                flag: UserFlag { flag: hex.flag() },
+                slot,
+            }
+        } else if opcode == DOpCode::LD_B2B as u8 {
+            let hex = PeUcoreHex::from_bits(word);
+            let slot = match hex.mode() {
+                MEM_ADDR => CtMem::Io(CtIo {
+                    addr: hex.slot().sas(),
+                }),
+                MEM_HEAP => CtMem::Heap(CtHeap {
+                    addr: hex.slot().sas(),
+                }),
+                m => panic!("LD_B2B: unsupported memory mode {m}"),
+            };
+            LD_B2B {
+                flag: UserFlag { flag: hex.flag() },
+                slot,
+            }
+        } else {
+            panic!("Unsupported or unknown DOp opcode {opcode:#08b} in word {word:#010x}")
+        };
+        let (_, rets) = ir.add_op(instr, svec![ctx]);
+        ctx = rets[0];
+    }
+    ir.add_op(_END, svec![ctx]);
+    ir
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use zhc_langs::doplang::DopInstructionSet;
+
+    fn instructions(ir: &IR<DopLang>) -> Vec<DopInstructionSet> {
+        ir.walk_ops_linear()
+            .map(|op| op.get_instruction().clone())
+            .filter(|instr| {
+                !matches!(instr, DopInstructionSet::_START | DopInstructionSet::_END)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn round_trips_through_generate_and_decode() {
+        use DopInstructionSet::*;
+
+        let mut ir: IR<DopLang> = IR::empty();
+        let (_, start) = ir.add_op(_START, svec![]);
+        let (_, r1) = ir.add_op(
+            LD {
+                dst: CtReg::new(1usize),
+                src: CtMem::heap(3usize),
+            },
+            svec![start[0]],
+        );
+        let (_, r2) = ir.add_op(
+            ADD {
+                dst: CtReg::new(2usize),
+                src1: CtReg::new(1usize),
+                src2: CtReg::new(1usize),
+            },
+            svec![r1[0]],
+        );
+        let (_, r3) = ir.add_op(
+            MAC {
+                dst: CtReg::new(3usize),
+                src1: CtReg::new(1usize),
+                src2: CtReg::new(2usize),
+                cst: PtArg::cst(4),
+            },
+            svec![r2[0]],
+        );
+        let (_, r4) = ir.add_op(
+            ADDS {
+                dst: CtReg::new(4usize),
+                src: CtReg::new(3usize),
+                cst: PtArg::var(2, 1),
+            },
+            svec![r3[0]],
+        );
+        let (_, r5) = ir.add_op(
+            PBS {
+                dst: CtReg::new(5usize),
+                src: CtReg::new(4usize),
+                lut: LutRef::from(LutId(0)),
+            },
+            svec![r4[0]],
+        );
+        let (_, r6) = ir.add_op(
+            PBS_ML2 {
+                dst: CtReg::ml2(6usize),
+                src: CtReg::new(5usize),
+                lut: LutRef::from(LutId(1)),
+            },
+            svec![r5[0]],
+        );
+        let (_, r7) = ir.add_op(
+            ST {
+                dst: CtMem::io(7usize),
+                src: CtReg::new(6usize),
+            },
+            svec![r6[0]],
+        );
+        ir.add_op(_END, svec![r7[0]]);
+
+        let words = generate_translation_table(&ir, None);
+        let decoded = decode_translation_table(&words, None);
+
+        assert_eq!(instructions(&ir), instructions(&decoded));
+    }
 }

@@ -27,5 +27,6 @@ pub mod passes {
         schedule_batched as hpu_schedule_batched_legacy,
     };
     pub use crate::hpu::scheduler::regular::schedule as hpu_schedule;
+    pub use crate::hpu::translation_table::decode_translation_table as hpu_decode_translation_table;
     pub use crate::hpu::translation_table::generate_translation_table as hpu_generate_translation_table;
 }
