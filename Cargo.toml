@@ -14,6 +14,7 @@ members = [
     "zhc_vm",
     "zhc_profiling",
     "zhc_pipeline_correctness",
+    "zhc_cli",
 ]
 default-members = [
     "zhc",
@@ -29,6 +30,7 @@ default-members = [
     "zhc_config",
     "zhc_profiling",
     "zhc_pipeline_correctness",
+    "zhc_cli",
 ]
 resolver = "3"
 
