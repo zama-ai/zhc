@@ -52,7 +52,9 @@ impl Builder {
             .iter()
             .map(|block| self.block_add_plaintext(zero_ct, block))
             .cosvec();
-        self.ciphertext_join(blocks, None)
+        // Pass the width explicitly: inferring it from the block count would round an `int_size`
+        // that is not a multiple of `message_size` up, and the result is documented to match `src`.
+        self.ciphertext_join(blocks, Some(src.spec().int_size()))
     }
 }
 

@@ -679,7 +679,35 @@ mod test {
             Some(vec![IopValue::Ciphertext(sum), IopValue::Ciphertext(flag)])
         }
         for size in (2..128).step_by(2) {
-            overflow_add(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+            let spec = CiphertextSpec::new(size, 2, 2);
+            let builder = overflow_add(spec);
+            builder.test_random(100, semantic);
+
+            // `test_random` on its own only ever observes the flag at 0: `CiphertextSpec::random`
+            // draws its bit-window bounds from `1..int_size`, so the top bit of an operand is
+            // never set and the sum can never carry out. Stimulate both answers explicitly.
+            let max = spec.int_mask();
+            let half = max / 2;
+            let msb = half + 1;
+            for (a, b) in [
+                (max, 1),    // wraps around to 0
+                (max, max),  // widest overflow
+                (msb, msb),  // sum is exactly 2^int_size
+                (msb, half), // largest sum that does not overflow
+                (max, 0),    // no overflow
+                (0, 0),      // no overflow
+            ] {
+                let inputs = vec![
+                    IopValue::Ciphertext(spec.from_int(a)),
+                    IopValue::Ciphertext(spec.from_int(b)),
+                ];
+                let outputs = builder.interpret().with_inputs(&inputs).get_outputs();
+                assert_eq!(
+                    outputs,
+                    semantic(&inputs).unwrap(),
+                    "overflow_add({a:#x}, {b:#x}) on {size} bits"
+                );
+            }
         }
     }
 
