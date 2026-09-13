@@ -1,28 +1,3 @@
-//! Scalar division IOps, i.e. `ct / imm` and `ct % imm`.
-//!
-//! Both are the `ct x ct` [`div`](super::div::div) datapath with the divisor lifted out of the
-//! plaintext domain by [`Builder::iop_trivial_encrypt`] — one `let_ct<0>` shared by every digit
-//! plus one `add_pt` per digit, so a linear DOp per block and **no PBS**.
-//!
-//! Contrary to [`subs`](super::subs) and [`muls`](super::muls), the scalar operand buys no
-//! algorithmic saving here, hence the plain lift:
-//!
-//! * The IOp language has no plaintext-domain arithmetic — a plaintext can only come from
-//!   `LetPlaintextBlock` (a compile-time constant) or `ExtractPtBlock`, and every op consuming one
-//!   lands straight in the ciphertext domain. So `2*C`, `3*C` or `!C` cannot be formed from a
-//!   *runtime* immediate, which is precisely what the division init phase needs.
-//! * A division costs `block_count` iterations of three carry propagations, and a propagation costs
-//!   the same whether its second operand is a ciphertext or an immediate. The dominant term is
-//!   therefore untouched by a scalar divisor.
-//!
-//! The legacy reference streams agree: `DIVS` weighs exactly as many PBS as `DIV` (182 + 17
-//! many-luts, `MODS` and `MOD` 174 + 17) and differs only by a score of linear DOps — see
-//! `zhc_sim/src/hpu/test/streams/DIVS.rs`.
-//!
-//! A division by zero behaves as in [`div`](super::div): the quotient is forced to zero, the
-//! remainder is unspecified. The immediate is in the clear on the host side, which can reject or
-//! shortcut that case before submitting the IOp.
-
 use zhc_crypto::integer_semantics::CiphertextSpec;
 
 use crate::builder::{Builder, Ciphertext, Plaintext};
@@ -80,11 +55,17 @@ impl Builder {
     /// [`iop_mods`](Self::iop_mods) if only one result is needed (dead-code elimination removes
     /// the unused output). Division by zero produces an unspecified result without trapping.
     ///
+    /// The divisor is lifted to the ciphertext domain with
+    /// [`iop_trivial_encrypt`](Self::iop_trivial_encrypt), which is one linear DOp per digit and no
+    /// PBS, then the `ct x ct` [`iop_divx`](Self::iop_divx) does the work. A scalar divisor saves
+    /// nothing here: the cost of a division is its carry propagations, which cost the same with an
+    /// immediate as with a ciphertext.
+    ///
     /// # Panics
     ///
-    /// Panics if the operands do not share the same integer width and block count — the division
-    /// core is driven by block counts alone, so a mismatch would silently extend the shorter
-    /// operand instead of failing.
+    /// Panics if the operands do not share the same integer width and block count. The division
+    /// core only looks at block counts, so a mismatch would silently extend the shorter operand
+    /// instead of failing.
     ///
     /// # Examples
     ///
@@ -107,7 +88,6 @@ impl Builder {
             rhs.spec().block_count(),
             "Spec mismatch."
         );
-        // The lift is a linear DOp per digit and no PBS, so `DIVS` costs what `DIV` costs.
         let divisor = self.comment("Lift Divisor").iop_trivial_encrypt(rhs);
         self.iop_divx(lhs, &divisor)
     }
@@ -183,8 +163,7 @@ mod test {
         }
     }
 
-    /// `mods` keeps a single output, so nothing else checks that it really is the *remainder*:
-    /// the specialization is pure dead-code elimination on top of `iop_divsx`.
+    // `mods` keeps one output only, so nothing else checks that it really is the remainder.
     #[test]
     fn correctness_mods() {
         fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
@@ -202,6 +181,20 @@ mod test {
         }
         for size in [16, 32, 64, 128] {
             mods(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+        }
+    }
+
+    #[test]
+    fn noise_divs() {
+        for size in (2..128).step_by(2) {
+            divs(CiphertextSpec::new(size, 2, 2)).check_noise();
+        }
+    }
+
+    #[test]
+    fn noise_mods() {
+        for size in (2..128).step_by(2) {
+            mods(CiphertextSpec::new(size, 2, 2)).check_noise();
         }
     }
 }

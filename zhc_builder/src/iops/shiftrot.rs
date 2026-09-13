@@ -1,9 +1,8 @@
 use zhc_crypto::integer_semantics::CiphertextSpec;
 use zhc_langs::ioplang::Lut1Def;
-use zhc_utils::SafeAs;
 
 use crate::{
-    CiphertextBlock, NU, NU_BOOL, PlaintextBlock,
+    CiphertextBlock, NU, NU_BOOL,
     builder::{Builder, Ciphertext, Plaintext},
 };
 
@@ -45,65 +44,6 @@ fn shiftrot_swap_source<'b>(
         ShiftRotKind::RotateRight => Some(&blocks[(i + stride) % blk_w]),
         ShiftRotKind::RotateLeft => Some(&blocks[(i + blk_w - stride % blk_w) % blk_w]),
     }
-}
-
-/// Number of message bits of the control word consumed by the scalar shift/rotate iops.
-///
-/// See [`shiftrot_ctrl_word`] for the layout: one digit per amount bit plus the `keep` digit.
-///
-/// # Panics
-///
-/// Panics if `int_size` is not a power of two.
-pub fn shiftrot_ctrl_size(spec: CiphertextSpec) -> u16 {
-    assert!(
-        spec.int_size().is_power_of_two(),
-        "Scalar shift/rotate needs a power of two int_size."
-    );
-    let msg_w = spec.block_spec().message_size().sas::<u16>();
-    (spec.int_size().ilog2().sas::<u16>() + 1) * msg_w
-}
-
-/// Encodes a clear shift/rotate amount into the control word expected by
-/// [`Builder::iop_shiftrots`].
-///
-/// The datapath selects with plaintext multiplications, which need one *digit* per control bit —
-/// and the IOp language cannot slice a digit out of a packed immediate. The amount is therefore
-/// advertised bit per bit, which is free for the host since it holds it in the clear:
-///
-/// ```text
-///  digit i         = bit i of (amount % int_size)   for i < log2(int_size)
-///  digit log2(W)   = keep = 1 if amount < int_size, else 0
-/// ```
-///
-/// `keep` is what makes an overflowing *shift* return zero at no cost; rotations ignore it, and it
-/// is always set for them since `amount % int_size` is the whole story.
-///
-/// # Panics
-///
-/// Panics if `int_size` is not a power of two.
-///
-/// # Examples
-///
-/// ```rust
-/// # use zhc_builder::{CiphertextSpec, ShiftRotKind, shiftrot_ctrl_word};
-/// let spec = CiphertextSpec::new(64, 2, 2);
-/// // 7 == 0b000111 -> digits [1, 1, 1, 0, 0, 0 | keep = 1]
-/// assert_eq!(shiftrot_ctrl_word(spec, ShiftRotKind::ShiftLeft, 7), 0x1015);
-/// // 70 >= 64 -> keep = 0, the result is null whatever the digits say
-/// assert_eq!(shiftrot_ctrl_word(spec, ShiftRotKind::ShiftLeft, 70), 0x0014);
-/// ```
-pub fn shiftrot_ctrl_word(spec: CiphertextSpec, kind: ShiftRotKind, amount: u32) -> u128 {
-    let msg_w = spec.block_spec().message_size().sas::<u32>();
-    let log_w = spec.int_size().ilog2();
-    let mut ctrl = 0_u128;
-    // Only the low log2(int_size) bits matter, which is exactly `amount % int_size`.
-    for i in 0..log_w {
-        ctrl |= u128::from((amount >> i) & 1) << (i * msg_w);
-    }
-    if !kind.is_shift() || u32::from(spec.int_size()) > amount {
-        ctrl |= 1_u128 << (log_w * msg_w);
-    }
-    ctrl
 }
 
 /// Which bit position in the carry field to test as the swap condition.
@@ -174,7 +114,7 @@ pub fn rotate_left(spec: CiphertextSpec) -> Builder {
 /// Creates an IR for the logical right shift of an encrypted integer by a scalar.
 ///
 /// Convenience wrapper that calls [`Builder::iop_shiftrots`] with [`ShiftRotKind::ShiftRight`].
-/// The immediate is a control word, see [`shiftrot_ctrl_word`].
+/// The immediate is the amount itself. When `amount >= int_size`, the result is zeroed.
 pub fn shifts_right(spec: CiphertextSpec) -> Builder {
     shiftrots(spec, ShiftRotKind::ShiftRight)
 }
@@ -182,7 +122,7 @@ pub fn shifts_right(spec: CiphertextSpec) -> Builder {
 /// Creates an IR for the logical left shift of an encrypted integer by a scalar.
 ///
 /// Convenience wrapper that calls [`Builder::iop_shiftrots`] with [`ShiftRotKind::ShiftLeft`].
-/// The immediate is a control word, see [`shiftrot_ctrl_word`].
+/// The immediate is the amount itself. When `amount >= int_size`, the result is zeroed.
 pub fn shifts_left(spec: CiphertextSpec) -> Builder {
     shiftrots(spec, ShiftRotKind::ShiftLeft)
 }
@@ -190,7 +130,7 @@ pub fn shifts_left(spec: CiphertextSpec) -> Builder {
 /// Creates an IR for the right rotation of an encrypted integer by a scalar.
 ///
 /// Convenience wrapper that calls [`Builder::iop_shiftrots`] with [`ShiftRotKind::RotateRight`].
-/// The immediate is a control word, see [`shiftrot_ctrl_word`].
+/// The immediate is the amount itself.
 pub fn rots_right(spec: CiphertextSpec) -> Builder {
     shiftrots(spec, ShiftRotKind::RotateRight)
 }
@@ -198,7 +138,7 @@ pub fn rots_right(spec: CiphertextSpec) -> Builder {
 /// Creates an IR for the left rotation of an encrypted integer by a scalar.
 ///
 /// Convenience wrapper that calls [`Builder::iop_shiftrots`] with [`ShiftRotKind::RotateLeft`].
-/// The immediate is a control word, see [`shiftrot_ctrl_word`].
+/// The immediate is the amount itself.
 pub fn rots_left(spec: CiphertextSpec) -> Builder {
     shiftrots(spec, ShiftRotKind::RotateLeft)
 }
@@ -207,8 +147,8 @@ pub fn rots_left(spec: CiphertextSpec) -> Builder {
 pub fn shiftrots(spec: CiphertextSpec, kind: ShiftRotKind) -> Builder {
     let builder = Builder::new(spec.block_spec());
     let src = builder.ciphertext_input(spec.int_size());
-    let ctrl = builder.plaintext_input(shiftrot_ctrl_size(spec));
-    let res = builder.iop_shiftrots(&src, &ctrl, kind);
+    let amount = builder.plaintext_input(spec.int_size());
+    let res = builder.iop_shiftrots(&src, &amount, kind);
     builder.ciphertext_output(res);
     builder
 }
@@ -216,124 +156,52 @@ pub fn shiftrots(spec: CiphertextSpec, kind: ShiftRotKind) -> Builder {
 impl Builder {
     /// Shifts or rotates an encrypted integer by a scalar amount.
     ///
-    /// Same barrel shifter as [`iop_shiftrot`](Self::iop_shiftrot), except that the swap
-    /// conditions come from the immediate instead of a ciphertext, which makes the whole butterfly
-    /// **free**: with a control digit `b` in `{0, 1}`,
+    /// The immediate is the amount itself, like in the other scalar iops. The IOp language has no
+    /// arithmetic in the plaintext domain, so the amount is first lifted into the ciphertext
+    /// domain with [`iop_trivial_encrypt`](Self::iop_trivial_encrypt), then the usual
+    /// [`iop_shiftrot`](Self::iop_shiftrot) does the work. The lift is one linear DOp per digit
+    /// and no PBS, so `SHIFTS` costs what `SHIFT` costs.
     ///
-    /// ```text
-    ///  orig + swap * b - orig * b   ==   orig  if b == 0
-    ///                                    swap  if b == 1
-    /// ```
-    ///
-    /// and every term is a linear operation. `b == 0` turns `MulPt` into the null ciphertext while
-    /// `b == 1` turns it into the identity, so the result is not merely *equal* to one of the two
-    /// operands: it **is** that operand, noise included — the `orig` contribution cancels against
-    /// itself. No cleanup lookup is needed between stages, and only the intra-block stage still
-    /// spends PBS, i.e. `2 * block_count` in total against `2 * block_count * (1 + log2(N))` for
-    /// the encrypted-amount flavor.
-    ///
-    /// The same trick gates the result: shifting by `int_size` or more must return zero, which is
-    /// one `MulPt` per block by the `keep` digit of the control word. Rotations do not need it,
-    /// their amount being taken modulo `int_size`.
-    ///
-    /// `ctrl` is *not* the raw amount — see [`shiftrot_ctrl_word`] for its layout and for the
-    /// reason the host has to explode the amount bit per bit.
+    /// A shift by `int_size` or more returns zero, which
+    /// [`iop_overshift_zero`](Self::iop_overshift_zero) takes care of. A rotation does not need
+    /// it, its amount being taken modulo `int_size`.
     ///
     /// # Panics
     ///
-    /// Panics if `int_size` is not a power of two, or if `ctrl` is not
-    /// [`shiftrot_ctrl_size`] wide.
+    /// Panics if the operands do not share the same integer width and block count.
     ///
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use zhc_builder::{CiphertextSpec, Builder, ShiftRotKind, shiftrot_ctrl_size};
+    /// # use zhc_builder::{CiphertextSpec, Builder, ShiftRotKind};
     /// # let spec = CiphertextSpec::new(16, 2, 2);
     /// # let builder = Builder::new(spec.block_spec());
     /// # let val = builder.ciphertext_input(spec.int_size());
-    /// # let ctrl = builder.plaintext_input(shiftrot_ctrl_size(spec));
-    /// let shifted = builder.iop_shiftrots(&val, &ctrl, ShiftRotKind::ShiftLeft);
+    /// # let amt = builder.plaintext_input(spec.int_size());
+    /// let shifted = builder.iop_shiftrots(&val, &amt, ShiftRotKind::ShiftLeft);
     /// ```
     pub fn iop_shiftrots(
         &self,
         src: &Ciphertext,
-        ctrl: &Plaintext,
+        amount: &Plaintext,
         kind: ShiftRotKind,
     ) -> Ciphertext {
         assert_eq!(
-            ctrl.spec().int_size(),
-            shiftrot_ctrl_size(src.spec()),
+            src.spec().int_size(),
+            amount.spec().int_size(),
             "Spec mismatch."
         );
-        let src_blocks = self.ciphertext_split(src);
-        let ctrl_digits = self.plaintext_split(ctrl);
-        let blk_w = src_blocks.len();
-        let num_stages = (2 * blk_w).ilog2().sas::<usize>();
-
-        // Stage 1 & 2: the intra-block shift is driven by bit 0 of the amount, which the shift
-        // luts read from the carry field of a ciphertext block. Lifting that single digit is one
-        // linear DOp, so the stage is shared with the encrypted-amount flavor as is.
-        let amount_lsb = self
-            .comment("Lift Amount Lsb")
-            .block_add_plaintext(self.block_let_ciphertext(0), ctrl_digits[0]);
-        let mut merged = self.shiftrot_inner_pass(kind, &src_blocks, &amount_lsb);
-
-        // Stage 3: block swap, one butterfly stage per remaining amount bit. Every stage is
-        // linear: no PBS, no noise growth, no degree growth.
-        for stg in 1..num_stages {
-            self.push_comment(format!("Swap stage {stg}"));
-            let stride = 1_usize << (stg - 1);
-            let sel = ctrl_digits[stg];
-
-            let prev = merged.clone();
-            merged = (0..blk_w)
-                .map(|i| {
-                    let swap = shiftrot_swap_source(kind, &prev, i, stride);
-                    self.shiftrot_block_select(&prev[i], swap, &sel)
-                })
-                .collect();
-            self.pop_comment();
-        }
-
-        // Shifting by int_size or more empties the integer: `keep` is null in that case, and
-        // multiplying a block by a null immediate yields the null ciphertext.
+        assert_eq!(
+            src.spec().block_count(),
+            amount.spec().block_count(),
+            "Spec mismatch."
+        );
+        let amount_ct = self.comment("Lift Amount").iop_trivial_encrypt(amount);
+        let shifted = self.iop_shiftrot(src, &amount_ct, kind);
         if kind.is_shift() {
-            self.push_comment("Keep");
-            let keep = ctrl_digits[num_stages];
-            merged = merged
-                .iter()
-                .map(|block| self.block_mul_plaintext(block, keep))
-                .collect();
-            self.pop_comment();
-        }
-
-        self.comment("Join").ciphertext_join(merged, None)
-    }
-
-    /// Selects between `src_orig` and `src_swap` on a plaintext condition, with no PBS.
-    ///
-    /// `sel` must be 0 or 1, which the control word guarantees. `src_swap` being `None` means
-    /// there is nothing to shift in, so the block is zeroed when the condition holds.
-    fn shiftrot_block_select(
-        &self,
-        src_orig: &CiphertextBlock,
-        src_swap: Option<&CiphertextBlock>,
-        sel: &PlaintextBlock,
-    ) -> CiphertextBlock {
-        // sel * orig is either the null ciphertext or `orig` itself.
-        let masked_orig = self.block_mul_plaintext(src_orig, sel);
-        match src_swap {
-            Some(swap) => {
-                let masked_swap = self.block_mul_plaintext(swap, sel);
-                // At most `2 * msg_mask`, and the subtraction brings it back to a single digit.
-                let sum = self.block_add(src_orig, masked_swap);
-                // if there is a swap block calculating src_orig + swap*sel - src_orig*sel
-                // so if sel = 1 => swap else => src_orig
-                self.block_sub(sum, masked_orig)
-            }
-            // if there is no swap block calculating src_orig - src_orig*sel
-            // so if sel = 1 => 0 else => src_orig
-            None => self.block_sub(src_orig, masked_orig),
+            self.iop_overshift_zero(&shifted, &amount_ct)
+        } else {
+            shifted
         }
     }
 
@@ -371,8 +239,33 @@ impl Builder {
         let blk_w = src_blocks.len();
         let msg_w = self.spec().message_size() as usize;
 
-        // Stage 1 & 2: Inner shift on bit 0 of the amount, then merge with the neighbours.
-        let mut merged = self.shiftrot_inner_pass(kind, &src_blocks, &amount_blocks[0]);
+        // Stage 1: Inner shift — process bit 0 of amount.
+        self.push_comment("Inner shift");
+        let (shiftrot_msg, shiftrot_next): (Vec<_>, Vec<_>) = src_blocks
+            .iter()
+            .enumerate()
+            .map(|(i, block)| {
+                self.push_comment(format!("Block {i}"));
+                let r = self.shiftrot_inner(kind, block, &amount_blocks[0]);
+                self.pop_comment();
+                r
+            })
+            .unzip();
+        self.pop_comment();
+
+        // Stage 2: Fuse msg and msg_next from neighboring blocks.
+        self.push_comment("Merge");
+        let mut merged: Vec<CiphertextBlock> = (0..blk_w)
+            .map(|i| {
+                // The overflow of a block always lands one position away, in the shift direction.
+                let neighbor = shiftrot_swap_source(kind, &shiftrot_next, i, 1);
+                match neighbor {
+                    Some(n) => self.block_add(&shiftrot_msg[i], n),
+                    None => shiftrot_msg[i],
+                }
+            })
+            .collect();
+        self.pop_comment();
 
         // Stage 3: Block swap — butterfly stages for higher amount bits.
         // Each stage handles one bit of the shift amount. Stage `stg` tests
@@ -407,48 +300,6 @@ impl Builder {
         }
 
         self.comment("Join").ciphertext_join(merged, None)
-    }
-
-    /// Runs the intra-block stage of the barrel shifter and merges each block with the overflow of
-    /// its neighbour, i.e. stages 1 and 2 of [`iop_shiftrot`](Self::iop_shiftrot).
-    ///
-    /// `amount_lsb` carries bit 0 of the amount; the scalar flavor lifts it from its immediate.
-    /// Costs two PBS per block and nothing else.
-    fn shiftrot_inner_pass(
-        &self,
-        kind: ShiftRotKind,
-        src_blocks: &[CiphertextBlock],
-        amount_lsb: &CiphertextBlock,
-    ) -> Vec<CiphertextBlock> {
-        let blk_w = src_blocks.len();
-
-        self.push_comment("Inner shift");
-        let (shiftrot_msg, shiftrot_next): (Vec<_>, Vec<_>) = src_blocks
-            .iter()
-            .enumerate()
-            .map(|(i, block)| {
-                self.push_comment(format!("Block {i}"));
-                let r = self.shiftrot_inner(kind, block, amount_lsb);
-                self.pop_comment();
-                r
-            })
-            .unzip();
-        self.pop_comment();
-
-        self.push_comment("Merge");
-        let merged = (0..blk_w)
-            .map(|i| {
-                // The overflow of a block always lands one position away, in the shift direction.
-                let neighbor = shiftrot_swap_source(kind, &shiftrot_next, i, 1);
-                match neighbor {
-                    Some(n) => self.block_add(&shiftrot_msg[i], n),
-                    None => shiftrot_msg[i],
-                }
-            })
-            .collect();
-        self.pop_comment();
-
-        merged
     }
 
     /// Computes the intra-block shift for a single block.
@@ -619,8 +470,8 @@ mod test {
     use zhc_langs::ioplang::IopValue;
     use zhc_utils::assert_display_is;
 
-    /// Expected result of a scalar shift/rotate, `amount` being a *clear* value that may exceed
-    /// `int_size` -- in which case a shift empties the integer while a rotation wraps around.
+    // Expected result of a scalar shift or rotate. `amount` is a clear value that may be larger
+    // than `int_size`: a shift then gives zero, a rotation wraps around.
     fn scalar_reference(kind: ShiftRotKind, int_size: u16, value: u128, amount: u32) -> u128 {
         let w = u32::from(int_size);
         let mask = u128::MAX >> (128 - w);
@@ -637,24 +488,23 @@ mod test {
         }
     }
 
-    /// Sweeps *every* amount in `0..2 * int_size`, so both the in-range behaviour and the
-    /// overflowing one are covered. `test_random` cannot be used here: it would draw arbitrary
-    /// control words, whose digits must be 0 or 1 to mean anything.
+    // Sweeps every amount in `0..2 * int_size`, so the normal case and the overshift one are both
+    // covered. `test_random` draws amounts on the full width, which almost always overshift.
     fn exercise_scalar(kind: ShiftRotKind, int_size: u16, reps: usize) {
         let spec = CiphertextSpec::new(int_size, 2, 2);
         let builder = Builder::new(spec.block_spec());
         let src = builder.ciphertext_input(spec.int_size());
-        let ctrl = builder.plaintext_input(shiftrot_ctrl_size(spec));
-        let res = builder.iop_shiftrots(&src, &ctrl, kind);
+        let amount_pt = builder.plaintext_input(spec.int_size());
+        let res = builder.iop_shiftrots(&src, &amount_pt, kind);
         builder.ciphertext_output(res);
 
         for amount in 0..(2 * u32::from(int_size)) {
-            let ctrl_value = ctrl.make_value(shiftrot_ctrl_word(spec, kind, amount));
+            let amount_value = amount_pt.make_value(u128::from(amount));
             for _ in 0..reps {
                 let value = spec.random();
                 let outputs = builder
                     .interpret()
-                    .with_inputs([IopValue::Ciphertext(value), ctrl_value.clone()])
+                    .with_inputs([IopValue::Ciphertext(value), amount_value.clone()])
                     .get_outputs();
                 let expected = scalar_reference(kind, int_size, value.as_storage(), amount);
                 assert_eq!(
@@ -667,8 +517,8 @@ mod test {
         }
     }
 
-    /// Every butterfly stage and the `keep` gate must be free of any `pbs`: only the two
-    /// intra-block lookups per block are left.
+    // The immediate is the plain amount: it is lifted with `add_pt` on a null block, then the
+    // stream is the one of the encrypted flavor.
     #[test]
     fn test_shifts_left() {
         let spec = CiphertextSpec::new(8, 2, 2);
@@ -678,63 +528,82 @@ mod test {
                 .with_walker(zhc_ir::PrintWalker::Linear)
                 .show_comments(true),
             r#"
-                                           | %0 = input_ciphertext<0, 8>();
-                                           | %1 = input_plaintext<1, 8>();
-                                           | %2 = extract_ct_block<0>(%0);
-                                           | %3 = extract_ct_block<1>(%0);
-                                           | %4 = extract_ct_block<2>(%0);
-                                           | %5 = extract_ct_block<3>(%0);
-                                           | %6 = extract_pt_block<0>(%1);
-                                           | %7 = extract_pt_block<1>(%1);
-                                           | %8 = extract_pt_block<2>(%1);
-                                           | %9 = extract_pt_block<3>(%1);
-                                           | %10 = let_ct_block<0>();
-                // Lift Amount Lsb         | %11 = add_pt(%10, %6);
-                // Inner shift / Block 0   | %12 = pack_ct<4>(%11, %2);
-                // Inner shift / Block 0   | %13 = pbs<Protect, Lut1("ShiftLeftByCarryPos0Msg")>(%12);
-                // Inner shift / Block 0   | %14 = pbs<Protect, Lut1("ShiftLeftByCarryPos0MsgNext")>(%12);
-                // Inner shift / Block 1   | %15 = pack_ct<4>(%11, %3);
-                // Inner shift / Block 1   | %16 = pbs<Protect, Lut1("ShiftLeftByCarryPos0Msg")>(%15);
-                // Inner shift / Block 1   | %17 = pbs<Protect, Lut1("ShiftLeftByCarryPos0MsgNext")>(%15);
-                // Inner shift / Block 2   | %18 = pack_ct<4>(%11, %4);
-                // Inner shift / Block 2   | %19 = pbs<Protect, Lut1("ShiftLeftByCarryPos0Msg")>(%18);
-                // Inner shift / Block 2   | %20 = pbs<Protect, Lut1("ShiftLeftByCarryPos0MsgNext")>(%18);
-                // Inner shift / Block 3   | %21 = pack_ct<4>(%11, %5);
-                // Inner shift / Block 3   | %22 = pbs<Protect, Lut1("ShiftLeftByCarryPos0Msg")>(%21);
-                // Merge                   | %24 = add_ct(%16, %14);
-                // Merge                   | %25 = add_ct(%19, %17);
-                // Merge                   | %26 = add_ct(%22, %20);
-                // Swap stage 1            | %27 = mul_pt(%13, %7);
-                // Swap stage 1            | %28 = sub_ct(%13, %27);
-                // Swap stage 1            | %29 = mul_pt(%24, %7);
-                // Swap stage 1            | %31 = add_ct(%24, %27);
-                // Swap stage 1            | %32 = sub_ct(%31, %29);
-                // Swap stage 1            | %33 = mul_pt(%25, %7);
-                // Swap stage 1            | %35 = add_ct(%25, %29);
-                // Swap stage 1            | %36 = sub_ct(%35, %33);
-                // Swap stage 1            | %37 = mul_pt(%26, %7);
-                // Swap stage 1            | %39 = add_ct(%26, %33);
-                // Swap stage 1            | %40 = sub_ct(%39, %37);
-                // Swap stage 2            | %41 = mul_pt(%28, %8);
-                // Swap stage 2            | %42 = sub_ct(%28, %41);
-                // Swap stage 2            | %43 = mul_pt(%32, %8);
-                // Swap stage 2            | %44 = sub_ct(%32, %43);
-                // Swap stage 2            | %45 = mul_pt(%36, %8);
-                // Swap stage 2            | %47 = add_ct(%36, %41);
-                // Swap stage 2            | %48 = sub_ct(%47, %45);
-                // Swap stage 2            | %49 = mul_pt(%40, %8);
-                // Swap stage 2            | %51 = add_ct(%40, %43);
-                // Swap stage 2            | %52 = sub_ct(%51, %49);
-                // Keep                    | %53 = mul_pt(%42, %9);
-                // Keep                    | %54 = mul_pt(%44, %9);
-                // Keep                    | %55 = mul_pt(%48, %9);
-                // Keep                    | %56 = mul_pt(%52, %9);
-                // Join                    | %57 = decl_ct<8>();
-                // Join                    | %63 = store_ct_block<0>(%53, %57);
-                // Join                    | %64 = store_ct_block<1>(%54, %63);
-                // Join                    | %65 = store_ct_block<2>(%55, %64);
-                // Join                    | %66 = store_ct_block<3>(%56, %65);
-                                           | output<0>(%66);
+                                                           | %0 = input_ciphertext<0, 8>();
+                                                           | %1 = input_plaintext<1, 8>();
+                // Lift Amount                             | %2 = extract_pt_block<0>(%1);
+                // Lift Amount                             | %3 = extract_pt_block<1>(%1);
+                // Lift Amount                             | %4 = extract_pt_block<2>(%1);
+                // Lift Amount                             | %5 = extract_pt_block<3>(%1);
+                // Lift Amount                             | %6 = let_ct_block<0>();
+                // Lift Amount                             | %7 = add_pt(%6, %2);
+                // Lift Amount                             | %8 = add_pt(%6, %3);
+                // Lift Amount                             | %9 = add_pt(%6, %4);
+                // Lift Amount                             | %10 = add_pt(%6, %5);
+                                                           | %21 = extract_ct_block<0>(%0);
+                                                           | %22 = extract_ct_block<1>(%0);
+                                                           | %23 = extract_ct_block<2>(%0);
+                                                           | %24 = extract_ct_block<3>(%0);
+                // Inner shift / Block 0                   | %29 = pack_ct<4>(%7, %21);
+                // Inner shift / Block 0                   | %30 = pbs<Protect, Lut1("ShiftLeftByCarryPos0Msg")>(%29);
+                // Inner shift / Block 0                   | %31 = pbs<Protect, Lut1("ShiftLeftByCarryPos0MsgNext")>(%29);
+                // Inner shift / Block 1                   | %32 = pack_ct<4>(%7, %22);
+                // Inner shift / Block 1                   | %33 = pbs<Protect, Lut1("ShiftLeftByCarryPos0Msg")>(%32);
+                // Inner shift / Block 1                   | %34 = pbs<Protect, Lut1("ShiftLeftByCarryPos0MsgNext")>(%32);
+                // Inner shift / Block 2                   | %35 = pack_ct<4>(%7, %23);
+                // Inner shift / Block 2                   | %36 = pbs<Protect, Lut1("ShiftLeftByCarryPos0Msg")>(%35);
+                // Inner shift / Block 2                   | %37 = pbs<Protect, Lut1("ShiftLeftByCarryPos0MsgNext")>(%35);
+                // Inner shift / Block 3                   | %38 = pack_ct<4>(%7, %24);
+                // Inner shift / Block 3                   | %39 = pbs<Protect, Lut1("ShiftLeftByCarryPos0Msg")>(%38);
+                // Merge                                   | %41 = add_ct(%33, %31);
+                // Merge                                   | %42 = add_ct(%36, %34);
+                // Merge                                   | %43 = add_ct(%39, %37);
+                // Swap stage 1                            | %44 = pack_ct<4>(%7, %30);
+                // Swap stage 1                            | %45 = pbs<Protect, Lut1("IfPos1TrueZeroed")>(%44);
+                // Swap stage 1                            | %46 = pack_ct<4>(%7, %41);
+                // Swap stage 1                            | %48 = pbs<Protect, Lut1("IfPos1TrueZeroed")>(%46);
+                // Swap stage 1                            | %49 = pbs<Protect, Lut1("IfPos1FalseZeroed")>(%44);
+                // Swap stage 1                            | %50 = add_ct(%48, %49);
+                // Swap stage 1                            | %51 = pack_ct<4>(%7, %42);
+                // Swap stage 1                            | %53 = pbs<Protect, Lut1("IfPos1TrueZeroed")>(%51);
+                // Swap stage 1                            | %54 = pbs<Protect, Lut1("IfPos1FalseZeroed")>(%46);
+                // Swap stage 1                            | %55 = add_ct(%53, %54);
+                // Swap stage 1                            | %56 = pack_ct<4>(%7, %43);
+                // Swap stage 1                            | %58 = pbs<Protect, Lut1("IfPos1TrueZeroed")>(%56);
+                // Swap stage 1                            | %59 = pbs<Protect, Lut1("IfPos1FalseZeroed")>(%51);
+                // Swap stage 1                            | %60 = add_ct(%58, %59);
+                // Swap stage 2                            | %61 = pack_ct<4>(%8, %45);
+                // Swap stage 2                            | %62 = pbs<Protect, Lut1("IfPos0TrueZeroed")>(%61);
+                // Swap stage 2                            | %63 = pack_ct<4>(%8, %50);
+                // Swap stage 2                            | %64 = pbs<Protect, Lut1("IfPos0TrueZeroed")>(%63);
+                // Swap stage 2                            | %65 = pack_ct<4>(%8, %55);
+                // Swap stage 2                            | %67 = pbs<Protect, Lut1("IfPos0TrueZeroed")>(%65);
+                // Swap stage 2                            | %68 = pbs<Protect, Lut1("IfPos0FalseZeroed")>(%61);
+                // Swap stage 2                            | %69 = add_ct(%67, %68);
+                // Swap stage 2                            | %70 = pack_ct<4>(%8, %60);
+                // Swap stage 2                            | %72 = pbs<Protect, Lut1("IfPos0TrueZeroed")>(%70);
+                // Swap stage 2                            | %73 = pbs<Protect, Lut1("IfPos0FalseZeroed")>(%63);
+                // Swap stage 2                            | %74 = add_ct(%72, %73);
+                // Overshift detection                     | %89 = let_ct_block<1>();
+                // Overshift detection                     | %90 = pack_ct<4>(%8, %89);
+                // Overshift detection                     | %91 = pbs<Protect, Lut1("IfPos1FalseZeroed")>(%90);
+                // Overshift detection                     | %92 = add_ct(%9, %10);
+                // Overshift detection / IsSome on chunk   | %93 = pbs<Protect, Lut1("IsSome")>(%92);
+                // Overshift reduce                        | %94 = add_ct(%91, %93);
+                // Overshift reduce                        | %95 = pbs<Protect, Lut1("IsSome")>(%94);
+                // return 0 if overshift                   | %100 = pack_ct<4>(%95, %62);
+                // return 0 if overshift                   | %101 = pbs<Protect, Lut1("IfTrueZeroed")>(%100);
+                // return 0 if overshift                   | %102 = pack_ct<4>(%95, %64);
+                // return 0 if overshift                   | %103 = pbs<Protect, Lut1("IfTrueZeroed")>(%102);
+                // return 0 if overshift                   | %104 = pack_ct<4>(%95, %69);
+                // return 0 if overshift                   | %105 = pbs<Protect, Lut1("IfTrueZeroed")>(%104);
+                // return 0 if overshift                   | %106 = pack_ct<4>(%95, %74);
+                // return 0 if overshift                   | %107 = pbs<Protect, Lut1("IfTrueZeroed")>(%106);
+                                                           | %108 = decl_ct<8>();
+                                                           | %114 = store_ct_block<0>(%101, %108);
+                                                           | %115 = store_ct_block<1>(%103, %114);
+                                                           | %116 = store_ct_block<2>(%105, %115);
+                                                           | %117 = store_ct_block<3>(%107, %116);
+                                                           | output<0>(%117);
             "#
         );
     }
@@ -764,6 +633,62 @@ mod test {
     fn correctness_rots_left() {
         for size in [4, 8, 16, 32, 64] {
             exercise_scalar(ShiftRotKind::RotateLeft, size, 4);
+        }
+    }
+
+    #[test]
+    fn correctness_shifts_right_random() {
+        fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
+            let [IopValue::Ciphertext(src), IopValue::Plaintext(amount)] = inp else {
+                unreachable!()
+            };
+            let amount = src.spec().from_int(amount.as_storage());
+            Some(vec![IopValue::Ciphertext(src.shift_right(amount))])
+        }
+        for size in [4, 8, 16, 32, 64] {
+            shifts_right(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+        }
+    }
+
+    #[test]
+    fn correctness_shifts_left_random() {
+        fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
+            let [IopValue::Ciphertext(src), IopValue::Plaintext(amount)] = inp else {
+                unreachable!()
+            };
+            let amount = src.spec().from_int(amount.as_storage());
+            Some(vec![IopValue::Ciphertext(src.shift_left(amount))])
+        }
+        for size in [4, 8, 16, 32, 64] {
+            shifts_left(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+        }
+    }
+
+    #[test]
+    fn correctness_rots_right_random() {
+        fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
+            let [IopValue::Ciphertext(src), IopValue::Plaintext(amount)] = inp else {
+                unreachable!()
+            };
+            let amount = src.spec().from_int(amount.as_storage());
+            Some(vec![IopValue::Ciphertext(src.rotate_right(amount))])
+        }
+        for size in [4, 8, 16, 32, 64] {
+            rots_right(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+        }
+    }
+
+    #[test]
+    fn correctness_rots_left_random() {
+        fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
+            let [IopValue::Ciphertext(src), IopValue::Plaintext(amount)] = inp else {
+                unreachable!()
+            };
+            let amount = src.spec().from_int(amount.as_storage());
+            Some(vec![IopValue::Ciphertext(src.rotate_left(amount))])
+        }
+        for size in [4, 8, 16, 32, 64] {
+            rots_left(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
         }
     }
 
@@ -816,6 +741,34 @@ mod test {
         }
         for size in [4, 8, 16, 32, 64] {
             rotate_left(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+        }
+    }
+
+    #[test]
+    fn noise_shifts_right() {
+        for size in [4, 8, 16, 32, 64] {
+            shifts_right(CiphertextSpec::new(size, 2, 2)).check_noise();
+        }
+    }
+
+    #[test]
+    fn noise_shifts_left() {
+        for size in [4, 8, 16, 32, 64] {
+            shifts_left(CiphertextSpec::new(size, 2, 2)).check_noise();
+        }
+    }
+
+    #[test]
+    fn noise_rots_right() {
+        for size in [4, 8, 16, 32, 64] {
+            rots_right(CiphertextSpec::new(size, 2, 2)).check_noise();
+        }
+    }
+
+    #[test]
+    fn noise_rots_left() {
+        for size in [4, 8, 16, 32, 64] {
+            rots_left(CiphertextSpec::new(size, 2, 2)).check_noise();
         }
     }
 

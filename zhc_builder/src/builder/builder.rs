@@ -2270,11 +2270,13 @@ impl Builder {
         output
     }
 
-    /// Adds a cyphertext block slices and a plaintext block slices element-wise.
+    /// Adds a ciphertext block slice and a plaintext block slice element-wise.
     ///
     /// For each position, calls [`block_add_plaintext`](Self::block_add_plaintext) on the
     /// corresponding pair. When the two slices have different lengths, `extension` controls the
-    /// behavior (see [`ExtensionBehavior`]).
+    /// behavior (see [`ExtensionBehavior`]). Contrary to [`vector_add`](Self::vector_add), a
+    /// plaintext block left over by [`Passthrough`](ExtensionBehavior::Passthrough) is dropped: the
+    /// output is a ciphertext.
     ///
     /// # Panics
     ///
@@ -2311,7 +2313,7 @@ impl Builder {
                 (ExtensionBehavior::Passthrough, Some(v), None) => output.push(*v),
             }
         }
-        return output;
+        output
     }
 
     /// Zero-extends a block slice to a given length.

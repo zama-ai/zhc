@@ -1,43 +1,5 @@
-//! Scalar multiplication IOps, i.e. `ct * imm`.
-//!
-//! The algorithm is the same schoolbook expand/reduce as [`mul`](super::mul), but every partial
-//! product involves a *plaintext* digit, so it becomes a linear operation:
-//!
-//! ```text
-//! A * C == sum_{i,j} (a_i * c_j) * (2^msg_w)^(i+j)
-//! ```
-//!
-//! `a_i * c_j` is a ciphertext-block times plaintext-block product
-//! ([`Builder::block_mul_plaintext`]) — one DOp and **no PBS**, where the `ct x ct` case needs a
-//! pack plus two PBS (`MultCarryMsgLsb`/`MultCarryMsgMsb`) per partial product. The whole PBS
-//! budget of `MULS` is therefore spent on the reduction alone: a digit product ranges over
-//! `[0, msg_mask^2]`, so a column of them saturates the `carry + message` capacity of a block
-//! quickly and has to be canonicalized with a carry extraction.
-//!
-//! | op | partial product | reduction |
-//! |---|---|---|
-//! | [`Builder::iop_mul`] | 1 pack + 2 PBS | `NU` clean terms per extraction |
-//! | [`Builder::iop_muls`] | 1 linear DOp | degree driven, see below |
-//!
-//! Because the terms entering the reduction are not clean digits, the `NU` counting used by
-//! [`Builder::iop_mul_raw`] does not apply: this implementation tracks the *degree* (the largest
-//! value a block may hold) of every term and of the accumulator, and only pays a carry extraction
-//! when the next term would not fit. Extractions use the many-lut flavor
-//! ([`Lut2Def::ManyCarryMsg`], one PBS for both halves) when the accumulator is small enough for
-//! it, and the `MsgOnly`/`CarryInMsg` pair otherwise.
-//!
-//! The order in which the carries of the previous column are consumed trades PBS count against
-//! critical path, see [`CarryOrder`]; [`Builder::iop_muls`] picks it per bit-width.
-//!
-//! Overflow detection benefits from the plaintext operand too. A dropped partial product is
-//! non-null iff *both* its digits are, and `a_i` being non-null is a property of the ciphertext
-//! alone: one `IsSome` per ciphertext digit turns the whole row into the linear
-//! `IsSome(a_i) * c_j`, whose degree is a mere `msg_mask` -- so several of them fit in one block
-//! before a single PBS decides the row. [`Builder::iop_mul_raw`] instead needs one
-//! `MultCarryMsgIsSome` PBS for every dropped *pair*.
-
 use crate::{
-    CiphertextBlock, PlaintextBlock,
+    CiphertextBlock, NU_BOOL, NU_MUL_PT, PlaintextBlock,
     builder::{Builder, Ciphertext, Plaintext},
 };
 use zhc_crypto::integer_semantics::CiphertextSpec;
@@ -47,18 +9,17 @@ use zhc_utils::SafeAs;
 /// Order in which the carries coming out of a column enter the reduction of the next one.
 ///
 /// A digit product has degree `msg_mask^2` while a carry only has degree `msg_mask`, so the
-/// carries are what allows an extraction to fill a block right up to its capacity. Feeding them
-/// early is therefore the cheapest option, but it also makes the n-th extraction of a column wait
-/// on the n-th extraction of the previous one.
+/// carries are what lets an extraction fill a block up to its capacity. Taking them early costs
+/// the fewest PBS, but it also makes the n-th extraction of a column wait on the n-th extraction
+/// of the previous one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CarryOrder {
-    /// Reduce the digit products first and only then the incoming carries. An extraction has
-    /// only the message left over by the previous one to fill its spare room, which wastes some
-    /// capacity, but a column no longer waits on the whole reduction of the previous one.
-    /// Prefer this for narrow integers, which are latency bound.
+    /// Reduce the digit products first, the incoming carries after. An extraction wastes some
+    /// capacity, but a column no longer waits on the whole reduction of the previous one. Better
+    /// for narrow integers, which are latency bound.
     Late,
-    /// Interleave the incoming carries with the digit products, filling every extraction up to
-    /// capacity. Prefer this for wide integers, which are throughput bound.
+    /// Mix the incoming carries with the digit products, so that every extraction is filled up to
+    /// capacity. Better for wide integers, which are throughput bound.
     Interleaved,
 }
 
@@ -104,9 +65,9 @@ impl Builder {
     /// Computes `(lhs * rhs) mod 2^n` where `n` is the integer bit-width, i.e. wrapping
     /// multiplication that discards the overflowing MSBs.
     ///
-    /// Partial products are plaintext-times-ciphertext products, which need no PBS; the cost of
-    /// the operation is the carry reduction of the partial product columns, whose flavor is
-    /// selected on the operand bit-width. See the `muls` module documentation for the details.
+    /// A partial product is a ciphertext digit times a plaintext digit, which needs no PBS. The
+    /// whole cost is the carry reduction of the columns, see
+    /// [`iop_muls_raw`](Self::iop_muls_raw). The carry order is picked on the operand width.
     ///
     /// # Examples
     ///
@@ -121,7 +82,6 @@ impl Builder {
     pub fn iop_muls(&self, lhs: &Ciphertext, rhs: &Plaintext) -> Ciphertext {
         let src_c_blocks = self.ciphertext_split(lhs);
         let src_p_blocks = self.plaintext_split(rhs);
-        // Only keep the LSBs to obtain an IxP -> I operation
         let cut_off = lhs.spec().block_count();
         let (output, _flag) = self.iop_muls_raw(
             &src_c_blocks,
@@ -151,7 +111,6 @@ impl Builder {
     pub fn iop_overflow_muls(&self, lhs: &Ciphertext, rhs: &Plaintext) -> (Ciphertext, Ciphertext) {
         let src_c_blocks = self.ciphertext_split(lhs);
         let src_p_blocks = self.plaintext_split(rhs);
-        // Only keep the LSBs to obtain an IxP -> I operation
         let cut_off = lhs.spec().block_count();
         let (output, flag_block) = self.iop_muls_raw(
             &src_c_blocks,
@@ -177,6 +136,10 @@ impl Builder {
     /// Overflow computation also uses the same phases, with slight differences:
     ///  * Expansion: only compute the NonNull flag of a whole row (linear, one PBS per digit)
     ///  * Reduction: merge the NonNull flags together with the carry leaving the cut-off column
+    ///
+    /// NB: the terms are not clean digits here, so the `NU` counting of
+    /// [`iop_mul_raw`](Self::iop_mul_raw) does not apply. Every term and the accumulator carry
+    /// their degree, and a carry is extracted only when the next term would not fit.
     ///
     /// # Panics
     ///
@@ -212,13 +175,12 @@ impl Builder {
         );
         let cut_off = cut_off_block.sas::<usize>();
 
-        // Phase 1 expand:
-        // Cartesian product of the ciphertext and plaintext digits, gathered by output column
-        // (i.e. i+j) together with the degree of the term, for the later reduction.
+        // Phase 1 expand: all the products of a ciphertext digit by a plaintext digit, gathered by
+        // output column (i.e. i+j) with the degree of the term.
         // NB: a degree is the largest value a block may hold. Contrary to the ct x ct case the
         // terms are not clean digits, a digit product spans [0, msg_mask^2].
-        // Columns at or above the cut-off only feed the dropped MSBs: their exact value is
-        // irrelevant, only whether they are non-null, which the overflow terms below track.
+        // Columns at or above the cut-off only feed the dropped MSBs: only their non-nullity
+        // matters, which the overflow terms below track.
         let mut partial_product = vec![Vec::<(CiphertextBlock, usize)>::new(); cut_off];
         let mut overflow_terms = Vec::<(CiphertextBlock, usize)>::new();
         for (i, ci) in src_c_blocks.iter().enumerate() {
@@ -235,8 +197,8 @@ impl Builder {
                         .block_mul_plaintext(ci, pj);
                     partial_product[i + j].push((pp, msg_mask * msg_mask));
                 } else {
-                    // `a_i * c_j != 0` iff both digits are non-null, and multiplying the flag of
-                    // the ciphertext digit by the plaintext one is linear: no PBS here.
+                    // `a_i * c_j` is not null only if both digits are not null, and multiplying
+                    // the flag of the ciphertext digit by the plaintext one is linear: no PBS.
                     let ovf = self
                         .comment(format!("ovf_{i}_{j}"))
                         .block_mul_plaintext(is_some.expect("row has a dropped part"), pj);
@@ -245,12 +207,11 @@ impl Builder {
             }
         }
 
-        // Phase 2 reduce/merge:
-        // Sum the terms of a column while they fit in a block; when the next one would overflow
-        // the capacity, extract the carry -- which becomes a term of the next column -- and keep
-        // going with the message left over. A column ends up as a single clean digit.
-        // The carries leaving the cut-off column are dropped MSBs as well, so they join the
-        // overflow terms instead of a column: hence the extra slot.
+        // Phase 2 reduce/merge: sum the terms of a column while they fit in a block. When the next
+        // one would go over the capacity, extract the carry, which becomes a term of the next
+        // column, and go on with the message left. A column ends as a single clean digit.
+        // The carries leaving the cut-off column are dropped MSBs too, so they join the overflow
+        // terms instead of a column: hence the extra slot.
         let mut carry_in = vec![Vec::<(CiphertextBlock, usize)>::new(); cut_off + 1];
         let mut dst_blk = Vec::with_capacity(cut_off);
         for k in 0..cut_off {
@@ -282,7 +243,7 @@ impl Builder {
                 acc_deg += deg;
             }
 
-            // Column completely reduced. Clear the block if it is not a clean digit yet.
+            // Column reduced, but the block may not be a clean digit yet.
             if acc_deg > msg_mask {
                 let (msg, carry) = self.block_extract_carry(acc_ct, acc_deg, want_carry);
                 if let Some(carry) = carry {
@@ -294,9 +255,8 @@ impl Builder {
             self.pop_comment();
         }
 
-        // Phase 2.b
-        // Overflow merge: every dropped contribution is now a small non-negative term, so a
-        // group of them is non-null iff one of its members is.
+        // Phase 2.b overflow merge: every dropped term is non-negative, so a group of them is not
+        // null only if one of its members is not null.
         self.push_comment("ovf");
         overflow_terms.extend(std::mem::take(&mut carry_in[cut_off]));
         let overflow_flag = self.block_merge_is_some(overflow_terms);
@@ -333,36 +293,45 @@ impl Builder {
 
     /// Reduces a set of non-negative terms to a single boolean telling whether any is non-null.
     ///
-    /// Terms are summed while they fit in a block -- a sum of non-negative terms is non-null iff
-    /// one of them is -- then every group is turned into a flag by an `IsSome` lookup, until a
-    /// single one is left. Contrary to [`iop_mul_raw`](Self::iop_mul_raw), which merges by
-    /// `NU`/`NU_BOOL`, the grouping follows the degrees so that the first round can already
-    /// absorb non-boolean terms.
+    /// A sum of non-negative terms is not null only if one of them is not null. So terms are summed
+    /// while they fit in a block, then every group is turned into a flag by an `IsSome` lookup,
+    /// until one is left. Contrary to [`iop_mul_raw`](Self::iop_mul_raw), which merges by
+    /// `NU`/`NU_BOOL`, the grouping follows the degrees, so the first round already takes terms
+    /// that are not booleans.
+    ///
+    /// A group is also limited in number of terms: the degrees alone would fill a block up to its
+    /// capacity, but a term out of `mul_pt` is as noisy as `msg_mask` fresh blocks, so the noise
+    /// budget runs out first.
     fn block_merge_is_some(&self, terms: Vec<(CiphertextBlock, usize)>) -> CiphertextBlock {
         let capacity = self.spec().data_mask().sas::<usize>();
+        // `mul_pt` terms in the first round, plain flags after it.
+        let mut max_terms = NU_MUL_PT;
         let mut terms = terms;
         if terms.is_empty() {
             return self.block_let_ciphertext(0);
         }
         loop {
-            // A lone flag is the answer; a lone wider term still needs to be normalized.
+            // A lone flag is the answer, a lone wider term still needs a lookup.
             if terms.len() == 1 && terms[0].1 <= 1 {
                 return terms[0].0;
             }
             let mut merged = Vec::with_capacity(terms.len());
             let mut term_iter = terms.into_iter();
             let (mut acc_ct, mut acc_deg) = term_iter.next().expect("non empty");
+            let mut acc_len = 1;
             for (ct, deg) in term_iter {
-                if acc_deg + deg > capacity {
+                if acc_deg + deg > capacity || acc_len == max_terms {
                     merged.push((self.block_lookup(acc_ct, Lut1Def::IsSome), 1));
-                    (acc_ct, acc_deg) = (ct, deg);
+                    (acc_ct, acc_deg, acc_len) = (ct, deg, 1);
                 } else {
                     acc_ct = self.block_add(ct, acc_ct);
                     acc_deg += deg;
+                    acc_len += 1;
                 }
             }
             merged.push((self.block_lookup(acc_ct, Lut1Def::IsSome), 1));
             terms = merged;
+            max_terms = NU_BOOL;
         }
     }
 }
@@ -526,6 +495,20 @@ mod test {
             for order in [CarryOrder::Late, CarryOrder::Interleaved] {
                 muls_with(CiphertextSpec::new(size, 2, 2), order).test_random(50, semantic);
             }
+        }
+    }
+
+    #[test]
+    fn noise_muls_lsb() {
+        for size in (2..128).step_by(2) {
+            muls(CiphertextSpec::new(size, 2, 2)).check_noise();
+        }
+    }
+
+    #[test]
+    fn noise_overflow_muls_lsb() {
+        for size in (2..128).step_by(2) {
+            overflow_muls(CiphertextSpec::new(size, 2, 2)).check_noise();
         }
     }
 }

@@ -1,20 +1,3 @@
-//! Scalar subtraction IOps, all built on top of the [`adds`](super::adds) datapath.
-//!
-//! Every operation here is a rewrite of a subtraction into the scalar *addition* already
-//! implemented in [`Builder::iop_adds`](Builder::iop_adds), using the identity
-//! `A - B == A + !B + 1` (two's complement). Writing `mask` for `2^W - 1`, `!X == mask - X`,
-//! which on a radix decomposition is just the per-digit `msg_mask - digit` — a *linear*
-//! plaintext-minus-ciphertext operation ([`Builder::iop_bitwise_inv`]), so it costs one DOp
-//! per block and **no PBS**.
-//!
-//! | op | identity | carry-in | carry-out is |
-//! |---|---|---|---|
-//! | [`Builder::iop_subs`] | `A - C == !(!A + C)` | none | the borrow, directly |
-//! | [`Builder::iop_ssub`] | `C - A == !A + C + 1` | 1 | the *inverse* of the borrow |
-//!
-//! Both overflow flavours reuse the very same sums, so the whole family costs `ADDS` plus a
-//! handful of carry-free DOps.
-
 use crate::builder::{Builder, Ciphertext, Plaintext};
 use zhc_crypto::integer_semantics::CiphertextSpec;
 use zhc_langs::ioplang::Lut1Def;
@@ -79,15 +62,13 @@ pub fn overflow_ssub(spec: CiphertextSpec) -> Builder {
 impl Builder {
     /// Subtracts a scalar from an encrypted integer, automatically selecting the best algorithm.
     ///
-    /// Computes `lhs - rhs` as `!(!lhs + rhs)`, delegating the carry propagation to
-    /// [`iop_adds`](Self::iop_adds) — so the algorithm (ripple-carry, Hillis-Steele or
-    /// Kogge-Stone) and the PBS count are exactly those of a scalar addition. The two
-    /// complements are plaintext-minus-ciphertext operations, which need no PBS.
+    /// Computes `lhs - rhs` as `!(!lhs + rhs)`. The carry propagation is done by
+    /// [`iop_adds`](Self::iop_adds), so the PBS count is the one of a scalar addition. The two
+    /// inversions are plaintext minus ciphertext operations and need no PBS.
     ///
-    /// It is costing 1 block_plaintext_sub per block before & after adds so in TFHE-rs we are
-    /// not using it and perfer inverting constant at runtime which we cannot do in ZHC.
-    /// It will have to be improved when we give ucore a few DOp instructions to manipulate
-    /// immediate on its own.
+    /// It costs one block_plaintext_sub per block before and after the addition. In TFHE-rs we
+    /// invert the constant at runtime instead, which ZHC cannot do yet. This will get better when
+    /// ucore gets DOp instructions to work on an immediate on its own.
     ///
     /// # Examples
     ///
@@ -100,7 +81,6 @@ impl Builder {
     /// let diff = builder.iop_subs(&a, &b);
     /// ```
     pub fn iop_subs(&self, lhs: &Ciphertext, rhs: &Plaintext) -> Ciphertext {
-        // lhs - rhs == !(!lhs + rhs)
         let a_inv = self.comment("Invert Input").iop_bitwise_inv(lhs);
         let sum = self.iop_adds(&a_inv, rhs);
         self.comment("Invert Output").iop_bitwise_inv(&sum)
@@ -109,10 +89,9 @@ impl Builder {
     /// Subtracts an encrypted integer from a scalar, automatically selecting the best algorithm.
     ///
     /// Computes `lhs - rhs` as `!rhs + lhs + 1`, i.e. a scalar addition
-    /// ([`iop_adds`](Self::iop_adds)) on the complemented ciphertext with an injected
-    /// carry-in of 1. The complement needs no PBS, so the cost is that of a scalar addition.
-    ///
-    /// The result is the wrapping difference.
+    /// ([`iop_adds`](Self::iop_adds)) on the inverted ciphertext with a carry-in of 1. The
+    /// inversion needs no PBS, so the cost is the one of a scalar addition. The result is the
+    /// wrapping difference.
     ///
     /// # Examples
     ///
@@ -125,7 +104,6 @@ impl Builder {
     /// let diff = builder.iop_ssub(&a, &b);
     /// ```
     pub fn iop_ssub(&self, lhs: &Plaintext, rhs: &Ciphertext) -> Ciphertext {
-        // lhs - rhs == !rhs + lhs + 1
         let int_size = rhs.spec().int_size();
         let one = self.block_let_ciphertext(1);
         let b_inv = self.comment("Invert Input").iop_bitwise_inv(rhs);
@@ -142,9 +120,9 @@ impl Builder {
     /// `overflow` is a single-block ciphertext: 1 if `rhs > lhs` (unsigned underflow
     /// occurred), 0 otherwise.
     ///
-    /// Because the sum computed under the hood is `!lhs + rhs`, its carry-out is set exactly
-    /// when `rhs > lhs` — it *is* the borrow, so unlike
-    /// [`iop_overflow_sub`](Self::iop_overflow_sub) no inversion PBS is needed on the flag.
+    /// The sum done inside is `!lhs + rhs`, whose carry-out is set exactly when `rhs > lhs`. It is
+    /// already the borrow, so contrary to [`iop_overflow_sub`](Self::iop_overflow_sub) the flag
+    /// needs no inversion PBS.
     ///
     /// # Examples
     ///
@@ -157,7 +135,6 @@ impl Builder {
     /// let (diff, borrow) = builder.iop_overflow_subs(&a, &b);
     /// ```
     pub fn iop_overflow_subs(&self, lhs: &Ciphertext, rhs: &Plaintext) -> (Ciphertext, Ciphertext) {
-        // lhs - rhs == !(!lhs + rhs), and carry_out(!lhs + rhs) == 1 iff rhs > lhs.
         let int_size = lhs.spec().int_size();
         let a_inv = self.comment("Invert Input").iop_bitwise_inv(lhs);
         let (sum, carry_out) = match int_size {
@@ -188,7 +165,6 @@ impl Builder {
     /// let (diff, borrow) = builder.iop_overflow_ssub(&a, &b);
     /// ```
     pub fn iop_overflow_ssub(&self, lhs: &Plaintext, rhs: &Ciphertext) -> (Ciphertext, Ciphertext) {
-        // lhs - rhs == !rhs + lhs + 1, whose carry-out is set iff lhs >= rhs.
         let int_size = rhs.spec().int_size();
         let one = self.block_let_ciphertext(1);
         let b_inv = self.comment("Invert Input").iop_bitwise_inv(rhs);
@@ -264,9 +240,8 @@ mod test {
         }
     }
 
-    /// The identities are most fragile at the boundaries (a zero scalar, equal operands,
-    /// a borrow out of zero), which `test_random` is unlikely to hit on wide integers.
-    /// Check them explicitly, on one width per algorithm band.
+    // `test_random` rarely draws the boundaries on wide integers: a null scalar, equal operands,
+    // a borrow out of zero. Check them by hand, on one width per algorithm.
     #[test]
     fn correctness_edge_cases() {
         for size in [4u16, 12, 32, 64, 128] {
@@ -331,6 +306,34 @@ mod test {
                     "overflow_ssub failed for size={size} a={a} c={c}"
                 );
             }
+        }
+    }
+
+    #[test]
+    fn noise_subs() {
+        for size in (2..128).step_by(2) {
+            subs(CiphertextSpec::new(size, 2, 2)).check_noise();
+        }
+    }
+
+    #[test]
+    fn noise_ssub() {
+        for size in (2..128).step_by(2) {
+            ssub(CiphertextSpec::new(size, 2, 2)).check_noise();
+        }
+    }
+
+    #[test]
+    fn noise_overflow_subs() {
+        for size in (2..128).step_by(2) {
+            overflow_subs(CiphertextSpec::new(size, 2, 2)).check_noise();
+        }
+    }
+
+    #[test]
+    fn noise_overflow_ssub() {
+        for size in (2..128).step_by(2) {
+            overflow_ssub(CiphertextSpec::new(size, 2, 2)).check_noise();
         }
     }
 }

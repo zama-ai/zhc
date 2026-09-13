@@ -10,7 +10,18 @@ use zhc_utils::{
     svec,
 };
 
-/// Creates an IR for the addition of 1 encrypted integer and a scalar.
+/// Creates an IR for the addition of an encrypted integer and a scalar.
+///
+/// Convenience wrapper that declares inputs/outputs and calls [`Builder::iop_adds`].
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # use zhc_builder::{CiphertextSpec, adds};
+/// # let spec = CiphertextSpec::new(16, 2, 2);
+/// let builder = adds(spec);
+/// let ir = builder.optimize_ir();
+/// ```
 pub fn adds(spec: CiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
     let src_c = builder.ciphertext_input(spec.int_size());
@@ -38,20 +49,20 @@ pub fn overflow_adds(spec: CiphertextSpec) -> Builder {
     builder
 }
 
-/// Creates an IR for the addition of an encrypted integers and a scalar using Hillis-Steele
+/// Creates an IR for the addition of an encrypted integer and a scalar using Hillis-Steele
 /// carry propagation.
 ///
 /// The returned [`Builder`] declares one ciphertext input, one plaintext input and one ciphertext
-/// output representing the wrapping sum of the operands. This variant explicitly selects the
-/// Hillis-Steele algorithm, which groups blocks into fours and resolves carries with
-/// logarithmic depth. Prefer [`adds`] for automatic algorithm selection based on bit-width.
+/// output holding the wrapping sum. This variant forces the Hillis-Steele algorithm, which groups
+/// blocks into fours and resolves the carries in logarithmic depth. Prefer [`adds`], which picks
+/// the algorithm on the bit-width.
 ///
 /// # Examples
 ///
 /// ```rust,no_run
-/// # use zhc_builder::{CiphertextSpec, add_hillis_steele};
+/// # use zhc_builder::{CiphertextSpec, adds_hillis_steele};
 /// # let spec = CiphertextSpec::new(16, 2, 2);
-/// let builder = add_hillis_steele(spec);
+/// let builder = adds_hillis_steele(spec);
 /// let ir = builder.optimize_ir();
 /// ```
 pub fn adds_hillis_steele(spec: CiphertextSpec) -> Builder {
@@ -63,6 +74,19 @@ pub fn adds_hillis_steele(spec: CiphertextSpec) -> Builder {
     builder
 }
 
+/// Creates an IR for the addition of an encrypted integer and a scalar using a ripple carry.
+///
+/// Same as [`adds_hillis_steele`], but forces the ripple carry algorithm. Prefer [`adds`], which
+/// picks the algorithm on the bit-width.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # use zhc_builder::{CiphertextSpec, adds_ripple_carry};
+/// # let spec = CiphertextSpec::new(16, 2, 2);
+/// let builder = adds_ripple_carry(spec);
+/// let ir = builder.optimize_ir();
+/// ```
 pub fn adds_ripple_carry(spec: CiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
     let src_c = builder.ciphertext_input(spec.int_size());
@@ -75,14 +99,12 @@ pub fn adds_ripple_carry(spec: CiphertextSpec) -> Builder {
 impl Builder {
     /// Adds an encrypted integer with an immediate, automatically selecting the best algorithm.
     ///
-    /// Chooses between ripple-carry, Hillis-Steele, and Kogge-Stone based on the
-    /// operand bit-width: ripple-carry for small integers (< 8 bits), Hillis-Steele
-    /// for medium (8–16 bits), and Kogge-Stone for larger widths. The result is the
-    /// wrapping sum of the two operands.
+    /// Chooses on the operand bit-width: ripple carry below 8 bits, Hillis-Steele above. The
+    /// result is the wrapping sum of the two operands.
     ///
-    /// Both operands must have the same [`CiphertextSpec`]. For explicit algorithm
-    /// selection, use [`iop_add_ripple_carry`](Self::iop_add_ripple_carry),
-    /// [`iop_add_hillis_steele`](Self::iop_add_hillis_steele), or
+    /// Both operands must have the same integer width. To force an algorithm, use
+    /// [`iop_adds_ripple_carry`](Self::iop_adds_ripple_carry) or
+    /// [`iop_adds_hillis_steele`](Self::iop_adds_hillis_steele).
     ///
     /// # Examples
     ///
@@ -108,9 +130,9 @@ impl Builder {
     /// single-block ciphertext: 1 if the unsigned sum does not fit in the operand width, 0
     /// otherwise.
     ///
-    /// The carry-out of the adder *is* the overflow flag, so this costs exactly the same as
-    /// [`iop_adds`](Self::iop_adds) -- the flag comes for free, and dead code elimination is
-    /// what makes it disappear from [`iop_adds`](Self::iop_adds).
+    /// The carry-out of the adder is already the overflow flag, so this costs the same as
+    /// [`iop_adds`](Self::iop_adds): the flag is free, and dead code elimination is what makes it
+    /// disappear from [`iop_adds`](Self::iop_adds).
     ///
     /// # Examples
     ///
@@ -130,12 +152,11 @@ impl Builder {
         }
     }
 
-    /// Adds two encrypted integers using sequential ripple-carry propagation.
+    /// Adds an encrypted integer and an immediate using a sequential ripple carry.
     ///
-    /// Processes blocks from LSB to MSB, computing each block's sum and carry in turn.
-    /// The optional `cin` injects an initial carry (useful for subtraction via two's
-    /// complement). Each block requires two PBS operations: one to extract the message
-    /// and one to extract the carry.
+    /// Walks the blocks from LSB to MSB, computing the sum and the carry of each one in turn. The
+    /// optional `cin` injects an initial carry, which subtraction uses for the two's complement.
+    /// Each block costs one many-lut PBS, which gives both the message and the carry.
     ///
     /// # Examples
     ///
@@ -168,7 +189,7 @@ impl Builder {
             self.pop_comment();
         }
 
-        // carry is now the carry-out of the last block (clean 0/1 via CarryInMsg)
+        // `carry` is now the carry-out of the last block, a clean 0/1 out of `ManyCarryMsg`.
         (
             self.comment("Join Output")
                 .ciphertext_join(output_blocks, None),
@@ -176,12 +197,12 @@ impl Builder {
         )
     }
 
-    /// Adds two encrypted integers using Hillis-Steele carry propagation.
+    /// Adds an encrypted integer and an immediate using Hillis-Steele carry propagation.
     ///
-    /// Groups blocks into fours, computes per-group propagation states, then resolves
-    /// inter-group carries with a parallel prefix scan. The optional `cin` injects an
-    /// initial carry into the LSB position. This algorithm offers O(log n) depth for
-    /// n groups, making it efficient for medium-width integers (roughly 8–16 blocks).
+    /// Groups the blocks into fours, computes the propagation state of each group, then resolves
+    /// the carries between groups with a parallel prefix scan. The optional `cin` injects an
+    /// initial carry on the LSB. The depth is O(log n) for n groups, which is good for medium
+    /// widths, roughly 8 to 16 blocks.
     ///
     /// # Examples
     ///
@@ -438,20 +459,6 @@ impl Builder {
 mod test {
     use super::*;
     use zhc_langs::ioplang::IopValue;
-    // use zhc_utils::assert_display_is;
-
-    #[test]
-    fn test_adds() {
-        let spec = CiphertextSpec::new(18, 2, 2);
-        let ir = adds(spec).optimize_ir();
-        println!(
-            "{}",
-            ir.format()
-                .with_walker(zhc_ir::PrintWalker::Linear)
-                .show_comments(true)
-                .show_types(false)
-        );
-    }
 
     #[test]
     fn correctness_adds_hillis_steele() {
@@ -489,7 +496,6 @@ mod test {
             Some(vec![IopValue::Ciphertext(sum), IopValue::Ciphertext(flag)])
         }
         for size in (2..128).step_by(2) {
-            // overflow_adds(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
             let spec = CiphertextSpec::new(size, 2, 2);
             let builder = Builder::new(spec.block_spec());
             let src_c = builder.ciphertext_input(spec.int_size());
@@ -500,9 +506,9 @@ mod test {
 
             builder.test_random(100, semantic);
 
-            // `test_random` on its own only ever observes the flag at 0: `CiphertextSpec::random`
-            // draws its bit-window bounds from `1..int_size`, so the top bit of an operand is
-            // never set and the sum can never carry out. Stimulate both answers explicitly.
+            // `test_random` alone only ever sees the flag at 0: `CiphertextSpec::random` draws its
+            // bit window in `1..int_size`, so the top bit of an operand is never set and the sum
+            // never carries out. Drive both answers by hand.
             let max = spec.int_mask();
             let half = max / 2;
             let msb = half + 1;
@@ -523,6 +529,34 @@ mod test {
                     "overflow_adds({a:#x}, {b:#x}) on {size} bits"
                 );
             }
+        }
+    }
+
+    #[test]
+    fn noise_adds_hillis_steele() {
+        for size in (2..128).step_by(2) {
+            adds_hillis_steele(CiphertextSpec::new(size, 2, 2)).check_noise();
+        }
+    }
+
+    #[test]
+    fn noise_adds_ripple() {
+        for size in (2..128).step_by(2) {
+            adds_ripple_carry(CiphertextSpec::new(size, 2, 2)).check_noise();
+        }
+    }
+
+    #[test]
+    fn noise_adds() {
+        for size in (2..128).step_by(2) {
+            adds(CiphertextSpec::new(size, 2, 2)).check_noise();
+        }
+    }
+
+    #[test]
+    fn noise_overflow_adds() {
+        for size in (2..128).step_by(2) {
+            overflow_adds(CiphertextSpec::new(size, 2, 2)).check_noise();
         }
     }
 }

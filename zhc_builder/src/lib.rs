@@ -127,6 +127,9 @@
 
 const NU: usize = 5;
 const NU_BOOL: usize = 8;
+// A `mul_pt` by a runtime immediate is as noisy as `msg_mask` fresh blocks, the noise analysis
+// having no better bound on the digit, so fewer of them may be summed before a lookup.
+const NU_MUL_PT: usize = 4;
 
 mod builder;
 mod iops;

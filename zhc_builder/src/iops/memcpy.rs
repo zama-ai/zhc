@@ -1,23 +1,13 @@
-//! Ciphertext copy IOp, i.e. `dst = src`.
-//!
-//! Pure data movement: the radix blocks of the source are extracted and stored into a fresh
-//! ciphertext, which the HPU lowering turns into one `LD` and one `ST` per block. There is no
-//! memory-to-memory move on the target, so going through the register file is the only option —
-//! the same shape the reference firmware documents.
-//!
-//! No lookup, no linear operation, no carry: this is the only IOp whose stream is free of any ALU
-//! work, which is also why it is the only one that can be *too short*, see `MIN_IOP_WORDS`.
-
 use zhc_crypto::integer_semantics::CiphertextSpec;
 
 use crate::builder::{Builder, Ciphertext};
 
 /// Shortest legal IOp stream, in words (one length word plus one word per DOp).
 ///
-/// The instruction scheduler rejects shorter streams -- too few DOps per IOp lets the sync id
-/// overflow -- and every board configuration commits to 4. The value cannot be read from
+/// The instruction scheduler rejects shorter streams, because too few DOps per IOp lets the sync
+/// id overflow, and every board configuration uses 4. The value cannot be read from
 /// [`CiphertextSpec`] nor from the HPU configuration (`min_iop_size` is not deserialized), so it is
-/// pinned here; it only ever bites the single-block case, see [`Builder::iop_memcpy`].
+/// written here. It only bites the single-block case, see [`Builder::iop_memcpy`].
 const MIN_IOP_WORDS: usize = 4;
 
 /// Creates an IR for the copy of an encrypted integer (`dst = src`).
@@ -44,12 +34,13 @@ impl Builder {
     /// Copies an encrypted integer block for block.
     ///
     /// Splitting then joining is the whole operation: the extracts read the source and the stores
-    /// fill a fresh ciphertext, which lowers to `LD` then `ST` per block.
+    /// fill a fresh ciphertext, which lowers to one `LD` and one `ST` per block. The target has no
+    /// memory to memory move, so going through the register file is the only way.
     ///
-    /// A one-block integer would yield a two-DOp stream, one word short of the minimum stream
-    /// length, so that case is padded with a null plaintext addition: one linear DOp, no PBS,
-    /// and neutral on both the value and the degree of the block. The padding has to sit on the
-    /// data path, as a dangling constant would simply be dropped by dead code elimination.
+    /// A one-block integer gives a two-DOp stream, one word short of the minimum stream length.
+    /// That case is padded with the addition of a null plaintext: one linear DOp, no PBS, and it
+    /// changes neither the value nor the degree of the block. The padding has to sit on the data
+    /// path, as a dangling constant would simply be dropped by dead code elimination.
     ///
     /// # Examples
     ///
@@ -62,7 +53,6 @@ impl Builder {
     /// ```
     pub fn iop_memcpy(&self, src: &Ciphertext) -> Ciphertext {
         let src_blocks = self.ciphertext_split(src);
-        // One LD and one ST per block, plus the leading length word.
         let words = 1 + 2 * src_blocks.len();
         let blocks = if words >= MIN_IOP_WORDS {
             src_blocks
@@ -97,8 +87,7 @@ mod test {
         }
     }
 
-    /// Guards the whole premise: a copy must not be optimized away, and must still be a plain
-    /// extract/store pair rather than anything with a lookup.
+    // A copy must not be optimized away, and must stay a plain extract/store pair.
     #[test]
     fn test_memcpy() {
         let spec = CiphertextSpec::new(8, 2, 2);
@@ -121,5 +110,12 @@ mod test {
                 output<0>(%14);
             "#
         );
+    }
+
+    #[test]
+    fn noise_memcpy() {
+        for size in (2..128).step_by(2) {
+            memcpy(CiphertextSpec::new(size, 2, 2)).check_noise();
+        }
     }
 }
