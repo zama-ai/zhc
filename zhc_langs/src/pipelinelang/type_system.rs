@@ -40,6 +40,7 @@ pub enum PipelineTypeSystem {
     MultiHpuLocalities,
     MultiHpuLangScheduled,
     MultiDopLang,
+    MultiHpuMetrics,
     MultiHpuTrace,
     MultiHpuStream,
     MultiHpuAssembly,

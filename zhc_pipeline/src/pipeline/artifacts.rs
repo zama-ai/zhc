@@ -2,6 +2,7 @@ use crate::{
     Fingerprint,
     hpu::{metrics::HpuMetrics, translation_table::DOpRepr},
     misc::PbsMetrics,
+    multi_hpu::metrics::MultiHpuMetrics,
     vm::scheduler::VmExecutionPlan,
 };
 use zhc_config::{hpu::HpuConfig, multi_hpu::MultiHpuConfig, vm::VmConfig};
@@ -52,6 +53,7 @@ pub enum PipelineArtifact {
     MultiHpuLocalities(OpMap<HpuLocality>),
     MultiHpuLangScheduled(Vec<IR<HpuLang>>),
     MultiDopLang(Vec<IR<DopLang>>),
+    MultiHpuMetrics(MultiHpuMetrics),
     MultiHpuTrace(PerfettoTrace),
     MultiHpuStream(Vec<Vec<DOpRepr>>),
     MultiHpuAssembly(Vec<FileHandle>),

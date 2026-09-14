@@ -47,6 +47,7 @@ impl EvaluatesTo<PipelineArtifact> for PipelineTypeSystem {
             PipelineArtifact::MultiHpuLocalities(_) => PipelineTypeSystem::MultiHpuLocalities,
             PipelineArtifact::MultiHpuLangScheduled(_) => PipelineTypeSystem::MultiHpuLangScheduled,
             PipelineArtifact::MultiDopLang(_) => PipelineTypeSystem::MultiDopLang,
+            PipelineArtifact::MultiHpuMetrics(_) => PipelineTypeSystem::MultiHpuMetrics,
             PipelineArtifact::MultiHpuTrace(_) => PipelineTypeSystem::MultiHpuTrace,
             PipelineArtifact::MultiHpuStream(_) => PipelineTypeSystem::MultiHpuStream,
             PipelineArtifact::MultiHpuAssembly(_) => PipelineTypeSystem::MultiHpuAssembly,
@@ -297,6 +298,15 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                     .collect();
                 let result = svec![PipelineArtifact::MultiHpuStream(streams)];
                 interval_end(c"GenerateMultiHpuStream", 0);
+                result
+            }
+            PipelineInstructionSet::ComputeMultiHpuMetrics => {
+                interval_begin(c"ComputeMultiHpuMetrics", 0);
+                let allocated = arguments[0].unwrap_multi_dop_lang_ref();
+                let config = arguments[1].unwrap_multi_hpu_config_ref();
+                let metrics = multi_hpu::metrics::compute_multi_hpu_metrics(allocated, config);
+                let result = svec![PipelineArtifact::MultiHpuMetrics(metrics)];
+                interval_end(c"ComputeMultiHpuMetrics", 0);
                 result
             }
             PipelineInstructionSet::TraceMultiHpuExecution => {

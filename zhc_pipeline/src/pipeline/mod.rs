@@ -129,6 +129,7 @@ use crate::{
     Fingerprint,
     hpu::{metrics::HpuMetrics, translation_table::DOpRepr},
     misc::PbsMetrics,
+    multi_hpu::metrics::MultiHpuMetrics,
     vm::scheduler::VmExecutionPlan,
 };
 
@@ -157,6 +158,7 @@ struct ArtifactsValids {
     multi_hpu_localities: ValId,
     multi_hpulang_scheduled: ValId,
     multi_doplang: ValId,
+    multi_hpu_metrics: ValId,
     multi_hpu_trace: ValId,
     multi_hpu_stream: ValId,
     multi_hpu_assembly: ValId,
@@ -239,6 +241,11 @@ static PIPELINE: LazyLock<(IR<PipelineLang>, ArtifactsValids)> = LazyLock::new(|
     );
     let multi_doplang = rets[0];
     let (_, rets) = ir.add_op(
+        ComputeMultiHpuMetrics,
+        svec![multi_doplang, multi_hpu_config],
+    );
+    let multi_hpu_metrics = rets[0];
+    let (_, rets) = ir.add_op(
         TraceMultiHpuExecution,
         svec![multi_doplang, multi_hpu_config],
     );
@@ -291,6 +298,7 @@ static PIPELINE: LazyLock<(IR<PipelineLang>, ArtifactsValids)> = LazyLock::new(|
             multi_hpu_localities,
             multi_hpulang_scheduled,
             multi_doplang,
+            multi_hpu_metrics,
             multi_hpu_trace,
             multi_hpu_stream,
             multi_hpu_assembly,
@@ -1498,6 +1506,40 @@ impl Pipeline {
             .unwrap_multi_hpu_trace_ref()
     }
 
+    /// Returns the simulated performance metrics of the whole multi-HPU system.
+    ///
+    /// Replays the per-board device-level programs on the timing model of the multi-HPU
+    /// system and reports the total latency until every board has completed.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the multi-HPU configuration, or any input the multi-HPU branch depends on,
+    /// was not provided, and on panics, in which case the message names the failing step.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_pipeline::Pipeline;
+    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
+    /// # use zhc_config::multi_hpu::MultiHpuConfig;
+    /// # let mut pipeline = Pipeline::new()
+    /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
+    /// #     .with_prototype(zhc_ir::Signature::empty())
+    /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
+    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
+    /// #     .with_multi_hpu_config(MultiHpuConfig::default());
+    /// println!("{}", pipeline.get_multi_hpu_metrics().latency);
+    /// ```
+    pub fn get_multi_hpu_metrics(&mut self) -> &MultiHpuMetrics {
+        self.eval
+            .pull_val(&mut self.context, VALIDS().multi_hpu_metrics);
+        self.eventually_report_failure();
+        self.eval
+            .get_val(VALIDS().multi_hpu_metrics)
+            .unwrap()
+            .unwrap_multi_hpu_metrics_ref()
+    }
+
     /// Returns the binary instruction stream of each HPU.
     ///
     /// Encodes every HPU's device-level program into machine words, giving one stream per HPU
@@ -2124,6 +2166,23 @@ impl Pipeline {
             .into_val(VALIDS().multi_hpu_trace)
             .unwrap()
             .unwrap_multi_hpu_trace()
+    }
+
+    /// Consumes the pipeline and returns the owned performance metrics of the whole system.
+    ///
+    /// The owning counterpart of [`get_multi_hpu_metrics`](Self::get_multi_hpu_metrics).
+    ///
+    /// # Panics
+    ///
+    /// See [`get_multi_hpu_metrics`](Self::get_multi_hpu_metrics).
+    pub fn into_multi_hpu_metrics(mut self) -> MultiHpuMetrics {
+        self.eval
+            .pull_val(&mut self.context, VALIDS().multi_hpu_metrics);
+        self.eventually_report_failure();
+        self.eval
+            .into_val(VALIDS().multi_hpu_metrics)
+            .unwrap()
+            .unwrap_multi_hpu_metrics()
     }
 
     /// Consumes the pipeline and returns the owned binary instruction stream of each HPU.

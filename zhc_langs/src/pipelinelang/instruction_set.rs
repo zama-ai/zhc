@@ -30,8 +30,8 @@ use super::PipelineTypeSystem;
 /// **MultiHpu.** Mirrors the HPU branch across several boards, with three deviations:
 /// `IopLangToMultiHpu` additionally consumes the `Partitions` artifact and produces placement
 /// information (`MultiHpuLocalities`) alongside the translated IR, `ScheduleMultiHpuLang`
-/// consumes those localities together with the translated IR and the configuration, and there is
-/// no multi-HPU metrics step.
+/// consumes those localities together with the translated IR and the configuration, and
+/// `ComputeMultiHpuMetrics` reads the configuration instead of the scheduled IR.
 ///
 /// **Vm.** `InputVmConfig` and `InputTopology` introduce the VM configuration and machine
 /// topology, `IopLangToVmLang` translates the IOP IR, and `GenerateVmExecutionPlan` combines all
@@ -65,6 +65,7 @@ pub enum PipelineInstructionSet {
     ScheduleMultiHpuLang,
     AllocateMultiDopLang,
     GenerateMultiHpuStream,
+    ComputeMultiHpuMetrics,
     TraceMultiHpuExecution,
     GenerateMultiHpuAssembly,
     // Vm
@@ -107,6 +108,7 @@ impl PipelineInstructionSet {
             | ScheduleMultiHpuLang
             | AllocateMultiDopLang
             | GenerateMultiHpuStream
+            | ComputeMultiHpuMetrics
             | TraceMultiHpuExecution
             | GenerateMultiHpuAssembly => Affinity::MultiHpu,
             InputVmConfig | InputTopology | IopLangToVmLang | GenerateVmExecutionPlan => {
@@ -147,6 +149,7 @@ impl Format for PipelineInstructionSet {
             ScheduleMultiHpuLang => write!(f, "schedule_multi_hpulang"),
             AllocateMultiDopLang => write!(f, "allocate_multi_doplang"),
             GenerateMultiHpuStream => write!(f, "generate_multi_hpu_stream"),
+            ComputeMultiHpuMetrics => write!(f, "compute_multi_hpu_metrics"),
             TraceMultiHpuExecution => write!(f, "trace_multi_hpu_execution"),
             GenerateMultiHpuAssembly => write!(f, "generate_multi_hpu_assembly"),
             // Vm
@@ -206,6 +209,7 @@ impl DialectInstructionSet for PipelineInstructionSet {
             GenerateMultiHpuStream => {
                 sig![(MultiDopLang, MultiHpuLutRelocation) -> (MultiHpuStream)]
             }
+            ComputeMultiHpuMetrics => sig![(MultiDopLang, MultiHpuConfig) -> (MultiHpuMetrics)],
             TraceMultiHpuExecution => sig![(MultiDopLang, MultiHpuConfig) -> (MultiHpuTrace)],
             GenerateMultiHpuAssembly => sig![(MultiDopLang, LutRegistry) -> (MultiHpuAssembly)],
             // Vm
