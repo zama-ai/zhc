@@ -9,6 +9,10 @@ use std::fmt::Write;
 use zhc_crypto::integer_semantics::lut::LutRegistry;
 use zhc_ir::IR;
 
+mod parser;
+
+pub use parser::*;
+
 /// Emits a textual assembly listing from a DOP instruction stream.
 ///
 /// Walks `ir` in linear order and formats each instruction as a newline-terminated line containing

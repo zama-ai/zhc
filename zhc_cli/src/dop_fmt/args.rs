@@ -1,9 +1,4 @@
-//! Hand-rolled command-line parsing for `dop_fmt` (no `clap`).
-//!
-//! Mirrors the exact flag set and behavior clap previously generated: `--from`/`--to` are
-//! required paths; `--passes`, `--inputs`, and `--perf-rpt` are repeatable and each occurrence
-//! may itself be a comma-separated list; `--inputs` requires `--simulate` and `--perf-rpt`
-//! requires `--perf`; `-h`/`--help` and `-V`/`--version` print and exit immediately.
+//! Command-line parsing for `dop_fmt`.
 
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -50,8 +45,7 @@ pub struct Args {
     pub perf_rpt: Vec<PerfReport>,
 }
 
-/// Parses `dop_fmt`'s command line, or prints help/version and exits (matching clap's own
-/// behavior for `-h`/`--help`/`-V`/`--version`) — this never returns for those flags.
+/// Parses `dop_fmt`'s command line, or prints help/version and exits.
 pub fn parse(argv: impl IntoIterator<Item = String>) -> Result<Args, String> {
     let mut from: Option<PathBuf> = None;
     let mut to: Option<PathBuf> = None;
@@ -109,21 +103,15 @@ fn missing(flag: &str) -> String {
     ))
 }
 
-/// An error message followed by the one-line usage summary and a hint toward `--help`, matching
-/// clap's own (concise) error style rather than dumping the full option list on every mistake.
 fn brief(message: &str) -> String {
     format!("{message}\n\n{USAGE_LINE}\n\nFor more information, try '--help'.")
 }
 
-/// Consumes and returns the next token as a flag's value, erroring if the flag was the last
-/// token on the command line.
 fn value_of(argv: &mut impl Iterator<Item = String>, flag: &str) -> Result<String, String> {
     argv.next()
         .ok_or_else(|| format!("{flag} requires a value"))
 }
 
-/// Splits `raw` on commas and parses each piece into `list`, so a single `--flag a,b` occurrence
-/// behaves the same as `--flag a --flag b`.
 fn extend<T: FromStr<Err = String>>(list: &mut Vec<T>, raw: &str) -> Result<(), String> {
     for tok in raw.split(',') {
         list.push(tok.parse()?);

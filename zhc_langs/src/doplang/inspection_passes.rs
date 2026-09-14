@@ -4,7 +4,7 @@
 use zhc_ir::IR;
 use zhc_utils::Dumpable;
 
-use super::{Affinity, CtReg, DopInstructionSet, DopLang, MASK_PBS2, MASK_PBS4, MASK_PBS8};
+use super::{Affinity, DopInstructionSet, DopLang};
 
 /// Instruction counts per hardware pipeline lane ([`Affinity`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -93,67 +93,11 @@ impl Dumpable for PbsUsage {
     }
 }
 
-/// The number of consecutive registers a many-LUT destination's mask spans.
-fn reg_span(mask: u8) -> u8 {
-    match mask {
-        MASK_PBS2 => 2,
-        MASK_PBS4 => 4,
-        MASK_PBS8 => 8,
-        _ => 1,
-    }
-}
-
-/// The number of registers the program requires: the highest register index touched, plus one
-/// (accounting for the register span a many-LUT PBS destination covers).
-pub fn register_usage(ir: &IR<DopLang>) -> usize {
-    let push_max = |reg: &CtReg, max: &mut Option<usize>| {
-        let top = reg.addr + reg_span(reg.mask) - 1;
-        *max = Some(max.map_or(top as usize, |m| m.max(top as usize)));
-    };
-
-    let mut max_reg: Option<usize> = None;
-    for op in ir.walk_ops_linear() {
-        use DopInstructionSet::*;
-        match op.get_instruction() {
-            ADD { dst, src1, src2 } | SUB { dst, src1, src2 } => {
-                push_max(dst, &mut max_reg);
-                push_max(src1, &mut max_reg);
-                push_max(src2, &mut max_reg);
-            }
-            MAC {
-                dst, src1, src2, ..
-            } => {
-                push_max(dst, &mut max_reg);
-                push_max(src1, &mut max_reg);
-                push_max(src2, &mut max_reg);
-            }
-            ADDS { dst, src, .. }
-            | SUBS { dst, src, .. }
-            | SSUB { dst, src, .. }
-            | MULS { dst, src, .. }
-            | PBS { dst, src, .. }
-            | PBS_ML2 { dst, src, .. }
-            | PBS_ML4 { dst, src, .. }
-            | PBS_ML8 { dst, src, .. }
-            | PBS_F { dst, src, .. }
-            | PBS_ML2_F { dst, src, .. }
-            | PBS_ML4_F { dst, src, .. }
-            | PBS_ML8_F { dst, src, .. } => {
-                push_max(dst, &mut max_reg);
-                push_max(src, &mut max_reg);
-            }
-            LD { dst, .. } => push_max(dst, &mut max_reg),
-            ST { src, .. } => push_max(src, &mut max_reg),
-            _START | _END | SYNC | WAIT { .. } | NOTIFY { .. } | LD_B2B { .. } => {}
-        }
-    }
-    max_reg.map_or(0, |m| m + 1)
-}
-
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::doplang::parse_assembly;
+
+    use super::*;
 
     fn ir_from(body: &str) -> IR<DopLang> {
         let src = format!(
@@ -181,18 +125,5 @@ mod tests {
         assert_eq!(usage.plain, 1);
         assert_eq!(usage.flushing, 1);
         assert_eq!(usage.total(), 2);
-    }
-
-    #[test]
-    fn register_usage_accounts_for_many_lut_span() {
-        // PBS_ML4 R4 R1 ... touches R4..=R7, so 8 registers are required.
-        let ir = ir_from("LD R1 TH.0\nPBS_ML4 R4 R1 PbsNone\n");
-        assert_eq!(register_usage(&ir), 8);
-    }
-
-    #[test]
-    fn register_usage_zero_when_no_registers_touched() {
-        let ir = ir_from("");
-        assert_eq!(register_usage(&ir), 0);
     }
 }

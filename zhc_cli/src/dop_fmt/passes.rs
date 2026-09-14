@@ -9,7 +9,7 @@ use std::fmt;
 use std::str::FromStr;
 
 use zhc_ir::IR;
-use zhc_langs::doplang::{DopLang, count_spills, instruction_mix, pbs_usage, register_usage};
+use zhc_langs::doplang::{DopLang, count_spills, instruction_mix, pbs_usage};
 use zhc_utils::Dumpable;
 
 /// A named property check, run and printed on request from `--passes`.
@@ -21,18 +21,11 @@ pub enum DopPass {
     InstructionMix,
     /// Counts programmable-bootstrap instructions, split into flushing and non-flushing.
     PbsUsage,
-    /// Reports the number of registers the program requires.
-    RegisterUsage,
 }
 
 impl DopPass {
     /// Every available pass, in a stable order.
-    pub const ALL: &[DopPass] = &[
-        DopPass::Spills,
-        DopPass::InstructionMix,
-        DopPass::PbsUsage,
-        DopPass::RegisterUsage,
-    ];
+    pub const ALL: &[DopPass] = &[DopPass::Spills, DopPass::InstructionMix, DopPass::PbsUsage];
 
     /// The name this pass is selected by (also its `Display`/`Debug` form).
     pub fn name(&self) -> &'static str {
@@ -40,7 +33,6 @@ impl DopPass {
             DopPass::Spills => "Spills",
             DopPass::InstructionMix => "InstructionMix",
             DopPass::PbsUsage => "PbsUsage",
-            DopPass::RegisterUsage => "RegisterUsage",
         }
     }
 
@@ -50,9 +42,6 @@ impl DopPass {
             DopPass::Spills => format!("{} heap-store instruction(s)", count_spills(ir)),
             DopPass::InstructionMix => instruction_mix(ir).dump_to_string(),
             DopPass::PbsUsage => pbs_usage(ir).dump_to_string(),
-            DopPass::RegisterUsage => {
-                format!("{} register(s) required", register_usage(ir))
-            }
         }
     }
 }
@@ -96,16 +85,6 @@ mod tests {
     }
 
     #[test]
-    fn parses_pass_names_case_insensitively() {
-        assert_eq!("spills".parse::<DopPass>().unwrap(), DopPass::Spills);
-        assert_eq!(
-            "RegisterUsage".parse::<DopPass>().unwrap(),
-            DopPass::RegisterUsage
-        );
-        assert!("bogus".parse::<DopPass>().is_err());
-    }
-
-    #[test]
     fn spills_reports_heap_stores() {
         let ir = ir_from("LD R1 TH.0\nST TH.1 R1\nST TH.2 R1\nADD R2 R1 R1\n");
         assert!(DopPass::Spills.run(&ir).starts_with("2"));
@@ -118,16 +97,5 @@ mod tests {
         assert!(report.contains("Alu=1"));
         assert!(report.contains("Mem=1"));
         assert!(report.contains("Ctl=1"));
-    }
-
-    #[test]
-    fn register_usage_accounts_for_many_lut_span() {
-        // PBS_ML4 R4 R1 ... touches R4..=R7, so 8 registers are required.
-        let ir = ir_from("LD R1 TH.0\nPBS_ML4 R4 R1 PbsNone\n");
-        assert!(
-            DopPass::RegisterUsage.run(&ir).starts_with("8 "),
-            "{}",
-            DopPass::RegisterUsage.run(&ir)
-        );
     }
 }

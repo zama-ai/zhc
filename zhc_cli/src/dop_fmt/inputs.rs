@@ -5,8 +5,7 @@
 //! itself decomposes it into that argument's per-block slots (`TS[<id>].0`, `TS[<id>].1`, ...)
 //! based on the block width declared in the file's `[signature]` (see `crate::sim`), so the
 //! caller never names a block directly. Any `TS[<id>]` beyond the given `--inputs` values is
-//! drawn randomly, matching `zhc_builder::Builder::test_random`'s "user value if given, random
-//! otherwise" convention.
+//! drawn randomly.
 
 use std::str::FromStr;
 

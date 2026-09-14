@@ -33,8 +33,6 @@ pub struct Loaded {
     pub luts: LutRegistry,
 }
 
-/// Runs `f`, turning a panic into a `String` (the panic's message, if a `&str`/`String`, or a
-/// generic fallback otherwise) instead of unwinding past the caller.
 fn catch<T>(f: impl FnOnce() -> T) -> Result<T, String> {
     catch_unwind(AssertUnwindSafe(f)).map_err(|payload| {
         payload
@@ -63,9 +61,6 @@ pub fn load_hex(src: &str) -> Result<Loaded, String> {
     let (preamble, header_lines, body) = parse_preamble(src).map_err(|err| err.to_string())?;
     let words = parse_hex_words(&body).map_err(|err| offset_hex_error(err, header_lines))?;
 
-    // `generate_translation_table`/`decode_translation_table` are internal `zhc_pipeline`
-    // helpers that additionally expect/produce a leading instruction-count word; that word is
-    // not part of this tool's file format, so it's synthesized here rather than written/read.
     let mut framed = Vec::with_capacity(words.len() + 1);
     framed.push(words.len() as u32);
     framed.extend(words);
@@ -79,7 +74,6 @@ pub fn load_hex(src: &str) -> Result<Loaded, String> {
     })
 }
 
-/// Parses hex text into a word stream: one `u32` per non-blank, non-comment (`;`/`#`) line.
 fn parse_hex_words(src: &str) -> Result<Vec<u32>, String> {
     src.lines()
         .enumerate()
@@ -98,8 +92,6 @@ fn parse_hex_words(src: &str) -> Result<Vec<u32>, String> {
         .collect()
 }
 
-/// Rewrites a `parse_hex_words` error's line number (relative to the body text) to account for
-/// the preamble lines that preceded it in the original file.
 fn offset_hex_error(err: String, header_lines: usize) -> String {
     match err.split_once(':') {
         Some((prefix, rest)) if prefix == "hex" => {
@@ -114,28 +106,18 @@ fn offset_hex_error(err: String, header_lines: usize) -> String {
     }
 }
 
-/// Serializes a word stream as hex text: one lowercase, unpadded hex word per line.
 fn format_hex_words(words: &[u32]) -> String {
     words.iter().map(|w| format!("{w:x}\n")).collect()
 }
 
-/// Column width the preamble's dashed separator lines are padded out to.
 const SEPARATOR_WIDTH: usize = 80;
 
-/// A `; ---...` (or `; <prefix> ---...`) line padded with dashes out to [`SEPARATOR_WIDTH`]
-/// columns, framing the preamble to make it stand out from the description comments around it.
 fn separator(prefix: &str) -> String {
     let head = format!("; {prefix}");
     let dashes = SEPARATOR_WIDTH.saturating_sub(head.len());
     format!("{head}{}\n", "-".repeat(dashes))
 }
 
-/// Renders the `!preamble { ... }` block `zhc_langs::doplang::preamble` expects, shared
-/// verbatim by both `to_asm_text` and `to_hex_text` when regenerating (rather than passing
-/// through) a file. The block spec itself isn't rendered — it's implicit in `signature`'s
-/// `Ciphertext`/`Plaintext` entries, and re-derived from them on the next load. A dashed
-/// separator line frames the block on both sides (the closing one sharing its line with `}`) so
-/// it stands out from the description comments a file may carry around it.
 fn render_preamble(signature: &Signature<Type>, luts: &LutRegistry) -> String {
     let mut out = String::new();
     out.push_str(&separator(""));
@@ -171,8 +153,6 @@ fn render_preamble(signature: &Signature<Type>, luts: &LutRegistry) -> String {
 /// needs sync metadata (`iid`/`hid`/`flag`) that `DopInstructionSet::SYNC` doesn't carry.
 pub fn to_hex_text(loaded: &Loaded) -> Result<String, String> {
     let framed = catch(|| hpu_generate_translation_table(&loaded.ir, None))?;
-    // Drop the leading instruction-count word `generate_translation_table` writes: it's an
-    // internal `zhc_pipeline` convention, not part of this tool's file format.
     let mut out = render_preamble(&loaded.signature, &loaded.luts);
     out.push_str(&format_hex_words(&framed[1..]));
     Ok(out)
