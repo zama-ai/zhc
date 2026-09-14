@@ -1,6 +1,6 @@
 use rand::RngExt;
 
-use crate::integer_semantics::PlaintextSpec;
+use crate::integer_semantics::IntegerPlaintextSpec;
 
 use super::{EmulatedPlaintextBlock, EmulatedPlaintextBlockStorage};
 
@@ -103,7 +103,7 @@ impl PlaintextBlockSpec {
     /// # Panics
     ///
     /// Panics if `int_size` is not divisible by the message size.
-    pub fn plaintext_spec(&self, int_size: u16) -> PlaintextSpec {
-        PlaintextSpec::new(int_size, self.message_size())
+    pub fn integer_plaintext_spec(&self, int_size: u16) -> IntegerPlaintextSpec {
+        IntegerPlaintextSpec::new(int_size, self.message_size())
     }
 }

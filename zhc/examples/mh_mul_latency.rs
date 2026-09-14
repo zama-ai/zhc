@@ -3,12 +3,12 @@
 //! Run with `cargo run --release -p zhc --example mh_mul_latency`.
 
 use zhc::compat::mh_mul;
-use zhc_builder::CiphertextSpec;
+use zhc_builder::IntegerCiphertextSpec;
 use zhc_config::multi_hpu::MultiHpuConfig;
 use zhc_langs::doplang::DopInstructionSet;
 
 fn main() {
-    let spec = CiphertextSpec::new(64, 2, 2);
+    let spec = IntegerCiphertextSpec::new(64, 2, 2);
     // `MultiHpuConfig::default()` uses 4 boards, so 8 has to be given explicitly.
     let config = MultiHpuConfig {
         n_hpus: 8,

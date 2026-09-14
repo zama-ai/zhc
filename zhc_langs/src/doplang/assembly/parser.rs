@@ -21,7 +21,7 @@
 //! ; A description of what this program does goes here, before the preamble.
 //! # !preamble {
 //! # [signature]
-//! # (Ciphertext<8, 2, 2>, Ciphertext<8, 2, 2>) -> Ciphertext<8, 2, 2>
+//! # (IntegerCiphertext<8, 2, 2>, IntegerCiphertext<8, 2, 2>) -> IntegerCiphertext<8, 2, 2>
 //! # [lut]
 //! # my_lut: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]
 //! # }
@@ -31,18 +31,19 @@
 //!
 //! * `[signature]` holds one line written in [`Signature<Type>`]'s own `Display` syntax (the same
 //!   `(arg, arg, ...) -> (ret, ret, ...)` form `{:?}` already renders, with each `Type` spelled
-//!   `Ciphertext<int_size, carry_size, message_size>` or `Plaintext<int_size, message_size>`, and
-//!   the surrounding parens dropped when a side has exactly one element). There's no separate "iop
-//!   assembly" grammar here — the section is a straight, round-trippable textual encoding of the
-//!   zhc [`Signature`] type itself. There's no separate `[ciphertext_spec]` section either: the
-//!   file's block spec (carry/message width) is derived from the `Ciphertext`/ `Plaintext` types
-//!   named here — every one of them must agree on carry/message width (their `int_size` may differ
-//!   freely, e.g. when a return packs more than one argument's worth of blocks), and at least one
-//!   `Ciphertext` type must be present so the block spec is derivable at all. A `dop.asm` program
-//!   is meant to be one part of a possibly multi-board operation (see `tfhe-rs`'s `custom_iop`
-//!   fixtures under `zhc_cli/dop_fmt/examples`, whose `_v0`/`_v1`/... siblings are different
-//!   boards' fragments of the *same* logical operation) — every sibling should declare the
-//!   operation's full signature, even where its own instruction stream only touches a subset of it.
+//!   `IntegerCiphertext<int_size, carry_size, message_size>`, `BooleanCiphertext<carry_size,
+//!   message_size>`, or `IntegerPlaintext<int_size, message_size>`, and the surrounding parens
+//!   dropped when a side has exactly one element). There's no separate "iop assembly" grammar here
+//!   — the section is a straight, round-trippable textual encoding of the zhc [`Signature`] type
+//!   itself. There's no separate `[ciphertext_spec]` section either: the file's block spec
+//!   (carry/message width) is derived from the `Ciphertext`/ `Plaintext` types named here — every
+//!   one of them must agree on carry/message width (their `int_size` may differ freely, e.g. when a
+//!   return packs more than one argument's worth of blocks), and at least one `Ciphertext` type
+//!   must be present so the block spec is derivable at all. A `dop.asm` program is meant to be one
+//!   part of a possibly multi-board operation (see `tfhe-rs`'s `custom_iop` fixtures under
+//!   `zhc_cli/dop_fmt/examples`, whose `_v0`/`_v1`/... siblings are different boards' fragments of
+//!   the *same* logical operation) — every sibling should declare the operation's full signature,
+//!   even where its own instruction stream only touches a subset of it.
 //! * `[lut]` holds zero or more `name: [v0, v1, ..., vN]` lines, one raw lookup table per line. The
 //!   table must have exactly `2^data_size` entries for the file's block spec; entries are indexed
 //!   by the input block's raw data bits (padding cleared) and are otherwise uninterpreted, matching
@@ -62,7 +63,7 @@
 use std::fmt;
 
 use zhc_crypto::integer_semantics::{
-    CiphertextBlockSpec, PlaintextSpec, Type,
+    CiphertextBlockSpec, IntegerCiphertextSpec, IntegerPlaintextSpec, Type,
     lut::{Lut1, LutRegistry},
 };
 use zhc_ir::{IR, Signature};
@@ -249,10 +250,19 @@ fn derive_block_spec(sig: &Signature<Type>) -> Result<CiphertextBlockSpec, Strin
 
     for t in sig.get_args().iter().chain(sig.get_returns()) {
         match t {
-            Type::Ciphertext(cs) => {
+            Type::IntegerCiphertext(cs) => {
                 let s = cs.block_spec();
                 match block_spec {
                     None => {
+                        if let Some(prev) = message_size
+                            && prev != s.message_size()
+                        {
+                            return Err(format!(
+                                "a Ciphertext entry has message width {}, but an earlier entry \
+                                 has {prev} — every entry must agree",
+                                s.message_size()
+                            ));
+                        }
                         message_size = Some(s.message_size());
                         block_spec = Some(s);
                     }
@@ -269,7 +279,7 @@ fn derive_block_spec(sig: &Signature<Type>) -> Result<CiphertextBlockSpec, Strin
                     }
                 }
             }
-            Type::Plaintext(ps) => {
+            Type::IntegerPlaintext(ps) => {
                 let m = ps.block_spec().message_size();
                 match message_size {
                     None => message_size = Some(m),
@@ -282,6 +292,32 @@ fn derive_block_spec(sig: &Signature<Type>) -> Result<CiphertextBlockSpec, Strin
                     }
                 }
             }
+            Type::BoolCiphertext(s) => match block_spec {
+                None => {
+                    if let Some(prev) = message_size
+                        && prev != s.message_size()
+                    {
+                        return Err(format!(
+                            "a BoolCiphertext entry has message width {}, but an earlier entry \
+                             has {prev} — every entry must agree",
+                            s.message_size()
+                        ));
+                    }
+                    message_size = Some(s.message_size());
+                    block_spec = Some(*s);
+                }
+                Some(prev) if prev == *s => {}
+                Some(prev) => {
+                    return Err(format!(
+                        "a BoolCiphertext entry has carry/message width {}/{}, but an earlier \
+                         entry has {}/{} — every entry must agree",
+                        s.carry_size(),
+                        s.message_size(),
+                        prev.carry_size(),
+                        prev.message_size()
+                    ));
+                }
+            },
         }
     }
 
@@ -370,7 +406,12 @@ fn split_top_level_commas(s: &str) -> Vec<&str> {
 
 fn parse_type(tok: &str) -> Result<Type, String> {
     let tok = tok.trim();
-    let invalid = || format!("`{tok}`: expected `Ciphertext<...>` or `Plaintext<...>`");
+    let invalid = || {
+        format!(
+            "`{tok}`: expected `IntegerCiphertext<...>`, `BooleanCiphertext<...>`, or \
+             `IntegerPlaintext<...>`"
+        )
+    };
 
     let parse_fields = |inner: &str| -> Result<Vec<u16>, String> {
         inner
@@ -380,30 +421,40 @@ fn parse_type(tok: &str) -> Result<Type, String> {
             .collect()
     };
 
-    if let Some(rest) = tok.strip_prefix("Ciphertext<") {
+    if let Some(rest) = tok.strip_prefix("IntegerCiphertext<") {
         let inner = rest.strip_suffix('>').ok_or_else(invalid)?;
         let fields = parse_fields(inner)?;
         let [int_size, carry_size, message_size] = fields.as_slice() else {
             return Err(format!(
-                "`{tok}`: expected `Ciphertext<int_size, carry_size, message_size>`"
+                "`{tok}`: expected `IntegerCiphertext<int_size, carry_size, message_size>`"
             ));
         };
-        Ok(Type::Ciphertext(
-            zhc_crypto::integer_semantics::CiphertextSpec::new(
-                *int_size,
-                *carry_size as u8,
-                *message_size as u8,
-            ),
-        ))
-    } else if let Some(rest) = tok.strip_prefix("Plaintext<") {
+        Ok(Type::IntegerCiphertext(IntegerCiphertextSpec::new(
+            *int_size,
+            *carry_size as u8,
+            *message_size as u8,
+        )))
+    } else if let Some(rest) = tok.strip_prefix("BooleanCiphertext<") {
+        let inner = rest.strip_suffix('>').ok_or_else(invalid)?;
+        let fields = parse_fields(inner)?;
+        let [carry_size, message_size] = fields.as_slice() else {
+            return Err(format!(
+                "`{tok}`: expected `BooleanCiphertext<carry_size, message_size>`"
+            ));
+        };
+        Ok(Type::BoolCiphertext(CiphertextBlockSpec(
+            *carry_size as u8,
+            *message_size as u8,
+        )))
+    } else if let Some(rest) = tok.strip_prefix("IntegerPlaintext<") {
         let inner = rest.strip_suffix('>').ok_or_else(invalid)?;
         let fields = parse_fields(inner)?;
         let [int_size, message_size] = fields.as_slice() else {
             return Err(format!(
-                "`{tok}`: expected `Plaintext<int_size, message_size>`"
+                "`{tok}`: expected `IntegerPlaintext<int_size, message_size>`"
             ));
         };
-        Ok(Type::Plaintext(PlaintextSpec::new(
+        Ok(Type::IntegerPlaintext(IntegerPlaintextSpec::new(
             *int_size,
             *message_size as u8,
         )))
@@ -971,17 +1022,18 @@ impl<'a> Cursor<'a> {
 
 #[cfg(test)]
 mod tests {
+    use zhc_crypto::integer_semantics::{IntegerCiphertextSpec, IntegerPlaintextSpec};
+
     use super::*;
     use crate::doplang::emit_assembly;
     use crate::ioplang::Lut1Def;
-    use zhc_crypto::integer_semantics::CiphertextSpec;
 
     #[test]
     fn parses_full_preamble_and_body() {
         let src = "\
             # !preamble {\n\
             # [signature]\n\
-            # (Ciphertext<8, 2, 2>, Ciphertext<8, 2, 2>) -> Ciphertext<8, 2, 2>\n\
+            # (IntegerCiphertext<8, 2, 2>, IntegerCiphertext<8, 2, 2>) -> IntegerCiphertext<8, 2, 2>\n\
             # [lut]\n\
             # my_lut: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]\n\
             # }\n\
@@ -995,9 +1047,9 @@ mod tests {
 
         assert_eq!(preamble.signature, {
             let mut sig = Signature::empty();
-            sig.push_arg(Type::Ciphertext(CiphertextSpec::new(8, 2, 2)));
-            sig.push_arg(Type::Ciphertext(CiphertextSpec::new(8, 2, 2)));
-            sig.push_ret(Type::Ciphertext(CiphertextSpec::new(8, 2, 2)));
+            sig.push_arg(Type::IntegerCiphertext(IntegerCiphertextSpec::new(8, 2, 2)));
+            sig.push_arg(Type::IntegerCiphertext(IntegerCiphertextSpec::new(8, 2, 2)));
+            sig.push_ret(Type::IntegerCiphertext(IntegerCiphertextSpec::new(8, 2, 2)));
             sig
         });
 
@@ -1015,10 +1067,13 @@ mod tests {
     #[test]
     fn signature_round_trips_through_its_own_display() {
         let mut sig = Signature::empty();
-        sig.push_arg(Type::Ciphertext(CiphertextSpec::new(8, 2, 2)));
-        sig.push_arg(Type::Plaintext(PlaintextSpec::new(8, 2)));
-        sig.push_ret(Type::Ciphertext(CiphertextSpec::new(16, 2, 2)));
-        sig.push_ret(Type::Ciphertext(CiphertextSpec::new(8, 2, 2)));
+        sig.push_arg(Type::IntegerCiphertext(IntegerCiphertextSpec::new(8, 2, 2)));
+        sig.push_arg(Type::IntegerPlaintext(IntegerPlaintextSpec::new(8, 2)));
+        sig.push_arg(Type::BoolCiphertext(CiphertextBlockSpec(2, 2)));
+        sig.push_ret(Type::IntegerCiphertext(IntegerCiphertextSpec::new(
+            16, 2, 2,
+        )));
+        sig.push_ret(Type::IntegerCiphertext(IntegerCiphertextSpec::new(8, 2, 2)));
 
         let displayed = format!("{sig}");
         let src = format!("# !preamble {{\n# [signature]\n# {displayed}\n# [lut]\n# }}\nSYNC\n");
@@ -1028,6 +1083,29 @@ mod tests {
         // int_size may differ freely between entries (16 vs 8 above); only carry/message width
         // is required to agree.
         assert_eq!(preamble.block_spec, CiphertextBlockSpec(2, 2));
+    }
+
+    #[test]
+    fn derives_block_spec_from_bool_ciphertext() {
+        let src =
+            "# !preamble {\n# [signature]\n# BooleanCiphertext<2, 2> -> ()\n# [lut]\n# }\nSYNC\n";
+
+        let (preamble, _) = parse_assembly(src).expect("valid file must parse");
+
+        assert_eq!(preamble.block_spec, CiphertextBlockSpec(2, 2));
+    }
+
+    #[test]
+    fn rejects_bool_ciphertext_with_mismatched_block_width() {
+        let src = "# !preamble {\n# [signature]\n# (IntegerCiphertext<8, 2, 2>, BooleanCiphertext<1, 3>) -> ()\n# [lut]\n# }\nSYNC\n";
+
+        let err = parse_assembly(src).unwrap_err();
+
+        assert!(
+            err.message.contains("every entry must agree"),
+            "{}",
+            err.message
+        );
     }
 
     #[test]
@@ -1044,7 +1122,7 @@ mod tests {
             ; Some description of what this program does.\n\
             ; !preamble {\n\
             ; [signature]\n\
-            ; Ciphertext<8, 2, 2> -> Ciphertext<8, 2, 2>\n\
+            ; IntegerCiphertext<8, 2, 2> -> IntegerCiphertext<8, 2, 2>\n\
             ; [lut]\n\
             ; }\n\
             SYNC\n\
@@ -1062,7 +1140,7 @@ mod tests {
             ; -----\n\
             ; !preamble {\n\
             ; [signature]\n\
-            ; Ciphertext<8, 2, 2> -> Ciphertext<8, 2, 2>\n\
+            ; IntegerCiphertext<8, 2, 2> -> IntegerCiphertext<8, 2, 2>\n\
             ; [lut]\n\
             ; } -----\n\
             SYNC\n\
@@ -1090,11 +1168,31 @@ mod tests {
     }
 
     #[test]
+    fn rejects_legacy_ciphertext_type_names() {
+        for type_name in ["Ciphertext<8, 2, 2>", "BoolCiphertext<2, 2>"] {
+            let src = format!(
+                "# !preamble {{\n# [signature]\n# {type_name} -> ()\n# [lut]\n# }}\nSYNC\n"
+            );
+
+            let err = parse_assembly(&src).unwrap_err();
+
+            assert!(
+                err.message.contains(
+                    "expected `IntegerCiphertext<...>`, \
+                                      `BooleanCiphertext<...>`"
+                ),
+                "{type_name}: {}",
+                err.message
+            );
+        }
+    }
+
+    #[test]
     fn rejects_signature_with_mismatched_block_width() {
         let src = "\
             # !preamble {\n\
             # [signature]\n\
-            # (Ciphertext<8, 2, 2>, Ciphertext<8, 1, 3>) -> ()\n\
+            # (IntegerCiphertext<8, 2, 2>, IntegerCiphertext<9, 1, 3>) -> ()\n\
             # [lut]\n\
             # }\n\
             SYNC\n\
@@ -1112,7 +1210,7 @@ mod tests {
         let src = "\
             # !preamble {\n\
             # [signature]\n\
-            # (Ciphertext<8, 2, 2>, Ciphertext<8, 2, 2>) -> Ciphertext<8, 2, 2>\n\
+            # (IntegerCiphertext<8, 2, 2>, IntegerCiphertext<8, 2, 2>) -> IntegerCiphertext<8, 2, 2>\n\
             # [lut]\n\
             # too_short: [0, 1, 2]\n\
             # }\n\
@@ -1124,7 +1222,7 @@ mod tests {
 
     #[test]
     fn rejects_unterminated_preamble() {
-        let src = "# !preamble {\n# [signature]\n# Ciphertext<16, 2, 2> -> ()\n";
+        let src = "# !preamble {\n# [signature]\n# IntegerCiphertext<16, 2, 2> -> ()\n";
         let err = parse_assembly(src).unwrap_err();
         assert!(err.message.to_lowercase().contains("unterminated"));
     }

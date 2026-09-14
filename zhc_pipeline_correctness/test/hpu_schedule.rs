@@ -1,5 +1,5 @@
 use zhc::compat::Iop;
-use zhc_builder::{CiphertextSpec, mul};
+use zhc_builder::{IntegerCiphertextSpec, mul};
 use zhc_config::hpu::PhysicalConfig;
 use zhc_langs::ioplang::IopLang;
 use zhc_pipeline_correctness_macro::test_matrix;
@@ -23,7 +23,7 @@ fn pipeline(ir: &IR<IopLang>) -> IR<HpuLang> {
 
 #[test]
 fn smoke() {
-    let ir = pipeline(&mul(CiphertextSpec::new(8, 2, 2)).optimize_ir());
+    let ir = pipeline(&mul(IntegerCiphertextSpec::new(8, 2, 2)).optimize_ir());
     assert_display_is!(
         ir.format(),
         r#"
@@ -149,7 +149,7 @@ fn smoke() {
 #[test_matrix(iop = @all_iops, size = @all_precs)]
 #[ignore]
 fn correctness(iop: Iop, size: u16) {
-    let b = iop.to_builder(CiphertextSpec::new(size, 2, 2));
+    let b = iop.to_builder(IntegerCiphertextSpec::new(size, 2, 2));
     let spec = *b.spec();
     let iop_ir = b.optimize_ir();
     let hpu_ir = pipeline(&iop_ir);

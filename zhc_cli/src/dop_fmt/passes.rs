@@ -78,7 +78,7 @@ mod tests {
 
     fn ir_from(body: &str) -> IR<DopLang> {
         let src = format!(
-            "# !preamble {{\n# [signature]\n# Ciphertext<8, 2, 2> -> ()\n# [lut]\n\
+            "# !preamble {{\n# [signature]\n# IntegerCiphertext<8, 2, 2> -> ()\n# [lut]\n\
              # None: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]\n# }}\n{body}"
         );
         parse_assembly(&src).expect("valid file must parse").1

@@ -1,8 +1,8 @@
-use zhc_crypto::integer_semantics::CiphertextSpec;
+use zhc_crypto::integer_semantics::IntegerCiphertextSpec;
 
 use crate::{
     CiphertextBlock, PlaintextBlock,
-    builder::{Builder, Ciphertext, ExtensionBehavior, Plaintext},
+    builder::{BoolCiphertext, Builder, ExtensionBehavior, IntegerCiphertext, IntegerPlaintext},
 };
 use zhc_langs::ioplang::{Lut1Def, Lut2Def};
 use zhc_utils::{
@@ -17,21 +17,21 @@ use zhc_utils::{
 /// # Examples
 ///
 /// ```rust,no_run
-/// # use zhc_builder::{CiphertextSpec, adds};
-/// # let spec = CiphertextSpec::new(16, 2, 2);
+/// # use zhc_builder::{IntegerCiphertextSpec, adds};
+/// # let spec = IntegerCiphertextSpec::new(16, 2, 2);
 /// let builder = adds(spec);
 /// let ir = builder.optimize_ir();
 /// ```
-pub fn adds(spec: CiphertextSpec) -> Builder {
+pub fn adds(spec: IntegerCiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src_c = builder.ciphertext_input(spec.int_size());
-    let src_p = builder.plaintext_input(spec.int_size());
+    let src_c = builder.integer_ciphertext_input(spec.int_size());
+    let src_p = builder.integer_plaintext_input(spec.int_size());
     let res = match spec.int_size() {
         0..8 => builder.iop_adds_ripple_carry(&src_c, &src_p, None).0,
         8..256 => builder.iop_adds_hillis_steele(&src_c, &src_p, None).0,
         _ => todo!(),
     };
-    builder.ciphertext_output(res);
+    builder.integer_ciphertext_output(res);
     builder
 }
 
@@ -39,13 +39,13 @@ pub fn adds(spec: CiphertextSpec) -> Builder {
 ///
 /// Convenience wrapper that calls [`Builder::iop_overflow_adds`]. Returns two outputs:
 /// the wrapping sum and a single-block carry flag.
-pub fn overflow_adds(spec: CiphertextSpec) -> Builder {
+pub fn overflow_adds(spec: IntegerCiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src_c = builder.ciphertext_input(spec.int_size());
-    let src_p = builder.plaintext_input(spec.int_size());
+    let src_c = builder.integer_ciphertext_input(spec.int_size());
+    let src_p = builder.integer_plaintext_input(spec.int_size());
     let (res, flag) = builder.iop_overflow_adds(&src_c, &src_p);
-    builder.ciphertext_output(res);
-    builder.ciphertext_output(flag);
+    builder.integer_ciphertext_output(res);
+    builder.bool_ciphertext_output(flag);
     builder
 }
 
@@ -60,17 +60,17 @@ pub fn overflow_adds(spec: CiphertextSpec) -> Builder {
 /// # Examples
 ///
 /// ```rust,no_run
-/// # use zhc_builder::{CiphertextSpec, adds_hillis_steele};
-/// # let spec = CiphertextSpec::new(16, 2, 2);
+/// # use zhc_builder::{IntegerCiphertextSpec, adds_hillis_steele};
+/// # let spec = IntegerCiphertextSpec::new(16, 2, 2);
 /// let builder = adds_hillis_steele(spec);
 /// let ir = builder.optimize_ir();
 /// ```
-pub fn adds_hillis_steele(spec: CiphertextSpec) -> Builder {
+pub fn adds_hillis_steele(spec: IntegerCiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src_c = builder.ciphertext_input(spec.int_size());
-    let src_p = builder.plaintext_input(spec.int_size());
+    let src_c = builder.integer_ciphertext_input(spec.int_size());
+    let src_p = builder.integer_plaintext_input(spec.int_size());
     let res = builder.iop_adds_hillis_steele(&src_c, &src_p, None).0;
-    builder.ciphertext_output(res);
+    builder.integer_ciphertext_output(res);
     builder
 }
 
@@ -82,17 +82,17 @@ pub fn adds_hillis_steele(spec: CiphertextSpec) -> Builder {
 /// # Examples
 ///
 /// ```rust,no_run
-/// # use zhc_builder::{CiphertextSpec, adds_ripple_carry};
-/// # let spec = CiphertextSpec::new(16, 2, 2);
+/// # use zhc_builder::{IntegerCiphertextSpec, adds_ripple_carry};
+/// # let spec = IntegerCiphertextSpec::new(16, 2, 2);
 /// let builder = adds_ripple_carry(spec);
 /// let ir = builder.optimize_ir();
 /// ```
-pub fn adds_ripple_carry(spec: CiphertextSpec) -> Builder {
+pub fn adds_ripple_carry(spec: IntegerCiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src_c = builder.ciphertext_input(spec.int_size());
-    let src_p = builder.plaintext_input(spec.int_size());
+    let src_c = builder.integer_ciphertext_input(spec.int_size());
+    let src_p = builder.integer_plaintext_input(spec.int_size());
     let res = builder.iop_adds_ripple_carry(&src_c, &src_p, None).0;
-    builder.ciphertext_output(res);
+    builder.integer_ciphertext_output(res);
     builder
 }
 
@@ -109,14 +109,14 @@ impl Builder {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use zhc_builder::{CiphertextSpec, Builder};
-    /// # let spec = CiphertextSpec::new(32, 2, 2);
+    /// # use zhc_builder::{IntegerCiphertextSpec, Builder};
+    /// # let spec = IntegerCiphertextSpec::new(32, 2, 2);
     /// # let builder = Builder::new(spec.block_spec());
-    /// # let a = builder.ciphertext_input(spec.int_size());
-    /// # let b = builder.plaintext_input(spec.int_size());
+    /// # let a = builder.integer_ciphertext_input(spec.int_size());
+    /// # let b = builder.integer_plaintext_input(spec.int_size());
     /// let sum = builder.iop_adds(&a, &b);
     /// ```
-    pub fn iop_adds(&self, lhs: &Ciphertext, rhs: &Plaintext) -> Ciphertext {
+    pub fn iop_adds(&self, lhs: &IntegerCiphertext, rhs: &IntegerPlaintext) -> IntegerCiphertext {
         match lhs.spec().int_size() {
             0..8 => self.iop_adds_ripple_carry(&lhs, &rhs, None).0,
             8..256 => self.iop_adds_hillis_steele(&lhs, &rhs, None).0,
@@ -137,14 +137,18 @@ impl Builder {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use zhc_builder::{CiphertextSpec, Builder};
-    /// # let spec = CiphertextSpec::new(32, 2, 2);
+    /// # use zhc_builder::{IntegerCiphertextSpec, Builder};
+    /// # let spec = IntegerCiphertextSpec::new(32, 2, 2);
     /// # let builder = Builder::new(spec.block_spec());
-    /// # let a = builder.ciphertext_input(spec.int_size());
-    /// # let b = builder.plaintext_input(spec.int_size());
+    /// # let a = builder.integer_ciphertext_input(spec.int_size());
+    /// # let b = builder.integer_plaintext_input(spec.int_size());
     /// let (sum, overflow) = builder.iop_overflow_adds(&a, &b);
     /// ```
-    pub fn iop_overflow_adds(&self, lhs: &Ciphertext, rhs: &Plaintext) -> (Ciphertext, Ciphertext) {
+    pub fn iop_overflow_adds(
+        &self,
+        lhs: &IntegerCiphertext,
+        rhs: &IntegerPlaintext,
+    ) -> (IntegerCiphertext, BoolCiphertext) {
         match lhs.spec().int_size() {
             0..8 => self.iop_adds_ripple_carry(lhs, rhs, None),
             8..256 => self.iop_adds_hillis_steele(lhs, rhs, None),
@@ -161,21 +165,21 @@ impl Builder {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use zhc_builder::{CiphertextSpec, Builder};
-    /// # let spec = CiphertextSpec::new(8, 2, 2);
+    /// # use zhc_builder::{IntegerCiphertextSpec, Builder};
+    /// # let spec = IntegerCiphertextSpec::new(8, 2, 2);
     /// # let builder = Builder::new(spec.block_spec());
-    /// # let a = builder.ciphertext_input(spec.int_size());
-    /// # let b = builder.plaintext_input(spec.int_size());
+    /// # let a = builder.integer_ciphertext_input(spec.int_size());
+    /// # let b = builder.integer_plaintext_input(spec.int_size());
     /// let (sum, carry_out) = builder.iop_adds_ripple_carry(&a, &b, None);
     /// ```
     pub fn iop_adds_ripple_carry(
         &self,
-        lhs: &Ciphertext,
-        rhs: &Plaintext,
+        lhs: &IntegerCiphertext,
+        rhs: &IntegerPlaintext,
         cin: Option<&CiphertextBlock>,
-    ) -> (Ciphertext, Ciphertext) {
-        let lhs_blocks = self.ciphertext_split(lhs);
-        let rhs_blocks = self.plaintext_split(rhs);
+    ) -> (IntegerCiphertext, BoolCiphertext) {
+        let lhs_blocks = self.integer_ciphertext_split(lhs);
+        let rhs_blocks = self.integer_plaintext_split(rhs);
 
         let mut carry = cin.cloned().unwrap_or_else(|| self.block_let_ciphertext(0));
         let mut output_blocks = Vec::new();
@@ -192,8 +196,8 @@ impl Builder {
         // `carry` is now the carry-out of the last block, a clean 0/1 out of `ManyCarryMsg`.
         (
             self.comment("Join Output")
-                .ciphertext_join(output_blocks, None),
-            self.comment("Join Carry").ciphertext_join([carry], None),
+                .integer_ciphertext_join(output_blocks, None),
+            self.comment("Join Carry").bool_ciphertext_from_block(carry),
         )
     }
 
@@ -207,30 +211,30 @@ impl Builder {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use zhc_builder::{CiphertextSpec, Builder};
-    /// # let spec = CiphertextSpec::new(16, 2, 2);
+    /// # use zhc_builder::{IntegerCiphertextSpec, Builder};
+    /// # let spec = IntegerCiphertextSpec::new(16, 2, 2);
     /// # let builder = Builder::new(spec.block_spec());
-    /// # let a = builder.ciphertext_input(spec.int_size());
-    /// # let b = builder.plaintext_input(spec.int_size());
+    /// # let a = builder.integer_ciphertext_input(spec.int_size());
+    /// # let b = builder.integer_plaintext_input(spec.int_size());
     /// let (sum, carry_out) = builder.iop_adds_hillis_steele(&a, &b, None);
     /// ```
     pub fn iop_adds_hillis_steele(
         &self,
-        lhs: &Ciphertext,
-        rhs: &Plaintext,
+        lhs: &IntegerCiphertext,
+        rhs: &IntegerPlaintext,
         cin: Option<&CiphertextBlock>,
-    ) -> (Ciphertext, Ciphertext) {
-        let lhs_blocks = self.ciphertext_split(lhs);
-        let rhs_blocks = self.plaintext_split(rhs);
+    ) -> (IntegerCiphertext, BoolCiphertext) {
+        let lhs_blocks = self.integer_ciphertext_split(lhs);
+        let rhs_blocks = self.integer_plaintext_split(rhs);
 
         let (output_blocks, carry_out) =
             self.iop_adds_hillis_steele_raw(lhs_blocks, rhs_blocks, cin, true);
 
         (
             self.comment("Join Output")
-                .ciphertext_join(output_blocks, None),
+                .integer_ciphertext_join(output_blocks, None),
             self.comment("Join Carry")
-                .ciphertext_join([carry_out], None),
+                .bool_ciphertext_from_block(carry_out),
         )
     }
 
@@ -463,52 +467,55 @@ mod test {
     #[test]
     fn correctness_adds_hillis_steele() {
         fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::Ciphertext(lhs), IopValue::Plaintext(rhs)] = inp else {
+            let [IopValue::IntegerCiphertext(lhs), IopValue::IntegerPlaintext(rhs)] = inp else {
                 unreachable!()
             };
-            Some(vec![IopValue::Ciphertext(lhs.adds(*rhs))])
+            Some(vec![IopValue::IntegerCiphertext(lhs.adds(*rhs))])
         }
         for size in (2..128).step_by(2) {
-            adds_hillis_steele(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+            adds_hillis_steele(IntegerCiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
         }
     }
 
     #[test]
     fn correctness_adds_ripple() {
         fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::Ciphertext(lhs), IopValue::Plaintext(rhs)] = inp else {
+            let [IopValue::IntegerCiphertext(lhs), IopValue::IntegerPlaintext(rhs)] = inp else {
                 unreachable!()
             };
-            Some(vec![IopValue::Ciphertext(lhs.adds(*rhs))])
+            Some(vec![IopValue::IntegerCiphertext(lhs.adds(*rhs))])
         }
         for size in (2..128).step_by(2) {
-            adds_ripple_carry(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+            adds_ripple_carry(IntegerCiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
         }
     }
 
     #[test]
     fn correctness_overflow_adds() {
         fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::Ciphertext(lhs), IopValue::Plaintext(rhs)] = inp else {
+            let [IopValue::IntegerCiphertext(lhs), IopValue::IntegerPlaintext(rhs)] = inp else {
                 unreachable!()
             };
             let (sum, flag) = lhs.overflow_adds(*rhs);
-            Some(vec![IopValue::Ciphertext(sum), IopValue::Ciphertext(flag)])
+            Some(vec![
+                IopValue::IntegerCiphertext(sum),
+                IopValue::BoolCiphertext(flag),
+            ])
         }
         for size in (2..128).step_by(2) {
-            let spec = CiphertextSpec::new(size, 2, 2);
+            let spec = IntegerCiphertextSpec::new(size, 2, 2);
             let builder = Builder::new(spec.block_spec());
-            let src_c = builder.ciphertext_input(spec.int_size());
-            let src_p = builder.plaintext_input(spec.int_size());
+            let src_c = builder.integer_ciphertext_input(spec.int_size());
+            let src_p = builder.integer_plaintext_input(spec.int_size());
             let (res, flag) = builder.iop_overflow_adds(&src_c, &src_p);
-            builder.ciphertext_output(res);
-            builder.ciphertext_output(flag);
+            builder.integer_ciphertext_output(res);
+            builder.bool_ciphertext_output(flag);
 
             builder.test_random(100, semantic);
 
-            // `test_random` alone only ever sees the flag at 0: `CiphertextSpec::random` draws its
-            // bit window in `1..int_size`, so the top bit of an operand is never set and the sum
-            // never carries out. Drive both answers by hand.
+            // `test_random` alone only ever sees the flag at 0: `IntegerCiphertextSpec::random`
+            // draws its bit window in `1..int_size`, so the top bit of an operand is never set
+            // and the sum never carries out. Drive both answers by hand.
             let max = spec.int_mask();
             let half = max / 2;
             let msb = half + 1;
@@ -521,7 +528,7 @@ mod test {
                 (0, 0),      // no overflow
             ] {
                 let src_p_value = src_p.make_value(b);
-                let inputs = vec![IopValue::Ciphertext(spec.from_int(a)), src_p_value.clone()];
+                let inputs = vec![IopValue::IntegerCiphertext(spec.from_int(a)), src_p_value.clone()];
                 let outputs = builder.interpret().with_inputs(&inputs).get_outputs();
                 assert_eq!(
                     outputs,
@@ -535,28 +542,28 @@ mod test {
     #[test]
     fn noise_adds_hillis_steele() {
         for size in (2..128).step_by(2) {
-            adds_hillis_steele(CiphertextSpec::new(size, 2, 2)).check_noise();
+            adds_hillis_steele(IntegerCiphertextSpec::new(size, 2, 2)).check_noise();
         }
     }
 
     #[test]
     fn noise_adds_ripple() {
         for size in (2..128).step_by(2) {
-            adds_ripple_carry(CiphertextSpec::new(size, 2, 2)).check_noise();
+            adds_ripple_carry(IntegerCiphertextSpec::new(size, 2, 2)).check_noise();
         }
     }
 
     #[test]
     fn noise_adds() {
         for size in (2..128).step_by(2) {
-            adds(CiphertextSpec::new(size, 2, 2)).check_noise();
+            adds(IntegerCiphertextSpec::new(size, 2, 2)).check_noise();
         }
     }
 
     #[test]
     fn noise_overflow_adds() {
         for size in (2..128).step_by(2) {
-            overflow_adds(CiphertextSpec::new(size, 2, 2)).check_noise();
+            overflow_adds(IntegerCiphertextSpec::new(size, 2, 2)).check_noise();
         }
     }
 }
