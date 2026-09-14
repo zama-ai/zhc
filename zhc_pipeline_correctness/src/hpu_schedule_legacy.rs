@@ -1,4 +1,4 @@
-use zhc_builder::{CiphertextSpec, count_0};
+use zhc_builder::{IntegerCiphertextSpec, count_0};
 use zhc_config::hpu::PhysicalConfig;
 use zhc_ir::IR;
 use zhc_langs::{hpulang::HpuLang, ioplang::IopLang};
@@ -20,7 +20,7 @@ fn pipeline(ir: &IR<IopLang>) -> IR<HpuLang> {
 
 #[test]
 fn test_scheduler() {
-    let ir = pipeline(&count_0(CiphertextSpec::new(16, 2, 2)).optimize_ir());
+    let ir = pipeline(&count_0(IntegerCiphertextSpec::new(16, 2, 2)).optimize_ir());
     assert_display_is!(
         ir.format(),
         r#"
@@ -149,7 +149,7 @@ fn correctness() {
     };
     for iop in Iop::TEST_ITER {
         for size in (2..=128).step_by(2) {
-            check(iop.to_builder(CiphertextSpec::new(size, 2, 2)));
+            check(iop.to_builder(IntegerCiphertextSpec::new(size, 2, 2)));
         }
     }
 }

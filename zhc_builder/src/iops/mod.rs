@@ -16,17 +16,17 @@
 //!
 //! ```rust,no_run
 //! # use zhc_builder::*;
-//! # let spec = CiphertextSpec::new(16, 2, 2);
+//! # let spec = IntegerCiphertextSpec::new(16, 2, 2);
 //! // Standalone: build a complete addition IR.
 //! let ir = add(spec).optimize_ir();
 //!
 //! // Composed: add then compare inside a single builder.
 //! let mut builder = Builder::new(spec.block_spec());
-//! let a = builder.ciphertext_input(spec.int_size());
-//! let b = builder.ciphertext_input(spec.int_size());
+//! let a = builder.integer_ciphertext_input(spec.int_size());
+//! let b = builder.integer_ciphertext_input(spec.int_size());
 //! let (sum, _carry) = builder.iop_add_hillis_steele(&a, &b, None);
 //! let is_gt = builder.iop_cmp(&sum, &b, CmpKind::Greater);
-//! builder.ciphertext_output(&is_gt);
+//! builder.bool_ciphertext_output(&is_gt);
 //! ```
 
 /// Selects which bit value to count or propagate in bit-scanning operations.

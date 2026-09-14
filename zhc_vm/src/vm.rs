@@ -169,7 +169,7 @@ impl Vm {
     /// ```rust,no_run
     /// # use tfhe::integer::RadixCiphertext;
     /// # use tfhe::shortint::parameters::v1_6::V1_6_PARAM_MESSAGE_2_CARRY_2_KS32_PBS_TUNIFORM_2M128;
-    /// # use zhc::{builder::CiphertextSpec, prelude::{Pipeline, PipelineExt, Iop}};
+    /// # use zhc::{builder::IntegerCiphertextSpec, prelude::{Pipeline, PipelineExt, Iop}};
     /// # use zhc_config::vm::VmConfig;
     /// # use zhc_utils::svec;
     /// # use zhc_vm::{Value, ValueMut, Vm, VmConfigExt};
@@ -180,7 +180,7 @@ impl Vm {
     /// # vm.set_server_key(sk);
     /// # let ck = ck.into_raw_parts().0;
     /// let plan = Pipeline::new()
-    ///     .with_builder(Iop::Add.to_builder(CiphertextSpec::new(64, 2, 2)))
+    ///     .with_builder(Iop::Add.to_builder(IntegerCiphertextSpec::new(64, 2, 2)))
     ///     .with_vm_config(config)
     ///     .into_vm_execution_plan();
     ///

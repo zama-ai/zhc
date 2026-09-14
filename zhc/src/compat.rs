@@ -1,7 +1,7 @@
 use crate::PipelineExt;
 
 use zhc_builder::{
-    Builder, CiphertextSpec, add, add_simd, adds, bitwise_and, bitwise_inv, bitwise_or,
+    Builder, IntegerCiphertextSpec, add, add_simd, adds, bitwise_and, bitwise_inv, bitwise_or,
     bitwise_xor, cast, cmp_eq, cmp_gt, cmp_gte, cmp_lt, cmp_lte, cmp_neq, count_0, count_1, div,
     divs, erc7984, erc7984_simd, flip, if_then_else, if_then_zero, ilog2, lead0, lead1, memcpy,
     mods, mul, muls, overflow_add, overflow_adds, overflow_mul, overflow_muls, overflow_ssub,
@@ -215,7 +215,7 @@ impl Iop {
     ];
 
     /// Returns the builder for this operation with the given ciphertext spec.
-    pub fn to_builder(&self, spec: CiphertextSpec) -> Builder {
+    pub fn to_builder(&self, spec: IntegerCiphertextSpec) -> Builder {
         match self {
             Iop::CmpGt => cmp_gt(spec),
             Iop::CmpGte => cmp_gte(spec),
@@ -272,7 +272,11 @@ impl Iop {
         }
     }
 
-    pub fn get_translation_table(&self, hpu_config: &HpuConfig, spec: CiphertextSpec) -> Vec<u32> {
+    pub fn get_translation_table(
+        &self,
+        hpu_config: &HpuConfig,
+        spec: IntegerCiphertextSpec,
+    ) -> Vec<u32> {
         let pipeline = Pipeline::new()
             .with_builder(self.to_builder(spec))
             .with_hpu_config(hpu_config.clone());
@@ -287,7 +291,11 @@ impl Iop {
         pipeline.get_hpu_stream().to_owned()
     }
 
-    pub fn compute_latency(&self, hpu_config: &HpuConfig, spec: CiphertextSpec) -> Microseconds {
+    pub fn compute_latency(
+        &self,
+        hpu_config: &HpuConfig,
+        spec: IntegerCiphertextSpec,
+    ) -> Microseconds {
         let pipeline = Pipeline::new()
             .with_builder(self.to_builder(spec))
             .with_hpu_config(hpu_config.clone());
@@ -303,7 +311,7 @@ impl Iop {
     }
 }
 
-pub fn mh_mul(spec: CiphertextSpec, config: MultiHpuConfig) -> Pipeline {
+pub fn mh_mul(spec: IntegerCiphertextSpec, config: MultiHpuConfig) -> Pipeline {
     let schoolbook_depth = std::cmp::max(2, config.n_hpus / 2) as usize;
     let builder = zhc_builder::mh_mul(spec, schoolbook_depth);
     match config.n_hpus {
@@ -338,7 +346,7 @@ pub fn mh_mul(spec: CiphertextSpec, config: MultiHpuConfig) -> Pipeline {
 
 #[cfg(test)]
 mod test {
-    use zhc_builder::CiphertextSpec;
+    use zhc_builder::IntegerCiphertextSpec;
     use zhc_config::multi_hpu::MultiHpuConfig;
 
     use crate::compat::mh_mul;
@@ -351,7 +359,7 @@ mod test {
         for int_size in INT_SIZES {
             for mh in MH_FACTORS {
                 let mut pl = mh_mul(
-                    CiphertextSpec::new(int_size, 2, 2),
+                    IntegerCiphertextSpec::new(int_size, 2, 2),
                     MultiHpuConfig {
                         n_hpus: mh,
                         ..Default::default()

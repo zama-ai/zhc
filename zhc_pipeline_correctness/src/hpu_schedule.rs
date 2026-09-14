@@ -1,4 +1,4 @@
-use zhc_builder::{CiphertextSpec, mul};
+use zhc_builder::{IntegerCiphertextSpec, mul};
 use zhc_config::hpu::PhysicalConfig;
 use zhc_langs::ioplang::IopLang;
 use zhc_utils::assert_display_is;
@@ -21,7 +21,7 @@ fn pipeline(ir: &IR<IopLang>) -> IR<HpuLang> {
 
 #[test]
 fn test_scheduler() {
-    let ir = pipeline(&mul(CiphertextSpec::new(8, 2, 2)).optimize_ir());
+    let ir = pipeline(&mul(IntegerCiphertextSpec::new(8, 2, 2)).optimize_ir());
     assert_display_is!(
         ir.format(),
         r#"

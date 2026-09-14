@@ -114,7 +114,8 @@ pub fn check_noise(ir: &IR<IopLang>, spec: &PlaintextBlockSpec) {
         .filter(|op| {
             matches!(
                 op.get_instruction(),
-                IopInstructionSet::OutputCiphertext { .. }
+                IopInstructionSet::OutputIntegerCiphertext { .. }
+                    | IopInstructionSet::OutputBoolCiphertext { .. }
             )
         })
         .map(|op| op.get_args_iter().next().unwrap())
@@ -136,9 +137,11 @@ pub fn analyze_noise<'a>(
         |op: AnnOpRef<'_, '_, _, zhc_ir::Analysing<()>, zhc_ir::Analysing<Ann>>| {
             use IopInstructionSet::*;
             let noises = match op.get_instruction() {
-                InputCiphertext { .. } => svec![Ann::Noised(Noise::FRESH)],
-                InputPlaintext { .. } => svec![Ann::UnknownPlaintext(())],
-                OutputCiphertext { .. } => svec![],
+                InputIntegerCiphertext { .. } | InputBoolCiphertext { .. } => {
+                    svec![Ann::Noised(Noise::FRESH)]
+                }
+                InputIntegerPlaintext { .. } => svec![Ann::UnknownPlaintext(())],
+                OutputIntegerCiphertext { .. } | OutputBoolCiphertext { .. } => svec![],
                 _Consume { .. } => svec![],
                 Inspect { .. } => svec![
                     op.get_args_iter()
@@ -147,7 +150,7 @@ pub fn analyze_noise<'a>(
                         .get_annotation()
                         .unwrap_analyzed()
                 ],
-                DeclareCiphertext { .. } => svec![Ann::Noised(Noise::NONE)],
+                DeclareIntegerCiphertext { .. } => svec![Ann::Noised(Noise::NONE)],
                 LetPlaintextBlock { value } => svec![Ann::PlaintextBlock(*value)],
                 LetCiphertextBlock { .. } => svec![Ann::Noised(Noise::NONE)],
                 AddCt { .. } | SubCt { .. } => {
@@ -214,14 +217,14 @@ pub fn analyze_noise<'a>(
                         .unwrap_plaintext_block();
                     svec![Ann::Noised(Noise::mul_constant(noise, mul))]
                 }
-                ExtractCtBlock { .. } => svec![
+                ExtractIntegerCiphertextBlock { .. } | BoolFromBlock | ExtractBoolBlock => svec![
                     op.get_args_iter()
                         .nth(0)
                         .unwrap()
                         .get_annotation()
                         .unwrap_analyzed()
                 ],
-                ExtractPtBlock { .. } => {
+                ExtractIntegerPlaintextBlock { .. } => {
                     assert!(
                         op.get_args_iter()
                             .nth(0)
@@ -232,7 +235,7 @@ pub fn analyze_noise<'a>(
                     );
                     svec![Ann::PlaintextBlock((1 << spec.message_size()) - 1)]
                 }
-                StoreCtBlock { .. } => svec![Ann::Noised(std::cmp::max(
+                StoreIntegerCiphertextBlock { .. } => svec![Ann::Noised(std::cmp::max(
                     op.get_args_iter()
                         .nth(0)
                         .unwrap()
@@ -340,20 +343,20 @@ mod tests {
         use IopInstructionSet::*;
         let mut ir: IR<IopLang> = IR::empty();
         ir.add_op(
-            InputCiphertext {
+            InputIntegerCiphertext {
                 pos: 0,
                 int_size: 4,
             },
             svec![],
         );
         ir.add_op(
-            InputPlaintext {
+            InputIntegerPlaintext {
                 pos: 1,
                 int_size: 4,
             },
             svec![],
         );
-        ir.add_op(DeclareCiphertext { int_size: 4 }, svec![]);
+        ir.add_op(DeclareIntegerCiphertext { int_size: 4 }, svec![]);
         ir.add_op(LetCiphertextBlock { value: 2 }, svec![]);
         ir.add_op(LetPlaintextBlock { value: 3 }, svec![]);
 
@@ -379,21 +382,21 @@ mod tests {
         use IopInstructionSet::*;
         let mut ir: IR<IopLang> = IR::empty();
         let (_, ct) = ir.add_op(
-            InputCiphertext {
+            InputIntegerCiphertext {
                 pos: 0,
                 int_size: 4,
             },
             svec![],
         );
-        let (_, blk) = ir.add_op(ExtractCtBlock { index: 3 }, svec![ct[0]]);
+        let (_, blk) = ir.add_op(ExtractIntegerCiphertextBlock { index: 3 }, svec![ct[0]]);
         let (_, pt) = ir.add_op(
-            InputPlaintext {
+            InputIntegerPlaintext {
                 pos: 1,
                 int_size: 4,
             },
             svec![],
         );
-        ir.add_op(ExtractPtBlock { index: 0 }, svec![pt[0]]);
+        ir.add_op(ExtractIntegerPlaintextBlock { index: 0 }, svec![pt[0]]);
         ir.add_op(
             Inspect {
                 typ: IopTypeSystem::CiphertextBlock,
@@ -425,21 +428,21 @@ mod tests {
         use IopInstructionSet::*;
         let mut ir: IR<IopLang> = IR::empty();
         let (_, a_ct) = ir.add_op(
-            InputCiphertext {
+            InputIntegerCiphertext {
                 pos: 0,
                 int_size: 4,
             },
             svec![],
         );
-        let (_, a) = ir.add_op(ExtractCtBlock { index: 0 }, svec![a_ct[0]]);
+        let (_, a) = ir.add_op(ExtractIntegerCiphertextBlock { index: 0 }, svec![a_ct[0]]);
         let (_, b_ct) = ir.add_op(
-            InputCiphertext {
+            InputIntegerCiphertext {
                 pos: 1,
                 int_size: 4,
             },
             svec![],
         );
-        let (_, b) = ir.add_op(ExtractCtBlock { index: 0 }, svec![b_ct[0]]);
+        let (_, b) = ir.add_op(ExtractIntegerCiphertextBlock { index: 0 }, svec![b_ct[0]]);
         let (_, s1) = ir.add_op(
             AddCt {
                 flavor: Flavor::Protect,
@@ -502,13 +505,13 @@ mod tests {
         use IopInstructionSet::*;
         let mut ir: IR<IopLang> = IR::empty();
         let (_, ct) = ir.add_op(
-            InputCiphertext {
+            InputIntegerCiphertext {
                 pos: 0,
                 int_size: 4,
             },
             svec![],
         );
-        let (_, blk) = ir.add_op(ExtractCtBlock { index: 0 }, svec![ct[0]]);
+        let (_, blk) = ir.add_op(ExtractIntegerCiphertextBlock { index: 0 }, svec![ct[0]]);
         let (_, noisy) = ir.add_op(
             AddCt {
                 flavor: Flavor::Protect,
@@ -541,7 +544,7 @@ mod tests {
             svec![pt[0], r3[0]],
         );
 
-        // Plaintext operands carry no noise: the 2σ bound passes through
+        // IntegerPlaintext operands carry no noise: the 2σ bound passes through
         // every mixed flavor, including `pt_sub` where the ciphertext is the
         // second argument.
         assert_display_is!(
@@ -572,13 +575,13 @@ mod tests {
         use IopInstructionSet::*;
         let mut ir: IR<IopLang> = IR::empty();
         let (_, ct) = ir.add_op(
-            InputCiphertext {
+            InputIntegerCiphertext {
                 pos: 0,
                 int_size: 4,
             },
             svec![],
         );
-        let (_, blk) = ir.add_op(ExtractCtBlock { index: 0 }, svec![ct[0]]);
+        let (_, blk) = ir.add_op(ExtractIntegerCiphertextBlock { index: 0 }, svec![ct[0]]);
         let (_, pt) = ir.add_op(LetPlaintextBlock { value: 2 }, svec![]);
         ir.add_op(
             MulPt {
@@ -587,13 +590,13 @@ mod tests {
             svec![blk[0], pt[0]],
         );
         let (_, unknown) = ir.add_op(
-            InputPlaintext {
+            InputIntegerPlaintext {
                 pos: 1,
                 int_size: 4,
             },
             svec![],
         );
-        let (_, pt_blk) = ir.add_op(ExtractPtBlock { index: 0 }, svec![unknown[0]]);
+        let (_, pt_blk) = ir.add_op(ExtractIntegerPlaintextBlock { index: 0 }, svec![unknown[0]]);
         ir.add_op(
             MulPt {
                 flavor: Flavor::Protect,
@@ -629,13 +632,13 @@ mod tests {
         use IopInstructionSet::*;
         let mut ir: IR<IopLang> = IR::empty();
         let (_, hi_ct) = ir.add_op(
-            InputCiphertext {
+            InputIntegerCiphertext {
                 pos: 0,
                 int_size: 4,
             },
             svec![],
         );
-        let (_, hi_raw) = ir.add_op(ExtractCtBlock { index: 0 }, svec![hi_ct[0]]);
+        let (_, hi_raw) = ir.add_op(ExtractIntegerCiphertextBlock { index: 0 }, svec![hi_ct[0]]);
         let (_, hi) = ir.add_op(
             AddCt {
                 flavor: Flavor::Protect,
@@ -643,13 +646,13 @@ mod tests {
             svec![hi_raw[0], hi_raw[0]],
         );
         let (_, lo_ct) = ir.add_op(
-            InputCiphertext {
+            InputIntegerCiphertext {
                 pos: 1,
                 int_size: 4,
             },
             svec![],
         );
-        let (_, lo) = ir.add_op(ExtractCtBlock { index: 0 }, svec![lo_ct[0]]);
+        let (_, lo) = ir.add_op(ExtractIntegerCiphertextBlock { index: 0 }, svec![lo_ct[0]]);
         ir.add_op(
             PackCt {
                 mul: 4,
@@ -683,22 +686,28 @@ mod tests {
         use IopInstructionSet::*;
         let mut ir: IR<IopLang> = IR::empty();
         let (_, ct) = ir.add_op(
-            InputCiphertext {
+            InputIntegerCiphertext {
                 pos: 0,
                 int_size: 4,
             },
             svec![],
         );
         let (_, clean) = ir.add_op(LetCiphertextBlock { value: 0 }, svec![]);
-        let (_, stored) = ir.add_op(StoreCtBlock { index: 0 }, svec![clean[0], ct[0]]);
-        let (_, blk) = ir.add_op(ExtractCtBlock { index: 0 }, svec![ct[0]]);
+        let (_, stored) = ir.add_op(
+            StoreIntegerCiphertextBlock { index: 0 },
+            svec![clean[0], ct[0]],
+        );
+        let (_, blk) = ir.add_op(ExtractIntegerCiphertextBlock { index: 0 }, svec![ct[0]]);
         let (_, noisy) = ir.add_op(
             AddCt {
                 flavor: Flavor::Protect,
             },
             svec![blk[0], blk[0]],
         );
-        ir.add_op(StoreCtBlock { index: 1 }, svec![noisy[0], stored[0]]);
+        ir.add_op(
+            StoreIntegerCiphertextBlock { index: 1 },
+            svec![noisy[0], stored[0]],
+        );
 
         // Storing a clean block keeps the composite bound; storing a noisier
         // block raises it.
@@ -726,13 +735,13 @@ mod tests {
         use IopInstructionSet::*;
         let mut ir: IR<IopLang> = IR::empty();
         let (_, ct) = ir.add_op(
-            InputCiphertext {
+            InputIntegerCiphertext {
                 pos: 0,
                 int_size: 4,
             },
             svec![],
         );
-        let (_, blk) = ir.add_op(ExtractCtBlock { index: 0 }, svec![ct[0]]);
+        let (_, blk) = ir.add_op(ExtractIntegerCiphertextBlock { index: 0 }, svec![ct[0]]);
         let (_, noisy) = ir.add_op(
             AddCt {
                 flavor: Flavor::Protect,
@@ -778,13 +787,13 @@ mod tests {
         use IopInstructionSet::*;
         let mut ir: IR<IopLang> = IR::empty();
         let (_, ct) = ir.add_op(
-            InputCiphertext {
+            InputIntegerCiphertext {
                 pos: 0,
                 int_size: 4,
             },
             svec![],
         );
-        let (_, x) = ir.add_op(ExtractCtBlock { index: 0 }, svec![ct[0]]);
+        let (_, x) = ir.add_op(ExtractIntegerCiphertextBlock { index: 0 }, svec![ct[0]]);
         let (_, a) = ir.add_op(
             AddCt {
                 flavor: Flavor::Protect,
@@ -826,17 +835,17 @@ mod tests {
         use IopInstructionSet::*;
         let mut ir: IR<IopLang> = IR::empty();
         let (_, ct) = ir.add_op(
-            InputCiphertext {
+            InputIntegerCiphertext {
                 pos: 0,
                 int_size: 4,
             },
             svec![],
         );
-        let (_, blk) = ir.add_op(ExtractCtBlock { index: 0 }, svec![ct[0]]);
+        let (_, blk) = ir.add_op(ExtractIntegerCiphertextBlock { index: 0 }, svec![ct[0]]);
         let mut acc = blk[0];
         for pos in 1..=30 {
-            let (_, ct) = ir.add_op(InputCiphertext { pos, int_size: 4 }, svec![]);
-            let (_, blk) = ir.add_op(ExtractCtBlock { index: 0 }, svec![ct[0]]);
+            let (_, ct) = ir.add_op(InputIntegerCiphertext { pos, int_size: 4 }, svec![]);
+            let (_, blk) = ir.add_op(ExtractIntegerCiphertextBlock { index: 0 }, svec![ct[0]]);
             let (_, sum) = ir.add_op(
                 AddCt {
                     flavor: Flavor::Protect,
@@ -1042,19 +1051,19 @@ mod tests {
         use IopInstructionSet::*;
         let mut ir: IR<IopLang> = IR::empty();
         let (_, ct) = ir.add_op(
-            InputCiphertext {
+            InputIntegerCiphertext {
                 pos: 0,
                 int_size: 4,
             },
             svec![],
         );
-        let (_, blk) = ir.add_op(ExtractCtBlock { index: 0 }, svec![ct[0]]);
+        let (_, blk) = ir.add_op(ExtractIntegerCiphertextBlock { index: 0 }, svec![ct[0]]);
         let mut acc = blk[0];
         // Each pack multiplies the bound by 4 and adds 1: 1, 5, 21, 85, then
         // 341 overflows u8 and saturates to the absorbing MAX.
         for pos in 1..=5 {
-            let (_, ct) = ir.add_op(InputCiphertext { pos, int_size: 4 }, svec![]);
-            let (_, blk) = ir.add_op(ExtractCtBlock { index: 0 }, svec![ct[0]]);
+            let (_, ct) = ir.add_op(InputIntegerCiphertext { pos, int_size: 4 }, svec![]);
+            let (_, blk) = ir.add_op(ExtractIntegerCiphertextBlock { index: 0 }, svec![ct[0]]);
             let (_, packed) = ir.add_op(
                 PackCt {
                     mul: 4,
@@ -1111,14 +1120,14 @@ mod tests {
         use IopInstructionSet::*;
         let mut ir: IR<IopLang> = IR::empty();
         let (_, ct) = ir.add_op(
-            InputCiphertext {
+            InputIntegerCiphertext {
                 pos: 0,
                 int_size: 4,
             },
             svec![],
         );
-        let (_, lo) = ir.add_op(ExtractCtBlock { index: 0 }, svec![ct[0]]);
-        let (_, hi) = ir.add_op(ExtractCtBlock { index: 1 }, svec![ct[0]]);
+        let (_, lo) = ir.add_op(ExtractIntegerCiphertextBlock { index: 0 }, svec![ct[0]]);
+        let (_, hi) = ir.add_op(ExtractIntegerCiphertextBlock { index: 1 }, svec![ct[0]]);
         let (_, sum) = ir.add_op(
             AddCt {
                 flavor: Flavor::Protect,
@@ -1132,8 +1141,11 @@ mod tests {
             },
             svec![sum[0], pt[0]],
         );
-        let (_, stored) = ir.add_op(StoreCtBlock { index: 0 }, svec![scaled[0], ct[0]]);
-        ir.add_op(OutputCiphertext { pos: 0 }, svec![stored[0]]);
+        let (_, stored) = ir.add_op(
+            StoreIntegerCiphertextBlock { index: 0 },
+            svec![scaled[0], ct[0]],
+        );
+        ir.add_op(OutputIntegerCiphertext { pos: 0 }, svec![stored[0]]);
 
         let analyzed = analyze_noise(&ir, &PlaintextBlockSpec(2));
         assert_display_is!(

@@ -9,8 +9,8 @@
 //!
 //! [`IopLang`] is the dialect tag binding [`IopTypeSystem`] to
 //! [`IopInstructionSet`]. The type system distinguishes composite values
-//! ([`Ciphertext`](IopTypeSystem::Ciphertext),
-//! [`Plaintext`](IopTypeSystem::Plaintext)) from their individual blocks
+//! ([`IntegerCiphertext`](IopTypeSystem::IntegerCiphertext),
+//! [`IntegerPlaintext`](IopTypeSystem::IntegerPlaintext)) from their individual blocks
 //! ([`CiphertextBlock`](IopTypeSystem::CiphertextBlock),
 //! [`PlaintextBlock`](IopTypeSystem::PlaintextBlock)). Arithmetic and PBS
 //! instructions operate exclusively on blocks; composite values are
