@@ -6,16 +6,16 @@ use zhc_ir::{DialectInstructionSet, Format, FormatContext, Signature, sig};
 
 /// Register address mask that compares all bits (single-output PBS or
 /// plain register).
-pub const MASK_NONE: usize = usize::MAX;
+pub const MASK_NONE: u8 = u8::MAX;
 /// Register address mask that ignores the lowest bit, grouping pairs
 /// of consecutive registers produced by a 2-output PBS.
-pub const MASK_PBS2: usize = usize::MAX << 1;
+pub const MASK_PBS2: u8 = u8::MAX << 1;
 /// Register address mask that ignores the two lowest bits, grouping
 /// quads of consecutive registers produced by a 4-output PBS.
-pub const MASK_PBS4: usize = usize::MAX << 2;
+pub const MASK_PBS4: u8 = u8::MAX << 2;
 /// Register address mask that ignores the three lowest bits, grouping
 /// octets of consecutive registers produced by an 8-output PBS.
-pub const MASK_PBS8: usize = usize::MAX << 3;
+pub const MASK_PBS8: u8 = u8::MAX << 3;
 
 // -------------------------------------------------------------------------------------------
 // Standalone operand types.
@@ -53,11 +53,11 @@ impl Display for PtConst {
 /// A ciphertext block located on the heap.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CtHeap {
-    pub addr: usize,
+    pub addr: u16,
 }
 
 impl CtHeap {
-    pub fn new(addr: usize) -> Self {
+    pub fn new(addr: u16) -> Self {
         Self { addr }
     }
 
@@ -75,11 +75,11 @@ impl Display for CtHeap {
 /// A ciphertext block located in I/O memory.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CtIo {
-    pub addr: usize,
+    pub addr: u16,
 }
 
 impl CtIo {
-    pub fn new(addr: usize) -> Self {
+    pub fn new(addr: u16) -> Self {
         Self { addr }
     }
 
@@ -98,12 +98,12 @@ impl Display for CtIo {
 /// the microcontroller.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CtSrcVar {
-    pub id: usize,
-    pub block: usize,
+    pub id: u8,
+    pub block: u8,
 }
 
 impl CtSrcVar {
-    pub fn new(id: usize, block: usize) -> Self {
+    pub fn new(id: u8, block: u8) -> Self {
         Self { id, block }
     }
 
@@ -122,12 +122,12 @@ impl Display for CtSrcVar {
 /// by the microcontroller.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CtDstVar {
-    pub id: usize,
-    pub block: usize,
+    pub id: u8,
+    pub block: u8,
 }
 
 impl CtDstVar {
-    pub fn new(id: usize, block: usize) -> Self {
+    pub fn new(id: u8, block: u8) -> Self {
         Self { id, block }
     }
 
@@ -146,12 +146,12 @@ impl Display for CtDstVar {
 /// microcontroller.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PtSrcVar {
-    pub id: usize,
-    pub block: usize,
+    pub id: u8,
+    pub block: u8,
 }
 
 impl PtSrcVar {
-    pub fn new(id: usize, block: usize) -> Self {
+    pub fn new(id: u8, block: u8) -> Self {
         Self { id, block }
     }
 
@@ -174,13 +174,13 @@ impl Display for PtSrcVar {
 /// the output arity.
 #[derive(Debug, Clone, Copy, Eq, Hash)]
 pub struct CtReg {
-    pub mask: usize,
-    pub addr: usize,
+    pub mask: u8,
+    pub addr: u8,
 }
 
 impl CtReg {
     /// Creates a `CtReg` with [`MASK_NONE`] (all bits significant).
-    pub fn new(addr: impl Into<usize>) -> Self {
+    pub fn new(addr: impl Into<u8>) -> Self {
         Self {
             mask: MASK_NONE,
             addr: addr.into(),
@@ -188,7 +188,7 @@ impl CtReg {
     }
 
     /// Creates a `CtReg` with [`MASK_PBS2`] (lowest bit ignored).
-    pub fn ml2(addr: impl Into<usize>) -> Self {
+    pub fn ml2(addr: impl Into<u8>) -> Self {
         Self {
             mask: MASK_PBS2,
             addr: addr.into(),
@@ -196,7 +196,7 @@ impl CtReg {
     }
 
     /// Creates a `CtReg` with [`MASK_PBS4`] (two lowest bits ignored).
-    pub fn ml4(addr: impl Into<usize>) -> Self {
+    pub fn ml4(addr: impl Into<u8>) -> Self {
         Self {
             mask: MASK_PBS4,
             addr: addr.into(),
@@ -204,7 +204,7 @@ impl CtReg {
     }
 
     /// Creates a `CtReg` with [`MASK_PBS8`] (three lowest bits ignored).
-    pub fn ml8(addr: impl Into<usize>) -> Self {
+    pub fn ml8(addr: impl Into<u8>) -> Self {
         Self {
             mask: MASK_PBS8,
             addr: addr.into(),
@@ -241,22 +241,22 @@ impl Display for CtReg {
 /// (which this simply wraps).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct LutRef {
-    pub id: usize,
+    pub id: u16,
 }
 
 impl LutRef {
-    pub fn new(id: impl Into<usize>) -> Self {
+    pub fn new(id: impl Into<u16>) -> Self {
         Self { id: id.into() }
     }
 
     pub fn asm(&self, lreg: &LutRegistry) -> String {
-        format!("Pbs{}", lreg.get_raw_lut(&LutId(self.id)).name())
+        format!("Pbs{}", lreg.get_raw_lut(&LutId(self.id as usize)).name())
     }
 }
 
 impl From<LutId> for LutRef {
     fn from(value: LutId) -> Self {
-        Self { id: value.0 }
+        Self { id: value.0 as u16 }
     }
 }
 
@@ -326,7 +326,7 @@ impl PtArg {
         Self::Const(PtConst::new(val))
     }
 
-    pub fn var(id: usize, block: usize) -> Self {
+    pub fn var(id: u8, block: u8) -> Self {
         Self::Var(PtSrcVar::new(id, block))
     }
 
@@ -370,19 +370,19 @@ pub enum CtMem {
 }
 
 impl CtMem {
-    pub fn heap(addr: usize) -> Self {
+    pub fn heap(addr: u16) -> Self {
         Self::Heap(CtHeap::new(addr))
     }
 
-    pub fn io(addr: usize) -> Self {
+    pub fn io(addr: u16) -> Self {
         Self::Io(CtIo::new(addr))
     }
 
-    pub fn src(id: usize, block: usize) -> Self {
+    pub fn src(id: u8, block: u8) -> Self {
         Self::Src(CtSrcVar::new(id, block))
     }
 
-    pub fn dst(id: usize, block: usize) -> Self {
+    pub fn dst(id: u8, block: u8) -> Self {
         Self::Dst(CtDstVar::new(id, block))
     }
 

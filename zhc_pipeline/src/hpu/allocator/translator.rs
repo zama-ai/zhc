@@ -39,7 +39,7 @@ pub fn translate<'ir>(ir: &AnnIR<'ir, HpuLang, Alloc, ()>, lut_reg: &LutRegistry
             TransferIn { id, .. } => {
                 add_op(DopInstructionSet::LD_B2B {
                     flag: UserFlag { flag: id.0 },
-                    slot: CtMem::heap(slots[0].0 as usize),
+                    slot: CtMem::heap(slots[0].0),
                 });
             }
             _ => {}
@@ -58,13 +58,13 @@ pub fn translate<'ir>(ir: &AnnIR<'ir, HpuLang, Alloc, ()>, lut_reg: &LutRegistry
         for Spill { from, to } in spills.iter() {
             add_op(DopInstructionSet::ST {
                 dst: CtMem::heap(to.0.sas()),
-                src: CtReg::new(from.0),
+                src: CtReg::new(from.0 as u8),
             });
         }
 
         for Unspill { from, to } in unspills.iter() {
             add_op(DopInstructionSet::LD {
-                dst: CtReg::new(to.0),
+                dst: CtReg::new(to.0 as u8),
                 src: CtMem::heap(from.0.sas()),
             })
         }
@@ -72,7 +72,7 @@ pub fn translate<'ir>(ir: &AnnIR<'ir, HpuLang, Alloc, ()>, lut_reg: &LutRegistry
         match op.get_instruction() {
             SrcLd { from } => {
                 add_op(DopInstructionSet::LD {
-                    dst: CtReg::new(dsts[0].0),
+                    dst: CtReg::new(dsts[0].0 as u8),
                     src: CtMem::src(
                         from.src_pos.try_into().unwrap(),
                         from.block_pos.try_into().unwrap(),
@@ -81,28 +81,28 @@ pub fn translate<'ir>(ir: &AnnIR<'ir, HpuLang, Alloc, ()>, lut_reg: &LutRegistry
             }
             TransferOut { to, id, .. } => {
                 add_op(DopInstructionSet::ST {
-                    dst: CtMem::heap(slots[0].0 as usize),
-                    src: CtReg::new(srcs[0].0),
+                    dst: CtMem::heap(slots[0].0 as u16),
+                    src: CtReg::new(srcs[0].0 as u8),
                 });
                 add_op(DopInstructionSet::NOTIFY {
                     virt_id: VirtId { id: to.0 },
                     flag: UserFlag { flag: id.0 },
-                    slot: CtMem::heap(slots[0].0 as usize),
+                    slot: CtMem::heap(slots[0].0 as u16),
                 });
             }
             TransferIn { id, .. } => {
                 add_op(DopInstructionSet::WAIT {
                     flag: UserFlag { flag: id.0 },
-                    slot: Some(CtMem::heap(slots[0].0 as usize)),
+                    slot: Some(CtMem::heap(slots[0].0 as u16)),
                 });
                 add_op(DopInstructionSet::LD {
-                    dst: CtReg::new(dsts[0].0),
-                    src: CtMem::heap(slots[0].0 as usize),
+                    dst: CtReg::new(dsts[0].0 as u8),
+                    src: CtMem::heap(slots[0].0 as u16),
                 })
             }
             DstSt { to } => {
                 add_op(DopInstructionSet::ST {
-                    src: CtReg::new(srcs[0].0),
+                    src: CtReg::new(srcs[0].0 as u8),
                     dst: CtMem::dst(
                         to.dst_pos.try_into().unwrap(),
                         to.block_pos.try_into().unwrap(),
@@ -115,23 +115,23 @@ pub fn translate<'ir>(ir: &AnnIR<'ir, HpuLang, Alloc, ()>, lut_reg: &LutRegistry
             }
             AddCt => {
                 add_op(DopInstructionSet::ADD {
-                    dst: CtReg::new(dsts[0].0),
-                    src1: CtReg::new(srcs[0].0),
-                    src2: CtReg::new(srcs[1].0),
+                    dst: CtReg::new(dsts[0].0 as u8),
+                    src1: CtReg::new(srcs[0].0 as u8),
+                    src2: CtReg::new(srcs[1].0 as u8),
                 });
             }
             SubCt => {
                 add_op(DopInstructionSet::SUB {
-                    dst: CtReg::new(dsts[0].0),
-                    src1: CtReg::new(srcs[0].0),
-                    src2: CtReg::new(srcs[1].0),
+                    dst: CtReg::new(dsts[0].0 as u8),
+                    src1: CtReg::new(srcs[0].0 as u8),
+                    src2: CtReg::new(srcs[1].0 as u8),
                 });
             }
             Mac { cst } => {
                 add_op(DopInstructionSet::MAC {
-                    dst: CtReg::new(dsts[0].0),
-                    src1: CtReg::new(srcs[0].0),
-                    src2: CtReg::new(srcs[1].0),
+                    dst: CtReg::new(dsts[0].0 as u8),
+                    src1: CtReg::new(srcs[0].0 as u8),
+                    src2: CtReg::new(srcs[1].0 as u8),
                     cst: PtArg::cst(cst.0),
                 });
             }
@@ -148,8 +148,8 @@ pub fn translate<'ir>(ir: &AnnIR<'ir, HpuLang, Alloc, ()>, lut_reg: &LutRegistry
                     unreachable!()
                 };
                 add_op(DopInstructionSet::ADDS {
-                    dst: CtReg::new(dsts[0].0),
-                    src: CtReg::new(srcs[0].0),
+                    dst: CtReg::new(dsts[0].0 as u8),
+                    src: CtReg::new(srcs[0].0 as u8),
                     cst: PtArg::var(
                         from.imm_pos.try_into().unwrap(),
                         from.block_pos.try_into().unwrap(),
@@ -169,8 +169,8 @@ pub fn translate<'ir>(ir: &AnnIR<'ir, HpuLang, Alloc, ()>, lut_reg: &LutRegistry
                     unreachable!()
                 };
                 add_op(DopInstructionSet::SUBS {
-                    dst: CtReg::new(dsts[0].0),
-                    src: CtReg::new(srcs[0].0),
+                    dst: CtReg::new(dsts[0].0 as u8),
+                    src: CtReg::new(srcs[0].0 as u8),
                     cst: PtArg::var(
                         from.imm_pos.try_into().unwrap(),
                         from.block_pos.try_into().unwrap(),
@@ -190,8 +190,8 @@ pub fn translate<'ir>(ir: &AnnIR<'ir, HpuLang, Alloc, ()>, lut_reg: &LutRegistry
                     unreachable!()
                 };
                 add_op(DopInstructionSet::SSUB {
-                    dst: CtReg::new(dsts[0].0),
-                    src: CtReg::new(srcs[0].0),
+                    dst: CtReg::new(dsts[0].0 as u8),
+                    src: CtReg::new(srcs[0].0 as u8),
                     cst: PtArg::var(
                         from.imm_pos.try_into().unwrap(),
                         from.block_pos.try_into().unwrap(),
@@ -211,8 +211,8 @@ pub fn translate<'ir>(ir: &AnnIR<'ir, HpuLang, Alloc, ()>, lut_reg: &LutRegistry
                     unreachable!()
                 };
                 add_op(DopInstructionSet::MULS {
-                    dst: CtReg::new(dsts[0].0),
-                    src: CtReg::new(srcs[0].0),
+                    dst: CtReg::new(dsts[0].0 as u8),
+                    src: CtReg::new(srcs[0].0 as u8),
                     cst: PtArg::var(
                         from.imm_pos.try_into().unwrap(),
                         from.block_pos.try_into().unwrap(),
@@ -221,42 +221,42 @@ pub fn translate<'ir>(ir: &AnnIR<'ir, HpuLang, Alloc, ()>, lut_reg: &LutRegistry
             }
             AddCst { cst } => {
                 add_op(DopInstructionSet::ADDS {
-                    dst: CtReg::new(dsts[0].0),
-                    src: CtReg::new(srcs[0].0),
+                    dst: CtReg::new(dsts[0].0 as u8),
+                    src: CtReg::new(srcs[0].0 as u8),
                     cst: PtArg::cst(cst.0),
                 });
             }
             SubCst { cst } => {
                 add_op(DopInstructionSet::SUBS {
-                    dst: CtReg::new(dsts[0].0),
-                    src: CtReg::new(srcs[0].0),
+                    dst: CtReg::new(dsts[0].0 as u8),
+                    src: CtReg::new(srcs[0].0 as u8),
                     cst: PtArg::cst(cst.0),
                 });
             }
             CstSub { cst } => {
                 add_op(DopInstructionSet::SSUB {
-                    dst: CtReg::new(dsts[0].0),
-                    src: CtReg::new(srcs[0].0),
+                    dst: CtReg::new(dsts[0].0 as u8),
+                    src: CtReg::new(srcs[0].0 as u8),
                     cst: PtArg::cst(cst.0),
                 });
             }
             MulCst { cst } => {
                 add_op(DopInstructionSet::MULS {
-                    dst: CtReg::new(dsts[0].0),
-                    src: CtReg::new(srcs[0].0),
+                    dst: CtReg::new(dsts[0].0 as u8),
+                    src: CtReg::new(srcs[0].0 as u8),
                     cst: PtArg::cst(cst.0),
                 });
             }
             CstCt { cst } => {
                 add_op(DopInstructionSet::SUB {
-                    dst: CtReg::new(dsts[0].0),
-                    src1: CtReg::new(dsts[0].0),
-                    src2: CtReg::new(dsts[0].0),
+                    dst: CtReg::new(dsts[0].0 as u8),
+                    src1: CtReg::new(dsts[0].0 as u8),
+                    src2: CtReg::new(dsts[0].0 as u8),
                 });
                 if cst.0 != 0 {
                     add_op(DopInstructionSet::ADDS {
-                        dst: CtReg::new(dsts[0].0),
-                        src: CtReg::new(dsts[0].0),
+                        dst: CtReg::new(dsts[0].0 as u8),
+                        src: CtReg::new(dsts[0].0 as u8),
                         cst: PtArg::cst(cst.0),
                     });
                 }
@@ -276,57 +276,57 @@ pub fn translate<'ir>(ir: &AnnIR<'ir, HpuLang, Alloc, ()>, lut_reg: &LutRegistry
                     match op.get_instruction() {
                         Pbs { lut } => {
                             add_op(DopInstructionSet::PBS {
-                                dst: CtReg::new(translate(rets[0]).0),
-                                src: CtReg::new(translate(args[0]).0),
+                                dst: CtReg::new(translate(rets[0]).0 as u8),
+                                src: CtReg::new(translate(args[0]).0 as u8),
                                 lut: LutRef::from(lut_reg.get_l1_lid(lut)),
                             });
                         }
                         PbsF { lut } => {
                             add_op(DopInstructionSet::PBS_F {
-                                dst: CtReg::new(translate(rets[0]).0),
-                                src: CtReg::new(translate(args[0]).0),
+                                dst: CtReg::new(translate(rets[0]).0 as u8),
+                                src: CtReg::new(translate(args[0]).0 as u8),
                                 lut: LutRef::from(lut_reg.get_l1_lid(lut)),
                             });
                         }
                         Pbs2 { lut } => {
                             add_op(DopInstructionSet::PBS_ML2 {
-                                dst: CtReg::ml2(translate(rets[0]).0),
-                                src: CtReg::new(translate(args[0]).0),
+                                dst: CtReg::ml2(translate(rets[0]).0 as u8),
+                                src: CtReg::new(translate(args[0]).0 as u8),
                                 lut: LutRef::from(lut_reg.get_l2_lid(lut)),
                             });
                         }
                         Pbs2F { lut } => {
                             add_op(DopInstructionSet::PBS_ML2_F {
-                                dst: CtReg::ml2(translate(rets[0]).0),
-                                src: CtReg::new(translate(args[0]).0),
+                                dst: CtReg::ml2(translate(rets[0]).0 as u8),
+                                src: CtReg::new(translate(args[0]).0 as u8),
                                 lut: LutRef::from(lut_reg.get_l2_lid(lut)),
                             });
                         }
                         Pbs4 { lut } => {
                             add_op(DopInstructionSet::PBS_ML4 {
-                                dst: CtReg::ml4(translate(rets[0]).0),
-                                src: CtReg::new(translate(args[0]).0),
+                                dst: CtReg::ml4(translate(rets[0]).0 as u8),
+                                src: CtReg::new(translate(args[0]).0 as u8),
                                 lut: LutRef::from(lut_reg.get_l4_lid(lut)),
                             });
                         }
                         Pbs4F { lut } => {
                             add_op(DopInstructionSet::PBS_ML4_F {
-                                dst: CtReg::ml4(translate(rets[0]).0),
-                                src: CtReg::new(translate(args[0]).0),
+                                dst: CtReg::ml4(translate(rets[0]).0 as u8),
+                                src: CtReg::new(translate(args[0]).0 as u8),
                                 lut: LutRef::from(lut_reg.get_l4_lid(lut)),
                             });
                         }
                         Pbs8 { lut } => {
                             add_op(DopInstructionSet::PBS_ML8 {
-                                dst: CtReg::ml8(translate(rets[0]).0),
-                                src: CtReg::new(translate(args[0]).0),
+                                dst: CtReg::ml8(translate(rets[0]).0 as u8),
+                                src: CtReg::new(translate(args[0]).0 as u8),
                                 lut: LutRef::from(lut_reg.get_l8_lid(lut)),
                             });
                         }
                         Pbs8F { lut } => {
                             add_op(DopInstructionSet::PBS_ML8_F {
-                                dst: CtReg::ml8(translate(rets[0]).0),
-                                src: CtReg::new(translate(args[0]).0),
+                                dst: CtReg::ml8(translate(rets[0]).0 as u8),
+                                src: CtReg::new(translate(args[0]).0 as u8),
                                 lut: LutRef::from(lut_reg.get_l8_lid(lut)),
                             });
                         }

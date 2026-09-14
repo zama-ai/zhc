@@ -94,12 +94,12 @@ impl DopInterpreterContext {
     /// Reads a ciphertext block from a register.
     fn read_ct_reg(&self, arg: &CtReg) -> EmulatedCiphertextBlock {
         // SAFETY: execution order guarantees the slot was written before read.
-        self.registers[arg.addr].unwrap()
+        self.registers[arg.addr as usize].unwrap()
     }
 
     /// Writes a ciphertext block to a register.
     fn write_ct_reg(&mut self, arg: &CtReg, val: EmulatedCiphertextBlock) {
-        self.registers[arg.addr] = Some(val);
+        self.registers[arg.addr as usize] = Some(val);
     }
 
     /// Reads a ciphertext block from memory (heap, I/O, or an unpatched source template).
@@ -111,17 +111,17 @@ impl DopInterpreterContext {
         match arg {
             CtMem::Heap(inner) => self
                 .heap
-                .get(&inner.addr)
+                .get(&(inner.addr as usize))
                 .unwrap_or_else(|| panic!("Heap CT_H({}) not populated", inner.addr))
                 .clone(),
             CtMem::Io(inner) => self
                 .io
-                .get(&inner.addr)
+                .get(&(inner.addr as usize))
                 .unwrap_or_else(|| panic!("I/O CT_IO({}) not populated", inner.addr))
                 .clone(),
             CtMem::Src(inner) => self
                 .sources
-                .get(&(inner.id, inner.block))
+                .get(&(inner.id as usize, inner.block as usize))
                 .unwrap_or_else(|| panic!("Source TC({}, {}) not populated", inner.id, inner.block))
                 .clone(),
             CtMem::Dst(_) => panic!("Expected a readable memory location, got {arg:?}"),
@@ -136,13 +136,14 @@ impl DopInterpreterContext {
     fn write_ct_mem(&mut self, arg: &CtMem, val: EmulatedCiphertextBlock) {
         match arg {
             CtMem::Heap(inner) => {
-                self.heap.insert(inner.addr, val);
+                self.heap.insert(inner.addr as usize, val);
             }
             CtMem::Io(inner) => {
-                self.io.insert(inner.addr, val);
+                self.io.insert(inner.addr as usize, val);
             }
             CtMem::Dst(inner) => {
-                self.destinations.insert((inner.id, inner.block), val);
+                self.destinations
+                    .insert((inner.id as usize, inner.block as usize), val);
             }
             CtMem::Src(_) => panic!("Expected a writable memory location, got {arg:?}"),
         }
@@ -157,7 +158,7 @@ impl DopInterpreterContext {
                 .from_message(inner.val.sas::<EmulatedPlaintextBlockStorage>()),
             PtArg::Var(inner) => self
                 .pt_sources
-                .get(&(inner.id, inner.block))
+                .get(&(inner.id as usize, inner.block as usize))
                 .unwrap_or_else(|| {
                     panic!("Plaintext TI({}, {}) not populated", inner.id, inner.block)
                 })
@@ -167,7 +168,7 @@ impl DopInterpreterContext {
 
     /// Resolves a `LutRef` to its registry `LutId`.
     fn resolve_lut(arg: &LutRef) -> LutId {
-        LutId(arg.id)
+        LutId(arg.id as usize)
     }
 }
 
@@ -267,8 +268,8 @@ impl Evaluable<DopValue> for super::DopInstructionSet {
                 let (ct0, ct1) = lut_def.lookup(ct, LookupCheck::AllowOutputPadding);
                 // Write to consecutive registers from the aligned base.
                 let base = dst.addr & dst.mask;
-                context.registers[base] = Some(ct0);
-                context.registers[base + 1] = Some(ct1);
+                context.registers[base as usize] = Some(ct0);
+                context.registers[(base + 1) as usize] = Some(ct1);
                 svec![DopValue::Ctx]
             }
 

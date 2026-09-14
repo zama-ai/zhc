@@ -542,9 +542,9 @@ mod tests {
         if is_flush {
             DOp {
                 raw: RawDOp::PBS_F {
-                    dst: CtReg::new(0usize),
-                    src: CtReg::new(0usize),
-                    lut: LutRef::new(0usize),
+                    dst: CtReg::new(0_u8),
+                    src: CtReg::new(0_u8),
+                    lut: LutRef::new(0_u8),
                 },
                 id: DOpId(id),
             }

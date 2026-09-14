@@ -562,8 +562,8 @@ pub fn generate_translation_table(
                 lut: LutRef { id: gid },
             } => {
                 let gid = match lut_relocation {
-                    Some(reloc) => reloc.get(*gid).unwrap().0,
-                    None => *gid,
+                    Some(reloc) => reloc.get(*gid as usize).unwrap().0,
+                    None => *gid as usize,
                 };
                 output.push(
                     PePbsHex::new()
@@ -794,11 +794,11 @@ pub fn decode_translation_table(
             None => gid.sas(),
         }
     };
-    let ct_reg = |mask: usize, addr: u8| CtReg {
+    let ct_reg = |mask: u8, addr: u8| CtReg {
         mask,
         addr: addr.sas(),
     };
-    let var = |packed: u16| ((packed >> 8) as usize, (packed & 0xff) as usize);
+    let var = |packed: u16| ((packed >> 8) as u8, (packed & 0xff) as u8);
 
     let mut ir: IR<DopLang> = IR::empty();
     let (_, start_rets) = ir.add_op(_START, svec![]);
@@ -811,9 +811,9 @@ pub fn decode_translation_table(
         let instr = match dopcode {
             DOpCode::ADD | DOpCode::SUB => {
                 let hex = PeArithHex::from_bits(word);
-                let dst = ct_reg(usize::MAX, hex.dst_rid());
-                let src1 = ct_reg(usize::MAX, hex.src0_rid());
-                let src2 = ct_reg(usize::MAX, hex.src1_rid());
+                let dst = ct_reg(u8::MAX, hex.dst_rid());
+                let src1 = ct_reg(u8::MAX, hex.src0_rid());
+                let src2 = ct_reg(u8::MAX, hex.src1_rid());
                 match dopcode {
                     DOpCode::ADD => ADD { dst, src1, src2 },
                     DOpCode::SUB => SUB { dst, src1, src2 },
@@ -823,9 +823,9 @@ pub fn decode_translation_table(
             DOpCode::MAC => {
                 let hex = PeArithHex::from_bits(word);
                 MAC {
-                    dst: ct_reg(usize::MAX, hex.dst_rid()),
-                    src1: ct_reg(usize::MAX, hex.src0_rid()),
-                    src2: ct_reg(usize::MAX, hex.src1_rid()),
+                    dst: ct_reg(u8::MAX, hex.dst_rid()),
+                    src1: ct_reg(u8::MAX, hex.src0_rid()),
+                    src2: ct_reg(u8::MAX, hex.src1_rid()),
                     cst: PtArg::Const(PtConst {
                         val: hex.mul_factor(),
                     }),
@@ -833,8 +833,8 @@ pub fn decode_translation_table(
             }
             DOpCode::ADDS | DOpCode::SUBS | DOpCode::SSUB | DOpCode::MULS => {
                 let hex = PeArithMsgHex::from_bits(word);
-                let dst = ct_reg(usize::MAX, hex.dst_rid());
-                let src = ct_reg(usize::MAX, hex.src_rid());
+                let dst = ct_reg(u8::MAX, hex.dst_rid());
+                let src = ct_reg(u8::MAX, hex.src_rid());
                 let cst = match hex.msg_mode() {
                     IMM_VAR => {
                         let (id, block) = var(hex.msg_cst());
@@ -854,7 +854,7 @@ pub fn decode_translation_table(
             }
             DOpCode::LD => {
                 let hex = PeMemHex::from_bits(word);
-                let dst = ct_reg(usize::MAX, hex.rid());
+                let dst = ct_reg(u8::MAX, hex.rid());
                 let src = match hex.mode() {
                     MEM_HEAP => CtMem::Heap(CtHeap {
                         addr: hex.slot().sas(),
@@ -872,7 +872,7 @@ pub fn decode_translation_table(
             }
             DOpCode::ST => {
                 let hex = PeMemHex::from_bits(word);
-                let src = ct_reg(usize::MAX, hex.rid());
+                let src = ct_reg(u8::MAX, hex.rid());
                 let dst = match hex.mode() {
                     MEM_HEAP => CtMem::Heap(CtHeap {
                         addr: hex.slot().sas(),
@@ -897,10 +897,10 @@ pub fn decode_translation_table(
             | DOpCode::PBS_ML4_F
             | DOpCode::PBS_ML8_F => {
                 let hex = PePbsHex::from_bits(word);
-                let src = ct_reg(usize::MAX, hex.src_rid());
+                let src = ct_reg(u8::MAX, hex.src_rid());
                 let is_plain = matches!(dopcode, DOpCode::PBS | DOpCode::PBS_F);
                 let mask = match dopcode {
-                    DOpCode::PBS | DOpCode::PBS_F => usize::MAX,
+                    DOpCode::PBS | DOpCode::PBS_F => u8::MAX,
                     DOpCode::PBS_ML2 | DOpCode::PBS_ML2_F => MASK_PBS2,
                     DOpCode::PBS_ML4 | DOpCode::PBS_ML4_F => MASK_PBS4,
                     _ => MASK_PBS8,
@@ -911,7 +911,7 @@ pub fn decode_translation_table(
                 } else {
                     hex.gid().sas()
                 };
-                let lut = LutRef { id: gid };
+                let lut = LutRef { id: gid as u16 };
                 match dopcode {
                     DOpCode::PBS => PBS { dst, src, lut },
                     DOpCode::PBS_ML2 => PBS_ML2 { dst, src, lut },
@@ -1009,56 +1009,56 @@ mod tests {
         let (_, start) = ir.add_op(_START, svec![]);
         let (_, r1) = ir.add_op(
             LD {
-                dst: CtReg::new(1usize),
-                src: CtMem::heap(3usize),
+                dst: CtReg::new(1_u8),
+                src: CtMem::heap(3_u16),
             },
             svec![start[0]],
         );
         let (_, r2) = ir.add_op(
             ADD {
-                dst: CtReg::new(2usize),
-                src1: CtReg::new(1usize),
-                src2: CtReg::new(1usize),
+                dst: CtReg::new(2_u8),
+                src1: CtReg::new(1_u8),
+                src2: CtReg::new(1_u8),
             },
             svec![r1[0]],
         );
         let (_, r3) = ir.add_op(
             MAC {
-                dst: CtReg::new(3usize),
-                src1: CtReg::new(1usize),
-                src2: CtReg::new(2usize),
+                dst: CtReg::new(3_u8),
+                src1: CtReg::new(1_u8),
+                src2: CtReg::new(2_u8),
                 cst: PtArg::cst(4),
             },
             svec![r2[0]],
         );
         let (_, r4) = ir.add_op(
             ADDS {
-                dst: CtReg::new(4usize),
-                src: CtReg::new(3usize),
+                dst: CtReg::new(4_u8),
+                src: CtReg::new(3_u8),
                 cst: PtArg::var(2, 1),
             },
             svec![r3[0]],
         );
         let (_, r5) = ir.add_op(
             PBS {
-                dst: CtReg::new(5usize),
-                src: CtReg::new(4usize),
+                dst: CtReg::new(5_u8),
+                src: CtReg::new(4_u8),
                 lut: LutRef::from(LutId(0)),
             },
             svec![r4[0]],
         );
         let (_, r6) = ir.add_op(
             PBS_ML2 {
-                dst: CtReg::ml2(6usize),
-                src: CtReg::new(5usize),
+                dst: CtReg::ml2(6_u8),
+                src: CtReg::new(5_u8),
                 lut: LutRef::from(LutId(1)),
             },
             svec![r5[0]],
         );
         let (_, r7) = ir.add_op(
             ST {
-                dst: CtMem::io(7usize),
-                src: CtReg::new(6usize),
+                dst: CtMem::io(7_u16),
+                src: CtReg::new(6_u8),
             },
             svec![r6[0]],
         );
