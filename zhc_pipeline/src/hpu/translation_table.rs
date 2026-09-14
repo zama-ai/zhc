@@ -765,16 +765,10 @@ pub fn generate_translation_table(
 /// (`iid`/`hid`/`flag`) that `DopInstructionSet::SYNC` doesn't carry, so — like
 /// `generate_translation_table`, which has no encode arm for it either — it isn't supported in
 /// this direction.
-///
-/// Also note a pre-existing ambiguity in the `NOTIFY` encoding: both `CtHeap` and `CtSrcVar`
-/// slots encode to the same `MEM_HEAP` mode tag (see `generate_translation_table`), so this
-/// function cannot tell them apart and always decodes that mode as `CtHeap`.
 pub fn decode_translation_table(
     words: &[DOpRepr],
     lut_relocation: Option<&[LutId]>,
 ) -> IR<DopLang> {
-    use DopInstructionSet::*;
-
     let declared_len = words.first().copied().unwrap_or(0) as usize;
     let body: &[DOpRepr] = if words.is_empty() { &[] } else { &words[1..] };
     assert_eq!(
@@ -784,7 +778,36 @@ pub fn decode_translation_table(
          the length prefix",
         body.len()
     );
+    let mut ir: IR<DopLang> = IR::empty();
+    let (_, start_rets) = ir.add_op(DopInstructionSet::_START, svec![]);
+    let mut ctx = start_rets[0];
 
+    for &word in body {
+        let instr = instruction_from_dop_repr(word, lut_relocation);
+        let (_, rets) = ir.add_op(instr, svec![ctx]);
+        ctx = rets[0];
+    }
+    ir.add_op(DopInstructionSet::_END, svec![ctx]);
+    ir
+}
+
+/// Decode DopInstructionSet from raw DOpRepr.
+///
+///
+/// `lut_relocation`, when given, is applied in reverse to single-output `PBS`/`PBS_F`
+/// destinations only — the physical gid found in the hex is looked up by position in
+/// `lut_relocation` to recover the original logical [`LutId`]. Many-LUT `PBS_ML*` variants were
+/// never relocated by the encoder (see `generate_translation_table`), so their gid is always
+/// taken literally, matching encode.
+///
+/// Also note a pre-existing ambiguity in the `NOTIFY` encoding: both `CtHeap` and `CtSrcVar`
+/// slots encode to the same `MEM_HEAP` mode tag (see `generate_translation_table`), so this
+/// function cannot tell them apart and always decodes that mode as `CtHeap`.
+pub fn instruction_from_dop_repr(
+    word: DOpRepr,
+    lut_relocation: Option<&[LutId]>,
+) -> DopInstructionSet {
+    use DopInstructionSet::*;
     let resolve_gid = |gid: u16| -> usize {
         match lut_relocation {
             Some(reloc) => reloc
@@ -800,193 +823,183 @@ pub fn decode_translation_table(
     };
     let var = |packed: u16| ((packed >> 8) as u8, (packed & 0xff) as u8);
 
-    let mut ir: IR<DopLang> = IR::empty();
-    let (_, start_rets) = ir.add_op(_START, svec![]);
-    let mut ctx = start_rets[0];
+    let dopcode_raw = DOpRawHex::from_bits(word).opcode();
+    let dopcode = DOpCode::from(dopcode_raw);
 
-    for &word in body {
-        let dopcode_raw = DOpRawHex::from_bits(word).opcode();
-        let dopcode = DOpCode::from(dopcode_raw);
-
-        let instr = match dopcode {
-            DOpCode::ADD | DOpCode::SUB => {
-                let hex = PeArithHex::from_bits(word);
-                let dst = ct_reg(u8::MAX, hex.dst_rid());
-                let src1 = ct_reg(u8::MAX, hex.src0_rid());
-                let src2 = ct_reg(u8::MAX, hex.src1_rid());
-                match dopcode {
-                    DOpCode::ADD => ADD { dst, src1, src2 },
-                    DOpCode::SUB => SUB { dst, src1, src2 },
-                    _ => panic!("Unknown DopCode {dopcode_raw} [{dopcode:?}]"),
+    match dopcode {
+        DOpCode::ADD | DOpCode::SUB => {
+            let hex = PeArithHex::from_bits(word);
+            let dst = ct_reg(u8::MAX, hex.dst_rid());
+            let src1 = ct_reg(u8::MAX, hex.src0_rid());
+            let src2 = ct_reg(u8::MAX, hex.src1_rid());
+            match dopcode {
+                DOpCode::ADD => ADD { dst, src1, src2 },
+                DOpCode::SUB => SUB { dst, src1, src2 },
+                _ => panic!("Unknown DopCode {dopcode_raw} [{dopcode:?}]"),
+            }
+        }
+        DOpCode::MAC => {
+            let hex = PeArithHex::from_bits(word);
+            MAC {
+                dst: ct_reg(u8::MAX, hex.dst_rid()),
+                src1: ct_reg(u8::MAX, hex.src0_rid()),
+                src2: ct_reg(u8::MAX, hex.src1_rid()),
+                cst: PtArg::Const(PtConst {
+                    val: hex.mul_factor(),
+                }),
+            }
+        }
+        DOpCode::ADDS | DOpCode::SUBS | DOpCode::SSUB | DOpCode::MULS => {
+            let hex = PeArithMsgHex::from_bits(word);
+            let dst = ct_reg(u8::MAX, hex.dst_rid());
+            let src = ct_reg(u8::MAX, hex.src_rid());
+            let cst = match hex.msg_mode() {
+                IMM_VAR => {
+                    let (id, block) = var(hex.msg_cst());
+                    PtArg::Var(PtSrcVar { id, block })
                 }
+                _ => PtArg::Const(PtConst {
+                    val: hex.msg_cst() as u8,
+                }),
+            };
+            match dopcode {
+                DOpCode::ADDS => ADDS { dst, src, cst },
+                DOpCode::SUBS => SUBS { dst, src, cst },
+                DOpCode::SSUB => SSUB { dst, src, cst },
+                DOpCode::MULS => MULS { dst, src, cst },
+                _ => panic!("Unknown DopCode {dopcode_raw} [{dopcode:?}]"),
             }
-            DOpCode::MAC => {
-                let hex = PeArithHex::from_bits(word);
-                MAC {
-                    dst: ct_reg(u8::MAX, hex.dst_rid()),
-                    src1: ct_reg(u8::MAX, hex.src0_rid()),
-                    src2: ct_reg(u8::MAX, hex.src1_rid()),
-                    cst: PtArg::Const(PtConst {
-                        val: hex.mul_factor(),
-                    }),
+        }
+        DOpCode::LD => {
+            let hex = PeMemHex::from_bits(word);
+            let dst = ct_reg(u8::MAX, hex.rid());
+            let src = match hex.mode() {
+                MEM_HEAP => CtMem::Heap(CtHeap {
+                    addr: hex.slot().sas(),
+                }),
+                MEM_ADDR => CtMem::Io(CtIo {
+                    addr: hex.slot().sas(),
+                }),
+                MEM_SRC => {
+                    let (id, block) = var(hex.slot());
+                    CtMem::Src(CtSrcVar { id, block })
                 }
-            }
-            DOpCode::ADDS | DOpCode::SUBS | DOpCode::SSUB | DOpCode::MULS => {
-                let hex = PeArithMsgHex::from_bits(word);
-                let dst = ct_reg(u8::MAX, hex.dst_rid());
-                let src = ct_reg(u8::MAX, hex.src_rid());
-                let cst = match hex.msg_mode() {
-                    IMM_VAR => {
-                        let (id, block) = var(hex.msg_cst());
-                        PtArg::Var(PtSrcVar { id, block })
-                    }
-                    _ => PtArg::Const(PtConst {
-                        val: hex.msg_cst() as u8,
-                    }),
-                };
-                match dopcode {
-                    DOpCode::ADDS => ADDS { dst, src, cst },
-                    DOpCode::SUBS => SUBS { dst, src, cst },
-                    DOpCode::SSUB => SSUB { dst, src, cst },
-                    DOpCode::MULS => MULS { dst, src, cst },
-                    _ => panic!("Unknown DopCode {dopcode_raw} [{dopcode:?}]"),
+                m => panic!("LD: unsupported memory mode {m}"),
+            };
+            LD { dst, src }
+        }
+        DOpCode::ST => {
+            let hex = PeMemHex::from_bits(word);
+            let src = ct_reg(u8::MAX, hex.rid());
+            let dst = match hex.mode() {
+                MEM_HEAP => CtMem::Heap(CtHeap {
+                    addr: hex.slot().sas(),
+                }),
+                MEM_ADDR => CtMem::Io(CtIo {
+                    addr: hex.slot().sas(),
+                }),
+                MEM_DST => {
+                    let (id, block) = var(hex.slot());
+                    CtMem::Dst(CtDstVar { id, block })
                 }
+                m => panic!("ST: unsupported memory mode {m}"),
+            };
+            ST { dst, src }
+        }
+        DOpCode::PBS
+        | DOpCode::PBS_ML2
+        | DOpCode::PBS_ML4
+        | DOpCode::PBS_ML8
+        | DOpCode::PBS_F
+        | DOpCode::PBS_ML2_F
+        | DOpCode::PBS_ML4_F
+        | DOpCode::PBS_ML8_F => {
+            let hex = PePbsHex::from_bits(word);
+            let src = ct_reg(u8::MAX, hex.src_rid());
+            let is_plain = matches!(dopcode, DOpCode::PBS | DOpCode::PBS_F);
+            let mask = match dopcode {
+                DOpCode::PBS | DOpCode::PBS_F => u8::MAX,
+                DOpCode::PBS_ML2 | DOpCode::PBS_ML2_F => MASK_PBS2,
+                DOpCode::PBS_ML4 | DOpCode::PBS_ML4_F => MASK_PBS4,
+                _ => MASK_PBS8,
+            };
+            let dst = ct_reg(mask, hex.dst_rid());
+            let gid = if is_plain {
+                resolve_gid(hex.gid())
+            } else {
+                hex.gid().sas()
+            };
+            let lut = LutRef { id: gid as u16 };
+            match dopcode {
+                DOpCode::PBS => PBS { dst, src, lut },
+                DOpCode::PBS_ML2 => PBS_ML2 { dst, src, lut },
+                DOpCode::PBS_ML4 => PBS_ML4 { dst, src, lut },
+                DOpCode::PBS_ML8 => PBS_ML8 { dst, src, lut },
+                DOpCode::PBS_F => PBS_F { dst, src, lut },
+                DOpCode::PBS_ML2_F => PBS_ML2_F { dst, src, lut },
+                DOpCode::PBS_ML4_F => PBS_ML4_F { dst, src, lut },
+                DOpCode::PBS_ML8_F => PBS_ML8_F { dst, src, lut },
+                _ => panic!("Unknown DopCode {dopcode_raw} [{dopcode:?}]"),
             }
-            DOpCode::LD => {
-                let hex = PeMemHex::from_bits(word);
-                let dst = ct_reg(u8::MAX, hex.rid());
-                let src = match hex.mode() {
-                    MEM_HEAP => CtMem::Heap(CtHeap {
-                        addr: hex.slot().sas(),
-                    }),
-                    MEM_ADDR => CtMem::Io(CtIo {
-                        addr: hex.slot().sas(),
-                    }),
-                    MEM_SRC => {
-                        let (id, block) = var(hex.slot());
-                        CtMem::Src(CtSrcVar { id, block })
-                    }
-                    m => panic!("LD: unsupported memory mode {m}"),
-                };
-                LD { dst, src }
-            }
-            DOpCode::ST => {
-                let hex = PeMemHex::from_bits(word);
-                let src = ct_reg(u8::MAX, hex.rid());
-                let dst = match hex.mode() {
-                    MEM_HEAP => CtMem::Heap(CtHeap {
-                        addr: hex.slot().sas(),
-                    }),
-                    MEM_ADDR => CtMem::Io(CtIo {
-                        addr: hex.slot().sas(),
-                    }),
-                    MEM_DST => {
-                        let (id, block) = var(hex.slot());
-                        CtMem::Dst(CtDstVar { id, block })
-                    }
-                    m => panic!("ST: unsupported memory mode {m}"),
-                };
-                ST { dst, src }
-            }
-            DOpCode::PBS
-            | DOpCode::PBS_ML2
-            | DOpCode::PBS_ML4
-            | DOpCode::PBS_ML8
-            | DOpCode::PBS_F
-            | DOpCode::PBS_ML2_F
-            | DOpCode::PBS_ML4_F
-            | DOpCode::PBS_ML8_F => {
-                let hex = PePbsHex::from_bits(word);
-                let src = ct_reg(u8::MAX, hex.src_rid());
-                let is_plain = matches!(dopcode, DOpCode::PBS | DOpCode::PBS_F);
-                let mask = match dopcode {
-                    DOpCode::PBS | DOpCode::PBS_F => u8::MAX,
-                    DOpCode::PBS_ML2 | DOpCode::PBS_ML2_F => MASK_PBS2,
-                    DOpCode::PBS_ML4 | DOpCode::PBS_ML4_F => MASK_PBS4,
-                    _ => MASK_PBS8,
-                };
-                let dst = ct_reg(mask, hex.dst_rid());
-                let gid = if is_plain {
-                    resolve_gid(hex.gid())
-                } else {
-                    hex.gid().sas()
-                };
-                let lut = LutRef { id: gid as u16 };
-                match dopcode {
-                    DOpCode::PBS => PBS { dst, src, lut },
-                    DOpCode::PBS_ML2 => PBS_ML2 { dst, src, lut },
-                    DOpCode::PBS_ML4 => PBS_ML4 { dst, src, lut },
-                    DOpCode::PBS_ML8 => PBS_ML8 { dst, src, lut },
-                    DOpCode::PBS_F => PBS_F { dst, src, lut },
-                    DOpCode::PBS_ML2_F => PBS_ML2_F { dst, src, lut },
-                    DOpCode::PBS_ML4_F => PBS_ML4_F { dst, src, lut },
-                    DOpCode::PBS_ML8_F => PBS_ML8_F { dst, src, lut },
-                    _ => panic!("Unknown DopCode {dopcode_raw} [{dopcode:?}]"),
-                }
-            }
-            DOpCode::WAIT => {
-                let hex = PeUcoreHex::from_bits(word);
-                let flag = UserFlag { flag: hex.flag() };
-                let slot = if hex.hid() != 0 {
-                    Some(match hex.mode() {
-                        MEM_ADDR => CtMem::Io(CtIo {
-                            addr: hex.slot().sas(),
-                        }),
-                        MEM_HEAP => CtMem::Heap(CtHeap {
-                            addr: hex.slot().sas(),
-                        }),
-                        m => panic!("WAIT: unsupported memory mode {m}"),
-                    })
-                } else {
-                    None
-                };
-                WAIT { flag, slot }
-            }
-            DOpCode::NOTIFY => {
-                let hex = PeUcoreHex::from_bits(word);
-                let slot = match hex.mode() {
-                    MEM_ADDR => CtMem::Io(CtIo {
-                        addr: hex.slot().sas(),
-                    }),
-                    // `generate_translation_table` maps both `CtHeap` and `CtSrcVar` to
-                    // `MEM_HEAP`; the two aren't distinguishable from the hex alone, so this
-                    // always decodes as `CtHeap` (see this function's doc comment).
-                    MEM_HEAP => CtMem::Heap(CtHeap {
-                        addr: hex.slot().sas(),
-                    }),
-                    m => panic!("NOTIFY: unsupported memory mode {m}"),
-                };
-                NOTIFY {
-                    virt_id: VirtId { id: hex.hid() },
-                    flag: UserFlag { flag: hex.flag() },
-                    slot,
-                }
-            }
-            DOpCode::LD_B2B => {
-                let hex = PeUcoreHex::from_bits(word);
-                let slot = match hex.mode() {
+        }
+        DOpCode::WAIT => {
+            let hex = PeUcoreHex::from_bits(word);
+            let flag = UserFlag { flag: hex.flag() };
+            let slot = if hex.hid() != 0 {
+                Some(match hex.mode() {
                     MEM_ADDR => CtMem::Io(CtIo {
                         addr: hex.slot().sas(),
                     }),
                     MEM_HEAP => CtMem::Heap(CtHeap {
                         addr: hex.slot().sas(),
                     }),
-                    m => panic!("LD_B2B: unsupported memory mode {m}"),
-                };
-                LD_B2B {
-                    flag: UserFlag { flag: hex.flag() },
-                    slot,
-                }
+                    m => panic!("WAIT: unsupported memory mode {m}"),
+                })
+            } else {
+                None
+            };
+            WAIT { flag, slot }
+        }
+        DOpCode::NOTIFY => {
+            let hex = PeUcoreHex::from_bits(word);
+            let slot = match hex.mode() {
+                MEM_ADDR => CtMem::Io(CtIo {
+                    addr: hex.slot().sas(),
+                }),
+                // `generate_translation_table` maps both `CtHeap` and `CtSrcVar` to
+                // `MEM_HEAP`; the two aren't distinguishable from the hex alone, so this
+                // always decodes as `CtHeap` (see this function's doc comment).
+                MEM_HEAP => CtMem::Heap(CtHeap {
+                    addr: hex.slot().sas(),
+                }),
+                m => panic!("NOTIFY: unsupported memory mode {m}"),
+            };
+            NOTIFY {
+                virt_id: VirtId { id: hex.hid() },
+                flag: UserFlag { flag: hex.flag() },
+                slot,
             }
-            _ => {
-                panic!("Unsupported or unknown DOp opcode {dopcode_raw:#08b} in word {word:#010x}")
+        }
+        DOpCode::LD_B2B => {
+            let hex = PeUcoreHex::from_bits(word);
+            let slot = match hex.mode() {
+                MEM_ADDR => CtMem::Io(CtIo {
+                    addr: hex.slot().sas(),
+                }),
+                MEM_HEAP => CtMem::Heap(CtHeap {
+                    addr: hex.slot().sas(),
+                }),
+                m => panic!("LD_B2B: unsupported memory mode {m}"),
+            };
+            LD_B2B {
+                flag: UserFlag { flag: hex.flag() },
+                slot,
             }
-        };
-        let (_, rets) = ir.add_op(instr, svec![ctx]);
-        ctx = rets[0];
+        }
+        _ => {
+            panic!("Unsupported or unknown DOp opcode {dopcode_raw:#08b} in word {word:#010x}")
+        }
     }
-    ir.add_op(_END, svec![ctx]);
-    ir
 }
 
 #[cfg(test)]
