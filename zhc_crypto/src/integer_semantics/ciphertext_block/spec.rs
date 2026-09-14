@@ -1,6 +1,6 @@
 use rand::RngExt;
 
-use crate::integer_semantics::CiphertextSpec;
+use crate::integer_semantics::IntegerCiphertextSpec;
 
 use super::super::PlaintextBlockSpec;
 use super::{EmulatedCiphertextBlock, EmulatedCiphertextBlockStorage};
@@ -310,8 +310,8 @@ impl CiphertextBlockSpec {
     /// # Panics
     ///
     /// Panics if `int_size` is not divisible by the message size.
-    pub fn ciphertext_spec(&self, int_size: u16) -> CiphertextSpec {
-        CiphertextSpec::new(int_size, self.carry_size(), self.message_size())
+    pub fn integer_ciphertext_spec(&self, int_size: u16) -> IntegerCiphertextSpec {
+        IntegerCiphertextSpec::new(int_size, self.carry_size(), self.message_size())
     }
 
     /// Iterates over all blocks in the data space.

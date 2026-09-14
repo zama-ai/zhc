@@ -7,7 +7,7 @@ use tfhe::{
     shortint::parameters::v1_6::V1_6_PARAM_MESSAGE_2_CARRY_2_KS32_PBS_TUNIFORM_2M128,
 };
 use zhc::{
-    builder::CiphertextSpec,
+    builder::IntegerCiphertextSpec,
     prelude::{Builder, Pipeline, PipelineExt, VmExecutionPlan},
 };
 use zhc_langs::vmlang::VmByteCode;
@@ -16,14 +16,14 @@ use zhc_vm::{Value, ValueMut, Vm, VmConfigExt};
 
 use rand::{RngExt, SeedableRng, rngs::SmallRng};
 
-fn single_lane(spec: CiphertextSpec) -> Builder {
+fn single_lane(spec: IntegerCiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src_from = builder.ciphertext_input(spec.int_size());
-    let src_to = builder.ciphertext_input(spec.int_size());
-    let src_amount = builder.ciphertext_input(spec.int_size());
+    let src_from = builder.integer_ciphertext_input(spec.int_size());
+    let src_to = builder.integer_ciphertext_input(spec.int_size());
+    let src_amount = builder.integer_ciphertext_input(spec.int_size());
     let (new_from, new_to) = builder.iop_erc_7984_ripple(&src_from, &src_to, &src_amount);
-    builder.ciphertext_output(new_from);
-    builder.ciphertext_output(new_to);
+    builder.integer_ciphertext_output(new_from);
+    builder.integer_ciphertext_output(new_to);
     builder
 }
 
@@ -271,7 +271,7 @@ fn replicate(
 
 fn verify_correctness() {
     let p = V1_6_PARAM_MESSAGE_2_CARRY_2_KS32_PBS_TUNIFORM_2M128;
-    let spec = CiphertextSpec::new(64, 2, 2);
+    let spec = IntegerCiphertextSpec::new(64, 2, 2);
     let n_blocks = 64 / 2;
 
     // One lane per VM worker: the VM spawns a worker per detected processor.
@@ -399,7 +399,7 @@ fn bench_throughput(c: &mut Criterion) {
     }
 
     let p = V1_6_PARAM_MESSAGE_2_CARRY_2_KS32_PBS_TUNIFORM_2M128;
-    let spec = CiphertextSpec::new(64, 2, 2);
+    let spec = IntegerCiphertextSpec::new(64, 2, 2);
     let n_blocks = 64 / 2;
 
     let n_cores = std::thread::available_parallelism().unwrap().get();

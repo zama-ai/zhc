@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
-use crate::{Ciphertext, CiphertextBlock, NU, NU_BOOL, builder::Builder};
-use zhc_crypto::integer_semantics::CiphertextSpec;
+use crate::{BoolCiphertext, CiphertextBlock, IntegerCiphertext, NU, NU_BOOL, builder::Builder};
+use zhc_crypto::integer_semantics::IntegerCiphertextSpec;
 use zhc_langs::ioplang::Lut1Def;
 use zhc_utils::SafeAs;
 
@@ -9,12 +9,12 @@ use zhc_utils::SafeAs;
 ///
 /// Convenience wrapper that calls [`Builder::iop_mul`]. Returns the low bits of
 /// the product (wrapping multiplication). See the builder method for algorithm details.
-pub fn mul(spec: CiphertextSpec) -> Builder {
+pub fn mul(spec: IntegerCiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src_a = builder.ciphertext_input(spec.int_size());
-    let src_b = builder.ciphertext_input(spec.int_size());
+    let src_a = builder.integer_ciphertext_input(spec.int_size());
+    let src_b = builder.integer_ciphertext_input(spec.int_size());
     let res = builder.iop_mul(&src_a, &src_b);
-    builder.ciphertext_output(res);
+    builder.integer_ciphertext_output(res);
     builder
 }
 
@@ -22,13 +22,13 @@ pub fn mul(spec: CiphertextSpec) -> Builder {
 ///
 /// Convenience wrapper that calls [`Builder::iop_overflow_mul`]. Returns the product
 /// and a single-block overflow flag. See the builder method for algorithm details.
-pub fn overflow_mul(spec: CiphertextSpec) -> Builder {
+pub fn overflow_mul(spec: IntegerCiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src_a = builder.ciphertext_input(spec.int_size());
-    let src_b = builder.ciphertext_input(spec.int_size());
+    let src_a = builder.integer_ciphertext_input(spec.int_size());
+    let src_b = builder.integer_ciphertext_input(spec.int_size());
     let (res, flag) = builder.iop_overflow_mul(&src_a, &src_b);
-    builder.ciphertext_output(res);
-    builder.ciphertext_output(flag);
+    builder.integer_ciphertext_output(res);
+    builder.bool_ciphertext_output(flag);
     builder
 }
 
@@ -42,21 +42,21 @@ impl Builder {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use zhc_builder::{CiphertextSpec, Builder};
-    /// # let spec = CiphertextSpec::new(16, 2, 2);
+    /// # use zhc_builder::{IntegerCiphertextSpec, Builder};
+    /// # let spec = IntegerCiphertextSpec::new(16, 2, 2);
     /// # let builder = Builder::new(spec.block_spec());
-    /// # let a = builder.ciphertext_input(spec.int_size());
-    /// # let b = builder.ciphertext_input(spec.int_size());
+    /// # let a = builder.integer_ciphertext_input(spec.int_size());
+    /// # let b = builder.integer_ciphertext_input(spec.int_size());
     /// let product = builder.iop_mul(&a, &b);
     /// ```
-    pub fn iop_mul(&self, lhs: &Ciphertext, rhs: &Ciphertext) -> Ciphertext {
-        let src_a_blocks = self.ciphertext_split(&lhs);
-        let src_b_blocks = self.ciphertext_split(&rhs);
+    pub fn iop_mul(&self, lhs: &IntegerCiphertext, rhs: &IntegerCiphertext) -> IntegerCiphertext {
+        let src_a_blocks = self.integer_ciphertext_split(&lhs);
+        let src_b_blocks = self.integer_ciphertext_split(&rhs);
         // Only kept LSB to obtain a IxI -> I operations
         let cut_off = lhs.spec().block_count();
         // Call inner function and construct results
         let (output, _flag) = self.iop_mul_raw(&src_a_blocks, &src_b_blocks, cut_off);
-        self.ciphertext_join(&output, Some(lhs.spec().int_size()))
+        self.integer_ciphertext_join(&output, Some(lhs.spec().int_size()))
     }
 
     /// Multiplies two encrypted integers with overflow detection.
@@ -68,24 +68,28 @@ impl Builder {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use zhc_builder::{CiphertextSpec, Builder};
-    /// # let spec = CiphertextSpec::new(16, 2, 2);
+    /// # use zhc_builder::{IntegerCiphertextSpec, Builder};
+    /// # let spec = IntegerCiphertextSpec::new(16, 2, 2);
     /// # let builder = Builder::new(spec.block_spec());
-    /// # let a = builder.ciphertext_input(spec.int_size());
-    /// # let b = builder.ciphertext_input(spec.int_size());
+    /// # let a = builder.integer_ciphertext_input(spec.int_size());
+    /// # let b = builder.integer_ciphertext_input(spec.int_size());
     /// let (product, overflow) = builder.iop_overflow_mul(&a, &b);
     /// ```
-    pub fn iop_overflow_mul(&self, lhs: &Ciphertext, rhs: &Ciphertext) -> (Ciphertext, Ciphertext) {
+    pub fn iop_overflow_mul(
+        &self,
+        lhs: &IntegerCiphertext,
+        rhs: &IntegerCiphertext,
+    ) -> (IntegerCiphertext, BoolCiphertext) {
         // Get input as array of blk
-        let src_a_blocks = self.ciphertext_split(&lhs);
-        let src_b_blocks = self.ciphertext_split(&rhs);
+        let src_a_blocks = self.integer_ciphertext_split(&lhs);
+        let src_b_blocks = self.integer_ciphertext_split(&rhs);
         // Only kept LSB to obtain a IxI -> I operations
         let cut_off = lhs.spec().block_count();
         // Call inner function and construct results
         let (output, flag_block) = self.iop_mul_raw(&src_a_blocks, &src_b_blocks, cut_off);
         (
-            self.ciphertext_join(&output, Some(lhs.spec().int_size())),
-            self.ciphertext_join(&[flag_block], None),
+            self.integer_ciphertext_join(&output, Some(lhs.spec().int_size())),
+            self.bool_ciphertext_from_block(flag_block),
         )
     }
 
@@ -105,13 +109,13 @@ impl Builder {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use zhc_builder::{CiphertextSpec, Builder};
-    /// # let spec = CiphertextSpec::new(16, 2, 2);
+    /// # use zhc_builder::{IntegerCiphertextSpec, Builder};
+    /// # let spec = IntegerCiphertextSpec::new(16, 2, 2);
     /// # let builder = Builder::new(spec.block_spec());
-    /// # let a = builder.ciphertext_input(spec.int_size());
-    /// # let b = builder.ciphertext_input(spec.int_size());
-    /// # let a = builder.ciphertext_split(&a);
-    /// # let b = builder.ciphertext_split(&b);
+    /// # let a = builder.integer_ciphertext_input(spec.int_size());
+    /// # let b = builder.integer_ciphertext_input(spec.int_size());
+    /// # let a = builder.integer_ciphertext_split(&a);
+    /// # let b = builder.integer_ciphertext_split(&b);
     /// let (res, flag) = builder.iop_mul_raw(&a, &b, spec.block_count());
     /// ```
     pub fn iop_mul_raw(
@@ -253,43 +257,51 @@ impl Builder {
 #[cfg(test)]
 mod test {
     use super::*;
-    use zhc_crypto::integer_semantics::CiphertextSpec;
+    use zhc_crypto::integer_semantics::IntegerCiphertextSpec;
     use zhc_langs::ioplang::IopValue;
     use zhc_utils::assert_display_is;
 
     #[test]
     fn correctness_mul_lsb() {
         fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::Ciphertext(lhs), IopValue::Ciphertext(rhs)] = inp else {
+            let [
+                IopValue::IntegerCiphertext(lhs),
+                IopValue::IntegerCiphertext(rhs),
+            ] = inp
+            else {
                 unreachable!()
             };
-            Some(vec![IopValue::Ciphertext(lhs.mul_lsb(*rhs))])
+            Some(vec![IopValue::IntegerCiphertext(lhs.mul_lsb(*rhs))])
         }
         for size in (2..128).step_by(2) {
-            mul(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+            mul(IntegerCiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
         }
     }
 
     #[test]
     fn correctness_overflow_mul_lsb() {
         fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::Ciphertext(lhs), IopValue::Ciphertext(rhs)] = inp else {
+            let [
+                IopValue::IntegerCiphertext(lhs),
+                IopValue::IntegerCiphertext(rhs),
+            ] = inp
+            else {
                 unreachable!()
             };
             let (product, flag) = lhs.overflow_mul_lsb(*rhs);
             Some(vec![
-                IopValue::Ciphertext(product),
-                IopValue::Ciphertext(flag),
+                IopValue::IntegerCiphertext(product),
+                IopValue::BoolCiphertext(flag),
             ])
         }
         for size in (2..128).step_by(2) {
-            overflow_mul(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+            overflow_mul(IntegerCiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
         }
     }
 
     #[test]
     fn test_mul_lsb() {
-        let spec = CiphertextSpec::new(8, 2, 2);
+        let spec = IntegerCiphertextSpec::new(8, 2, 2);
         let ir = mul(spec).optimize_ir();
         assert_display_is!(
             ir.format()
@@ -368,14 +380,14 @@ mod test {
     #[test]
     fn noise_mul_lsb() {
         for size in (2..128).step_by(2) {
-            mul(CiphertextSpec::new(size, 2, 2)).check_noise();
+            mul(IntegerCiphertextSpec::new(size, 2, 2)).check_noise();
         }
     }
 
     #[test]
     fn noise_overflow_mul_lsb() {
         for size in (2..128).step_by(2) {
-            overflow_mul(CiphertextSpec::new(size, 2, 2)).check_noise();
+            overflow_mul(IntegerCiphertextSpec::new(size, 2, 2)).check_noise();
         }
     }
 }

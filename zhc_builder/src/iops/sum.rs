@@ -1,7 +1,7 @@
-use zhc_crypto::integer_semantics::CiphertextSpec;
+use zhc_crypto::integer_semantics::IntegerCiphertextSpec;
 use zhc_langs::ioplang::Lut1Def;
 
-use crate::{Ciphertext, CiphertextBlock, NU, builder::Builder};
+use crate::{CiphertextBlock, IntegerCiphertext, NU, builder::Builder};
 
 /// Which sum algorithm to emit.
 /// Both sum the same columns of equal-weight blocks and wrap at the width those
@@ -24,44 +24,44 @@ pub enum SumKind {
 /// # Examples
 ///
 /// ```rust,no_run
-/// # use zhc_builder::{CiphertextSpec, sum};
-/// # let spec = CiphertextSpec::new(16, 2, 2);
+/// # use zhc_builder::{IntegerCiphertextSpec, sum};
+/// # let spec = IntegerCiphertextSpec::new(16, 2, 2);
 /// let builder = sum(spec, 4);
 /// let ir = builder.optimize_ir();
 /// ```
-pub fn sum(spec: CiphertextSpec, n: usize) -> Builder {
+pub fn sum(spec: IntegerCiphertextSpec, n: usize) -> Builder {
     let builder = Builder::new(spec.block_spec());
     let srcs = sum_inputs(&builder, spec, n);
     let output = builder.iop_sum(&srcs, SumKind::default());
-    builder.ciphertext_output(output);
+    builder.integer_ciphertext_output(output);
     builder
 }
 
 /// Creates an IR summing `n` encrypted integers by reducing columns.
 /// See [`Builder::iop_sum_column_reduce`].
-pub fn sum_column_reduce(spec: CiphertextSpec, n: usize) -> Builder {
+pub fn sum_column_reduce(spec: IntegerCiphertextSpec, n: usize) -> Builder {
     let builder = Builder::new(spec.block_spec());
     let srcs = sum_inputs(&builder, spec, n);
     let output = builder.iop_sum_column_reduce(&srcs);
-    builder.ciphertext_output(output);
+    builder.integer_ciphertext_output(output);
     builder
 }
 
 /// Creates an IR summing `n` encrypted integers with rippling carries.
 /// See [`Builder::iop_sum_ripple_carry`].
-pub fn sum_ripple_carry(spec: CiphertextSpec, n: usize) -> Builder {
+pub fn sum_ripple_carry(spec: IntegerCiphertextSpec, n: usize) -> Builder {
     let builder = Builder::new(spec.block_spec());
     let srcs = sum_inputs(&builder, spec, n);
     let output = builder.iop_sum_ripple_carry(&srcs);
-    builder.ciphertext_output(output);
+    builder.integer_ciphertext_output(output);
     builder
 }
 
 /// Declares the `n` operands, which the other iops spell out inline but cannot
 /// here because their count is variable.
-fn sum_inputs(builder: &Builder, spec: CiphertextSpec, n: usize) -> Vec<Ciphertext> {
+fn sum_inputs(builder: &Builder, spec: IntegerCiphertextSpec, n: usize) -> Vec<IntegerCiphertext> {
     (0..n)
-        .map(|_| builder.ciphertext_input(spec.int_size()))
+        .map(|_| builder.integer_ciphertext_input(spec.int_size()))
         .collect()
 }
 
@@ -77,15 +77,15 @@ impl Builder {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use zhc_builder::{CiphertextSpec, Builder, SumKind};
-    /// # let spec = CiphertextSpec::new(16, 2, 2);
+    /// # use zhc_builder::{IntegerCiphertextSpec, Builder, SumKind};
+    /// # let spec = IntegerCiphertextSpec::new(16, 2, 2);
     /// # let builder = Builder::new(spec.block_spec());
-    /// # let a = builder.ciphertext_input(spec.int_size());
-    /// # let b = builder.ciphertext_input(spec.int_size());
-    /// # let c = builder.ciphertext_input(spec.int_size());
+    /// # let a = builder.integer_ciphertext_input(spec.int_size());
+    /// # let b = builder.integer_ciphertext_input(spec.int_size());
+    /// # let c = builder.integer_ciphertext_input(spec.int_size());
     /// let total = builder.iop_sum(&[a, b, c], SumKind::MinLatency);
     /// ```
-    pub fn iop_sum(&self, srcs: &[Ciphertext], kind: SumKind) -> Ciphertext {
+    pub fn iop_sum(&self, srcs: &[IntegerCiphertext], kind: SumKind) -> IntegerCiphertext {
         match kind {
             SumKind::MinLatency => self.iop_sum_column_reduce(srcs),
             SumKind::MinPbs => self.iop_sum_ripple_carry(srcs),
@@ -107,15 +107,15 @@ impl Builder {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use zhc_builder::{CiphertextSpec, Builder};
-    /// # let spec = CiphertextSpec::new(16, 2, 2);
+    /// # use zhc_builder::{IntegerCiphertextSpec, Builder};
+    /// # let spec = IntegerCiphertextSpec::new(16, 2, 2);
     /// # let builder = Builder::new(spec.block_spec());
-    /// # let a = builder.ciphertext_input(spec.int_size());
-    /// # let b = builder.ciphertext_input(spec.int_size());
-    /// # let c = builder.ciphertext_input(spec.int_size());
+    /// # let a = builder.integer_ciphertext_input(spec.int_size());
+    /// # let b = builder.integer_ciphertext_input(spec.int_size());
+    /// # let c = builder.integer_ciphertext_input(spec.int_size());
     /// let total = builder.iop_sum_column_reduce(&[a, b, c]);
     /// ```
-    pub fn iop_sum_column_reduce(&self, srcs: &[Ciphertext]) -> Ciphertext {
+    pub fn iop_sum_column_reduce(&self, srcs: &[IntegerCiphertext]) -> IntegerCiphertext {
         let spec = self.check_sum_operands(srcs);
         let block_count: usize = spec.block_count().into();
         let mut columns = self.sum_columns(srcs, block_count);
@@ -165,8 +165,8 @@ impl Builder {
         self.pop_comment();
 
         self.comment("resolve carries").iop_add(
-            &self.ciphertext_join(messages, None),
-            &self.ciphertext_join(carries, None),
+            &self.integer_ciphertext_join(messages, None),
+            &self.integer_ciphertext_join(carries, None),
             None,
         )
     }
@@ -184,15 +184,15 @@ impl Builder {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use zhc_builder::{CiphertextSpec, Builder};
-    /// # let spec = CiphertextSpec::new(16, 2, 2);
+    /// # use zhc_builder::{IntegerCiphertextSpec, Builder};
+    /// # let spec = IntegerCiphertextSpec::new(16, 2, 2);
     /// # let builder = Builder::new(spec.block_spec());
-    /// # let a = builder.ciphertext_input(spec.int_size());
-    /// # let b = builder.ciphertext_input(spec.int_size());
-    /// # let c = builder.ciphertext_input(spec.int_size());
+    /// # let a = builder.integer_ciphertext_input(spec.int_size());
+    /// # let b = builder.integer_ciphertext_input(spec.int_size());
+    /// # let c = builder.integer_ciphertext_input(spec.int_size());
     /// let total = builder.iop_sum_ripple_carry(&[a, b, c]);
     /// ```
-    pub fn iop_sum_ripple_carry(&self, srcs: &[Ciphertext]) -> Ciphertext {
+    pub fn iop_sum_ripple_carry(&self, srcs: &[IntegerCiphertext]) -> IntegerCiphertext {
         let spec = self.check_sum_operands(srcs);
         let block_count = spec.block_count().into();
         let mut output_blocks = Vec::with_capacity(block_count);
@@ -242,10 +242,10 @@ impl Builder {
             self.pop_comment();
         }
 
-        self.ciphertext_join(output_blocks, None)
+        self.integer_ciphertext_join(output_blocks, None)
     }
 
-    fn check_sum_operands(&self, srcs: &[Ciphertext]) -> CiphertextSpec {
+    fn check_sum_operands(&self, srcs: &[IntegerCiphertext]) -> IntegerCiphertextSpec {
         assert!(
             srcs.len() >= 3,
             "Tried to sum fewer than three ciphertexts, use iop_add for a pair."
@@ -259,10 +259,10 @@ impl Builder {
     }
 
     /// Groups the blocks of every operand by weight.
-    fn sum_columns(&self, srcs: &[Ciphertext], block_count: usize) -> Vec<Vec<CiphertextBlock>> {
+    fn sum_columns(&self, srcs: &[IntegerCiphertext], block_count: usize) -> Vec<Vec<CiphertextBlock>> {
         let mut columns = vec![Vec::new(); block_count];
         for src in srcs {
-            for (position, block) in self.ciphertext_split(src).into_iter().enumerate() {
+            for (position, block) in self.integer_ciphertext_split(src).into_iter().enumerate() {
                 columns[position].push(block);
             }
         }
@@ -278,7 +278,7 @@ mod test {
 
     fn expected_sum(inp: &[IopValue]) -> Option<Vec<IopValue>> {
         let mut terms = inp.iter().map(|v| match v {
-            IopValue::Ciphertext(ct) => ct,
+            IopValue::IntegerCiphertext(ct) => ct,
             _ => unreachable!(),
         });
         let first = terms.next().unwrap();
@@ -286,23 +286,23 @@ mod test {
         let total = terms.fold(first.as_storage(), |acc, ct| {
             acc.wrapping_add(ct.as_storage())
         });
-        Some(vec![IopValue::Ciphertext(
+        Some(vec![IopValue::IntegerCiphertext(
             spec.from_int(total & spec.int_mask()),
         )])
     }
 
     /// `test_random` masks values to a random bit window, so it never saturates the carry space.
     /// This pins the worst case down explicitly.
-    fn check_all_max_blocks(builder: Builder, spec: CiphertextSpec, n: usize) {
-        let inputs = vec![IopValue::Ciphertext(spec.from_int(spec.int_mask())); n];
+    fn check_all_max_blocks(builder: Builder, spec: IntegerCiphertextSpec, n: usize) {
+        let inputs = vec![IopValue::IntegerCiphertext(spec.from_int(spec.int_mask())); n];
         let outputs = builder.interpret().with_inputs(&inputs).get_outputs();
         assert_eq!(outputs, expected_sum(&inputs).unwrap(), "{n} terms");
     }
 
-    fn check_sizes_and_term_counts(factory: impl Fn(CiphertextSpec, usize) -> Builder) {
+    fn check_sizes_and_term_counts(factory: impl Fn(IntegerCiphertextSpec, usize) -> Builder) {
         for size in [2, 4, 8, 16, 32] {
             for n in [3, 5, 6, 9, 11, 13, 17, 26] {
-                let spec = CiphertextSpec::new(size, 2, 2);
+                let spec = IntegerCiphertextSpec::new(size, 2, 2);
                 factory(spec, n).test_random(20, expected_sum);
                 check_all_max_blocks(factory(spec, n), spec, n);
             }
@@ -311,7 +311,7 @@ mod test {
 
     #[test]
     fn test_sum_column_reduce() {
-        let ir = sum_column_reduce(CiphertextSpec::new(4, 2, 2), 3).optimize_ir();
+        let ir = sum_column_reduce(IntegerCiphertextSpec::new(4, 2, 2), 3).optimize_ir();
         assert_display_is!(
             ir.format()
                 .show_comments(false)
@@ -353,12 +353,12 @@ mod test {
     #[test]
     #[should_panic(expected = "fewer than three")]
     fn sum_rejects_a_pair() {
-        sum(CiphertextSpec::new(4, 2, 2), 2);
+        sum(IntegerCiphertextSpec::new(4, 2, 2), 2);
     }
 
     #[test]
     fn test_sum_ripple_carry() {
-        let ir = sum_ripple_carry(CiphertextSpec::new(4, 2, 2), 3).optimize_ir();
+        let ir = sum_ripple_carry(IntegerCiphertextSpec::new(4, 2, 2), 3).optimize_ir();
         assert_display_is!(
             ir.format()
                 .show_comments(false)

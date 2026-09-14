@@ -9,7 +9,7 @@
 ; ------------------------------------------------------------------------------
 ; !preamble {
 ; [signature]
-; (Ciphertext<8, 2, 2>, Ciphertext<8, 2, 2>) -> Ciphertext<8, 2, 2>
+; (IntegerCiphertext<8, 2, 2>, IntegerCiphertext<8, 2, 2>) -> IntegerCiphertext<8, 2, 2>
 ; [lut]
 ; GenPropAdd: [0,1,2,3,0,1,2,3,1,2,3,0,1,2,3,0]
 ; ManyGenProp: [0,0,0,1,2,2,2,3,0,1,2,3,0,1,2,3]

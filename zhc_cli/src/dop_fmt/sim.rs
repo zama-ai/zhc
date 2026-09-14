@@ -159,14 +159,15 @@ fn recompose(blocks: &[EmulatedCiphertextBlock], message_size: u8) -> usize {
     })
 }
 
-/// The declared block count for `Ciphertext` argument/return `id` of `signature`'s given side.
+/// The declared block count for ciphertext argument/return `id` of `signature`'s given side.
 fn num_blocks(types: &[Type], id: usize, side: &str) -> Result<usize, String> {
     match types.get(id) {
-        Some(Type::Ciphertext(spec)) => {
+        Some(Type::IntegerCiphertext(spec)) => {
             Ok(spec.int_size() as usize / spec.block_spec().message_size() as usize)
         }
-        Some(Type::Plaintext(_)) => {
-            Err(format!("{side}[{id}] is a Plaintext, expected Ciphertext"))
+        Some(Type::BoolCiphertext(_)) => Ok(1),
+        Some(Type::IntegerPlaintext(_)) => {
+            Err(format!("{side}[{id}] is plaintext, expected ciphertext"))
         }
         None => Err(format!("{side}[{id}] has no matching entry in [signature]")),
     }

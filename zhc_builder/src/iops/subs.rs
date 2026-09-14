@@ -1,17 +1,17 @@
-use crate::builder::{Builder, Ciphertext, Plaintext};
-use zhc_crypto::integer_semantics::CiphertextSpec;
+use crate::builder::{BoolCiphertext, Builder, IntegerCiphertext, IntegerPlaintext};
+use zhc_crypto::integer_semantics::IntegerCiphertextSpec;
 use zhc_langs::ioplang::Lut1Def;
 
 /// Creates an IR for the subtraction of a scalar from an encrypted integer (`ct - imm`).
 ///
 /// Convenience wrapper that declares inputs/outputs and calls [`Builder::iop_subs`].
 /// See that method for algorithm details.
-pub fn subs(spec: CiphertextSpec) -> Builder {
+pub fn subs(spec: IntegerCiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src_c = builder.ciphertext_input(spec.int_size());
-    let src_p = builder.plaintext_input(spec.int_size());
+    let src_c = builder.integer_ciphertext_input(spec.int_size());
+    let src_p = builder.integer_plaintext_input(spec.int_size());
     let res = builder.iop_subs(&src_c, &src_p);
-    builder.ciphertext_output(res);
+    builder.integer_ciphertext_output(res);
     builder
 }
 
@@ -22,12 +22,12 @@ pub fn subs(spec: CiphertextSpec) -> Builder {
 ///
 /// The ciphertext input is declared first so that the operand slots match the ones used by
 /// [`adds`](super::adds), independently of the reversed mathematical operand order.
-pub fn ssub(spec: CiphertextSpec) -> Builder {
+pub fn ssub(spec: IntegerCiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src_c = builder.ciphertext_input(spec.int_size());
-    let src_p = builder.plaintext_input(spec.int_size());
+    let src_c = builder.integer_ciphertext_input(spec.int_size());
+    let src_p = builder.integer_plaintext_input(spec.int_size());
     let res = builder.iop_ssub(&src_p, &src_c);
-    builder.ciphertext_output(res);
+    builder.integer_ciphertext_output(res);
     builder
 }
 
@@ -35,13 +35,13 @@ pub fn ssub(spec: CiphertextSpec) -> Builder {
 ///
 /// Convenience wrapper that calls [`Builder::iop_overflow_subs`]. Returns two outputs:
 /// the wrapping difference and a single-block borrow flag.
-pub fn overflow_subs(spec: CiphertextSpec) -> Builder {
+pub fn overflow_subs(spec: IntegerCiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src_c = builder.ciphertext_input(spec.int_size());
-    let src_p = builder.plaintext_input(spec.int_size());
+    let src_c = builder.integer_ciphertext_input(spec.int_size());
+    let src_p = builder.integer_plaintext_input(spec.int_size());
     let (res, flag) = builder.iop_overflow_subs(&src_c, &src_p);
-    builder.ciphertext_output(res);
-    builder.ciphertext_output(flag);
+    builder.integer_ciphertext_output(res);
+    builder.bool_ciphertext_output(flag);
     builder
 }
 
@@ -49,13 +49,13 @@ pub fn overflow_subs(spec: CiphertextSpec) -> Builder {
 ///
 /// Convenience wrapper that calls [`Builder::iop_overflow_ssub`]. Returns two outputs:
 /// the wrapping difference and a single-block borrow flag.
-pub fn overflow_ssub(spec: CiphertextSpec) -> Builder {
+pub fn overflow_ssub(spec: IntegerCiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src_c = builder.ciphertext_input(spec.int_size());
-    let src_p = builder.plaintext_input(spec.int_size());
+    let src_c = builder.integer_ciphertext_input(spec.int_size());
+    let src_p = builder.integer_plaintext_input(spec.int_size());
     let (res, flag) = builder.iop_overflow_ssub(&src_p, &src_c);
-    builder.ciphertext_output(res);
-    builder.ciphertext_output(flag);
+    builder.integer_ciphertext_output(res);
+    builder.bool_ciphertext_output(flag);
     builder
 }
 
@@ -73,14 +73,14 @@ impl Builder {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use zhc_builder::{CiphertextSpec, Builder};
-    /// # let spec = CiphertextSpec::new(16, 2, 2);
+    /// # use zhc_builder::{IntegerCiphertextSpec, Builder};
+    /// # let spec = IntegerCiphertextSpec::new(16, 2, 2);
     /// # let builder = Builder::new(spec.block_spec());
-    /// # let a = builder.ciphertext_input(spec.int_size());
-    /// # let b = builder.plaintext_input(spec.int_size());
+    /// # let a = builder.integer_ciphertext_input(spec.int_size());
+    /// # let b = builder.integer_plaintext_input(spec.int_size());
     /// let diff = builder.iop_subs(&a, &b);
     /// ```
-    pub fn iop_subs(&self, lhs: &Ciphertext, rhs: &Plaintext) -> Ciphertext {
+    pub fn iop_subs(&self, lhs: &IntegerCiphertext, rhs: &IntegerPlaintext) -> IntegerCiphertext {
         let a_inv = self.comment("Invert Input").iop_bitwise_inv(lhs);
         let sum = self.iop_adds(&a_inv, rhs);
         self.comment("Invert Output").iop_bitwise_inv(&sum)
@@ -96,14 +96,14 @@ impl Builder {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use zhc_builder::{CiphertextSpec, Builder};
-    /// # let spec = CiphertextSpec::new(16, 2, 2);
+    /// # use zhc_builder::{IntegerCiphertextSpec, Builder};
+    /// # let spec = IntegerCiphertextSpec::new(16, 2, 2);
     /// # let builder = Builder::new(spec.block_spec());
-    /// # let a = builder.plaintext_input(spec.int_size());
-    /// # let b = builder.ciphertext_input(spec.int_size());
+    /// # let a = builder.integer_plaintext_input(spec.int_size());
+    /// # let b = builder.integer_ciphertext_input(spec.int_size());
     /// let diff = builder.iop_ssub(&a, &b);
     /// ```
-    pub fn iop_ssub(&self, lhs: &Plaintext, rhs: &Ciphertext) -> Ciphertext {
+    pub fn iop_ssub(&self, lhs: &IntegerPlaintext, rhs: &IntegerCiphertext) -> IntegerCiphertext {
         let int_size = rhs.spec().int_size();
         let one = self.block_let_ciphertext(1);
         let b_inv = self.comment("Invert Input").iop_bitwise_inv(rhs);
@@ -127,14 +127,18 @@ impl Builder {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use zhc_builder::{CiphertextSpec, Builder};
-    /// # let spec = CiphertextSpec::new(16, 2, 2);
+    /// # use zhc_builder::{IntegerCiphertextSpec, Builder};
+    /// # let spec = IntegerCiphertextSpec::new(16, 2, 2);
     /// # let builder = Builder::new(spec.block_spec());
-    /// # let a = builder.ciphertext_input(spec.int_size());
-    /// # let b = builder.plaintext_input(spec.int_size());
+    /// # let a = builder.integer_ciphertext_input(spec.int_size());
+    /// # let b = builder.integer_plaintext_input(spec.int_size());
     /// let (diff, borrow) = builder.iop_overflow_subs(&a, &b);
     /// ```
-    pub fn iop_overflow_subs(&self, lhs: &Ciphertext, rhs: &Plaintext) -> (Ciphertext, Ciphertext) {
+    pub fn iop_overflow_subs(
+        &self,
+        lhs: &IntegerCiphertext,
+        rhs: &IntegerPlaintext,
+    ) -> (IntegerCiphertext, BoolCiphertext) {
         let int_size = lhs.spec().int_size();
         let a_inv = self.comment("Invert Input").iop_bitwise_inv(lhs);
         let (sum, carry_out) = match int_size {
@@ -157,14 +161,18 @@ impl Builder {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use zhc_builder::{CiphertextSpec, Builder};
-    /// # let spec = CiphertextSpec::new(16, 2, 2);
+    /// # use zhc_builder::{IntegerCiphertextSpec, Builder};
+    /// # let spec = IntegerCiphertextSpec::new(16, 2, 2);
     /// # let builder = Builder::new(spec.block_spec());
-    /// # let a = builder.plaintext_input(spec.int_size());
-    /// # let b = builder.ciphertext_input(spec.int_size());
+    /// # let a = builder.integer_plaintext_input(spec.int_size());
+    /// # let b = builder.integer_ciphertext_input(spec.int_size());
     /// let (diff, borrow) = builder.iop_overflow_ssub(&a, &b);
     /// ```
-    pub fn iop_overflow_ssub(&self, lhs: &Plaintext, rhs: &Ciphertext) -> (Ciphertext, Ciphertext) {
+    pub fn iop_overflow_ssub(
+        &self,
+        lhs: &IntegerPlaintext,
+        rhs: &IntegerCiphertext,
+    ) -> (IntegerCiphertext, BoolCiphertext) {
         let int_size = rhs.spec().int_size();
         let one = self.block_let_ciphertext(1);
         let b_inv = self.comment("Invert Input").iop_bitwise_inv(rhs);
@@ -175,9 +183,9 @@ impl Builder {
         };
 
         // carry_out=1 means NO overflow (lhs >= rhs), carry_out=0 means overflow (lhs < rhs).
-        let carry_out = self.ciphertext_split(carry_out);
-        let overflow_flag = self.block_lookup(&carry_out[0], Lut1Def::IsNull);
-        (res, self.ciphertext_join(&[overflow_flag], None))
+        let carry_out = self.bool_ciphertext_get_block(carry_out);
+        let overflow_flag = self.block_lookup(&carry_out, Lut1Def::IsNull);
+        (res, self.bool_ciphertext_from_block(overflow_flag))
     }
 }
 
@@ -189,54 +197,54 @@ mod test {
     #[test]
     fn correctness_subs() {
         fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::Ciphertext(lhs), IopValue::Plaintext(rhs)] = inp else {
+            let [IopValue::IntegerCiphertext(lhs), IopValue::IntegerPlaintext(rhs)] = inp else {
                 unreachable!()
             };
-            Some(vec![IopValue::Ciphertext(lhs.subs(*rhs))])
+            Some(vec![IopValue::IntegerCiphertext(lhs.subs(*rhs))])
         }
         for size in (2..128).step_by(2) {
-            subs(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+            subs(IntegerCiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
         }
     }
 
     #[test]
     fn correctness_ssub() {
         fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::Ciphertext(lhs), IopValue::Plaintext(rhs)] = inp else {
+            let [IopValue::IntegerCiphertext(lhs), IopValue::IntegerPlaintext(rhs)] = inp else {
                 unreachable!()
             };
-            Some(vec![IopValue::Ciphertext(lhs.ssub(*rhs))])
+            Some(vec![IopValue::IntegerCiphertext(lhs.ssub(*rhs))])
         }
         for size in (2..128).step_by(2) {
-            ssub(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+            ssub(IntegerCiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
         }
     }
 
     #[test]
     fn correctness_overflow_subs() {
         fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::Ciphertext(lhs), IopValue::Plaintext(rhs)] = inp else {
+            let [IopValue::IntegerCiphertext(lhs), IopValue::IntegerPlaintext(rhs)] = inp else {
                 unreachable!()
             };
             let (diff, flag) = lhs.overflow_subs(*rhs);
-            Some(vec![IopValue::Ciphertext(diff), IopValue::Ciphertext(flag)])
+            Some(vec![IopValue::IntegerCiphertext(diff), IopValue::BoolCiphertext(flag)])
         }
         for size in (2..128).step_by(2) {
-            overflow_subs(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+            overflow_subs(IntegerCiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
         }
     }
 
     #[test]
     fn correctness_overflow_ssub() {
         fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::Ciphertext(lhs), IopValue::Plaintext(rhs)] = inp else {
+            let [IopValue::IntegerCiphertext(lhs), IopValue::IntegerPlaintext(rhs)] = inp else {
                 unreachable!()
             };
             let (diff, flag) = lhs.overflow_ssub(*rhs);
-            Some(vec![IopValue::Ciphertext(diff), IopValue::Ciphertext(flag)])
+            Some(vec![IopValue::IntegerCiphertext(diff), IopValue::BoolCiphertext(flag)])
         }
         for size in (2..128).step_by(2) {
-            overflow_ssub(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+            overflow_ssub(IntegerCiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
         }
     }
 
@@ -245,8 +253,11 @@ mod test {
     #[test]
     fn correctness_edge_cases() {
         for size in [4u16, 12, 32, 64, 128] {
-            let spec = CiphertextSpec::new(size, 2, 2);
-            let pt_spec = spec.matching_plaintext_spec();
+            let spec = IntegerCiphertextSpec::new(size, 2, 2);
+            let pt_spec = spec
+                .block_spec()
+                .matching_plaintext_block_spec()
+                .integer_plaintext_spec(size);
             let mask = spec.int_mask();
 
             // (ct, imm) pairs: zero scalar, equal operands, borrow out of zero, saturated.
@@ -264,8 +275,8 @@ mod test {
 
             for (a, c) in cases {
                 let inputs = [
-                    IopValue::Ciphertext(spec.from_int(a)),
-                    IopValue::Plaintext(pt_spec.from_int(c)),
+                    IopValue::IntegerCiphertext(spec.from_int(a)),
+                    IopValue::IntegerPlaintext(pt_spec.from_int(c)),
                 ];
                 let ct = spec.from_int(a);
                 let pt = pt_spec.from_int(c);
@@ -273,14 +284,14 @@ mod test {
                 let got = subs(spec).interpret().with_inputs(&inputs).get_outputs();
                 assert_eq!(
                     got,
-                    vec![IopValue::Ciphertext(ct.subs(pt))],
+                    vec![IopValue::IntegerCiphertext(ct.subs(pt))],
                     "subs failed for size={size} a={a} c={c}"
                 );
 
                 let got = ssub(spec).interpret().with_inputs(&inputs).get_outputs();
                 assert_eq!(
                     got,
-                    vec![IopValue::Ciphertext(ct.ssub(pt))],
+                    vec![IopValue::IntegerCiphertext(ct.ssub(pt))],
                     "ssub failed for size={size} a={a} c={c}"
                 );
 
@@ -291,7 +302,7 @@ mod test {
                     .get_outputs();
                 assert_eq!(
                     got,
-                    vec![IopValue::Ciphertext(diff), IopValue::Ciphertext(flag)],
+                    vec![IopValue::IntegerCiphertext(diff), IopValue::BoolCiphertext(flag)],
                     "overflow_subs failed for size={size} a={a} c={c}"
                 );
 
@@ -302,7 +313,7 @@ mod test {
                     .get_outputs();
                 assert_eq!(
                     got,
-                    vec![IopValue::Ciphertext(diff), IopValue::Ciphertext(flag)],
+                    vec![IopValue::IntegerCiphertext(diff), IopValue::BoolCiphertext(flag)],
                     "overflow_ssub failed for size={size} a={a} c={c}"
                 );
             }
@@ -312,28 +323,28 @@ mod test {
     #[test]
     fn noise_subs() {
         for size in (2..128).step_by(2) {
-            subs(CiphertextSpec::new(size, 2, 2)).check_noise();
+            subs(IntegerCiphertextSpec::new(size, 2, 2)).check_noise();
         }
     }
 
     #[test]
     fn noise_ssub() {
         for size in (2..128).step_by(2) {
-            ssub(CiphertextSpec::new(size, 2, 2)).check_noise();
+            ssub(IntegerCiphertextSpec::new(size, 2, 2)).check_noise();
         }
     }
 
     #[test]
     fn noise_overflow_subs() {
         for size in (2..128).step_by(2) {
-            overflow_subs(CiphertextSpec::new(size, 2, 2)).check_noise();
+            overflow_subs(IntegerCiphertextSpec::new(size, 2, 2)).check_noise();
         }
     }
 
     #[test]
     fn noise_overflow_ssub() {
         for size in (2..128).step_by(2) {
-            overflow_ssub(CiphertextSpec::new(size, 2, 2)).check_noise();
+            overflow_ssub(IntegerCiphertextSpec::new(size, 2, 2)).check_noise();
         }
     }
 }

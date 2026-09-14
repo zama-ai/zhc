@@ -1,4 +1,4 @@
-use zhc_builder::{CiphertextSpec, add, cmp_gt};
+use zhc_builder::{IntegerCiphertextSpec, add, cmp_gt};
 use zhc_config::hpu::{HpuConfig, PhysicalConfig};
 use zhc_ir::IR;
 use zhc_langs::ioplang::IopLang;
@@ -35,7 +35,7 @@ fn format_binary_vec(inp: &Vec<u32>) -> String {
 
 #[test]
 fn test_hex_add_ir() {
-    let hex = pipeline(&add(CiphertextSpec::new(16, 2, 2)).optimize_ir());
+    let hex = pipeline(&add(IntegerCiphertextSpec::new(16, 2, 2)).optimize_ir());
     assert_display_is!(
         format_binary_vec(&hex),
         r#"
@@ -114,7 +114,7 @@ fn test_hex_add_ir() {
 
 #[test]
 fn test_hex_cmp_ir() {
-    let hex = pipeline(&cmp_gt(CiphertextSpec::new(16, 2, 2)).optimize_ir());
+    let hex = pipeline(&cmp_gt(IntegerCiphertextSpec::new(16, 2, 2)).optimize_ir());
     assert_display_is!(
         format_binary_vec(&hex),
         r#"

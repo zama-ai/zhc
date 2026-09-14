@@ -1,11 +1,11 @@
 use super::super::PlaintextBlockSpec;
-use super::{EmulatedPlaintext, PlaintextSpec};
+use super::{EmulatedIntegerPlaintext, IntegerPlaintextSpec};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 #[test]
 fn spec_creation() {
-    let spec = PlaintextSpec::new(16, 4);
+    let spec = IntegerPlaintextSpec::new(16, 4);
     assert_eq!(spec.int_size(), 16);
     assert_eq!(spec.block_count(), 4);
     assert_eq!(spec.block_spec(), PlaintextBlockSpec(4));
@@ -13,23 +13,23 @@ fn spec_creation() {
 
 #[test]
 fn spec_int_mask() {
-    let spec = PlaintextSpec::new(8, 4);
+    let spec = IntegerPlaintextSpec::new(8, 4);
     assert_eq!(spec.int_mask(), 0b1111_1111);
 
-    let spec = PlaintextSpec::new(12, 4);
+    let spec = IntegerPlaintextSpec::new(12, 4);
     assert_eq!(spec.int_mask(), 0b1111_1111_1111);
 }
 
 #[test]
 fn spec_block_mask() {
-    let spec = PlaintextSpec::new(8, 4);
+    let spec = IntegerPlaintextSpec::new(8, 4);
     assert_eq!(spec.block_mask(0), 0b1111);
     assert_eq!(spec.block_mask(1), 0b1111_0000);
 }
 
 #[test]
 fn spec_overflow_checks() {
-    let spec = PlaintextSpec::new(8, 4);
+    let spec = IntegerPlaintextSpec::new(8, 4);
 
     assert!(!spec.overflows_int(0b1111_1111));
     assert!(spec.overflows_int(0b1_0000_0000));
@@ -38,7 +38,7 @@ fn spec_overflow_checks() {
 
 #[test]
 fn from_int() {
-    let spec = PlaintextSpec::new(8, 4);
+    let spec = IntegerPlaintextSpec::new(8, 4);
     let plaintext = spec.from_int(0b1111_0101);
     assert_eq!(plaintext.storage, 0b1111_0101);
     assert_eq!(plaintext.spec, spec);
@@ -46,14 +46,14 @@ fn from_int() {
 
 #[test]
 fn len() {
-    let spec = PlaintextSpec::new(16, 4);
+    let spec = IntegerPlaintextSpec::new(16, 4);
     let plaintext = spec.from_int(0b1111_0000_1111_0000);
     assert_eq!(plaintext.len(), 4);
 }
 
 #[test]
 fn get_block() {
-    let spec = PlaintextSpec::new(8, 4);
+    let spec = IntegerPlaintextSpec::new(8, 4);
     let plaintext = spec.from_int(0b1111_0101);
 
     let block0 = plaintext.get_block(0);
@@ -65,7 +65,7 @@ fn get_block() {
 
 #[test]
 fn get_block_correct_spec() {
-    let spec = PlaintextSpec::new(8, 4);
+    let spec = IntegerPlaintextSpec::new(8, 4);
     let plaintext = spec.from_int(0b1111_0101);
     let block = plaintext.get_block(0);
     assert_eq!(block.spec, PlaintextBlockSpec(4));
@@ -73,8 +73,8 @@ fn get_block_correct_spec() {
 
 #[test]
 fn raw_int_bits() {
-    let spec = PlaintextSpec::new(8, 4);
-    let plaintext = EmulatedPlaintext {
+    let spec = IntegerPlaintextSpec::new(8, 4);
+    let plaintext = EmulatedIntegerPlaintext {
         storage: 0b1111_1111_1111_0101,
         spec,
     };
@@ -84,7 +84,7 @@ fn raw_int_bits() {
 
 #[test]
 fn equality_same_spec() {
-    let spec = PlaintextSpec::new(8, 4);
+    let spec = IntegerPlaintextSpec::new(8, 4);
     let plaintext1 = spec.from_int(0b1111_0101);
     let plaintext2 = spec.from_int(0b1111_0101);
     let plaintext3 = spec.from_int(0b1111_0110);
@@ -95,8 +95,8 @@ fn equality_same_spec() {
 
 #[test]
 fn equality_different_spec() {
-    let spec1 = PlaintextSpec::new(8, 4);
-    let spec2 = PlaintextSpec::new(12, 4);
+    let spec1 = IntegerPlaintextSpec::new(8, 4);
+    let spec2 = IntegerPlaintextSpec::new(12, 4);
     let plaintext1 = spec1.from_int(0b1111_0101);
     let plaintext2 = spec2.from_int(0b1111_0101);
 
@@ -105,9 +105,9 @@ fn equality_different_spec() {
 
 #[test]
 fn equality_ignores_extra_bits() {
-    let spec = PlaintextSpec::new(8, 4);
+    let spec = IntegerPlaintextSpec::new(8, 4);
     let plaintext1 = spec.from_int(0b1111_0101);
-    let plaintext2 = EmulatedPlaintext {
+    let plaintext2 = EmulatedIntegerPlaintext {
         storage: 0b1111_1111_1111_0101,
         spec,
     };
@@ -117,10 +117,10 @@ fn equality_ignores_extra_bits() {
 
 #[test]
 fn partial_ordering() {
-    let spec = PlaintextSpec::new(8, 4);
+    let spec = IntegerPlaintextSpec::new(8, 4);
     let plaintext1 = spec.from_int(0b1111_0101);
     let plaintext2 = spec.from_int(0b1111_0110);
-    let plaintext3 = PlaintextSpec::new(12, 4).from_int(0b1111_0101);
+    let plaintext3 = IntegerPlaintextSpec::new(12, 4).from_int(0b1111_0101);
 
     assert!(plaintext1 < plaintext2);
     assert!(plaintext1.partial_cmp(&plaintext3).is_none());
@@ -128,10 +128,10 @@ fn partial_ordering() {
 
 #[test]
 fn hash_consistency() {
-    let spec = PlaintextSpec::new(8, 4);
+    let spec = IntegerPlaintextSpec::new(8, 4);
     let plaintext1 = spec.from_int(0b1111_0101);
     let plaintext2 = spec.from_int(0b1111_0101);
-    let plaintext3 = EmulatedPlaintext {
+    let plaintext3 = EmulatedIntegerPlaintext {
         storage: 0b1111_1111_1111_0101,
         spec,
     };
@@ -150,7 +150,7 @@ fn hash_consistency() {
 
 #[test]
 fn display_formatting() {
-    let spec = PlaintextSpec::new(8, 4);
+    let spec = IntegerPlaintextSpec::new(8, 4);
     let plaintext = spec.from_int(0b1111_0101);
 
     assert_eq!(format!("{:?}", plaintext), "15_5_pt");
@@ -160,7 +160,7 @@ fn display_formatting() {
 #[test]
 #[should_panic(expected = "Tried to get nonexistent block")]
 fn get_block_out_of_bounds_panics() {
-    let spec = PlaintextSpec::new(8, 4);
+    let spec = IntegerPlaintextSpec::new(8, 4);
     let plaintext = spec.from_int(0b1111_0101);
     plaintext.get_block(2);
 }
@@ -168,19 +168,31 @@ fn get_block_out_of_bounds_panics() {
 #[test]
 #[should_panic(expected = "Tried to create malformed plaintext spec")]
 fn spec_creation_zero_message_panics() {
-    PlaintextSpec::new(8, 0);
+    IntegerPlaintextSpec::new(8, 0);
+}
+
+#[test]
+#[should_panic(expected = "precision must be non-zero")]
+fn spec_creation_zero_precision_panics() {
+    IntegerPlaintextSpec::new(0, 2);
+}
+
+#[test]
+#[should_panic(expected = "is not a multiple of message size")]
+fn spec_creation_unaligned_precision_panics() {
+    IntegerPlaintextSpec::new(7, 2);
 }
 
 #[test]
 #[should_panic(expected = "exceeds maximum value for int size")]
 fn from_int_overflow_panics() {
-    let spec = PlaintextSpec::new(8, 4);
+    let spec = IntegerPlaintextSpec::new(8, 4);
     spec.from_int(0b1_0000_0000);
 }
 
 #[test]
 #[should_panic(expected = "Tried to get block mask for nonexistent block")]
 fn block_mask_out_of_bounds_panics() {
-    let spec = PlaintextSpec::new(8, 4);
+    let spec = IntegerPlaintextSpec::new(8, 4);
     spec.block_mask(2);
 }

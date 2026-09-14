@@ -5,7 +5,7 @@
 //! integer inputs, applies arithmetic operations and programmable bootstrapping (PBS) lookups
 //! on individual blocks, and produces encrypted outputs.
 //!
-//! The four value types — [`Ciphertext`], [`CiphertextBlock`], [`Plaintext`], and
+//! The four value types — [`IntegerCiphertext`], [`CiphertextBlock`], [`IntegerPlaintext`], and
 //! [`PlaintextBlock`] — are opaque handles into the IR graph. They cannot be inspected
 //! directly; instead, they are passed to [`Builder`] methods that emit the corresponding IR
 //! instructions.
@@ -36,8 +36,8 @@
 //! padding bits — only the `message_size` message bits.
 //!
 //! All block-level operations (`block_*` methods) work on individual blocks, while
-//! multi-block integers must first be [`split`](Builder::ciphertext_split) into their radix
-//! digits and later [`join`](Builder::ciphertext_join)ed back.
+//! multi-block integers must first be [`split`](Builder::integer_ciphertext_split) into their radix
+//! digits and later [`join`](Builder::integer_ciphertext_join)ed back.
 //!
 //! # Operation Flavors
 //!
@@ -107,19 +107,19 @@
 //! let builder = Builder::new(CiphertextBlockSpec(2, 2));
 //!
 //! // 2. Declare circuit inputs.
-//! let a = builder.ciphertext_input(8);
-//! let b = builder.ciphertext_input(8);
+//! let a = builder.integer_ciphertext_input(8);
+//! let b = builder.integer_ciphertext_input(8);
 //!
 //! // 3. Decompose into blocks and operate.
-//! let a_blocks = builder.ciphertext_split(&a);
-//! let b_blocks = builder.ciphertext_split(&b);
+//! let a_blocks = builder.integer_ciphertext_split(&a);
+//! let b_blocks = builder.integer_ciphertext_split(&b);
 //! let sum_blocks: Vec<_> = a_blocks.iter().zip(b_blocks.iter())
 //!     .map(|(ab, bb)| builder.block_add(ab, bb))
 //!     .collect();
 //!
 //! // 4. Reassemble and declare the output.
-//! let result = builder.ciphertext_join(&sum_blocks, None);
-//! builder.ciphertext_output(&result);
+//! let result = builder.integer_ciphertext_join(&sum_blocks, None);
+//! builder.integer_ciphertext_output(&result);
 //!
 //! // 5. Finalize — this runs dead-code elimination and CSE.
 //! let ir = builder.optimize_ir();

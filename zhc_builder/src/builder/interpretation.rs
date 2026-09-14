@@ -31,8 +31,8 @@ use crate::builder::InnerBuilder;
 /// ```rust,no_run
 /// # use zhc_builder::*;
 /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-/// let a = builder.ciphertext_input(8);
-/// builder.ciphertext_output(&a);
+/// let a = builder.integer_ciphertext_input(8);
+/// builder.integer_ciphertext_output(&a);
 /// let outputs = builder.interpret()
 ///     .with_inputs(&[a.make_value(42)])
 ///     .get_outputs();
@@ -98,8 +98,8 @@ impl Interpreter {
     /// ```rust,no_run
     /// # use zhc_builder::*;
     /// # let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// # let a = builder.ciphertext_input(8);
-    /// # builder.ciphertext_output(&a);
+    /// # let a = builder.integer_ciphertext_input(8);
+    /// # builder.integer_ciphertext_output(&a);
     /// builder.interpret()
     ///     .with_inputs(&[a.make_value(42)])
     ///     .draw()

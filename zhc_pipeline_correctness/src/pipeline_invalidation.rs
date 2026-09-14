@@ -5,14 +5,14 @@
 //! after an artifact was already pulled must invalidate that artifact (and everything computed
 //! from it), or the pipeline keeps handing back a result that no longer matches its own inputs.
 
-use zhc_builder::{CiphertextBlockSpec, CiphertextSpec, add};
+use zhc_builder::{CiphertextBlockSpec, IntegerCiphertextSpec, add};
 use zhc_config::hpu::{HpuConfig, PhysicalConfig};
 use zhc_crypto::integer_semantics::lut::LutId;
 use zhc_pipeline::Pipeline;
 
 #[test]
 fn hpu_stream_reflects_lut_relocation_set_after_first_pull() {
-    let ir = add(CiphertextSpec::new(16, 2, 2)).optimize_ir();
+    let ir = add(IntegerCiphertextSpec::new(16, 2, 2)).optimize_ir();
     let config = HpuConfig::from(PhysicalConfig::gaussian_64b_fast());
 
     let mut pipeline = Pipeline::new()

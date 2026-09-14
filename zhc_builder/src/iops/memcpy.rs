@@ -1,12 +1,12 @@
-use zhc_crypto::integer_semantics::CiphertextSpec;
+use zhc_crypto::integer_semantics::IntegerCiphertextSpec;
 
-use crate::builder::{Builder, Ciphertext};
+use crate::builder::{Builder, IntegerCiphertext};
 
 /// Shortest legal IOp stream, in words (one length word plus one word per DOp).
 ///
 /// The instruction scheduler rejects shorter streams, because too few DOps per IOp lets the sync
 /// id overflow, and every board configuration uses 4. The value cannot be read from
-/// [`CiphertextSpec`] nor from the HPU configuration (`min_iop_size` is not deserialized), so it is
+/// [`IntegerCiphertextSpec`] nor from the HPU configuration (`min_iop_size` is not deserialized), so it is
 /// written here. It only bites the single-block case, see [`Builder::iop_memcpy`].
 const MIN_IOP_WORDS: usize = 4;
 
@@ -17,16 +17,16 @@ const MIN_IOP_WORDS: usize = 4;
 /// # Examples
 ///
 /// ```rust,no_run
-/// # use zhc_builder::{CiphertextSpec, memcpy};
-/// # let spec = CiphertextSpec::new(16, 2, 2);
+/// # use zhc_builder::{IntegerCiphertextSpec, memcpy};
+/// # let spec = IntegerCiphertextSpec::new(16, 2, 2);
 /// let builder = memcpy(spec);
 /// let ir = builder.optimize_ir();
 /// ```
-pub fn memcpy(spec: CiphertextSpec) -> Builder {
+pub fn memcpy(spec: IntegerCiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src = builder.ciphertext_input(spec.int_size());
+    let src = builder.integer_ciphertext_input(spec.int_size());
     let res = builder.iop_memcpy(&src);
-    builder.ciphertext_output(res);
+    builder.integer_ciphertext_output(res);
     builder
 }
 
@@ -45,14 +45,14 @@ impl Builder {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use zhc_builder::{CiphertextSpec, Builder};
-    /// # let spec = CiphertextSpec::new(16, 2, 2);
+    /// # use zhc_builder::{IntegerCiphertextSpec, Builder};
+    /// # let spec = IntegerCiphertextSpec::new(16, 2, 2);
     /// # let builder = Builder::new(spec.block_spec());
-    /// # let a = builder.ciphertext_input(spec.int_size());
+    /// # let a = builder.integer_ciphertext_input(spec.int_size());
     /// let copy = builder.iop_memcpy(&a);
     /// ```
-    pub fn iop_memcpy(&self, src: &Ciphertext) -> Ciphertext {
-        let src_blocks = self.ciphertext_split(src);
+    pub fn iop_memcpy(&self, src: &IntegerCiphertext) -> IntegerCiphertext {
+        let src_blocks = self.integer_ciphertext_split(src);
         let words = 1 + 2 * src_blocks.len();
         let blocks = if words >= MIN_IOP_WORDS {
             src_blocks
@@ -63,7 +63,7 @@ impl Builder {
                 .map(|block| self.comment("Pad Stream").block_add_plaintext(block, zero))
                 .collect()
         };
-        self.ciphertext_join(&blocks, Some(src.spec().int_size()))
+        self.integer_ciphertext_join(&blocks, Some(src.spec().int_size()))
     }
 }
 
@@ -76,21 +76,21 @@ mod test {
     #[test]
     fn correctness_memcpy() {
         fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::Ciphertext(src)] = inp else {
+            let [IopValue::IntegerCiphertext(src)] = inp else {
                 unreachable!()
             };
-            Some(vec![IopValue::Ciphertext(*src)])
+            Some(vec![IopValue::IntegerCiphertext(*src)])
         }
         // From 2 bits, i.e. from the single-block case that needs stream padding.
         for size in (2..128).step_by(2) {
-            memcpy(CiphertextSpec::new(size, 2, 2)).test_random(10, semantic);
+            memcpy(IntegerCiphertextSpec::new(size, 2, 2)).test_random(10, semantic);
         }
     }
 
     // A copy must not be optimized away, and must stay a plain extract/store pair.
     #[test]
     fn test_memcpy() {
-        let spec = CiphertextSpec::new(8, 2, 2);
+        let spec = IntegerCiphertextSpec::new(8, 2, 2);
         let ir = memcpy(spec).optimize_ir();
         assert_display_is!(
             ir.format()
@@ -115,7 +115,7 @@ mod test {
     #[test]
     fn noise_memcpy() {
         for size in (2..128).step_by(2) {
-            memcpy(CiphertextSpec::new(size, 2, 2)).check_noise();
+            memcpy(IntegerCiphertextSpec::new(size, 2, 2)).check_noise();
         }
     }
 }

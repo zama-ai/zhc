@@ -11,7 +11,7 @@ use zhc::{
     compat::Iop,
     prelude::{Pipeline, PipelineExt},
 };
-use zhc_builder::{Builder, CiphertextSpec};
+use zhc_builder::{Builder, IntegerCiphertextSpec};
 use zhc_config::hpu::HpuConfig;
 use zhc_utils::{data_visulization::DynamicTable, units::Microseconds};
 
@@ -182,7 +182,7 @@ fn check_git_clean() {
 fn bench_iop(iop: &Iop, config: &HpuConfig, bits_filter: &[u16]) -> BTreeMap<u16, Microseconds> {
     let mut bits_results = BTreeMap::new();
     for &bits in bits_filter {
-        let spec = CiphertextSpec::new(bits, 2, 2);
+        let spec = IntegerCiphertextSpec::new(bits, 2, 2);
         let context = format!("{:?} {}b latency", iop, bits);
         if let Some(latency) = catch_panic(&context, || iop.compute_latency(&config, spec)) {
             bits_results.insert(bits, latency);
@@ -202,7 +202,7 @@ fn median(samples: &mut [f64]) -> f64 {
 }
 
 /// Returns the pipeline compiling this iop, with the same scheduler `compute_latency` picks.
-fn iop_pipeline(iop: &Iop, config: &HpuConfig, spec: CiphertextSpec) -> Pipeline {
+fn iop_pipeline(iop: &Iop, config: &HpuConfig, spec: IntegerCiphertextSpec) -> Pipeline {
     let pipeline = Pipeline::new()
         .with_builder(iop.to_builder(spec))
         .with_hpu_config(config.clone());
@@ -225,7 +225,7 @@ fn bench_compile_iop(
 ) -> BTreeMap<u16, Microseconds> {
     let mut bits_results = BTreeMap::new();
     for &bits in bits_filter {
-        let spec = CiphertextSpec::new(bits, 2, 2);
+        let spec = IntegerCiphertextSpec::new(bits, 2, 2);
         // A pipeline caches its steps, so each repetition compiles on a fresh one.
         let context = format!("{:?} {}b compile", iop, bits);
         let samples: Option<Vec<f64>> = catch_panic(&context, || {
@@ -459,7 +459,7 @@ fn run_analyze(filters: &Filters) {
 
     for (row, iop) in filters.iops.iter().enumerate() {
         for (col, bits) in filters.bits.iter().enumerate() {
-            let spec = CiphertextSpec::new(*bits, 2, 2);
+            let spec = IntegerCiphertextSpec::new(*bits, 2, 2);
             let context = format!("{:?} {}b analyze", iop, bits);
             let cell = catch_panic(&context, || analyze_ir(&iop.to_builder(spec)))
                 .unwrap_or_else(|| "panic!".into());

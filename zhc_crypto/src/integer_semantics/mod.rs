@@ -7,7 +7,7 @@
 //! operate on large integers, TFHE decomposes encrypted values of arbitrary size in multiple LWE
 //! ciphertexts using a fixed radix decomposition. The elements of this decomposition are referred
 //! to as __blocks__, and are emulated by [EmulatedCiphertextBlock]. Those blocks are then assembled
-//! in an __integer__ emulated by [EmulatedCiphertext].
+//! in an __integer__ emulated by [EmulatedIntegerCiphertext].
 //!
 //! A __block__ can be modelled by a fixed-precision integer separated in different
 //! contiguous regions `[ padding_bit | carry_bits | message_bits ]`:
@@ -25,7 +25,7 @@
 //! automatically propagate the carries: It is up to the users to propagates carries between blocks
 //! before aggregating the ciphertext.
 //!
-//! Operations with plaintext values can be emulated as well. The [EmulatedPlaintext] and
+//! Operations with plaintext values can be emulated as well. The [EmulatedIntegerPlaintext] and
 //! [EmulatedPlaintextBlock] structures mirror the radix decomposition of ciphertexts.
 //!
 //! Operation flavors
@@ -74,6 +74,7 @@ thread_local! {
 
 pub mod lut;
 
+mod bool_ciphertext;
 mod ciphertext;
 mod ciphertext_block;
 mod flavor;
@@ -82,6 +83,7 @@ mod ops;
 mod plaintext;
 mod plaintext_block;
 
+pub use bool_ciphertext::*;
 pub use ciphertext::*;
 pub use ciphertext_block::*;
 pub use flavor::*;

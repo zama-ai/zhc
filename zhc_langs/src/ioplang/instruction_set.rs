@@ -11,13 +11,13 @@ use crate::ioplang::IopTypeSystem;
 ///
 /// Instructions fall into five categories:
 ///
-/// **I/O and aliasing.** `InputCiphertext`, `InputPlaintext`, and
-/// `OutputCiphertext` mark program entry/exit points at a given
+/// **I/O and aliasing.** `InputIntegerCiphertext`, `InputIntegerPlaintext`, and
+/// `OutputIntegerCiphertext` mark program entry/exit points at a given
 /// positional slot. `Inspect` forwards a value unchanged and is eliminated
 /// by [`eliminate_aliases`](super::eliminate_aliases) before downstream
 /// processing.
 ///
-/// **Constants and declarations.** `DeclareCiphertext` produces a
+/// **Constants and declarations.** `DeclareIntegerCiphertext` produces a
 /// zero-initialized composite ciphertext. `LetPlaintextBlock` and
 /// `LetCiphertextBlock` produce scalar block constants.
 ///
@@ -33,9 +33,9 @@ use crate::ioplang::IopTypeSystem;
 /// `wrapping_*` methods of
 /// [`EmulatedCiphertextBlock`](zhc_crypto::integer_semantics::EmulatedCiphertextBlock).
 ///
-/// **Block extraction and storage.** `ExtractCtBlock` and
-/// `ExtractPtBlock` decompose a composite value into a block at a given
-/// index. `StoreCtBlock` writes a block into a composite ciphertext at
+/// **Block extraction and storage.** `ExtractIntegerCiphertextBlock` and
+/// `ExtractIntegerPlaintextBlock` decompose a composite value into a block at a given
+/// index. `StoreIntegerCiphertextBlock` writes a block into a composite ciphertext at
 /// a given index, producing an updated ciphertext.
 ///
 /// **Programmable bootstrapping (PBS).** `Pbs` applies a single-output
@@ -48,23 +48,27 @@ use crate::ioplang::IopTypeSystem;
 /// All signatures are available via the [`DialectInstructionSet`] impl.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum IopInstructionSet {
-    /// Ciphertext program input at positional slot `pos`, with
-    /// `int_size` radix blocks. `() → (Ciphertext)`
-    InputCiphertext { pos: usize, int_size: u16 },
-    /// Plaintext program input at positional slot `pos`, with
-    /// `int_size` radix blocks. `() → (Plaintext)`
-    InputPlaintext { pos: usize, int_size: u16 },
-    /// Ciphertext program output at positional slot `pos`.
-    /// `(Ciphertext) → ()`
-    OutputCiphertext { pos: usize },
+    /// Encrypted integer input at positional slot `pos`, with
+    /// `int_size` message bits. `() → (IntegerCiphertext)`
+    InputIntegerCiphertext { pos: usize, int_size: u16 },
+    /// Boolean ciphertext program input at positional slot `pos`.
+    InputBoolCiphertext { pos: usize },
+    /// Plain integer input at positional slot `pos`, with
+    /// `int_size` message bits. `() → (IntegerPlaintext)`
+    InputIntegerPlaintext { pos: usize, int_size: u16 },
+    /// Encrypted integer output at positional slot `pos`.
+    /// `(IntegerCiphertext) → ()`
+    OutputIntegerCiphertext { pos: usize },
+    /// Boolean ciphertext program output at positional slot `pos`.
+    OutputBoolCiphertext { pos: usize },
     /// Debug-only value sink. `(typ) → ()`
     _Consume { typ: IopTypeSystem },
     /// Identity forwarding. `(typ) → (typ)`.
     /// Eliminated by [`eliminate_aliases`](super::eliminate_aliases)
     /// before downstream passes.
     Inspect { typ: IopTypeSystem },
-    /// Zero-initialized composite ciphertext. `() → (Ciphertext)`
-    DeclareCiphertext { int_size: u16 },
+    /// Zero-initialized composite ciphertext. `() → (IntegerCiphertext)`
+    DeclareIntegerCiphertext { int_size: u16 },
     /// Plaintext block constant. `() → (PlaintextBlock)`
     LetPlaintextBlock { value: u8 },
     /// Ciphertext block constant. The value spans the complete block
@@ -97,16 +101,22 @@ pub enum IopInstructionSet {
     MulPt { flavor: Flavor },
     /// Extracts the ciphertext block at `index` from a composite
     /// ciphertext (index 0 = LSB).
-    /// `(Ciphertext) → (CiphertextBlock)`
-    ExtractCtBlock { index: u8 },
+    /// `(IntegerCiphertext) → (CiphertextBlock)`
+    ExtractIntegerCiphertextBlock { index: u8 },
     /// Extracts the plaintext block at `index` from a composite
     /// plaintext (index 0 = LSB).
-    /// `(Plaintext) → (PlaintextBlock)`
-    ExtractPtBlock { index: u8 },
+    /// `(IntegerPlaintext) → (PlaintextBlock)`
+    ExtractIntegerPlaintextBlock { index: u8 },
     /// Writes a ciphertext block into a composite ciphertext at `index`,
     /// returning the updated ciphertext.
-    /// `(CiphertextBlock, Ciphertext) → (Ciphertext)`
-    StoreCtBlock { index: u8 },
+    /// `(CiphertextBlock, IntegerCiphertext) → (IntegerCiphertext)`
+    StoreIntegerCiphertextBlock { index: u8 },
+    /// Wraps a clean zero-or-one block as a Boolean ciphertext.
+    /// `(CiphertextBlock) → (BoolCiphertext)`
+    BoolFromBlock,
+    /// Returns the sole block backing a Boolean ciphertext.
+    /// `(BoolCiphertext) → (CiphertextBlock)`
+    ExtractBoolBlock,
     /// Single-output PBS. Checked according to the given policy.
     /// `(CiphertextBlock) → (CiphertextBlock)`
     Pbs { check: LookupCheck, lut: Lut1 },
@@ -149,16 +159,18 @@ impl Format for IopInstructionSet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>, _ctx: &FormatContext) -> std::fmt::Result {
         use IopInstructionSet::*;
         match self {
-            InputCiphertext { pos, int_size } => {
+            InputIntegerCiphertext { pos, int_size } => {
                 write!(f, "input_ciphertext<{pos}, {int_size}>")
             }
-            InputPlaintext { pos, int_size } => {
+            InputBoolCiphertext { pos } => write!(f, "input_bool_ciphertext<{pos}>"),
+            InputIntegerPlaintext { pos, int_size } => {
                 write!(f, "input_plaintext<{pos}, {int_size}>")
             }
-            OutputCiphertext { pos } => write!(f, "output<{pos}>"),
+            OutputIntegerCiphertext { pos } => write!(f, "output<{pos}>"),
+            OutputBoolCiphertext { pos } => write!(f, "output_bool<{pos}>"),
             _Consume { typ } => write!(f, "_consume<{typ}>"),
             Inspect { .. } => write!(f, "inspect"),
-            DeclareCiphertext { int_size } => write!(f, "decl_ct<{int_size}>"),
+            DeclareIntegerCiphertext { int_size } => write!(f, "decl_ct<{int_size}>"),
             LetPlaintextBlock { value } => write!(f, "let_pt_block<{value}>"),
             LetCiphertextBlock { value } => write!(f, "let_ct_block<{value}>"),
             AddCt { flavor } => write!(f, "{}add_ct", flavor.prefix()),
@@ -169,9 +181,11 @@ impl Format for IopInstructionSet {
             SubPt { flavor } => write!(f, "{}sub_pt", flavor.prefix()),
             PtSub { flavor } => write!(f, "{}pt_sub", flavor.prefix()),
             MulPt { flavor } => write!(f, "{}mul_pt", flavor.prefix()),
-            ExtractCtBlock { index } => write!(f, "extract_ct_block<{index}>"),
-            ExtractPtBlock { index } => write!(f, "extract_pt_block<{index}>"),
-            StoreCtBlock { index } => write!(f, "store_ct_block<{index}>"),
+            ExtractIntegerCiphertextBlock { index } => write!(f, "extract_ct_block<{index}>"),
+            ExtractIntegerPlaintextBlock { index } => write!(f, "extract_pt_block<{index}>"),
+            StoreIntegerCiphertextBlock { index } => write!(f, "store_ct_block<{index}>"),
+            BoolFromBlock => write!(f, "bool_from_block"),
+            ExtractBoolBlock => write!(f, "extract_bool_block"),
             Pbs { check, lut } => write!(f, "pbs<{check:?}, {lut:?}>"),
             Pbs2 { check, lut } => write!(f, "pbs2<{check:?}, {lut:?}>"),
             Pbs4 { check, lut } => write!(f, "pbs4<{check:?}, {lut:?}>"),
@@ -193,12 +207,14 @@ impl DialectInstructionSet for IopInstructionSet {
         use IopInstructionSet::*;
         use IopTypeSystem::*;
         match self {
-            InputCiphertext { .. } => sig![() -> (Ciphertext)],
-            InputPlaintext { .. } => sig![() -> (Plaintext)],
-            OutputCiphertext { .. } => sig![(Ciphertext) -> ()],
+            InputIntegerCiphertext { .. } => sig![() -> (IntegerCiphertext)],
+            InputBoolCiphertext { .. } => sig![() -> (BoolCiphertext)],
+            InputIntegerPlaintext { .. } => sig![() -> (IntegerPlaintext)],
+            OutputIntegerCiphertext { .. } => sig![(IntegerCiphertext) -> ()],
+            OutputBoolCiphertext { .. } => sig![(BoolCiphertext) -> ()],
             _Consume { typ } => sig![(typ.clone()) -> ()],
             Inspect { typ } => sig![(typ.clone()) -> (typ.clone())],
-            DeclareCiphertext { .. } => sig![() -> (Ciphertext)],
+            DeclareIntegerCiphertext { .. } => sig![() -> (IntegerCiphertext)],
             LetPlaintextBlock { .. } => sig![() -> (PlaintextBlock)],
             LetCiphertextBlock { .. } => sig![() -> (CiphertextBlock)],
             AddCt { .. } | SubCt { .. } | PackCt { .. } => {
@@ -211,11 +227,13 @@ impl DialectInstructionSet for IopInstructionSet {
             PtSub { .. } => {
                 sig![(PlaintextBlock, CiphertextBlock) -> (CiphertextBlock)]
             }
-            ExtractCtBlock { .. } => sig![(Ciphertext) -> (CiphertextBlock)],
-            ExtractPtBlock { .. } => sig![(Plaintext) -> (PlaintextBlock)],
-            StoreCtBlock { .. } => {
-                sig![(CiphertextBlock, Ciphertext) -> (Ciphertext)]
+            ExtractIntegerCiphertextBlock { .. } => sig![(IntegerCiphertext) -> (CiphertextBlock)],
+            ExtractIntegerPlaintextBlock { .. } => sig![(IntegerPlaintext) -> (PlaintextBlock)],
+            StoreIntegerCiphertextBlock { .. } => {
+                sig![(CiphertextBlock, IntegerCiphertext) -> (IntegerCiphertext)]
             }
+            BoolFromBlock => sig![(CiphertextBlock) -> (BoolCiphertext)],
+            ExtractBoolBlock => sig![(BoolCiphertext) -> (CiphertextBlock)],
             Pbs { .. } => sig![(CiphertextBlock) -> (CiphertextBlock)],
             Pbs2 { .. } => {
                 sig![(CiphertextBlock) -> (CiphertextBlock, CiphertextBlock)]

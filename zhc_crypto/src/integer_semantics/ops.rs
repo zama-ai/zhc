@@ -2,9 +2,9 @@ use std::ops::{Add, Mul, Shl, Sub};
 
 use zhc_utils::SafeAs;
 
-use crate::integer_semantics::CiphertextSpec;
-use crate::integer_semantics::EmulatedCiphertext;
-use crate::integer_semantics::EmulatedPlaintext;
+use crate::integer_semantics::{
+    EmulatedBoolCiphertext, EmulatedIntegerCiphertext, EmulatedIntegerPlaintext,
+};
 
 use super::{
     EmulatedCiphertextBlock, EmulatedCiphertextBlockStorage, EmulatedPlaintextBlock, Flavor,
@@ -518,95 +518,47 @@ impl EmulatedPlaintextBlock {
     }
 }
 
-impl EmulatedCiphertext {
-    pub fn cgt(self, other: Self) -> EmulatedCiphertext {
+impl EmulatedIntegerCiphertext {
+    pub fn cgt(self, other: Self) -> EmulatedBoolCiphertext {
         assert_eq!(self.spec, other.spec(), "Spec mismatch.");
-        let storage = (self.storage > other.storage) as u128;
-        EmulatedCiphertext {
-            storage,
-            spec: CiphertextSpec::new(
-                self.spec.block_spec().message_size() as u16,
-                self.spec.block_spec().message_size(),
-                self.spec.block_spec().carry_size(),
-            ),
-        }
+        EmulatedBoolCiphertext::from_bool(self.storage > other.storage, self.spec.block_spec())
     }
 
-    pub fn cgte(self, other: Self) -> EmulatedCiphertext {
+    pub fn cgte(self, other: Self) -> EmulatedBoolCiphertext {
         assert_eq!(self.spec, other.spec(), "Spec mismatch.");
-        let storage = (self.storage >= other.storage) as u128;
-        EmulatedCiphertext {
-            storage,
-            spec: CiphertextSpec::new(
-                self.spec.block_spec().message_size() as u16,
-                self.spec.block_spec().message_size(),
-                self.spec.block_spec().carry_size(),
-            ),
-        }
+        EmulatedBoolCiphertext::from_bool(self.storage >= other.storage, self.spec.block_spec())
     }
 
-    pub fn clt(self, other: Self) -> EmulatedCiphertext {
+    pub fn clt(self, other: Self) -> EmulatedBoolCiphertext {
         assert_eq!(self.spec, other.spec(), "Spec mismatch.");
-        let storage = (self.storage < other.storage) as u128;
-        EmulatedCiphertext {
-            storage,
-            spec: CiphertextSpec::new(
-                self.spec.block_spec().message_size() as u16,
-                self.spec.block_spec().message_size(),
-                self.spec.block_spec().carry_size(),
-            ),
-        }
+        EmulatedBoolCiphertext::from_bool(self.storage < other.storage, self.spec.block_spec())
     }
 
-    pub fn clte(self, other: Self) -> EmulatedCiphertext {
+    pub fn clte(self, other: Self) -> EmulatedBoolCiphertext {
         assert_eq!(self.spec, other.spec(), "Spec mismatch.");
-        let storage = (self.storage <= other.storage) as u128;
-        EmulatedCiphertext {
-            storage,
-            spec: CiphertextSpec::new(
-                self.spec.block_spec().message_size() as u16,
-                self.spec.block_spec().message_size(),
-                self.spec.block_spec().carry_size(),
-            ),
-        }
+        EmulatedBoolCiphertext::from_bool(self.storage <= other.storage, self.spec.block_spec())
     }
 
-    pub fn equal(self, other: Self) -> EmulatedCiphertext {
+    pub fn equal(self, other: Self) -> EmulatedBoolCiphertext {
         assert_eq!(self.spec, other.spec(), "Spec mismatch.");
-        let storage = (self.storage == other.storage) as u128;
-        EmulatedCiphertext {
-            storage,
-            spec: CiphertextSpec::new(
-                self.spec.block_spec().message_size() as u16,
-                self.spec.block_spec().message_size(),
-                self.spec.block_spec().carry_size(),
-            ),
-        }
+        EmulatedBoolCiphertext::from_bool(self.storage == other.storage, self.spec.block_spec())
     }
 
-    pub fn not_equal(self, other: Self) -> EmulatedCiphertext {
+    pub fn not_equal(self, other: Self) -> EmulatedBoolCiphertext {
         assert_eq!(self.spec, other.spec(), "Spec mismatch.");
-        let storage = (self.storage != other.storage) as u128;
-        EmulatedCiphertext {
-            storage,
-            spec: CiphertextSpec::new(
-                self.spec.block_spec().message_size() as u16,
-                self.spec.block_spec().message_size(),
-                self.spec.block_spec().carry_size(),
-            ),
-        }
+        EmulatedBoolCiphertext::from_bool(self.storage != other.storage, self.spec.block_spec())
     }
 
-    pub fn add(self, other: Self) -> EmulatedCiphertext {
+    pub fn add(self, other: Self) -> EmulatedIntegerCiphertext {
         assert_eq!(self.spec, other.spec(), "Spec mismatch.");
         let storage = (self.storage + other.storage) & self.spec.int_mask();
-        EmulatedCiphertext {
+        EmulatedIntegerCiphertext {
             storage,
             spec: self.spec,
         }
     }
 
-    pub fn adds(self, other: EmulatedPlaintext) -> EmulatedCiphertext {
+    pub fn adds(self, other: EmulatedIntegerPlaintext) -> EmulatedIntegerCiphertext {
         assert_eq!(
             self.spec.int_size(),
             other.spec().int_size(),
@@ -618,14 +570,14 @@ impl EmulatedCiphertext {
             "Spec mismatch."
         );
         let storage = (self.storage + other.storage) & self.spec.int_mask();
-        EmulatedCiphertext {
+        EmulatedIntegerCiphertext {
             storage,
             spec: self.spec,
         }
     }
 
     /// Subtracts a scalar from an encrypted integer: `self - other` (wrapping).
-    pub fn subs(self, other: EmulatedPlaintext) -> EmulatedCiphertext {
+    pub fn subs(self, other: EmulatedIntegerPlaintext) -> EmulatedIntegerCiphertext {
         assert_eq!(
             self.spec.int_size(),
             other.spec().int_size(),
@@ -637,14 +589,14 @@ impl EmulatedCiphertext {
             "Spec mismatch."
         );
         let storage = self.storage.wrapping_sub(other.raw_mask_int()) & self.spec.int_mask();
-        EmulatedCiphertext {
+        EmulatedIntegerCiphertext {
             storage,
             spec: self.spec,
         }
     }
 
     /// Subtracts an encrypted integer from a scalar: `other - self` (wrapping).
-    pub fn ssub(self, other: EmulatedPlaintext) -> EmulatedCiphertext {
+    pub fn ssub(self, other: EmulatedIntegerPlaintext) -> EmulatedIntegerCiphertext {
         assert_eq!(
             self.spec.int_size(),
             other.spec().int_size(),
@@ -656,57 +608,57 @@ impl EmulatedCiphertext {
             "Spec mismatch."
         );
         let storage = other.raw_mask_int().wrapping_sub(self.storage) & self.spec.int_mask();
-        EmulatedCiphertext {
+        EmulatedIntegerCiphertext {
             storage,
             spec: self.spec,
         }
     }
 
-    pub fn sub(self, other: Self) -> EmulatedCiphertext {
+    pub fn sub(self, other: Self) -> EmulatedIntegerCiphertext {
         assert_eq!(self.spec, other.spec(), "Spec mismatch.");
         let storage = self.storage.wrapping_sub(other.storage) & self.spec.int_mask();
-        EmulatedCiphertext {
+        EmulatedIntegerCiphertext {
             storage,
             spec: self.spec,
         }
     }
 
-    pub fn bitwise_and(self, other: Self) -> EmulatedCiphertext {
+    pub fn bitwise_and(self, other: Self) -> EmulatedIntegerCiphertext {
         assert_eq!(self.spec, other.spec(), "Spec mismatch.");
         let storage = (self.storage & other.storage) & self.spec.int_mask();
-        EmulatedCiphertext {
+        EmulatedIntegerCiphertext {
             storage,
             spec: self.spec,
         }
     }
 
-    pub fn bitwise_or(self, other: Self) -> EmulatedCiphertext {
+    pub fn bitwise_or(self, other: Self) -> EmulatedIntegerCiphertext {
         assert_eq!(self.spec, other.spec(), "Spec mismatch.");
         let storage = (self.storage | other.storage) & self.spec.int_mask();
-        EmulatedCiphertext {
+        EmulatedIntegerCiphertext {
             storage,
             spec: self.spec,
         }
     }
 
-    pub fn bitwise_xor(self, other: Self) -> EmulatedCiphertext {
+    pub fn bitwise_xor(self, other: Self) -> EmulatedIntegerCiphertext {
         assert_eq!(self.spec, other.spec(), "Spec mismatch.");
         let storage = (self.storage ^ other.storage) & self.spec.int_mask();
-        EmulatedCiphertext {
+        EmulatedIntegerCiphertext {
             storage,
             spec: self.spec,
         }
     }
 
-    pub fn bitwise_not(self) -> EmulatedCiphertext {
+    pub fn bitwise_not(self) -> EmulatedIntegerCiphertext {
         let storage = !self.storage & self.spec.int_mask();
-        EmulatedCiphertext {
+        EmulatedIntegerCiphertext {
             storage,
             spec: self.spec,
         }
     }
 
-    pub fn shift_right(self, amount: Self) -> EmulatedCiphertext {
+    pub fn shift_right(self, amount: Self) -> EmulatedIntegerCiphertext {
         assert_eq!(self.spec, amount.spec(), "Spec mismatch.");
         let w = self.spec.int_size() as u128;
         let n = amount.storage as u128;
@@ -715,13 +667,13 @@ impl EmulatedCiphertext {
         } else {
             (self.storage >> n) & self.spec.int_mask()
         };
-        EmulatedCiphertext {
+        EmulatedIntegerCiphertext {
             storage,
             spec: self.spec,
         }
     }
 
-    pub fn shift_left(self, amount: Self) -> EmulatedCiphertext {
+    pub fn shift_left(self, amount: Self) -> EmulatedIntegerCiphertext {
         assert_eq!(self.spec, amount.spec(), "Spec mismatch.");
         let w = self.spec.int_size() as u128;
         let n = amount.storage as u128;
@@ -730,13 +682,13 @@ impl EmulatedCiphertext {
         } else {
             (self.storage << n) & self.spec.int_mask()
         };
-        EmulatedCiphertext {
+        EmulatedIntegerCiphertext {
             storage,
             spec: self.spec,
         }
     }
 
-    pub fn rotate_right(self, amount: Self) -> EmulatedCiphertext {
+    pub fn rotate_right(self, amount: Self) -> EmulatedIntegerCiphertext {
         assert_eq!(self.spec, amount.spec(), "Spec mismatch.");
         let w = self.spec.int_size() as u32;
         let n = (amount.storage as u32) % w;
@@ -745,13 +697,13 @@ impl EmulatedCiphertext {
         } else {
             ((self.storage >> n) | (self.storage << (w - n))) & self.spec.int_mask()
         };
-        EmulatedCiphertext {
+        EmulatedIntegerCiphertext {
             storage,
             spec: self.spec,
         }
     }
 
-    pub fn rotate_left(self, amount: Self) -> EmulatedCiphertext {
+    pub fn rotate_left(self, amount: Self) -> EmulatedIntegerCiphertext {
         assert_eq!(self.spec, amount.spec(), "Spec mismatch.");
         let w = self.spec.int_size() as u32;
         let n = (amount.storage as u32) % w;
@@ -760,38 +712,31 @@ impl EmulatedCiphertext {
         } else {
             ((self.storage << n) | (self.storage >> (w - n))) & self.spec.int_mask()
         };
-        EmulatedCiphertext {
+        EmulatedIntegerCiphertext {
             storage,
             spec: self.spec,
         }
     }
 
-    pub fn overflow_add(self, other: Self) -> (EmulatedCiphertext, EmulatedCiphertext) {
+    pub fn overflow_add(self, other: Self) -> (EmulatedIntegerCiphertext, EmulatedBoolCiphertext) {
         assert_eq!(self.spec, other.spec(), "Spec mismatch.");
         let full = (self.storage as u128) + (other.storage as u128);
         let sum = full & self.spec.int_mask();
         let overflow: u128 = if full > self.spec.int_mask() { 1 } else { 0 };
         (
-            EmulatedCiphertext {
+            EmulatedIntegerCiphertext {
                 storage: sum,
                 spec: self.spec,
             },
-            EmulatedCiphertext {
-                storage: overflow,
-                spec: CiphertextSpec::new(
-                    self.spec.block_spec().message_size() as u16,
-                    self.spec.block_spec().message_size(),
-                    self.spec.block_spec().carry_size(),
-                ),
-            },
+            EmulatedBoolCiphertext::from_bool(overflow != 0, self.spec.block_spec()),
         )
     }
 
     /// `self + other` with unsigned-overflow (carry) detection, `other` being a scalar.
     pub fn overflow_adds(
         self,
-        other: EmulatedPlaintext,
-    ) -> (EmulatedCiphertext, EmulatedCiphertext) {
+        other: EmulatedIntegerPlaintext,
+    ) -> (EmulatedIntegerCiphertext, EmulatedBoolCiphertext) {
         assert_eq!(
             self.spec.int_size(),
             other.spec().int_size(),
@@ -805,26 +750,19 @@ impl EmulatedCiphertext {
         let (raw_sum, wrapped) = self.storage.overflowing_add(other.raw_mask_int());
         let overflow: u128 = (wrapped || raw_sum > self.spec.int_mask()).sas();
         (
-            EmulatedCiphertext {
+            EmulatedIntegerCiphertext {
                 storage: raw_sum & self.spec.int_mask(),
                 spec: self.spec,
             },
-            EmulatedCiphertext {
-                storage: overflow,
-                spec: CiphertextSpec::new(
-                    self.spec.block_spec().message_size() as u16,
-                    self.spec.block_spec().message_size(),
-                    self.spec.block_spec().carry_size(),
-                ),
-            },
+            EmulatedBoolCiphertext::from_bool(overflow != 0, self.spec.block_spec()),
         )
     }
 
     /// `self - other` with unsigned-underflow (borrow) detection, `other` being a scalar.
     pub fn overflow_subs(
         self,
-        other: EmulatedPlaintext,
-    ) -> (EmulatedCiphertext, EmulatedCiphertext) {
+        other: EmulatedIntegerPlaintext,
+    ) -> (EmulatedIntegerCiphertext, EmulatedBoolCiphertext) {
         assert_eq!(
             self.spec.int_size(),
             other.spec().int_size(),
@@ -839,26 +777,19 @@ impl EmulatedCiphertext {
         let diff = self.storage.wrapping_sub(rhs) & self.spec.int_mask();
         let overflow: u128 = if rhs > self.storage { 1 } else { 0 };
         (
-            EmulatedCiphertext {
+            EmulatedIntegerCiphertext {
                 storage: diff,
                 spec: self.spec,
             },
-            EmulatedCiphertext {
-                storage: overflow,
-                spec: CiphertextSpec::new(
-                    self.spec.block_spec().message_size() as u16,
-                    self.spec.block_spec().message_size(),
-                    self.spec.block_spec().carry_size(),
-                ),
-            },
+            EmulatedBoolCiphertext::from_bool(overflow != 0, self.spec.block_spec()),
         )
     }
 
     /// `other - self` with unsigned-underflow (borrow) detection, `other` being a scalar.
     pub fn overflow_ssub(
         self,
-        other: EmulatedPlaintext,
-    ) -> (EmulatedCiphertext, EmulatedCiphertext) {
+        other: EmulatedIntegerPlaintext,
+    ) -> (EmulatedIntegerCiphertext, EmulatedBoolCiphertext) {
         assert_eq!(
             self.spec.int_size(),
             other.spec().int_size(),
@@ -873,52 +804,38 @@ impl EmulatedCiphertext {
         let diff = lhs.wrapping_sub(self.storage) & self.spec.int_mask();
         let overflow: u128 = if self.storage > lhs { 1 } else { 0 };
         (
-            EmulatedCiphertext {
+            EmulatedIntegerCiphertext {
                 storage: diff,
                 spec: self.spec,
             },
-            EmulatedCiphertext {
-                storage: overflow,
-                spec: CiphertextSpec::new(
-                    self.spec.block_spec().message_size() as u16,
-                    self.spec.block_spec().message_size(),
-                    self.spec.block_spec().carry_size(),
-                ),
-            },
+            EmulatedBoolCiphertext::from_bool(overflow != 0, self.spec.block_spec()),
         )
     }
 
-    pub fn overflow_sub(self, other: Self) -> (EmulatedCiphertext, EmulatedCiphertext) {
+    pub fn overflow_sub(self, other: Self) -> (EmulatedIntegerCiphertext, EmulatedBoolCiphertext) {
         assert_eq!(self.spec, other.spec(), "Spec mismatch.");
         let diff = self.storage.wrapping_sub(other.storage) & self.spec.int_mask();
         let overflow: u128 = if other.storage > self.storage { 1 } else { 0 };
         (
-            EmulatedCiphertext {
+            EmulatedIntegerCiphertext {
                 storage: diff,
                 spec: self.spec,
             },
-            EmulatedCiphertext {
-                storage: overflow,
-                spec: CiphertextSpec::new(
-                    self.spec.block_spec().message_size() as u16,
-                    self.spec.block_spec().message_size(),
-                    self.spec.block_spec().carry_size(),
-                ),
-            },
+            EmulatedBoolCiphertext::from_bool(overflow != 0, self.spec.block_spec()),
         )
     }
 
     /// Describe multiplication behavior when MSB are dropped
-    pub fn mul_lsb(self, other: Self) -> EmulatedCiphertext {
+    pub fn mul_lsb(self, other: Self) -> EmulatedIntegerCiphertext {
         assert_eq!(self.spec, other.spec(), "Spec mismatch.");
         let storage = self.storage.wrapping_mul(other.storage) & self.spec.int_mask();
-        EmulatedCiphertext {
+        EmulatedIntegerCiphertext {
             storage,
             spec: self.spec,
         }
     }
     /// Describe scalar multiplication behavior when MSB are dropped
-    pub fn muls_lsb(self, other: EmulatedPlaintext) -> EmulatedCiphertext {
+    pub fn muls_lsb(self, other: EmulatedIntegerPlaintext) -> EmulatedIntegerCiphertext {
         assert_eq!(
             self.spec.int_size(),
             other.spec().int_size(),
@@ -930,7 +847,7 @@ impl EmulatedCiphertext {
             "Spec mismatch."
         );
         let storage = self.storage.wrapping_mul(other.raw_mask_int()) & self.spec.int_mask();
-        EmulatedCiphertext {
+        EmulatedIntegerCiphertext {
             storage,
             spec: self.spec,
         }
@@ -939,8 +856,8 @@ impl EmulatedCiphertext {
     /// Describe scalar multiplication behavior with overflow detection when MSB are dropped
     pub fn overflow_muls_lsb(
         self,
-        other: EmulatedPlaintext,
-    ) -> (EmulatedCiphertext, EmulatedCiphertext) {
+        other: EmulatedIntegerPlaintext,
+    ) -> (EmulatedIntegerCiphertext, EmulatedBoolCiphertext) {
         assert_eq!(
             self.spec.int_size(),
             other.spec().int_size(),
@@ -955,41 +872,30 @@ impl EmulatedCiphertext {
         let int_size = self.spec.int_size();
         let overflow_flag = overflow_u128 || (int_size < 128 && (raw_mul >> int_size) != 0);
         (
-            EmulatedCiphertext {
+            EmulatedIntegerCiphertext {
                 storage: raw_mul & self.spec.int_mask(),
                 spec: self.spec,
             },
-            EmulatedCiphertext {
-                storage: overflow_flag.sas(),
-                spec: CiphertextSpec::new(
-                    self.spec.block_spec().message_size() as u16,
-                    self.spec.block_spec().message_size(),
-                    self.spec.block_spec().carry_size(),
-                ),
-            },
+            EmulatedBoolCiphertext::from_bool(overflow_flag, self.spec.block_spec()),
         )
     }
 
     /// Describe multiplication behavior with overflow detection when MSB are dropped
-    pub fn overflow_mul_lsb(self, other: Self) -> (EmulatedCiphertext, EmulatedCiphertext) {
+    pub fn overflow_mul_lsb(
+        self,
+        other: Self,
+    ) -> (EmulatedIntegerCiphertext, EmulatedBoolCiphertext) {
         assert_eq!(self.spec, other.spec(), "Spec mismatch.");
         let (raw_mul, overflow_u128) = self.storage.overflowing_mul(other.storage);
         let mul_lsb = raw_mul & self.spec.int_mask();
         let int_size = self.spec.int_size();
         let overflow_flag = overflow_u128 || (int_size < 128 && (raw_mul >> int_size) != 0);
         (
-            EmulatedCiphertext {
+            EmulatedIntegerCiphertext {
                 storage: mul_lsb,
                 spec: self.spec,
             },
-            EmulatedCiphertext {
-                storage: overflow_flag.sas(),
-                spec: CiphertextSpec::new(
-                    self.spec.block_spec().message_size() as u16,
-                    self.spec.block_spec().message_size(),
-                    self.spec.block_spec().carry_size(),
-                ),
-            },
+            EmulatedBoolCiphertext::from_bool(overflow_flag, self.spec.block_spec()),
         )
     }
 }

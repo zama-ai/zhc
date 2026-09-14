@@ -1,5 +1,5 @@
 use tfhe::integer::RadixCiphertext;
-use zhc::crypto::integer_semantics::EmulatedPlaintext;
+use zhc::crypto::integer_semantics::EmulatedIntegerPlaintext;
 
 /// A read-only reference to an input value for VM execution.
 ///
@@ -12,7 +12,7 @@ pub enum Value {
     /// A pointer to an encrypted radix ciphertext (read-only).
     FheUint(*const RadixCiphertext),
     /// A plaintext integer used for scalar operations.
-    Uint(EmulatedPlaintext),
+    Uint(EmulatedIntegerPlaintext),
 }
 
 impl Value {

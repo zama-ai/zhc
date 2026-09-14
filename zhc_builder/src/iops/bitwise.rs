@@ -1,18 +1,18 @@
-use zhc_crypto::integer_semantics::CiphertextSpec;
+use zhc_crypto::integer_semantics::IntegerCiphertextSpec;
 use zhc_langs::ioplang::Lut1Def;
 
-use crate::builder::{Builder, Ciphertext};
+use crate::builder::{Builder, IntegerCiphertext};
 
 /// Creates an IR for bitwise AND of two encrypted integers.
 ///
 /// Convenience wrapper that calls [`Builder::iop_bitwise`] with [`BwKind::And`].
 /// See that method for details.
-pub fn bitwise_and(spec: CiphertextSpec) -> Builder {
+pub fn bitwise_and(spec: IntegerCiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src_a = builder.ciphertext_input(spec.int_size());
-    let src_b = builder.ciphertext_input(spec.int_size());
+    let src_a = builder.integer_ciphertext_input(spec.int_size());
+    let src_b = builder.integer_ciphertext_input(spec.int_size());
     let res = builder.iop_bitwise(&src_a, &src_b, BwKind::And);
-    builder.ciphertext_output(res);
+    builder.integer_ciphertext_output(res);
     builder
 }
 
@@ -20,12 +20,12 @@ pub fn bitwise_and(spec: CiphertextSpec) -> Builder {
 ///
 /// Convenience wrapper that calls [`Builder::iop_bitwise`] with [`BwKind::Or`].
 /// See that method for details.
-pub fn bitwise_or(spec: CiphertextSpec) -> Builder {
+pub fn bitwise_or(spec: IntegerCiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src_a = builder.ciphertext_input(spec.int_size());
-    let src_b = builder.ciphertext_input(spec.int_size());
+    let src_a = builder.integer_ciphertext_input(spec.int_size());
+    let src_b = builder.integer_ciphertext_input(spec.int_size());
     let res = builder.iop_bitwise(&src_a, &src_b, BwKind::Or);
-    builder.ciphertext_output(res);
+    builder.integer_ciphertext_output(res);
     builder
 }
 
@@ -37,17 +37,17 @@ pub fn bitwise_or(spec: CiphertextSpec) -> Builder {
 /// # Examples
 ///
 /// ```rust,no_run
-/// # use zhc_builder::{CiphertextSpec, bitwise_xor};
-/// # let spec = CiphertextSpec::new(16, 2, 2);
+/// # use zhc_builder::{IntegerCiphertextSpec, bitwise_xor};
+/// # let spec = IntegerCiphertextSpec::new(16, 2, 2);
 /// let builder = bitwise_xor(spec);
 /// let ir = builder.optimize_ir();
 /// ```
-pub fn bitwise_xor(spec: CiphertextSpec) -> Builder {
+pub fn bitwise_xor(spec: IntegerCiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src_a = builder.ciphertext_input(spec.int_size());
-    let src_b = builder.ciphertext_input(spec.int_size());
+    let src_a = builder.integer_ciphertext_input(spec.int_size());
+    let src_b = builder.integer_ciphertext_input(spec.int_size());
     let res = builder.iop_bitwise(&src_a, &src_b, BwKind::Xor);
-    builder.ciphertext_output(res);
+    builder.integer_ciphertext_output(res);
     builder
 }
 
@@ -59,16 +59,16 @@ pub fn bitwise_xor(spec: CiphertextSpec) -> Builder {
 /// # Examples
 ///
 /// ```rust,no_run
-/// # use zhc_builder::{CiphertextSpec, bitwise_inv};
-/// # let spec = CiphertextSpec::new(16, 2, 2);
+/// # use zhc_builder::{IntegerCiphertextSpec, bitwise_inv};
+/// # let spec = IntegerCiphertextSpec::new(16, 2, 2);
 /// let builder = bitwise_inv(spec);
 /// let ir = builder.optimize_ir();
 /// ```
-pub fn bitwise_inv(spec: CiphertextSpec) -> Builder {
+pub fn bitwise_inv(spec: IntegerCiphertextSpec) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src_ct = builder.ciphertext_input(spec.int_size());
+    let src_ct = builder.integer_ciphertext_input(spec.int_size());
     let res = builder.iop_bitwise_inv(&src_ct);
-    builder.ciphertext_output(res);
+    builder.integer_ciphertext_output(res);
     builder
 }
 
@@ -105,23 +105,28 @@ impl Builder {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use zhc_builder::{CiphertextSpec, Builder, BwKind};
-    /// # let spec = CiphertextSpec::new(16, 2, 2);
+    /// # use zhc_builder::{IntegerCiphertextSpec, Builder, BwKind};
+    /// # let spec = IntegerCiphertextSpec::new(16, 2, 2);
     /// # let builder = Builder::new(spec.block_spec());
-    /// # let a = builder.ciphertext_input(spec.int_size());
-    /// # let b = builder.ciphertext_input(spec.int_size());
+    /// # let a = builder.integer_ciphertext_input(spec.int_size());
+    /// # let b = builder.integer_ciphertext_input(spec.int_size());
     /// let result = builder.iop_bitwise(&a, &b, BwKind::Xor);
     /// ```
-    pub fn iop_bitwise(&self, lhs: &Ciphertext, rhs: &Ciphertext, kind: BwKind) -> Ciphertext {
-        let lhs_blocks = self.ciphertext_split(lhs);
-        let rhs_blocks = self.ciphertext_split(rhs);
+    pub fn iop_bitwise(
+        &self,
+        lhs: &IntegerCiphertext,
+        rhs: &IntegerCiphertext,
+        kind: BwKind,
+    ) -> IntegerCiphertext {
+        let lhs_blocks = self.integer_ciphertext_split(lhs);
+        let rhs_blocks = self.integer_ciphertext_split(rhs);
         let res = self.vector_zip_then_lookup(
             lhs_blocks,
             rhs_blocks,
             kind.lut(),
             crate::ExtensionBehavior::Panic,
         );
-        self.ciphertext_join(res, None)
+        self.integer_ciphertext_join(res, None)
     }
 
     /// Applies a bitwise NOT operation on an encrypted integer.
@@ -133,21 +138,21 @@ impl Builder {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use zhc_builder::{CiphertextSpec, Builder};
-    /// # let spec = CiphertextSpec::new(16, 2, 2);
+    /// # use zhc_builder::{IntegerCiphertextSpec, Builder};
+    /// # let spec = IntegerCiphertextSpec::new(16, 2, 2);
     /// # let builder = Builder::new(spec.block_spec());
-    /// # let a = builder.ciphertext_input(spec.int_size());
+    /// # let a = builder.integer_ciphertext_input(spec.int_size());
     /// let result = builder.iop_bitwise_inv(&a);
     /// ```
-    pub fn iop_bitwise_inv(&self, ct: &Ciphertext) -> Ciphertext {
-        let ct_blocks = self.ciphertext_split(ct);
+    pub fn iop_bitwise_inv(&self, ct: &IntegerCiphertext) -> IntegerCiphertext {
+        let ct_blocks = self.integer_ciphertext_split(ct);
         // create a message full of 1
         let allone = self.block_let_plaintext((1 << self.spec().message_size()) - 1);
         let res = ct_blocks
             .iter()
             .map(|m| self.block_plaintext_sub(allone, m))
             .collect::<Vec<_>>();
-        self.ciphertext_join(res, None)
+        self.integer_ciphertext_join(res, None)
     }
 }
 
@@ -159,7 +164,7 @@ mod test {
 
     #[test]
     fn test_bw_and() {
-        let spec = CiphertextSpec::new(64, 2, 2);
+        let spec = IntegerCiphertextSpec::new(64, 2, 2);
         let ir = bitwise_and(spec).optimize_ir();
         assert_display_is!(
             ir.format().with_walker(zhc_ir::PrintWalker::Linear),
@@ -335,80 +340,92 @@ mod test {
     #[test]
     fn correctness_and() {
         fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::Ciphertext(lhs), IopValue::Ciphertext(rhs)] = inp else {
+            let [
+                IopValue::IntegerCiphertext(lhs),
+                IopValue::IntegerCiphertext(rhs),
+            ] = inp
+            else {
                 unreachable!()
             };
-            Some(vec![IopValue::Ciphertext(lhs.bitwise_and(*rhs))])
+            Some(vec![IopValue::IntegerCiphertext(lhs.bitwise_and(*rhs))])
         }
         for size in (2..128).step_by(2) {
-            bitwise_and(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+            bitwise_and(IntegerCiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
         }
     }
 
     #[test]
     fn correctness_or() {
         fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::Ciphertext(lhs), IopValue::Ciphertext(rhs)] = inp else {
+            let [
+                IopValue::IntegerCiphertext(lhs),
+                IopValue::IntegerCiphertext(rhs),
+            ] = inp
+            else {
                 unreachable!()
             };
-            Some(vec![IopValue::Ciphertext(lhs.bitwise_or(*rhs))])
+            Some(vec![IopValue::IntegerCiphertext(lhs.bitwise_or(*rhs))])
         }
         for size in (2..128).step_by(2) {
-            bitwise_or(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+            bitwise_or(IntegerCiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
         }
     }
 
     #[test]
     fn correctness_xor() {
         fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::Ciphertext(lhs), IopValue::Ciphertext(rhs)] = inp else {
+            let [
+                IopValue::IntegerCiphertext(lhs),
+                IopValue::IntegerCiphertext(rhs),
+            ] = inp
+            else {
                 unreachable!()
             };
-            Some(vec![IopValue::Ciphertext(lhs.bitwise_xor(*rhs))])
+            Some(vec![IopValue::IntegerCiphertext(lhs.bitwise_xor(*rhs))])
         }
         for size in (2..128).step_by(2) {
-            bitwise_xor(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+            bitwise_xor(IntegerCiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
         }
     }
 
     #[test]
     fn correctness_inv() {
         fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::Ciphertext(ct)] = inp else {
+            let [IopValue::IntegerCiphertext(ct)] = inp else {
                 unreachable!()
             };
-            Some(vec![IopValue::Ciphertext(ct.bitwise_not())])
+            Some(vec![IopValue::IntegerCiphertext(ct.bitwise_not())])
         }
         for size in (2..128).step_by(2) {
-            bitwise_inv(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+            bitwise_inv(IntegerCiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
         }
     }
 
     #[test]
     fn noise_and() {
         for size in (2..128).step_by(2) {
-            bitwise_and(CiphertextSpec::new(size, 2, 2)).check_noise();
+            bitwise_and(IntegerCiphertextSpec::new(size, 2, 2)).check_noise();
         }
     }
 
     #[test]
     fn noise_or() {
         for size in (2..128).step_by(2) {
-            bitwise_or(CiphertextSpec::new(size, 2, 2)).check_noise();
+            bitwise_or(IntegerCiphertextSpec::new(size, 2, 2)).check_noise();
         }
     }
 
     #[test]
     fn noise_xor() {
         for size in (2..128).step_by(2) {
-            bitwise_xor(CiphertextSpec::new(size, 2, 2)).check_noise();
+            bitwise_xor(IntegerCiphertextSpec::new(size, 2, 2)).check_noise();
         }
     }
 
     #[test]
     fn noise_inv() {
         for size in (2..128).step_by(2) {
-            bitwise_inv(CiphertextSpec::new(size, 2, 2)).check_noise();
+            bitwise_inv(IntegerCiphertextSpec::new(size, 2, 2)).check_noise();
         }
     }
 }

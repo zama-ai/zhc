@@ -1,5 +1,5 @@
 use zhc::compat::Iop;
-use zhc_builder::{CiphertextSpec, add, cmp_gt};
+use zhc_builder::{IntegerCiphertextSpec, add, cmp_gt};
 use zhc_ir::IR;
 use zhc_langs::{hpulang::HpuLang, ioplang::IopLang};
 use zhc_pipeline_correctness_macro::test_matrix;
@@ -13,7 +13,7 @@ fn pipeline(ir: &IR<IopLang>) -> IR<HpuLang> {
 
 #[test]
 fn smoke1() {
-    let ir = pipeline(&add(CiphertextSpec::new(16, 2, 2)).optimize_ir());
+    let ir = pipeline(&add(IntegerCiphertextSpec::new(16, 2, 2)).optimize_ir());
     assert_display_is!(
         ir.format(),
         r#"
@@ -91,7 +91,7 @@ fn smoke1() {
 
 #[test]
 fn smoke2() {
-    let ir = pipeline(&cmp_gt(CiphertextSpec::new(16, 2, 2)).optimize_ir());
+    let ir = pipeline(&cmp_gt(IntegerCiphertextSpec::new(16, 2, 2)).optimize_ir());
     assert_display_is!(
         ir.format(),
         r#"
@@ -153,7 +153,7 @@ fn smoke2() {
 #[test_matrix(iop = @all_iops, size = @all_precs)]
 #[ignore]
 fn correctness(iop: Iop, size: u16) {
-    let b = iop.to_builder(CiphertextSpec::new(size, 2, 2));
+    let b = iop.to_builder(IntegerCiphertextSpec::new(size, 2, 2));
     let spec = *b.spec();
     let iop_ir = b.optimize_ir();
     let hpu_ir = pipeline(&iop_ir);
