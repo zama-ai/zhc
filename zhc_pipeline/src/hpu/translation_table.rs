@@ -783,13 +783,43 @@ pub fn decode_translation_table(
     let mut ctx = start_rets[0];
 
     for &word in body {
-        let instr = instruction_from_dop_repr(word, lut_relocation);
+        let instr = instruction_from_dop_repr(word, lut_relocation).unwrap_or_else(|e| {
+            panic!("DOpInstructionSet decoding encountered following error: {e}")
+        });
         let (_, rets) = ir.add_op(instr, svec![ctx]);
         ctx = rets[0];
     }
     ir.add_op(DopInstructionSet::_END, svec![ctx]);
     ir
 }
+
+#[derive(Debug)]
+pub enum DopDecodeError {
+    UnknownOpcode { raw: u8, word: DOpRepr },
+    UnknownDopCode { raw: u8, dopcode: DOpCode },
+    UnsupportedMemMode { instruction: &'static str, mode: u8 },
+    GidNotFound { gid: u16 },
+}
+
+impl std::fmt::Display for DopDecodeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnknownOpcode { raw, word } => write!(
+                f,
+                "unsupported or unknown DOp opcode {raw:#08b} in word {word:#010x}"
+            ),
+            Self::UnknownDopCode { raw, dopcode } => {
+                write!(f, "unknown DopCode {raw} [{dopcode:?}]")
+            }
+            Self::UnsupportedMemMode { instruction, mode } => {
+                write!(f, "{instruction}: unsupported memory mode {mode}")
+            }
+            Self::GidNotFound { gid } => write!(f, "gid {gid} not found in lut_relocation table"),
+        }
+    }
+}
+
+impl std::error::Error for DopDecodeError {}
 
 /// Decode DopInstructionSet from raw DOpRepr.
 ///
@@ -806,15 +836,16 @@ pub fn decode_translation_table(
 pub fn instruction_from_dop_repr(
     word: DOpRepr,
     lut_relocation: Option<&[LutId]>,
-) -> DopInstructionSet {
+) -> Result<DopInstructionSet, DopDecodeError> {
     use DopInstructionSet::*;
-    let resolve_gid = |gid: u16| -> usize {
+
+    let resolve_gid = |gid: u16| -> Result<usize, DopDecodeError> {
         match lut_relocation {
             Some(reloc) => reloc
                 .iter()
                 .position(|lid| lid.0 == gid.sas::<usize>())
-                .unwrap_or_else(|| panic!("gid {gid} not found in lut_relocation table")),
-            None => gid.sas(),
+                .ok_or(DopDecodeError::GidNotFound { gid }),
+            None => Ok(gid.sas()),
         }
     };
     let ct_reg = |mask: u8, addr: u8| CtReg {
@@ -826,7 +857,7 @@ pub fn instruction_from_dop_repr(
     let dopcode_raw = DOpRawHex::from_bits(word).opcode();
     let dopcode = DOpCode::from(dopcode_raw);
 
-    match dopcode {
+    let insn = match dopcode {
         DOpCode::ADD | DOpCode::SUB => {
             let hex = PeArithHex::from_bits(word);
             let dst = ct_reg(u8::MAX, hex.dst_rid());
@@ -835,7 +866,12 @@ pub fn instruction_from_dop_repr(
             match dopcode {
                 DOpCode::ADD => ADD { dst, src1, src2 },
                 DOpCode::SUB => SUB { dst, src1, src2 },
-                _ => panic!("Unknown DopCode {dopcode_raw} [{dopcode:?}]"),
+                _ => {
+                    return Err(DopDecodeError::UnknownDopCode {
+                        raw: dopcode_raw,
+                        dopcode,
+                    });
+                }
             }
         }
         DOpCode::MAC => {
@@ -867,7 +903,12 @@ pub fn instruction_from_dop_repr(
                 DOpCode::SUBS => SUBS { dst, src, cst },
                 DOpCode::SSUB => SSUB { dst, src, cst },
                 DOpCode::MULS => MULS { dst, src, cst },
-                _ => panic!("Unknown DopCode {dopcode_raw} [{dopcode:?}]"),
+                _ => {
+                    return Err(DopDecodeError::UnknownDopCode {
+                        raw: dopcode_raw,
+                        dopcode,
+                    });
+                }
             }
         }
         DOpCode::LD => {
@@ -884,7 +925,12 @@ pub fn instruction_from_dop_repr(
                     let (id, block) = var(hex.slot());
                     CtMem::Src(CtSrcVar { id, block })
                 }
-                m => panic!("LD: unsupported memory mode {m}"),
+                m => {
+                    return Err(DopDecodeError::UnsupportedMemMode {
+                        instruction: "LD",
+                        mode: m,
+                    });
+                }
             };
             LD { dst, src }
         }
@@ -902,7 +948,12 @@ pub fn instruction_from_dop_repr(
                     let (id, block) = var(hex.slot());
                     CtMem::Dst(CtDstVar { id, block })
                 }
-                m => panic!("ST: unsupported memory mode {m}"),
+                m => {
+                    return Err(DopDecodeError::UnsupportedMemMode {
+                        instruction: "ST",
+                        mode: m,
+                    });
+                }
             };
             ST { dst, src }
         }
@@ -925,7 +976,7 @@ pub fn instruction_from_dop_repr(
             };
             let dst = ct_reg(mask, hex.dst_rid());
             let gid = if is_plain {
-                resolve_gid(hex.gid())
+                resolve_gid(hex.gid())?
             } else {
                 hex.gid().sas()
             };
@@ -939,7 +990,12 @@ pub fn instruction_from_dop_repr(
                 DOpCode::PBS_ML2_F => PBS_ML2_F { dst, src, lut },
                 DOpCode::PBS_ML4_F => PBS_ML4_F { dst, src, lut },
                 DOpCode::PBS_ML8_F => PBS_ML8_F { dst, src, lut },
-                _ => panic!("Unknown DopCode {dopcode_raw} [{dopcode:?}]"),
+                _ => {
+                    return Err(DopDecodeError::UnknownDopCode {
+                        raw: dopcode_raw,
+                        dopcode,
+                    });
+                }
             }
         }
         DOpCode::WAIT => {
@@ -953,7 +1009,12 @@ pub fn instruction_from_dop_repr(
                     MEM_HEAP => CtMem::Heap(CtHeap {
                         addr: hex.slot().sas(),
                     }),
-                    m => panic!("WAIT: unsupported memory mode {m}"),
+                    m => {
+                        return Err(DopDecodeError::UnsupportedMemMode {
+                            instruction: "WAIT",
+                            mode: m,
+                        });
+                    }
                 })
             } else {
                 None
@@ -966,13 +1027,15 @@ pub fn instruction_from_dop_repr(
                 MEM_ADDR => CtMem::Io(CtIo {
                     addr: hex.slot().sas(),
                 }),
-                // `generate_translation_table` maps both `CtHeap` and `CtSrcVar` to
-                // `MEM_HEAP`; the two aren't distinguishable from the hex alone, so this
-                // always decodes as `CtHeap` (see this function's doc comment).
                 MEM_HEAP => CtMem::Heap(CtHeap {
                     addr: hex.slot().sas(),
                 }),
-                m => panic!("NOTIFY: unsupported memory mode {m}"),
+                m => {
+                    return Err(DopDecodeError::UnsupportedMemMode {
+                        instruction: "NOTIFY",
+                        mode: m,
+                    });
+                }
             };
             NOTIFY {
                 virt_id: VirtId { id: hex.hid() },
@@ -989,7 +1052,12 @@ pub fn instruction_from_dop_repr(
                 MEM_HEAP => CtMem::Heap(CtHeap {
                     addr: hex.slot().sas(),
                 }),
-                m => panic!("LD_B2B: unsupported memory mode {m}"),
+                m => {
+                    return Err(DopDecodeError::UnsupportedMemMode {
+                        instruction: "LD_B2B",
+                        mode: m,
+                    });
+                }
             };
             LD_B2B {
                 flag: UserFlag { flag: hex.flag() },
@@ -997,9 +1065,14 @@ pub fn instruction_from_dop_repr(
             }
         }
         _ => {
-            panic!("Unsupported or unknown DOp opcode {dopcode_raw:#08b} in word {word:#010x}")
+            return Err(DopDecodeError::UnknownOpcode {
+                raw: dopcode_raw,
+                word,
+            });
         }
-    }
+    };
+
+    Ok(insn)
 }
 
 #[cfg(test)]
