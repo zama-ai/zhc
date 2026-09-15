@@ -471,7 +471,11 @@ mod test {
     #[test]
     fn correctness_adds_hillis_steele() {
         fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::IntegerCiphertext(lhs), IopValue::IntegerPlaintext(rhs)] = inp else {
+            let [
+                IopValue::IntegerCiphertext(lhs),
+                IopValue::IntegerPlaintext(rhs),
+            ] = inp
+            else {
                 unreachable!()
             };
             Some(vec![IopValue::IntegerCiphertext(lhs.adds(*rhs))])
@@ -484,7 +488,11 @@ mod test {
     #[test]
     fn correctness_adds_ripple() {
         fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::IntegerCiphertext(lhs), IopValue::IntegerPlaintext(rhs)] = inp else {
+            let [
+                IopValue::IntegerCiphertext(lhs),
+                IopValue::IntegerPlaintext(rhs),
+            ] = inp
+            else {
                 unreachable!()
             };
             Some(vec![IopValue::IntegerCiphertext(lhs.adds(*rhs))])
@@ -497,7 +505,11 @@ mod test {
     #[test]
     fn correctness_overflow_adds() {
         fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::IntegerCiphertext(lhs), IopValue::IntegerPlaintext(rhs)] = inp else {
+            let [
+                IopValue::IntegerCiphertext(lhs),
+                IopValue::IntegerPlaintext(rhs),
+            ] = inp
+            else {
                 unreachable!()
             };
             let (sum, flag) = lhs.overflow_adds(*rhs);
@@ -532,7 +544,10 @@ mod test {
                 (0, 0),      // no overflow
             ] {
                 let src_p_value = src_p.make_value(b);
-                let inputs = vec![IopValue::IntegerCiphertext(spec.from_int(a)), src_p_value.clone()];
+                let inputs = vec![
+                    IopValue::IntegerCiphertext(spec.from_int(a)),
+                    src_p_value.clone(),
+                ];
                 let outputs = builder.interpret().with_inputs(&inputs).get_outputs();
                 assert_eq!(
                     outputs,

@@ -1,6 +1,7 @@
 #include "zhc.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/stat.h>
 
 #define CHECK(call)                                                                        \
@@ -71,11 +72,45 @@ int main(int argc, char **argv) {
     CHECK(zhc_pipeline_get_fingerprint(p, &fp));
     printf("fingerprint: %llu\n", (unsigned long long)fp);
 
-    zhc_hpu_metrics m;
+    zhc_hpu_metrics *m = NULL;
     CHECK(zhc_pipeline_get_hpu_metrics(p, &m));
-    printf("latency=%.2f lower_bound=%.2f batches=%zu slots=%zu/%zu\n", m.latency, m.lower_bound,
-           m.batch_count, m.slots_filled, m.slots_total);
-    if (!(m.latency > 0.0) || m.batch_count == 0) return 1;
+    double latency = 0.0, lower_bound = 0.0;
+    size_t batches = 0, filled = 0, total = 0;
+    CHECK(zhc_hpu_metrics_latency(m, &latency));
+    CHECK(zhc_hpu_metrics_lower_bound(m, &lower_bound));
+    CHECK(zhc_hpu_metrics_batch_count(m, &batches));
+    CHECK(zhc_hpu_metrics_slots_filled(m, &filled));
+    CHECK(zhc_hpu_metrics_slots_total(m, &total));
+    printf("latency=%.2f lower_bound=%.2f batches=%zu slots=%zu/%zu\n", latency, lower_bound,
+           batches, filled, total);
+    if (!(latency > 0.0) || batches == 0) return 1;
+
+    zhc_pbs_metrics *pbs = NULL;
+    CHECK(zhc_pipeline_get_pbs_metrics(p, &pbs));
+    size_t pbs_count = 0;
+    CHECK(zhc_pbs_metrics_count(pbs, &pbs_count));
+    if (pbs_count != 2) {
+        fprintf(stderr, "expected 2 bootstrappings, got %zu\n", pbs_count);
+        return 1;
+    }
+
+    char *m_dump = NULL, *m_debug = NULL, *pbs_dump = NULL, *p_debug = NULL;
+    CHECK(zhc_hpu_metrics_dump(m, &m_dump));
+    CHECK(zhc_hpu_metrics_debug(m, &m_debug));
+    CHECK(zhc_pbs_metrics_dump(pbs, &pbs_dump));
+    CHECK(zhc_pipeline_debug(p, &p_debug));
+    if (strstr(m_dump, "HPU Metrics") == NULL || strstr(m_debug, "latency") == NULL ||
+        strlen(pbs_dump) == 0 || strstr(p_debug, "Pipeline") == NULL) {
+        fprintf(stderr, "unexpected dumps:\n%s\n%s\n%s\n%s\n", m_dump, m_debug, pbs_dump, p_debug);
+        return 1;
+    }
+    printf("metrics dump: %zu bytes, pbs dump: %zu bytes\n", strlen(m_dump), strlen(pbs_dump));
+    zhc_string_free(m_dump);
+    zhc_string_free(m_debug);
+    zhc_string_free(pbs_dump);
+    zhc_string_free(p_debug);
+    zhc_hpu_metrics_free(m);
+    zhc_pbs_metrics_free(pbs);
 
     zhc_file_handle *asm_file = NULL, *slack = NULL, *state = NULL;
     zhc_perfetto_trace *trace = NULL;
@@ -92,10 +127,10 @@ int main(int argc, char **argv) {
         return 1;
 
     /* Wrong flow: the multi-HPU getters panic when only a single-HPU config is set. */
-    zhc_multi_hpu_metrics mm;
+    zhc_multi_hpu_metrics *mm = NULL;
     zhc_status s = zhc_pipeline_get_multi_hpu_metrics(p, &mm);
     printf("multi metrics on single-hpu pipeline: status=%d\n", (int)s);
-    if (s != ZHC_ERR_PANIC) return 1;
+    if (s != ZHC_ERR_PANIC || mm != NULL) return 1;
 
     zhc_perfetto_trace_free(trace);
     zhc_file_handle_free(asm_file);

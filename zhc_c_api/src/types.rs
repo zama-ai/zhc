@@ -1,15 +1,17 @@
 //! C representations of the plain-data types crossing the ABI, the opaque handles with their
 //! constructors and destructors, and the status code returned by every function.
 
-use std::ffi::{CStr, c_char};
+use std::ffi::{CStr, CString, c_char};
+use std::fmt::Debug;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use zhc_builder::{
     BoolCiphertext, CiphertextBlock, CiphertextBlockSpec, Flavor, IntegerCiphertext,
     IntegerPlaintext, IrKind, LookupCheck, Lut1, Lut2, Lut4, Lut8, PlaintextBlock,
 };
 use zhc_config::{hpu::HpuConfig, multi_hpu::MultiHpuConfig, vm::VmConfig};
-use zhc_pipeline::{HpuMetrics, MultiHpuMetrics};
+use zhc_pipeline::{HpuMetrics, MultiHpuMetrics, PbsMetrics};
 use zhc_utils::{
+    Dumpable,
     files::{FileHandle, PerfettoTrace},
     units::{Cycle, MHz},
 };
@@ -286,51 +288,6 @@ impl From<VmConfig> for zhc_vm_config {
     }
 }
 
-/// Binding of [`HpuMetrics`]. The `Microseconds` newtype is flattened to `f64`. The
-/// `batch_stats` histogram is not exposed.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct zhc_hpu_metrics {
-    pub latency: f64,
-    pub lower_bound: f64,
-    pub batching_overhead: f64,
-    pub starvation: f64,
-    pub batch_count: usize,
-    pub slots_filled: usize,
-    pub slots_total: usize,
-    pub timeout_launches: u16,
-}
-
-impl From<&HpuMetrics> for zhc_hpu_metrics {
-    fn from(m: &HpuMetrics) -> Self {
-        zhc_hpu_metrics {
-            latency: m.latency.0,
-            lower_bound: m.lower_bound.0,
-            batching_overhead: m.batching_overhead.0,
-            starvation: m.starvation.0,
-            batch_count: m.batch_count,
-            slots_filled: m.slots_filled,
-            slots_total: m.slots_total,
-            timeout_launches: m.timeout_launches,
-        }
-    }
-}
-
-/// Binding of [`MultiHpuMetrics`]. The `Microseconds` newtype is flattened to `f64`.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct zhc_multi_hpu_metrics {
-    pub latency: f64,
-}
-
-impl From<&MultiHpuMetrics> for zhc_multi_hpu_metrics {
-    fn from(m: &MultiHpuMetrics) -> Self {
-        zhc_multi_hpu_metrics {
-            latency: m.latency.0,
-        }
-    }
-}
-
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn zhc_hpu_config_default(out: *mut zhc_hpu_config) -> zhc_status {
     guard(|| unsafe { write(out, HpuConfig::default().into()) })
@@ -347,19 +304,39 @@ pub unsafe extern "C" fn zhc_multi_hpu_config_default(
 // Opaque handles
 // ---------------------------------------------------------------------------------------------
 
+// Every handle is `repr(transparent)`, so a `*const zhc_x` may be cast to a `*const X`.
+
+#[repr(transparent)]
 pub struct zhc_ciphertext_block(pub(crate) CiphertextBlock);
+#[repr(transparent)]
 pub struct zhc_plaintext_block(pub(crate) PlaintextBlock);
+#[repr(transparent)]
 pub struct zhc_bool_ciphertext(pub(crate) BoolCiphertext);
+#[repr(transparent)]
 pub struct zhc_integer_ciphertext(pub(crate) IntegerCiphertext);
+#[repr(transparent)]
 pub struct zhc_integer_plaintext(pub(crate) IntegerPlaintext);
 
+#[repr(transparent)]
 pub struct zhc_lut1(pub(crate) Lut1);
+#[repr(transparent)]
 pub struct zhc_lut2(pub(crate) Lut2);
+#[repr(transparent)]
 pub struct zhc_lut4(pub(crate) Lut4);
+#[repr(transparent)]
 pub struct zhc_lut8(pub(crate) Lut8);
 
+#[repr(transparent)]
 pub struct zhc_file_handle(pub(crate) FileHandle);
+#[repr(transparent)]
 pub struct zhc_perfetto_trace(pub(crate) PerfettoTrace);
+
+#[repr(transparent)]
+pub struct zhc_hpu_metrics(pub(crate) HpuMetrics);
+#[repr(transparent)]
+pub struct zhc_multi_hpu_metrics(pub(crate) MultiHpuMetrics);
+#[repr(transparent)]
+pub struct zhc_pbs_metrics(pub(crate) PbsMetrics);
 
 // ---------------------------------------------------------------------------------------------
 // Pointer helpers
@@ -422,6 +399,37 @@ pub(crate) unsafe fn c_str(s: *const c_char) -> Fallible<String> {
     Ok(unsafe { CStr::from_ptr(s) }.to_string_lossy().into_owned())
 }
 
+/// Writes a Rust string to the caller-provided `out` location as a heap-allocated C string.
+/// The caller releases it with [`zhc_string_free`].
+///
+/// # Safety
+///
+/// `out` must be null or point to writable memory for a `*mut c_char`.
+pub(crate) unsafe fn write_string(out: *mut *mut c_char, s: String) -> Fallible {
+    let s = CString::new(s).map_err(|_| zhc_status::InvalidArgument)?;
+    unsafe { write(out, s.into_raw()) }
+}
+
+/// Writes the `Debug` representation of the value behind `ptr` to `out`.
+///
+/// # Safety
+///
+/// `ptr` must be null or point to a live value. `out` as in [`write_string`].
+pub(crate) unsafe fn write_debug<T: Debug>(ptr: *const T, out: *mut *mut c_char) -> Fallible {
+    let value = unsafe { deref(ptr) }?;
+    unsafe { write_string(out, format!("{value:?}")) }
+}
+
+/// Writes the [`Dumpable`] representation of the value behind `ptr` to `out`.
+///
+/// # Safety
+///
+/// `ptr` must be null or point to a live value. `out` as in [`write_string`].
+pub(crate) unsafe fn write_dump<T: Dumpable>(ptr: *const T, out: *mut *mut c_char) -> Fallible {
+    let value = unsafe { deref(ptr) }?;
+    unsafe { write_string(out, value.dump_to_string()) }
+}
+
 /// Frees a handle previously written by [`write_handle`]. Null is a no-op.
 ///
 /// # Safety
@@ -430,6 +438,18 @@ pub(crate) unsafe fn c_str(s: *const c_char) -> Fallible<String> {
 pub(crate) unsafe fn free<T>(ptr: *mut T) {
     if !ptr.is_null() {
         drop(unsafe { Box::from_raw(ptr) });
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Strings
+// ---------------------------------------------------------------------------------------------
+
+/// Frees a string written by a `*_to_string` function. Null is a no-op.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn zhc_string_free(ptr: *mut c_char) {
+    if !ptr.is_null() {
+        drop(unsafe { CString::from_raw(ptr) });
     }
 }
 
@@ -490,6 +510,300 @@ pub unsafe extern "C" fn zhc_file_handle_free(ptr: *mut zhc_file_handle) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn zhc_perfetto_trace_free(ptr: *mut zhc_perfetto_trace) {
     unsafe { free(ptr) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn zhc_hpu_metrics_free(ptr: *mut zhc_hpu_metrics) {
+    unsafe { free(ptr) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn zhc_multi_hpu_metrics_free(ptr: *mut zhc_multi_hpu_metrics) {
+    unsafe { free(ptr) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn zhc_pbs_metrics_free(ptr: *mut zhc_pbs_metrics) {
+    unsafe { free(ptr) }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Debug and dump
+// ---------------------------------------------------------------------------------------------
+//
+// `*_debug` binds `format!("{:?}")`. `*_dump` binds `Dumpable::dump_to_string`, for the types
+// that implement it. The builder's and the pipeline's live next to their other methods.
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn zhc_ciphertext_block_debug(
+    ptr: *const zhc_ciphertext_block,
+    out: *mut *mut c_char,
+) -> zhc_status {
+    guard(|| unsafe { write_debug(ptr.cast::<CiphertextBlock>(), out) })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn zhc_plaintext_block_debug(
+    ptr: *const zhc_plaintext_block,
+    out: *mut *mut c_char,
+) -> zhc_status {
+    guard(|| unsafe { write_debug(ptr.cast::<PlaintextBlock>(), out) })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn zhc_bool_ciphertext_debug(
+    ptr: *const zhc_bool_ciphertext,
+    out: *mut *mut c_char,
+) -> zhc_status {
+    guard(|| unsafe { write_debug(ptr.cast::<BoolCiphertext>(), out) })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn zhc_integer_ciphertext_debug(
+    ptr: *const zhc_integer_ciphertext,
+    out: *mut *mut c_char,
+) -> zhc_status {
+    guard(|| unsafe { write_debug(ptr.cast::<IntegerCiphertext>(), out) })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn zhc_integer_plaintext_debug(
+    ptr: *const zhc_integer_plaintext,
+    out: *mut *mut c_char,
+) -> zhc_status {
+    guard(|| unsafe { write_debug(ptr.cast::<IntegerPlaintext>(), out) })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn zhc_lut1_debug(ptr: *const zhc_lut1, out: *mut *mut c_char) -> zhc_status {
+    guard(|| unsafe { write_debug(ptr.cast::<Lut1>(), out) })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn zhc_lut1_dump(ptr: *const zhc_lut1, out: *mut *mut c_char) -> zhc_status {
+    guard(|| unsafe { write_dump(ptr.cast::<Lut1>(), out) })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn zhc_lut2_debug(ptr: *const zhc_lut2, out: *mut *mut c_char) -> zhc_status {
+    guard(|| unsafe { write_debug(ptr.cast::<Lut2>(), out) })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn zhc_lut2_dump(ptr: *const zhc_lut2, out: *mut *mut c_char) -> zhc_status {
+    guard(|| unsafe { write_dump(ptr.cast::<Lut2>(), out) })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn zhc_lut4_debug(ptr: *const zhc_lut4, out: *mut *mut c_char) -> zhc_status {
+    guard(|| unsafe { write_debug(ptr.cast::<Lut4>(), out) })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn zhc_lut4_dump(ptr: *const zhc_lut4, out: *mut *mut c_char) -> zhc_status {
+    guard(|| unsafe { write_dump(ptr.cast::<Lut4>(), out) })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn zhc_lut8_debug(ptr: *const zhc_lut8, out: *mut *mut c_char) -> zhc_status {
+    guard(|| unsafe { write_debug(ptr.cast::<Lut8>(), out) })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn zhc_lut8_dump(ptr: *const zhc_lut8, out: *mut *mut c_char) -> zhc_status {
+    guard(|| unsafe { write_dump(ptr.cast::<Lut8>(), out) })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn zhc_file_handle_debug(
+    ptr: *const zhc_file_handle,
+    out: *mut *mut c_char,
+) -> zhc_status {
+    guard(|| unsafe { write_debug(ptr.cast::<FileHandle>(), out) })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn zhc_perfetto_trace_debug(
+    ptr: *const zhc_perfetto_trace,
+    out: *mut *mut c_char,
+) -> zhc_status {
+    guard(|| unsafe { write_debug(ptr.cast::<PerfettoTrace>(), out) })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn zhc_hpu_metrics_debug(
+    ptr: *const zhc_hpu_metrics,
+    out: *mut *mut c_char,
+) -> zhc_status {
+    guard(|| unsafe { write_debug(ptr.cast::<HpuMetrics>(), out) })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn zhc_hpu_metrics_dump(
+    ptr: *const zhc_hpu_metrics,
+    out: *mut *mut c_char,
+) -> zhc_status {
+    guard(|| unsafe { write_dump(ptr.cast::<HpuMetrics>(), out) })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn zhc_multi_hpu_metrics_debug(
+    ptr: *const zhc_multi_hpu_metrics,
+    out: *mut *mut c_char,
+) -> zhc_status {
+    guard(|| unsafe { write_debug(ptr.cast::<MultiHpuMetrics>(), out) })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn zhc_multi_hpu_metrics_dump(
+    ptr: *const zhc_multi_hpu_metrics,
+    out: *mut *mut c_char,
+) -> zhc_status {
+    guard(|| unsafe { write_dump(ptr.cast::<MultiHpuMetrics>(), out) })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn zhc_pbs_metrics_debug(
+    ptr: *const zhc_pbs_metrics,
+    out: *mut *mut c_char,
+) -> zhc_status {
+    guard(|| unsafe { write_debug(ptr.cast::<PbsMetrics>(), out) })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn zhc_pbs_metrics_dump(
+    ptr: *const zhc_pbs_metrics,
+    out: *mut *mut c_char,
+) -> zhc_status {
+    guard(|| unsafe { write_dump(ptr.cast::<PbsMetrics>(), out) })
+}
+
+// ---------------------------------------------------------------------------------------------
+// Metrics fields
+// ---------------------------------------------------------------------------------------------
+//
+// One getter per public scalar field. The `Microseconds` newtype is flattened to `f64`. The
+// histograms are only visible through `dump`.
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn zhc_hpu_metrics_latency(
+    m: *const zhc_hpu_metrics,
+    out: *mut f64,
+) -> zhc_status {
+    guard(|| {
+        let v = unsafe { deref(m) }?.0.latency.0;
+        unsafe { write(out, v) }
+    })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn zhc_hpu_metrics_lower_bound(
+    m: *const zhc_hpu_metrics,
+    out: *mut f64,
+) -> zhc_status {
+    guard(|| {
+        let v = unsafe { deref(m) }?.0.lower_bound.0;
+        unsafe { write(out, v) }
+    })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn zhc_hpu_metrics_batching_overhead(
+    m: *const zhc_hpu_metrics,
+    out: *mut f64,
+) -> zhc_status {
+    guard(|| {
+        let v = unsafe { deref(m) }?.0.batching_overhead.0;
+        unsafe { write(out, v) }
+    })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn zhc_hpu_metrics_starvation(
+    m: *const zhc_hpu_metrics,
+    out: *mut f64,
+) -> zhc_status {
+    guard(|| {
+        let v = unsafe { deref(m) }?.0.starvation.0;
+        unsafe { write(out, v) }
+    })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn zhc_hpu_metrics_batch_count(
+    m: *const zhc_hpu_metrics,
+    out: *mut usize,
+) -> zhc_status {
+    guard(|| {
+        let v = unsafe { deref(m) }?.0.batch_count;
+        unsafe { write(out, v) }
+    })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn zhc_hpu_metrics_slots_filled(
+    m: *const zhc_hpu_metrics,
+    out: *mut usize,
+) -> zhc_status {
+    guard(|| {
+        let v = unsafe { deref(m) }?.0.slots_filled;
+        unsafe { write(out, v) }
+    })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn zhc_hpu_metrics_slots_total(
+    m: *const zhc_hpu_metrics,
+    out: *mut usize,
+) -> zhc_status {
+    guard(|| {
+        let v = unsafe { deref(m) }?.0.slots_total;
+        unsafe { write(out, v) }
+    })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn zhc_hpu_metrics_timeout_launches(
+    m: *const zhc_hpu_metrics,
+    out: *mut u16,
+) -> zhc_status {
+    guard(|| {
+        let v = unsafe { deref(m) }?.0.timeout_launches;
+        unsafe { write(out, v) }
+    })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn zhc_multi_hpu_metrics_latency(
+    m: *const zhc_multi_hpu_metrics,
+    out: *mut f64,
+) -> zhc_status {
+    guard(|| {
+        let v = unsafe { deref(m) }?.0.latency.0;
+        unsafe { write(out, v) }
+    })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn zhc_pbs_metrics_count(
+    m: *const zhc_pbs_metrics,
+    out: *mut usize,
+) -> zhc_status {
+    guard(|| {
+        let v = unsafe { deref(m) }?.0.count;
+        unsafe { write(out, v) }
+    })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn zhc_pbs_metrics_critical_length(
+    m: *const zhc_pbs_metrics,
+    out: *mut usize,
+) -> zhc_status {
+    guard(|| {
+        let v = unsafe { deref(m) }?.0.critical_length;
+        unsafe { write(out, v) }
+    })
 }
 
 // ---------------------------------------------------------------------------------------------

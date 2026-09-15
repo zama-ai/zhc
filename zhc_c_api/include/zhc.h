@@ -17,6 +17,8 @@
  * - `*_free` accepts NULL. Freeing a handle twice is undefined behaviour.
  * - Pointer arguments are borrowed for the duration of the call. Strings are copied. Tables
  *   are read. The caller keeps ownership.
+ * - Strings written by `*_debug`, `*_dump` and `zhc_builder_dump_noise` are owned by the
+ *   caller. Release them with zhc_string_free, and only that one.
  * - Strings are null-terminated. Invalid UTF-8 is replaced, not rejected.
  *
  * Builder and values
@@ -138,21 +140,6 @@ typedef struct zhc_vm_config {
 zhc_status zhc_hpu_config_default(zhc_hpu_config *out);
 zhc_status zhc_multi_hpu_config_default(zhc_multi_hpu_config *out);
 
-/* Timing fields are microseconds. The `batch_stats` histogram of the Rust struct is omitted. */
-typedef struct zhc_hpu_metrics {
-    double latency;
-    double lower_bound;
-    double batching_overhead;
-    double starvation;
-    size_t batch_count;
-    size_t slots_filled;
-    size_t slots_total;
-    uint16_t timeout_launches;
-} zhc_hpu_metrics;
-
-typedef struct zhc_multi_hpu_metrics {
-    double latency;
-} zhc_multi_hpu_metrics;
 
 /* ------------------------------------------------------------------------------------------- */
 /* Opaque handles                                                                              */
@@ -171,6 +158,9 @@ typedef struct zhc_lut8 zhc_lut8;
 typedef struct zhc_file_handle zhc_file_handle;
 typedef struct zhc_perfetto_trace zhc_perfetto_trace;
 typedef struct zhc_pipeline zhc_pipeline;
+typedef struct zhc_hpu_metrics zhc_hpu_metrics;
+typedef struct zhc_multi_hpu_metrics zhc_multi_hpu_metrics;
+typedef struct zhc_pbs_metrics zhc_pbs_metrics;
 
 void zhc_ciphertext_block_free(zhc_ciphertext_block *ptr);
 void zhc_plaintext_block_free(zhc_plaintext_block *ptr);
@@ -183,6 +173,60 @@ void zhc_lut4_free(zhc_lut4 *ptr);
 void zhc_lut8_free(zhc_lut8 *ptr);
 void zhc_file_handle_free(zhc_file_handle *ptr);
 void zhc_perfetto_trace_free(zhc_perfetto_trace *ptr);
+void zhc_hpu_metrics_free(zhc_hpu_metrics *ptr);
+void zhc_multi_hpu_metrics_free(zhc_multi_hpu_metrics *ptr);
+void zhc_pbs_metrics_free(zhc_pbs_metrics *ptr);
+
+/* Strings written by `*_debug`, `*_dump` and `zhc_builder_dump_noise` are owned by the caller. */
+void zhc_string_free(char *ptr);
+
+/* ------------------------------------------------------------------------------------------- */
+/* Debug and dump                                                                              */
+/* ------------------------------------------------------------------------------------------- */
+/* `*_debug` binds Rust's `{:?}`. `*_dump` binds `Dumpable::dump_to_string`, for the types      */
+/* that implement it.                                                                          */
+
+zhc_status zhc_builder_debug(const zhc_builder *ptr, char **out);
+zhc_status zhc_builder_dump(const zhc_builder *ptr, char **out);
+zhc_status zhc_ciphertext_block_debug(const zhc_ciphertext_block *ptr, char **out);
+zhc_status zhc_plaintext_block_debug(const zhc_plaintext_block *ptr, char **out);
+zhc_status zhc_bool_ciphertext_debug(const zhc_bool_ciphertext *ptr, char **out);
+zhc_status zhc_integer_ciphertext_debug(const zhc_integer_ciphertext *ptr, char **out);
+zhc_status zhc_integer_plaintext_debug(const zhc_integer_plaintext *ptr, char **out);
+zhc_status zhc_lut1_debug(const zhc_lut1 *ptr, char **out);
+zhc_status zhc_lut1_dump(const zhc_lut1 *ptr, char **out);
+zhc_status zhc_lut2_debug(const zhc_lut2 *ptr, char **out);
+zhc_status zhc_lut2_dump(const zhc_lut2 *ptr, char **out);
+zhc_status zhc_lut4_debug(const zhc_lut4 *ptr, char **out);
+zhc_status zhc_lut4_dump(const zhc_lut4 *ptr, char **out);
+zhc_status zhc_lut8_debug(const zhc_lut8 *ptr, char **out);
+zhc_status zhc_lut8_dump(const zhc_lut8 *ptr, char **out);
+zhc_status zhc_file_handle_debug(const zhc_file_handle *ptr, char **out);
+zhc_status zhc_perfetto_trace_debug(const zhc_perfetto_trace *ptr, char **out);
+zhc_status zhc_pipeline_debug(const zhc_pipeline *ptr, char **out);
+zhc_status zhc_hpu_metrics_debug(const zhc_hpu_metrics *ptr, char **out);
+zhc_status zhc_hpu_metrics_dump(const zhc_hpu_metrics *ptr, char **out);
+zhc_status zhc_multi_hpu_metrics_debug(const zhc_multi_hpu_metrics *ptr, char **out);
+zhc_status zhc_multi_hpu_metrics_dump(const zhc_multi_hpu_metrics *ptr, char **out);
+zhc_status zhc_pbs_metrics_debug(const zhc_pbs_metrics *ptr, char **out);
+zhc_status zhc_pbs_metrics_dump(const zhc_pbs_metrics *ptr, char **out);
+
+/* ------------------------------------------------------------------------------------------- */
+/* Metrics fields                                                                              */
+/* ------------------------------------------------------------------------------------------- */
+/* Timing values are microseconds. The histograms are only visible through `*_dump`.           */
+
+zhc_status zhc_hpu_metrics_latency(const zhc_hpu_metrics *m, double *out);
+zhc_status zhc_hpu_metrics_lower_bound(const zhc_hpu_metrics *m, double *out);
+zhc_status zhc_hpu_metrics_batching_overhead(const zhc_hpu_metrics *m, double *out);
+zhc_status zhc_hpu_metrics_starvation(const zhc_hpu_metrics *m, double *out);
+zhc_status zhc_hpu_metrics_batch_count(const zhc_hpu_metrics *m, size_t *out);
+zhc_status zhc_hpu_metrics_slots_filled(const zhc_hpu_metrics *m, size_t *out);
+zhc_status zhc_hpu_metrics_slots_total(const zhc_hpu_metrics *m, size_t *out);
+zhc_status zhc_hpu_metrics_timeout_launches(const zhc_hpu_metrics *m, uint16_t *out);
+zhc_status zhc_multi_hpu_metrics_latency(const zhc_multi_hpu_metrics *m, double *out);
+zhc_status zhc_pbs_metrics_count(const zhc_pbs_metrics *m, size_t *out);
+zhc_status zhc_pbs_metrics_critical_length(const zhc_pbs_metrics *m, size_t *out);
 
 /* ------------------------------------------------------------------------------------------- */
 /* File handles                                                                                */
@@ -230,7 +274,7 @@ zhc_status zhc_builder_spec(const zhc_builder *builder, zhc_ciphertext_block_spe
 /* ------------------------------------------------------------------------------------------- */
 
 zhc_status zhc_builder_draw(const zhc_builder *builder, zhc_ir_kind kind, zhc_file_handle **out);
-zhc_status zhc_builder_dump_noise(const zhc_builder *builder);
+zhc_status zhc_builder_dump_noise(const zhc_builder *builder, char **out);
 zhc_status zhc_builder_check_noise(const zhc_builder *builder);
 
 /* ------------------------------------------------------------------------------------------- */
@@ -546,9 +590,10 @@ zhc_status zhc_pipeline_get_multi_hpu_config(zhc_pipeline *pipeline, zhc_multi_h
 zhc_status zhc_pipeline_get_vm_config(zhc_pipeline *pipeline, zhc_vm_config *out);
 
 zhc_status zhc_pipeline_get_fingerprint(zhc_pipeline *pipeline, uint64_t *out);
-zhc_status zhc_pipeline_get_hpu_metrics(zhc_pipeline *pipeline, zhc_hpu_metrics *out);
+zhc_status zhc_pipeline_get_hpu_metrics(zhc_pipeline *pipeline, zhc_hpu_metrics **out);
 zhc_status zhc_pipeline_get_multi_hpu_metrics(zhc_pipeline *pipeline,
-                                              zhc_multi_hpu_metrics *out);
+                                              zhc_multi_hpu_metrics **out);
+zhc_status zhc_pipeline_get_pbs_metrics(zhc_pipeline *pipeline, zhc_pbs_metrics **out);
 
 zhc_status zhc_pipeline_draw_state(zhc_pipeline *pipeline, zhc_file_handle **out);
 zhc_status zhc_pipeline_get_slack_drawing(zhc_pipeline *pipeline, zhc_file_handle **out);

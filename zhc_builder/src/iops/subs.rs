@@ -197,7 +197,11 @@ mod test {
     #[test]
     fn correctness_subs() {
         fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::IntegerCiphertext(lhs), IopValue::IntegerPlaintext(rhs)] = inp else {
+            let [
+                IopValue::IntegerCiphertext(lhs),
+                IopValue::IntegerPlaintext(rhs),
+            ] = inp
+            else {
                 unreachable!()
             };
             Some(vec![IopValue::IntegerCiphertext(lhs.subs(*rhs))])
@@ -210,7 +214,11 @@ mod test {
     #[test]
     fn correctness_ssub() {
         fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::IntegerCiphertext(lhs), IopValue::IntegerPlaintext(rhs)] = inp else {
+            let [
+                IopValue::IntegerCiphertext(lhs),
+                IopValue::IntegerPlaintext(rhs),
+            ] = inp
+            else {
                 unreachable!()
             };
             Some(vec![IopValue::IntegerCiphertext(lhs.ssub(*rhs))])
@@ -223,11 +231,18 @@ mod test {
     #[test]
     fn correctness_overflow_subs() {
         fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::IntegerCiphertext(lhs), IopValue::IntegerPlaintext(rhs)] = inp else {
+            let [
+                IopValue::IntegerCiphertext(lhs),
+                IopValue::IntegerPlaintext(rhs),
+            ] = inp
+            else {
                 unreachable!()
             };
             let (diff, flag) = lhs.overflow_subs(*rhs);
-            Some(vec![IopValue::IntegerCiphertext(diff), IopValue::BoolCiphertext(flag)])
+            Some(vec![
+                IopValue::IntegerCiphertext(diff),
+                IopValue::BoolCiphertext(flag),
+            ])
         }
         for size in (2..128).step_by(2) {
             overflow_subs(IntegerCiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
@@ -237,11 +252,18 @@ mod test {
     #[test]
     fn correctness_overflow_ssub() {
         fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::IntegerCiphertext(lhs), IopValue::IntegerPlaintext(rhs)] = inp else {
+            let [
+                IopValue::IntegerCiphertext(lhs),
+                IopValue::IntegerPlaintext(rhs),
+            ] = inp
+            else {
                 unreachable!()
             };
             let (diff, flag) = lhs.overflow_ssub(*rhs);
-            Some(vec![IopValue::IntegerCiphertext(diff), IopValue::BoolCiphertext(flag)])
+            Some(vec![
+                IopValue::IntegerCiphertext(diff),
+                IopValue::BoolCiphertext(flag),
+            ])
         }
         for size in (2..128).step_by(2) {
             overflow_ssub(IntegerCiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
@@ -302,7 +324,10 @@ mod test {
                     .get_outputs();
                 assert_eq!(
                     got,
-                    vec![IopValue::IntegerCiphertext(diff), IopValue::BoolCiphertext(flag)],
+                    vec![
+                        IopValue::IntegerCiphertext(diff),
+                        IopValue::BoolCiphertext(flag)
+                    ],
                     "overflow_subs failed for size={size} a={a} c={c}"
                 );
 
@@ -313,7 +338,10 @@ mod test {
                     .get_outputs();
                 assert_eq!(
                     got,
-                    vec![IopValue::IntegerCiphertext(diff), IopValue::BoolCiphertext(flag)],
+                    vec![
+                        IopValue::IntegerCiphertext(diff),
+                        IopValue::BoolCiphertext(flag)
+                    ],
                     "overflow_ssub failed for size={size} a={a} c={c}"
                 );
             }

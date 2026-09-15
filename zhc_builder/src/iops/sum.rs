@@ -260,7 +260,11 @@ impl Builder {
     }
 
     /// Groups the blocks of every operand by weight.
-    fn sum_columns(&self, srcs: &[IntegerCiphertext], block_count: usize) -> Vec<Vec<CiphertextBlock>> {
+    fn sum_columns(
+        &self,
+        srcs: &[IntegerCiphertext],
+        block_count: usize,
+    ) -> Vec<Vec<CiphertextBlock>> {
         let mut columns = vec![Vec::new(); block_count];
         for src in srcs {
             for (position, block) in self.integer_ciphertext_split(src).into_iter().enumerate() {

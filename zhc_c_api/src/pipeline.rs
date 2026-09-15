@@ -7,8 +7,18 @@ use crate::builder::zhc_builder;
 use crate::types::*;
 use ::zhc::PipelineExt;
 use ::zhc_pipeline::Pipeline;
+use std::ffi::c_char;
 
+#[repr(transparent)]
 pub struct zhc_pipeline(Pipeline);
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn zhc_pipeline_debug(
+    pipeline: *const zhc_pipeline,
+    out: *mut *mut c_char,
+) -> zhc_status {
+    guard(|| unsafe { write_debug(pipeline.cast::<Pipeline>(), out) })
+}
 
 /// Shorthand: dereferences the pipeline handle to the wrapped [`Pipeline`].
 unsafe fn p<'a>(pipeline: *mut zhc_pipeline) -> Fallible<&'a mut Pipeline> {
@@ -172,25 +182,41 @@ pub unsafe extern "C" fn zhc_pipeline_get_fingerprint(
     })
 }
 
+// ---------------------------------------------------------------------------------------------
+// Artifacts: metrics
+// ---------------------------------------------------------------------------------------------
+// The pipeline returns references to its own metrics. The C functions hand out clones.
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn zhc_pipeline_get_hpu_metrics(
     pipeline: *mut zhc_pipeline,
-    out: *mut zhc_hpu_metrics,
+    out: *mut *mut zhc_hpu_metrics,
 ) -> zhc_status {
     guard(|| {
-        let r = unsafe { p(pipeline) }?.get_hpu_metrics().into();
-        unsafe { write(out, r) }
+        let r = unsafe { p(pipeline) }?.get_hpu_metrics().clone();
+        unsafe { write_handle(out, zhc_hpu_metrics(r)) }
     })
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn zhc_pipeline_get_multi_hpu_metrics(
     pipeline: *mut zhc_pipeline,
-    out: *mut zhc_multi_hpu_metrics,
+    out: *mut *mut zhc_multi_hpu_metrics,
 ) -> zhc_status {
     guard(|| {
-        let r = unsafe { p(pipeline) }?.get_multi_hpu_metrics().into();
-        unsafe { write(out, r) }
+        let r = unsafe { p(pipeline) }?.get_multi_hpu_metrics().clone();
+        unsafe { write_handle(out, zhc_multi_hpu_metrics(r)) }
+    })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn zhc_pipeline_get_pbs_metrics(
+    pipeline: *mut zhc_pipeline,
+    out: *mut *mut zhc_pbs_metrics,
+) -> zhc_status {
+    guard(|| {
+        let r = unsafe { p(pipeline) }?.get_pbs_metrics().clone();
+        unsafe { write_handle(out, zhc_pbs_metrics(r)) }
     })
 }
 

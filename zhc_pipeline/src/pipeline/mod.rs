@@ -162,6 +162,15 @@ pub struct Pipeline {
     context: PipelineContext,
 }
 
+impl std::fmt::Debug for Pipeline {
+    /// Shows the supplied inputs. Artifacts computed so far are not listed.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Pipeline")
+            .field("context", &self.context)
+            .finish_non_exhaustive()
+    }
+}
+
 impl Pipeline {
     pub fn draw() -> FileHandle {
         let h_root = Hierarchy::new();

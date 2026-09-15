@@ -145,7 +145,11 @@ mod test {
     #[test]
     fn correctness_divs() {
         fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::IntegerCiphertext(lhs), IopValue::IntegerPlaintext(rhs)] = inp else {
+            let [
+                IopValue::IntegerCiphertext(lhs),
+                IopValue::IntegerPlaintext(rhs),
+            ] = inp
+            else {
                 unreachable!()
             };
             // A null divisor leaves the remainder unspecified: skip the draw.
@@ -171,14 +175,20 @@ mod test {
     #[test]
     fn correctness_mods() {
         fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::IntegerCiphertext(lhs), IopValue::IntegerPlaintext(rhs)] = inp else {
+            let [
+                IopValue::IntegerCiphertext(lhs),
+                IopValue::IntegerPlaintext(rhs),
+            ] = inp
+            else {
                 unreachable!()
             };
             if rhs.as_storage() == 0 {
                 return None;
             }
             let remainder = lhs.as_storage().rem_euclid(rhs.as_storage());
-            Some(vec![IopValue::IntegerCiphertext(lhs.spec().from_int(remainder))])
+            Some(vec![IopValue::IntegerCiphertext(
+                lhs.spec().from_int(remainder),
+            )])
         }
         for size in (2..128).step_by(2) {
             mods(IntegerCiphertextSpec::new(size, 2, 2)).test_random(10, semantic);
