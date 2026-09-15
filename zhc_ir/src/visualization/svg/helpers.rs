@@ -1,28 +1,71 @@
 use super::*;
-use crate::visualization::composition::{CardShape, Style};
+use crate::visualization::composition::{CardShape, Fill, Style};
 use zhc_utils::graphics::{Color, Frame, Position, Thickness, X, Y};
 
-/// Background rect for a styled container, in the literal `fill`/`stroke`
-/// colors from `style` (so a `StyleModifier` override from `VisualAnnotation`
-/// always shows — nothing here can suppress it). No class attribute: types
-/// that need one for a CSS/JS selector tag it themselves via `tag_background`.
-pub(crate) fn background_rect(style: &Style, frame: &Frame) -> Option<SvgElement> {
-    if style.fill_color == Color::TRANSPARENT && style.border_color == Color::TRANSPARENT {
-        return None;
+/// Background rect for a styled container, using the fill and stroke from
+/// `style`. No class attribute: types that need one for a CSS/JS selector tag
+/// it themselves via `tag_background`.
+pub(crate) fn background_rect(style: &Style, frame: &Frame) -> Vec<SvgElement> {
+    if !fill_is_visible(style) && style.border_color == Color::TRANSPARENT {
+        return vec![];
     }
-    Some(SvgElement::Rect {
+    let (mut definitions, fill) = svg_fill(style);
+    definitions.push(SvgElement::Rect {
         x: frame.position.x.as_f64(),
         y: frame.position.y.as_f64(),
         width: frame.size.width.as_f64(),
         height: frame.size.height.as_f64(),
         rx: (style.corner_radius > Thickness::ZERO).then(|| style.corner_radius.as_f64()),
-        fill: Some(style.fill_color.to_string()),
+        fill: Some(fill),
         stroke: Some(style.border_color.to_string()),
         stroke_width: Some(style.border_width.as_f64()),
         class: None,
         id: None,
         data_val: None,
-    })
+    });
+    definitions
+}
+
+fn fill_is_visible(style: &Style) -> bool {
+    match &style.fill {
+        Fill::Solid(color) => *color != Color::TRANSPARENT,
+        Fill::Stripes { colors, .. } => colors.iter().any(|c| *c != Color::TRANSPARENT),
+    }
+}
+
+fn svg_fill(style: &Style) -> (Vec<SvgElement>, String) {
+    match &style.fill {
+        Fill::Solid(color) => (vec![], color.to_string()),
+        Fill::Stripes {
+            colors,
+            stripe_width,
+        } if !colors.is_empty() => {
+            let stripe_width = if stripe_width.is_finite() && *stripe_width > 0.0 {
+                *stripe_width
+            } else {
+                6.0
+            };
+            let mut hash = 0xcbf29ce484222325_u64;
+            for color in colors {
+                for byte in [color.r, color.g, color.b, color.a] {
+                    hash = (hash ^ u64::from(byte)).wrapping_mul(0x100000001b3);
+                }
+            }
+            for byte in stripe_width.to_bits().to_le_bytes() {
+                hash = (hash ^ u64::from(byte)).wrapping_mul(0x100000001b3);
+            }
+            let id = format!("stripe-fill-{hash:x}");
+            (
+                vec![SvgElement::Pattern {
+                    id: id.clone(),
+                    colors: colors.iter().map(ToString::to_string).collect(),
+                    stripe_width,
+                }],
+                format!("url(#{id})"),
+            )
+        }
+        Fill::Stripes { .. } => (vec![], Color::TRANSPARENT.to_string()),
+    }
 }
 
 /// A hairline separator between stacked children, in the container's own
@@ -68,12 +111,28 @@ pub(crate) fn vseparator_rect(style: &Style, x_mid: f64, y: f64, height: f64) ->
 /// Card background: a plain rounded rect, or a ticket-stub zigzag on the
 /// free edge for `CardShape::SawtoothTop/Bottom` — purely decorative, the
 /// solver still treats the card as its ordinary rectangular frame.
-pub(crate) fn card_background(style: &Style, frame: &Frame) -> Option<SvgElement> {
+pub(crate) fn card_background(style: &Style, frame: &Frame) -> Vec<SvgElement> {
     match style.card_shape {
         CardShape::Rect => background_rect(style, frame),
-        CardShape::SawtoothTop => Some(sawtooth_path(style, frame, true)),
-        CardShape::SawtoothBottom => Some(sawtooth_path(style, frame, false)),
+        CardShape::SawtoothTop => patterned_path(style, frame, true),
+        CardShape::SawtoothBottom => patterned_path(style, frame, false),
     }
+}
+
+fn patterned_path(style: &Style, frame: &Frame, teeth_on_top: bool) -> Vec<SvgElement> {
+    if !fill_is_visible(style) && style.border_color == Color::TRANSPARENT {
+        return vec![];
+    }
+    let (mut definitions, fill) = svg_fill(style);
+    let mut path = sawtooth_path(style, frame, teeth_on_top);
+    if let SvgElement::Path {
+        fill: path_fill, ..
+    } = &mut path
+    {
+        *path_fill = Some(fill);
+    }
+    definitions.push(path);
+    definitions
 }
 
 /// Small colored bars at the card's left/right edges signaling its op-kind,
@@ -183,7 +242,7 @@ fn sawtooth_path(style: &Style, frame: &Frame, teeth_on_top: bool) -> SvgElement
 
     SvgElement::Path {
         commands,
-        fill: Some(style.fill_color.to_string()),
+        fill: None,
         stroke: Some(style.border_color.to_string()),
         stroke_width: Some(style.border_width.as_f64()),
         class: None,
@@ -197,8 +256,9 @@ fn sawtooth_path(style: &Style, frame: &Frame, teeth_on_top: bool) -> SvgElement
 /// with a structural class, for the CSS elevation selector and the
 /// color-picker's node lookup in script.js — it never drives color.
 pub(crate) fn tag_background(mut elements: Vec<SvgElement>, class: &str) -> Vec<SvgElement> {
-    if let Some(SvgElement::Rect { class: c, .. } | SvgElement::Path { class: c, .. }) =
-        elements.first_mut()
+    if let Some(SvgElement::Rect { class: c, .. } | SvgElement::Path { class: c, .. }) = elements
+        .iter_mut()
+        .find(|element| matches!(element, SvgElement::Rect { .. } | SvgElement::Path { .. }))
     {
         *c = Some(class.to_string());
     }

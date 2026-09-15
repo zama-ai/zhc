@@ -1,9 +1,9 @@
 use super::*;
 use crate::testlang::{TestInstructionSet, TestLang};
 use crate::visualization::Hierarchy;
-use crate::visualization::composition::{NoClass, StyleModifier, TextBox};
+use crate::visualization::composition::{Fill, NoClass, StyleModifier, TextBox};
 use crate::{AnnIR, IR};
-use zhc_utils::graphics::ColorScale;
+use zhc_utils::graphics::{Color, ColorScale};
 use zhc_utils::svec;
 
 /// Build a small IR and annotate it with a flat hierarchy (all ops at root).
@@ -1180,7 +1180,7 @@ fn test_ann_style_modifier() {
     impl VisualAnnotation for OpAnn {
         fn style_modifier(&self) -> Option<composition::StyleModifier> {
             Some(StyleModifier {
-                fill_color: Some(ColorScale::RAINBOW.interpolate(self.0 as f64 / 5.)),
+                fill: Some(ColorScale::RAINBOW.interpolate(self.0 as f64 / 5.).into()),
                 ..Default::default()
             })
         }
@@ -1215,6 +1215,59 @@ fn test_ann_style_modifier() {
     draw_ann_ir_to_html(&ann_ir.view(), Some(op_annotations));
 }
 
+/// Show non-exclusive class membership with one repeating stripe per class.
+#[test]
+fn test_non_exclusive_class_fill() {
+    // red -> red+blue -> red+blue+green -> green
+    let mut ir: IR<TestLang> = IR::empty();
+    let (input, value) = ir.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![]);
+    let (red_blue, value) = ir.add_op(TestInstructionSet::Inc, svec![value[0]]);
+    let (all_classes, value) = ir.add_op(TestInstructionSet::Inc, svec![value[0]]);
+    let (green, _) = ir.add_op(TestInstructionSet::Return, svec![value[0]]);
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct Classes {
+        label: &'static str,
+        colors: Vec<Color>,
+    }
+
+    impl VisualAnnotation for Classes {
+        fn style_modifier(&self) -> Option<StyleModifier> {
+            let fill = match self.colors.as_slice() {
+                [color] => Fill::Solid(*color),
+                colors => Fill::stripes_with_width(colors.iter().copied(), 20.),
+            };
+            Some(StyleModifier {
+                fill: Some(fill),
+                ..Default::default()
+            })
+        }
+
+        fn widget(&self) -> Option<Box<dyn composition::DynamicElement>> {
+            Some(Box::new(TextBox::<NoClass>::new(None, self.label.into())))
+        }
+    }
+
+    let annotation = |label, colors| Classes { label, colors };
+    let mut op_annotations = ir.empty_opmap();
+    op_annotations.insert(input, annotation("red", vec![Color::RED]));
+    op_annotations.insert(
+        red_blue,
+        annotation("red + blue", vec![Color::RED, Color::BLUE]),
+    );
+    op_annotations.insert(
+        all_classes,
+        annotation(
+            "red + blue + green",
+            vec![Color::RED, Color::BLUE, Color::GREEN],
+        ),
+    );
+    op_annotations.insert(green, annotation("green", vec![Color::GREEN]));
+
+    let ann_ir = AnnIR::new(&ir, op_annotations, ir.filled_valmap(()));
+    draw_ann_ir_to_html(&ann_ir.view(), None);
+}
+
 #[test]
 fn test_val_ann_style_modifier() {
     // inp (root) -> inc1 (a/b) -> inc2 (a) -> ret (root), each value annotated with its depth
@@ -1236,7 +1289,7 @@ fn test_val_ann_style_modifier() {
     impl VisualAnnotation for ValAnn {
         fn style_modifier(&self) -> Option<composition::StyleModifier> {
             Some(StyleModifier {
-                fill_color: Some(ColorScale::RAINBOW.interpolate(self.0 as f64 / 2.)),
+                fill: Some(ColorScale::RAINBOW.interpolate(self.0 as f64 / 2.).into()),
                 ..Default::default()
             })
         }

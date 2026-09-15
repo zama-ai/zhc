@@ -203,19 +203,19 @@ impl VisualAnnotation for OpState {
     fn style_modifier(&self) -> Option<StyleModifier> {
         match self {
             OpState::Pending => Some(StyleModifier {
-                fill_color: Some(Color::WHITE),
+                fill: Some(Color::WHITE.into()),
                 ..Default::default()
             }),
             OpState::Evaluated(_) => Some(StyleModifier {
-                fill_color: Some(Color::GREEN),
+                fill: Some(Color::GREEN.into()),
                 ..Default::default()
             }),
             OpState::Panicked(_) => Some(StyleModifier {
-                fill_color: Some(Color::RED),
+                fill: Some(Color::RED.into()),
                 ..Default::default()
             }),
             OpState::PoisonedBy(_) => Some(StyleModifier {
-                fill_color: Some(Color::ORANGE),
+                fill: Some(Color::ORANGE.into()),
                 ..Default::default()
             }),
         }

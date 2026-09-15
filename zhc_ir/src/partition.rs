@@ -140,8 +140,10 @@ impl Dumpable for PartitionId {
 impl VisualAnnotation for PartitionId {
     fn style_modifier(&self) -> Option<StyleModifier> {
         Some(StyleModifier {
-            fill_color: Some(
-                ColorScale::RAINBOW.interpolate((self.id as f64 * 0.6180339887498949) % 1.0),
+            fill: Some(
+                ColorScale::RAINBOW
+                    .interpolate((self.id as f64 * 0.6180339887498949) % 1.0)
+                    .into(),
             ),
             ..Default::default()
         })

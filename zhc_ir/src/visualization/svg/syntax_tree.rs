@@ -11,6 +11,11 @@ pub struct Svg {
 #[allow(unused)]
 #[derive(Debug, Clone)]
 pub enum SvgElement {
+    Pattern {
+        id: String,
+        colors: Vec<String>,
+        stripe_width: f64,
+    },
     Rect {
         x: f64,
         y: f64,
@@ -124,6 +129,29 @@ impl std::fmt::Display for Svg {
 impl std::fmt::Display for SvgElement {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            SvgElement::Pattern {
+                id,
+                colors,
+                stripe_width,
+            } => {
+                let width = stripe_width * colors.len() as f64;
+                writeln!(
+                    f,
+                    r#"  <defs><pattern id="{}" width="{}" height="{}" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">"#,
+                    id, width, width
+                )?;
+                for (index, color) in colors.iter().enumerate() {
+                    writeln!(
+                        f,
+                        r#"    <rect x="{}" y="0" width="{}" height="{}" fill="{}" />"#,
+                        index as f64 * stripe_width,
+                        stripe_width,
+                        width,
+                        color
+                    )?;
+                }
+                writeln!(f, "  </pattern></defs>")
+            }
             SvgElement::Rect {
                 x,
                 y,

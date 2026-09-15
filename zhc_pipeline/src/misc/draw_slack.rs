@@ -16,9 +16,10 @@ struct RelativeSlack {
 impl VisualAnnotation for RelativeSlack {
     fn style_modifier(&self) -> Option<StyleModifier> {
         Some(StyleModifier {
-            fill_color: Some(
+            fill: Some(
                 ColorScale::INVERSE_TRAFFIC_LIGHT
-                    .interpolate(self.slack as f64 / self.max_slack as f64),
+                    .interpolate(self.slack as f64 / self.max_slack as f64)
+                    .into(),
             ),
             ..Default::default()
         })

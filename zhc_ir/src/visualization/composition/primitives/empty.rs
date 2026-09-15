@@ -1,5 +1,5 @@
 use super::*;
-use zhc_utils::graphics::{Color, Frame, Size, Thickness};
+use zhc_utils::graphics::{Frame, Size};
 
 /// Empty element that takes up space according to its padding but renders nothing.
 pub struct Empty<C: Class = NoClass> {
@@ -50,23 +50,6 @@ impl<C: Class> Renderable for Empty<C> {
         let style = self.styler.get();
         let frame = self.get_frame();
 
-        // Only render if there's something visible
-        if style.fill_color == Color::TRANSPARENT && style.border_color == Color::TRANSPARENT {
-            return vec![];
-        }
-
-        vec![SvgElement::Rect {
-            x: frame.position.x.as_f64(),
-            y: frame.position.y.as_f64(),
-            width: frame.size.width.as_f64(),
-            height: frame.size.height.as_f64(),
-            rx: (style.corner_radius > Thickness::ZERO).then(|| style.corner_radius.as_f64()),
-            fill: Some(style.fill_color.to_string()),
-            stroke: Some(style.border_color.to_string()),
-            stroke_width: Some(style.border_width.as_f64()),
-            class: None,
-            id: None,
-            data_val: None,
-        }]
+        background_rect(&style, &frame)
     }
 }

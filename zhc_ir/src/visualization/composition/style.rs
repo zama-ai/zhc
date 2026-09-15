@@ -33,6 +33,42 @@ pub enum CardShape {
     SawtoothBottom,
 }
 
+/// Paint used for the background of a styled element.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Fill {
+    /// A single, uniform color.
+    Solid(Color),
+    /// Diagonal, repeating stripes, one for each color in order.
+    Stripes {
+        colors: Vec<Color>,
+        stripe_width: f64,
+    },
+}
+
+impl Fill {
+    /// Creates repeating diagonal stripes with a default width of 6 SVG units.
+    pub fn stripes(colors: impl IntoIterator<Item = Color>) -> Self {
+        Self::Stripes {
+            colors: colors.into_iter().collect(),
+            stripe_width: 6.0,
+        }
+    }
+
+    /// Creates repeating diagonal stripes with a custom width in SVG units.
+    pub fn stripes_with_width(colors: impl IntoIterator<Item = Color>, stripe_width: f64) -> Self {
+        Self::Stripes {
+            colors: colors.into_iter().collect(),
+            stripe_width,
+        }
+    }
+}
+
+impl From<Color> for Fill {
+    fn from(color: Color) -> Self {
+        Self::Solid(color)
+    }
+}
+
 /// Visual styling properties for UI components.
 #[derive(Clone)]
 pub struct Style {
@@ -45,7 +81,7 @@ pub struct Style {
     pub spacing: Thickness,
     pub border_width: Thickness,
     pub border_color: Color,
-    pub fill_color: Color,
+    pub fill: Fill,
     pub corner_radius: Thickness,
     pub halign: HAlign,
     pub valign: VAlign,
@@ -68,7 +104,7 @@ impl Style {
         spacing: Thickness::new(2.),
         border_width: Thickness::new(0.2),
         border_color: Color::TRANSPARENT,
-        fill_color: Color::TRANSPARENT,
+        fill: Fill::Solid(Color::TRANSPARENT),
         corner_radius: Thickness::ZERO,
         halign: HAlign::Center,
         valign: VAlign::Center,
@@ -90,7 +126,7 @@ impl Style {
             spacing: modifier.spacing.unwrap_or(self.spacing),
             border_width: modifier.border_width.unwrap_or(self.border_width),
             border_color: modifier.border_color.unwrap_or(self.border_color),
-            fill_color: modifier.fill_color.unwrap_or(self.fill_color),
+            fill: modifier.fill.unwrap_or(self.fill),
             corner_radius: modifier.corner_radius.unwrap_or(self.corner_radius),
             halign: modifier.halign.unwrap_or(self.halign),
             valign: modifier.valign.unwrap_or(self.valign),
@@ -120,7 +156,7 @@ pub struct StyleModifier {
     pub spacing: Option<Thickness>,
     pub border_width: Option<Thickness>,
     pub border_color: Option<Color>,
-    pub fill_color: Option<Color>,
+    pub fill: Option<Fill>,
     pub corner_radius: Option<Thickness>,
     pub halign: Option<HAlign>,
     pub valign: Option<VAlign>,
@@ -148,7 +184,7 @@ impl StyleModifier {
         spacing: None,
         border_width: None,
         border_color: None,
-        fill_color: None,
+        fill: None,
         corner_radius: None,
         halign: None,
         valign: None,
@@ -186,7 +222,7 @@ impl Class for NoClass {}
 pub struct OpInputPortClass;
 impl Class for OpInputPortClass {
     const STYLE: Style = Style {
-        fill_color: Color::WHITE,
+        fill: Fill::Solid(Color::WHITE),
         border_width: Thickness::new(1.),
         border_color: Color::rgb(214, 218, 226),
         font_color: Color::rgb(43, 49, 58),
@@ -211,7 +247,7 @@ impl Class for OpPortTextClass {
 pub struct OpInputsClass;
 impl Class for OpInputsClass {
     const STYLE: Style = Style {
-        fill_color: Color::TRANSPARENT,
+        fill: Fill::Solid(Color::TRANSPARENT),
         border_color: Color::TRANSPARENT,
         padding: Thickness::new(4.),
         ..Style::DEFAULT
@@ -240,7 +276,7 @@ impl Class for OpCommentClass {
 pub struct OpOutputPortClass;
 impl Class for OpOutputPortClass {
     const STYLE: Style = Style {
-        fill_color: Color::WHITE,
+        fill: Fill::Solid(Color::WHITE),
         border_width: Thickness::new(1.),
         border_color: Color::rgb(214, 218, 226),
         font_color: Color::rgb(43, 49, 58),
@@ -255,7 +291,7 @@ impl Class for OpOutputPortClass {
 pub struct OpOutputsClass;
 impl Class for OpOutputsClass {
     const STYLE: Style = Style {
-        fill_color: Color::TRANSPARENT,
+        fill: Fill::Solid(Color::TRANSPARENT),
         border_color: Color::TRANSPARENT,
         padding: Thickness::new(4.),
         ..Style::DEFAULT
@@ -265,7 +301,7 @@ impl Class for OpOutputsClass {
 pub struct InputOpClass;
 impl Class for InputOpClass {
     const STYLE: Style = Style {
-        fill_color: Color::WHITE,
+        fill: Fill::Solid(Color::WHITE),
         valign: VAlign::Top,
         border_color: Color::rgb(200, 207, 217),
         border_width: Thickness::new(1.),
@@ -281,7 +317,7 @@ impl Class for InputOpClass {
 pub struct OpClass;
 impl Class for OpClass {
     const STYLE: Style = Style {
-        fill_color: Color::WHITE,
+        fill: Fill::Solid(Color::WHITE),
         valign: VAlign::Top,
         border_color: Color::rgb(200, 207, 217),
         border_width: Thickness::new(1.),
@@ -296,7 +332,7 @@ impl Class for OpClass {
 pub struct EffectOpClass;
 impl Class for EffectOpClass {
     const STYLE: Style = Style {
-        fill_color: Color::WHITE,
+        fill: Fill::Solid(Color::WHITE),
         valign: VAlign::Top,
         border_color: Color::rgb(200, 207, 217),
         border_width: Thickness::new(1.),
@@ -358,7 +394,7 @@ impl Class for CurveClass {
 pub struct GroupClass;
 impl Class for GroupClass {
     const STYLE: Style = Style {
-        fill_color: Color::rgb(96, 120, 152).with_opacity(0.12),
+        fill: Fill::Solid(Color::rgb(96, 120, 152).with_opacity(0.12)),
         corner_radius: Thickness::new(10.),
         padding: Thickness::new(4.),
         spacing: Thickness::new(2.),
@@ -385,7 +421,7 @@ impl Class for GroupTitleClass {
 pub struct GroupInputPortClass;
 impl Class for GroupInputPortClass {
     const STYLE: Style = Style {
-        fill_color: Color::LIGHTSKYBLUE,
+        fill: Fill::Solid(Color::LIGHTSKYBLUE),
         border_color: Color::BLACK,
         padding: Thickness::new(0.),
         spacing: Thickness::new(0.),
@@ -396,7 +432,7 @@ impl Class for GroupInputPortClass {
 pub struct GroupOutputPortClass;
 impl Class for GroupOutputPortClass {
     const STYLE: Style = Style {
-        fill_color: Color::LIGHTSKYBLUE,
+        fill: Fill::Solid(Color::LIGHTSKYBLUE),
         border_color: Color::BLACK,
         padding: Thickness::new(0.),
         spacing: Thickness::new(0.),
@@ -407,7 +443,7 @@ impl Class for GroupOutputPortClass {
 pub struct GroupInputsClass;
 impl Class for GroupInputsClass {
     const STYLE: Style = Style {
-        fill_color: Color::TRANSPARENT,
+        fill: Fill::Solid(Color::TRANSPARENT),
         border_color: Color::BLACK,
         padding: Thickness::new(0.),
         spacing: Thickness::new(0.),
@@ -419,7 +455,7 @@ impl Class for GroupInputsClass {
 pub struct GroupOutputsClass;
 impl Class for GroupOutputsClass {
     const STYLE: Style = Style {
-        fill_color: Color::TRANSPARENT,
+        fill: Fill::Solid(Color::TRANSPARENT),
         border_color: Color::BLACK,
         padding: Thickness::new(0.),
         spacing: Thickness::new(0.),
