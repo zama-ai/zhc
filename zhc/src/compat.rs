@@ -13,83 +13,106 @@ use zhc_pipeline::Pipeline;
 use zhc_utils::units::Microseconds;
 
 /// Iops supported by the pipeline.
+/// Force discriminants by hand to match the legacy fixed opcode bytes, so
+/// [`get_opcode`](Iop::get_opcode) stays compatible with tooling and deployed hardware that
+/// already expect those specific values, rather than an incidental declaration order.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[repr(u8)]
 pub enum Iop {
-    CmpGt,
-    CmpGte,
-    CmpLt,
-    CmpLte,
-    CmpEq,
-    CmpNeq,
-    IfThenElse,
-    IfThenZero,
-    /// Wrapping addition of two encrypted integers.
-    Add,
-    /// Wrapping subtraction of two encrypted integers.
-    Sub,
-    /// Wrapping multiplication of two encrypted integers (LSB result).
-    Mul,
-    /// Wrapping multiplication of an encrypted integer by a scalar (`ct * imm`, LSB result).
-    Muls,
-    Ilog2,
-    CountZeros,
-    CountOnes,
-    LeadingZeros,
-    LeadingOnes,
-    TrailingZeros,
-    TrailingOnes,
-    /// Unsigned division of two encrypted integers (quotient and remainder).
-    Div,
-    /// Unsigned remainder of two encrypted integers.
-    Mod,
-    /// Unsigned division of an encrypted integer by a scalar (quotient and remainder).
-    Divs,
-    /// Unsigned remainder of an encrypted integer by a scalar.
-    Mods,
-    Adds,
-    /// Wrapping subtraction of a scalar from an encrypted integer (`ct - imm`).
-    Subs,
-    /// Wrapping subtraction of an encrypted integer from a scalar (`imm - ct`).
-    Ssub,
-    /// `ct + imm` with unsigned-overflow detection.
-    OvfAdds,
-    /// `ct * imm` with overflow detection.
-    OvfMuls,
-    /// `ct - imm` with unsigned-underflow detection.
-    OvfSubs,
-    /// `imm - ct` with unsigned-underflow detection.
-    OvfSsub,
-    OvfAdd,
-    OvfSub,
-    OvfMul,
-    BwAnd,
-    BwOr,
-    BwXor,
-    BwNot,
-    RightShift,
-    LeftShift,
-    RightRot,
-    LeftRot,
-    /// Logical right shift of an encrypted integer by a scalar.
-    RightShifts,
-    /// Logical left shift of an encrypted integer by a scalar.
-    LeftShifts,
-    /// Right rotation of an encrypted integer by a scalar.
-    RightRots,
-    /// Left rotation of an encrypted integer by a scalar.
-    LeftRots,
-    Erc7984,
-    Erc7984Simd,
-    AddSimd,
-    /// Block for block copy of an encrypted integer (`dst = src`).
-    MemCpy,
-    Cast {
-        to_size: u16,
-    },
-    Flip,
-    Sum {
-        n: u16,
-    },
+    // Ct x Imm -------------------------------------------------------------------
+    // Arith operations
+    Adds = 0xA0,
+    Subs = 0xA1,
+    Ssub = 0xA2,
+    Muls = 0xA3,
+    Divs = 0xA4,
+    Mods = 0xA5,
+    // Overflowing Arith
+    OvfAdds = 0xA8,
+    OvfSubs = 0xA9,
+    OvfSsub = 0xAA,
+    OvfMuls = 0xAB,
+
+    // Rotation and Shift
+    RightShifts = 0xAC,
+    LeftShifts = 0xAD,
+    RightRots = 0xAE,
+    LeftRots = 0xAF,
+
+    // Ct x Ct -------------------------------------------------------------------
+    // Arith operations
+    Add = 0xE0,
+    Sub = 0xE2,
+    Mul = 0xE4,
+    Div = 0xE5,
+    Mod = 0xE6,
+
+    // Overflowing Arith
+    OvfAdd = 0xE8,
+    OvfSub = 0xEA,
+    OvfMul = 0xEC,
+
+    // BW operations
+    BwAnd = 0xD0,
+    BwOr = 0xD1,
+    BwXor = 0xD2,
+    BwNot = 0xD3,
+
+    // Rotation and shift
+    RightShift = 0xDC,
+    LeftShift = 0xDD,
+    RightRot = 0xDE,
+    LeftRot = 0xDF,
+
+    // Cmp operations
+    CmpGt = 0xC0,
+    CmpGte = 0xC1,
+    CmpLt = 0xC2,
+    CmpLte = 0xC3,
+    CmpEq = 0xC4,
+    CmpNeq = 0xC5,
+
+    // Ternary operations
+    // IfThenZero -> Select or force to 0
+    // Take 1Ct and a Boolean Ct as input
+    IfThenZero = 0xCA,
+    // IfThenElse -> Select operation
+    // Take 2Ct and a Boolean Ct as input
+    IfThenElse = 0xCB,
+
+    // Custom algorithm
+    // ERC7984 -> Found xfer algorithm
+    // 2Ct <- func(3Ct)
+    Erc7984 = 0x80,
+
+    // Count bits
+    CountZeros = 0x81,
+    CountOnes = 0x82,
+    Ilog2 = 0x83,
+    LeadingZeros = 0x84,
+    LeadingOnes = 0x85,
+    TrailingZeros = 0x86,
+    TrailingOnes = 0x87,
+
+    // SIMD for maximum throughput
+    AddSimd = 0xF0,
+    Erc7984Simd = 0xF1,
+
+    Sum { n: u16 } = 0xF8,
+
+    // Utility operations --------------------------------------------------------
+    Cast { to_size: u16 } = 0xFC,
+    Flip = 0xFE,
+    // Used to handle real clone of ciphertext already uploaded in the Hpu memory
+    MemCpy = 0xFF,
+}
+
+impl Iop {
+    pub fn get_opcode(&self) -> u8 {
+        // SAFETY: repr(u32) guarantees the discriminant is the first u8 in the layout
+        // NB: Enum discriminant is used and opcode
+        unsafe { *(self as *const Self as *const u8) }
+    }
 }
 
 impl Iop {
