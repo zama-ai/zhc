@@ -7,6 +7,7 @@ use crate::types::*;
 use ::zhc_builder::{Builder, CiphertextBlock, PlaintextBlock};
 use std::ffi::c_char;
 
+#[repr(transparent)]
 pub struct zhc_builder(pub(crate) Builder);
 
 /// Shorthand: dereferences the builder handle to the wrapped [`Builder`].
@@ -74,10 +75,29 @@ pub unsafe extern "C" fn zhc_builder_draw(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn zhc_builder_dump_noise(builder: *const zhc_builder) -> zhc_status {
+pub unsafe extern "C" fn zhc_builder_debug(
+    builder: *const zhc_builder,
+    out: *mut *mut c_char,
+) -> zhc_status {
+    guard(|| unsafe { write_debug(builder.cast::<Builder>(), out) })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn zhc_builder_dump(
+    builder: *const zhc_builder,
+    out: *mut *mut c_char,
+) -> zhc_status {
+    guard(|| unsafe { write_dump(builder.cast::<Builder>(), out) })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn zhc_builder_dump_noise(
+    builder: *const zhc_builder,
+    out: *mut *mut c_char,
+) -> zhc_status {
     guard(|| {
-        unsafe { b(builder) }?.dump_noise();
-        Ok(())
+        let s = unsafe { b(builder) }?.dump_noise_to_string();
+        unsafe { write_string(out, s) }
     })
 }
 

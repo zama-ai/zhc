@@ -1,6 +1,7 @@
 #include "zhc.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/stat.h>
 
 #define CHECK(call)                                                                        \
@@ -32,7 +33,27 @@ int main(int argc, char **argv) {
     CHECK(zhc_builder_block_add(b, blk, blk, &sum));
     CHECK(zhc_builder_integer_ciphertext_output(b, in));
 
-    CHECK(zhc_builder_dump_noise(b));
+    char *dump = NULL, *noise = NULL, *debug = NULL, *block_debug = NULL;
+    CHECK(zhc_builder_dump(b, &dump));
+    CHECK(zhc_builder_dump_noise(b, &noise));
+    CHECK(zhc_builder_debug(b, &debug));
+    CHECK(zhc_ciphertext_block_debug(sum, &block_debug));
+    if (strstr(dump, "Sig:") == NULL || strstr(dump, "add_ct") == NULL) {
+        fprintf(stderr, "unexpected builder dump:\n%s\n", dump);
+        return 1;
+    }
+    if (strstr(noise, "%") == NULL) {
+        fprintf(stderr, "unexpected noise dump:\n%s\n", noise);
+        return 1;
+    }
+    if (strlen(debug) == 0 || strlen(block_debug) == 0) return 1;
+    printf("dump: %zu bytes, noise: %zu bytes, debug: %zu bytes, block: %s\n", strlen(dump),
+           strlen(noise), strlen(debug), block_debug);
+    zhc_string_free(dump);
+    zhc_string_free(noise);
+    zhc_string_free(debug);
+    zhc_string_free(block_debug);
+    zhc_string_free(NULL);
     CHECK(zhc_builder_check_noise(b));
 
     zhc_file_handle *f = NULL;

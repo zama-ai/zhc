@@ -1515,7 +1515,7 @@ dependencies = [
 
 [[package]]
 name = "zhc_c_api"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "zhc_builder",
  "zhc_config",

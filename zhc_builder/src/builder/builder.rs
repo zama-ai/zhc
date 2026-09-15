@@ -2684,6 +2684,11 @@ impl Builder {
         analyze_noise(&*self.ir(), &self.spec().matching_plaintext_block_spec()).dump();
     }
 
+    /// String form of [`dump_noise`](Self::dump_noise).
+    pub fn dump_noise_to_string(&self) -> String {
+        analyze_noise(&*self.ir(), &self.spec().matching_plaintext_block_spec()).dump_to_string()
+    }
+
     /// Asserts that the circuit built so far stays within the noise budget.
     ///
     /// Homomorphic operations accumulate noise in ciphertext blocks. This method runs a static

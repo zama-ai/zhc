@@ -421,7 +421,8 @@ mod test {
     #[test]
     fn correctness_overflow_muls_lsb() {
         for size in (2..128).step_by(2) {
-            overflow_muls(IntegerCiphertextSpec::new(size, 2, 2)).test_random(100, overflow_semantic);
+            overflow_muls(IntegerCiphertextSpec::new(size, 2, 2))
+                .test_random(100, overflow_semantic);
         }
     }
 
