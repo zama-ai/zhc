@@ -93,6 +93,30 @@ impl Dumpable for PbsUsage {
     }
 }
 
+/// sync instruction counts
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct SyncUsage(pub usize);
+
+/// Counts sync instructions, split into global and inner one.
+pub fn sync_usage(ir: &IR<DopLang>) -> SyncUsage {
+    let mut usage = SyncUsage::default();
+    for op in ir.walk_ops_linear() {
+        use DopInstructionSet::*;
+        let instr = op.get_instruction();
+        match instr {
+            SYNC => usage.0 += 1,
+            _ => {}
+        }
+    }
+    usage
+}
+
+impl Dumpable for SyncUsage {
+    fn dump_to_string(&self) -> String {
+        format!("{} Sync instruction(s)", self.0,)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::doplang::parse_assembly;
