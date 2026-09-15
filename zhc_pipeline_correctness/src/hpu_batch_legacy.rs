@@ -1,5 +1,5 @@
 use crate::equivalence_check::check_iop_hpu_equivalence;
-use zhc_builder::{Builder, CiphertextSpec, add};
+use zhc_builder::{Builder, IntegerCiphertextSpec, add};
 use zhc_config::hpu::PhysicalConfig;
 use zhc_ir::IR;
 use zhc_langs::{hpulang::HpuLang, ioplang::IopLang};
@@ -19,7 +19,7 @@ fn pipeline(ir: &IR<IopLang>) -> IR<HpuLang> {
 
 #[test]
 fn test_batch_scheduler() {
-    let ir = pipeline(&add(CiphertextSpec::new(16, 2, 2)).optimize_ir());
+    let ir = pipeline(&add(IntegerCiphertextSpec::new(16, 2, 2)).optimize_ir());
     assert_display_is!(
         ir.format().show_types(false),
         r#"
@@ -159,7 +159,7 @@ fn correctness() {
     };
     for iop in Iop::TEST_ITER {
         for size in (2..=128).step_by(2) {
-            check(iop.to_builder(CiphertextSpec::new(size, 2, 2)));
+            check(iop.to_builder(IntegerCiphertextSpec::new(size, 2, 2)));
         }
     }
 }

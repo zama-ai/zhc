@@ -1,4 +1,4 @@
-use super::{CiphertextSpec, PlaintextSpec};
+use super::{CiphertextBlockSpec, IntegerCiphertextSpec, IntegerPlaintextSpec};
 use std::fmt::Debug;
 
 /// A circuit I/O type, either encrypted or plaintext.
@@ -7,25 +7,33 @@ use std::fmt::Debug;
 /// specification that fully describes the integer's bit-width and per-block layout.
 #[derive(Clone, PartialEq, Eq)]
 pub enum Type {
-    /// An encrypted integer with the given [`CiphertextSpec`].
-    Ciphertext(CiphertextSpec),
-    /// A plaintext integer with the given [`PlaintextSpec`].
-    Plaintext(PlaintextSpec),
+    /// An encrypted integer with the given [`IntegerCiphertextSpec`].
+    IntegerCiphertext(IntegerCiphertextSpec),
+    /// An encrypted Boolean stored in one clean ciphertext block.
+    BoolCiphertext(CiphertextBlockSpec),
+    /// A plaintext integer with the given [`IntegerPlaintextSpec`].
+    IntegerPlaintext(IntegerPlaintextSpec),
 }
 
 impl Debug for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Type::Ciphertext(spec) => write!(
+            Type::IntegerCiphertext(spec) => write!(
                 f,
-                "Ciphertext<{}, {}, {}>",
+                "IntegerCiphertext<{}, {}, {}>",
                 spec.int_size(),
                 spec.block_spec().carry_size(),
                 spec.block_spec().message_size()
             ),
-            Type::Plaintext(spec) => write!(
+            Type::BoolCiphertext(spec) => write!(
                 f,
-                "Plaintext<{}, {}>",
+                "BoolCiphertext<{}, {}>",
+                spec.carry_size(),
+                spec.message_size()
+            ),
+            Type::IntegerPlaintext(spec) => write!(
+                f,
+                "IntegerPlaintext<{}, {}>",
                 spec.int_size(),
                 spec.block_spec().message_size()
             ),

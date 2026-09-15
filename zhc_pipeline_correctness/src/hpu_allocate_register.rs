@@ -1,4 +1,4 @@
-use zhc_builder::{Builder, CiphertextSpec, add, cmp_gt};
+use zhc_builder::{Builder, IntegerCiphertextSpec, add, cmp_gt};
 use zhc_config::hpu::{HpuConfig, PhysicalConfig};
 use zhc_crypto::integer_semantics::lut::LutRegistry;
 use zhc_ir::{IR, PrintWalker};
@@ -29,7 +29,7 @@ fn pipeline(ir: &IR<IopLang>) -> (IR<DopLang>, LutRegistry) {
 
 #[test]
 fn test_allocate_add_ir() {
-    let ir = pipeline(&add(CiphertextSpec::new(16, 2, 2)).optimize_ir()).0;
+    let ir = pipeline(&add(IntegerCiphertextSpec::new(16, 2, 2)).optimize_ir()).0;
     assert_display_is!(
         ir.format(),
         r#"
@@ -109,7 +109,7 @@ fn test_allocate_add_ir() {
 
 #[test]
 fn test_allocate_cmp_ir() {
-    let ir = pipeline(&cmp_gt(CiphertextSpec::new(16, 2, 2)).optimize_ir()).0;
+    let ir = pipeline(&cmp_gt(IntegerCiphertextSpec::new(16, 2, 2)).optimize_ir()).0;
     assert_display_is!(
         ir.format().with_walker(PrintWalker::Linear),
         r#"
@@ -184,7 +184,7 @@ fn allocator_correctness() {
     };
     for iop in Iop::TEST_ITER {
         for size in (2..=128).step_by(2) {
-            check(iop.to_builder(CiphertextSpec::new(size, 2, 2)));
+            check(iop.to_builder(IntegerCiphertextSpec::new(size, 2, 2)));
         }
     }
 }
