@@ -15,3 +15,4 @@ zhc_crypto.workspace = true
 zhc_ir.workspace = true
 zhc_langs.workspace = true
 zhc_utils.workspace = true
+zhc_pipeline_correctness_macro.workspace = true

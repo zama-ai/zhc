@@ -1,8 +1,10 @@
-use zhc_builder::{Builder, CiphertextSpec, add, cmp_gt};
+use zhc::compat::Iop;
+use zhc_builder::{CiphertextSpec, add, cmp_gt};
 use zhc_config::hpu::{HpuConfig, PhysicalConfig};
 use zhc_crypto::integer_semantics::lut::LutRegistry;
 use zhc_ir::{IR, PrintWalker};
 use zhc_langs::{doplang::DopLang, ioplang::IopLang};
+use zhc_pipeline_correctness_macro::test_matrix;
 use zhc_utils::assert_display_is;
 
 use crate::equivalence_check::check_iop_dop_equivalence;
@@ -170,21 +172,13 @@ fn test_allocate_cmp_ir() {
     );
 }
 
-#[test]
+#[test_matrix(iop = @all_iops, size = @all_precs)]
 #[ignore]
-fn allocator_correctness() {
-    use zhc::compat::Iop;
-
+fn correctness(iop: Iop, size: u16) {
     let config = HpuConfig::from(PhysicalConfig::gaussian_64b());
-    let check = |b: Builder| {
-        let spec = *b.spec();
-        let iop_ir = b.optimize_ir();
-        let (dop_ir, lut_reg) = pipeline(&iop_ir);
-        check_iop_dop_equivalence(&iop_ir, &dop_ir, &lut_reg, spec, config.regf_size, 100);
-    };
-    for iop in Iop::TEST_ITER {
-        for size in (2..=128).step_by(2) {
-            check(iop.to_builder(CiphertextSpec::new(size, 2, 2)));
-        }
-    }
+    let b = iop.to_builder(CiphertextSpec::new(size, 2, 2));
+    let spec = *b.spec();
+    let iop_ir = b.optimize_ir();
+    let (dop_ir, lut_reg) = pipeline(&iop_ir);
+    check_iop_dop_equivalence(&iop_ir, &dop_ir, &lut_reg, spec, config.regf_size, 100);
 }

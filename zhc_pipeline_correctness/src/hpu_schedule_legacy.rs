@@ -1,7 +1,9 @@
+use zhc::compat::Iop;
 use zhc_builder::{CiphertextSpec, count_0};
 use zhc_config::hpu::PhysicalConfig;
 use zhc_ir::IR;
 use zhc_langs::{hpulang::HpuLang, ioplang::IopLang};
+use zhc_pipeline_correctness_macro::test_matrix;
 use zhc_utils::assert_display_is;
 
 use crate::equivalence_check::check_iop_hpu_equivalence;
@@ -19,7 +21,7 @@ fn pipeline(ir: &IR<IopLang>) -> IR<HpuLang> {
 }
 
 #[test]
-fn test_scheduler() {
+fn smoke() {
     let ir = pipeline(&count_0(CiphertextSpec::new(16, 2, 2)).optimize_ir());
     assert_display_is!(
         ir.format(),
@@ -135,21 +137,12 @@ fn test_scheduler() {
     )
 }
 
-#[test]
+#[test_matrix(iop = @all_iops, size = @all_precs)]
 #[ignore]
-fn correctness() {
-    use zhc::compat::Iop;
-    use zhc_builder::Builder;
-
-    let check = |b: Builder| {
-        let spec = *b.spec();
-        let iop_ir = b.optimize_ir();
-        let hpu_ir = pipeline(&iop_ir);
-        check_iop_hpu_equivalence(&iop_ir, &hpu_ir, spec, 100);
-    };
-    for iop in Iop::TEST_ITER {
-        for size in (2..=128).step_by(2) {
-            check(iop.to_builder(CiphertextSpec::new(size, 2, 2)));
-        }
-    }
+fn correctness(iop: Iop, size: u16) {
+    let b = iop.to_builder(CiphertextSpec::new(size, 2, 2));
+    let spec = *b.spec();
+    let iop_ir = b.optimize_ir();
+    let hpu_ir = pipeline(&iop_ir);
+    check_iop_hpu_equivalence(&iop_ir, &hpu_ir, spec, 100);
 }

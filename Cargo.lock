@@ -1591,7 +1591,17 @@ dependencies = [
  "zhc_ir",
  "zhc_langs",
  "zhc_pipeline",
+ "zhc_pipeline_correctness_macro",
  "zhc_utils",
+]
+
+[[package]]
+name = "zhc_pipeline_correctness_macro"
+version = "0.9.1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
 ]
 
 [[package]]
