@@ -699,6 +699,8 @@ pub fn generate_translation_table(
                 flag: UserFlag { flag },
                 slot,
             } => {
+                // NB: Mode encoding in PeUcore is != than usual only used 1b (ADDR || TEMPLATE)
+                // TODO: clean it
                 let (mode, slot_hex) = match slot {
                     CtMem::Io(CtIo { addr }) => (MEM_ADDR, *addr as u16),
                     CtMem::Heap(CtHeap { addr }) => (MEM_HEAP, *addr as u16),
@@ -721,10 +723,23 @@ pub fn generate_translation_table(
                 flag: UserFlag { flag },
                 slot,
             } => {
+                // NB: Mode encoding in PeUcore is != than usual only used 1b (ADDR || TEMPLATE)
+                // TODO: clean it
                 let (mode, slot_hex) = match slot {
                     CtMem::Io(CtIo { addr }) => (MEM_ADDR, *addr as u16),
                     CtMem::Heap(CtHeap { addr }) => (MEM_HEAP, *addr as u16),
-                    _ => panic!("Unexpected slot argument in LD_B2B"),
+                    CtMem::Src(CtSrcVar { id, block }) => {
+                        if *flag == 0 {
+                            (MEM_HEAP, ((*id as u16) << 8) + *block as u16)
+                        } else {
+                            panic!(
+                                "Unexpected CtMem::Src slot argument in LD_B2B. This slot required prefetch mode (i.e F0)."
+                            )
+                        }
+                    }
+                    CtMem::Dst(ct_dst_var) => {
+                        panic!("Unexpected CtMem::Dst slot argument in LD_B2B")
+                    }
                 };
                 output.push(
                     PeUcoreHex::new()
