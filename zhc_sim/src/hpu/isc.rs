@@ -136,7 +136,7 @@ impl DopOperandExt for DopInstructionSet {
             PBS_ML8_F { src, .. } => eq(arg, *src),
             _START => false,
             _END => false,
-            SYNC => false,
+            SYNC { .. } => false,
             LD_B2B { .. } | WAIT { .. } | NOTIFY { .. } => panic!(),
         }
     }
@@ -163,7 +163,7 @@ impl DopOperandExt for DopInstructionSet {
             PBS_ML8_F { dst, .. } => Some((*dst).into()),
             _START => None,
             _END => None,
-            SYNC => None,
+            SYNC { .. } => None,
             LD_B2B { .. } | WAIT { .. } | NOTIFY { .. } => panic!(),
         }
     }
@@ -190,7 +190,7 @@ impl DopOperandExt for DopInstructionSet {
             PBS_ML8_F { src, .. } => Some((*src).into()),
             _START => None,
             _END => None,
-            SYNC => None,
+            SYNC { .. } => None,
             LD_B2B { .. } | WAIT { .. } | NOTIFY { .. } => panic!(),
         }
     }
@@ -217,7 +217,7 @@ impl DopOperandExt for DopInstructionSet {
             PBS_ML8_F { .. } => None,
             _START => None,
             _END => None,
-            SYNC => None,
+            SYNC { .. } => None,
             LD_B2B { .. } | WAIT { .. } | NOTIFY { .. } => panic!(),
         }
     }
@@ -339,7 +339,7 @@ impl Pool {
         // An instruction _write lock_ is the number of instructions before, that need to write into
         // our sources / destination.
         match (op, op.get_dst(), op.get_src1(), op.get_src2()) {
-            (RawDOp::SYNC, _, _, _) => {
+            (RawDOp::SYNC { .. }, _, _, _) => {
                 // Special case of the sync op -> it write-locks on every dop in the pool.
                 PredLock(self.slots.iter().map(|s| s.dop.id).collect())
             }

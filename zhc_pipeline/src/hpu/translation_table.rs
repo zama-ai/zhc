@@ -264,15 +264,26 @@ pub struct PeUcoreHex {
 }
 
 /// PeSync instructions
+///
+/// `flag`/`hid`/`iid` only carry meaningful data when `is_inner_sync` is set (an inner sync
+/// generated at runtime, e.g. by ucore/hpu_sim for a multi-HPU `NOTIFY` transfer) — they're
+/// ignored otherwise, but kept in the wire layout (rather than a narrower ad-hoc encoding) so
+/// this stays the single spec both the real encode/decode path and hpu_sim build on.
 #[bitfield(u32)]
 pub struct PeSyncHex {
-    #[bits(11)]
-    _pad: u32,
     #[bits(6)]
     flag: u8,
-    is_inner_sync: bool,
+    #[bits(2)]
+    _pad_a: u8,
+    #[bits(3)]
+    hid: u8,
+    #[bits(5)]
+    _pad_b: u8,
     #[bits(8)]
     iid: u8,
+    is_inner_sync: bool,
+    #[bits(1)]
+    _pad_c: u8,
     #[bits(6)]
     opcode: u8,
 }
@@ -758,10 +769,23 @@ pub fn generate_translation_table(
                         .0,
                 );
             }
-            _START | _END => {}
-            a => {
-                panic!("Unexpected Doplang Operation encountered: {a}")
+            SYNC {
+                is_inner,
+                flag: UserFlag { flag },
+                hid: VirtId { id: hid },
+                iid,
+            } => {
+                output.push(
+                    PeSyncHex::new()
+                        .with_is_inner_sync(*is_inner)
+                        .with_flag(*flag)
+                        .with_hid(*hid)
+                        .with_iid(*iid)
+                        .with_opcode(u8::from(DOpCode::SYNC))
+                        .0,
+                );
             }
+            _START | _END => {}
         };
     }
     output[0] = (output.len() - 1).sas();
@@ -782,11 +806,8 @@ pub fn generate_translation_table(
 ///
 /// # Panics
 ///
-/// Panics if the word count doesn't match the declared length, if an unrecognized opcode or
-/// memory mode is encountered, or on `SYNC`: its hardware encoding needs sync metadata
-/// (`iid`/`hid`/`flag`) that `DopInstructionSet::SYNC` doesn't carry, so — like
-/// `generate_translation_table`, which has no encode arm for it either — it isn't supported in
-/// this direction.
+/// Panics if the word count doesn't match the declared length, or if an unrecognized opcode or
+/// memory mode is encountered.
 pub fn decode_translation_table(
     words: &[DOpRepr],
     lut_relocation: Option<&[LutId]>,
@@ -997,7 +1018,8 @@ pub fn instruction_from_dop_repr(
             };
             let dst = ct_reg(mask, hex.dst_rid());
             // All PBS variants share the same `LutId` space (see `LutRegistry`), so every one of
-            // them must be resolved through `lut_relocation`, matching `generate_translation_table`.
+            // them must be resolved through `lut_relocation`, matching
+            // `generate_translation_table`.
             let gid = resolve_gid(hex.gid())?;
             let lut = LutRef { id: gid as u16 };
             match dopcode {
@@ -1060,6 +1082,15 @@ pub fn instruction_from_dop_repr(
                 virt_id: VirtId { id: hex.hid() },
                 flag: UserFlag { flag: hex.flag() },
                 slot,
+            }
+        }
+        DOpCode::SYNC => {
+            let hex = PeSyncHex::from_bits(word);
+            SYNC {
+                is_inner: hex.is_inner_sync(),
+                flag: UserFlag { flag: hex.flag() },
+                hid: VirtId { id: hex.hid() },
+                iid: hex.iid(),
             }
         }
         DOpCode::LD_B2B => {
@@ -1260,5 +1291,29 @@ mod tests {
 
         let decoded = decode_translation_table(&words, Some(&relocation));
         assert_eq!(instructions(&ir), instructions(&decoded));
+    }
+
+    #[test]
+    fn sync_round_trips_with_full_metadata() {
+        use DopInstructionSet::*;
+
+        // Non-default flag/hid/iid, to catch the wire layout dropping or shifting a field —
+        // zhc itself never produces anything but `is_inner: false` with these left at their
+        // default, but hpu_sim relies on the full encoding being faithful.
+        let sync = SYNC {
+            is_inner: true,
+            flag: UserFlag { flag: 0x2a },
+            hid: VirtId { id: 0x5 },
+            iid: 0x7b,
+        };
+
+        let mut ir: IR<DopLang> = IR::empty();
+        let (_, start) = ir.add_op(_START, svec![]);
+        ir.add_op(sync.clone(), svec![start[0]]);
+
+        let words = generate_translation_table(&ir, None);
+        let decoded = decode_translation_table(&words, None);
+
+        assert_eq!(instructions(&decoded), vec![sync]);
     }
 }

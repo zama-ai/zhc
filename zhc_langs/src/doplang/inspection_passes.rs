@@ -104,7 +104,7 @@ pub fn sync_usage(ir: &IR<DopLang>) -> SyncUsage {
         use DopInstructionSet::*;
         let instr = op.get_instruction();
         match instr {
-            SYNC => usage.0 += 1,
+            SYNC { .. } => usage.0 += 1,
             _ => {}
         }
     }

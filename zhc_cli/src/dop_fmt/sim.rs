@@ -136,7 +136,7 @@ fn scan(ir: &IR<DopLang>) -> Addrs {
                 }
             }
             NOTIFY { slot, .. } | LD_B2B { slot, .. } => addrs.visit_mem(slot),
-            _START | _END | SYNC => {}
+            _START | _END | SYNC { .. } => {}
         }
     }
     addrs

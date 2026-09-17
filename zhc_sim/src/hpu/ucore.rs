@@ -156,7 +156,15 @@ impl Simulatable for UCore {
                             else {
                                 unreachable!()
                             };
-                            dispatcher.dispatch_now(Events::IscPushDOp(DOp { raw: SYNC, id }));
+                            dispatcher.dispatch_now(Events::IscPushDOp(DOp {
+                                raw: SYNC {
+                                    is_inner: true,
+                                    flag: UserFlag { flag },
+                                    hid: VirtId { id: hid },
+                                    iid: 0,
+                                },
+                                id,
+                            }));
                             self.condition.transition(|old| match old {
                                 UCoreCondition::Incuring => UCoreCondition::WaitingTransferOut {
                                     hid: HpuId(hid),

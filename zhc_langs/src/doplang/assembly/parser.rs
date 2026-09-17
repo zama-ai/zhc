@@ -700,10 +700,21 @@ fn parse_instruction(line: &str, lreg: &LutRegistry) -> Result<DopInstructionSet
                 lut: lut(2)?,
             })
         }
-        "SYNC" => {
-            expect_arity(0)?;
-            Ok(SYNC)
-        }
+        "SYNC" => match operands.len() {
+            0 => Ok(SYNC {
+                is_inner: false,
+                flag: UserFlag::default(),
+                hid: VirtId::default(),
+                iid: 0,
+            }),
+            1 => Ok(SYNC {
+                is_inner: true,
+                flag: user_flag(0)?,
+                hid: VirtId::default(),
+                iid: 0,
+            }),
+            n => Err(format!("SYNC: expected 0 or 1 operand(s), got {n}")),
+        },
         "WAIT" => match operands.len() {
             1 => Ok(WAIT {
                 flag: user_flag(0)?,
@@ -1229,6 +1240,66 @@ mod tests {
         let lreg = registry();
         let err = parse_instructions("ADD R1 R2\n", &lreg).unwrap_err();
         assert_eq!(err.line, 1);
+    }
+
+    #[test]
+    fn sync_without_flag_is_not_inner() {
+        let lreg = registry();
+        let ir = parse_instructions("SYNC\n", &lreg).expect("valid listing must parse");
+        assert_eq!(
+            instructions(&ir),
+            vec![DopInstructionSet::SYNC {
+                is_inner: false,
+                flag: UserFlag::default(),
+                hid: VirtId::default(),
+                iid: 0,
+            }]
+        );
+    }
+
+    #[test]
+    fn sync_with_flag_is_inner() {
+        let lreg = registry();
+        let ir = parse_instructions("SYNC F1\n", &lreg).expect("valid listing must parse");
+        assert_eq!(
+            instructions(&ir),
+            vec![DopInstructionSet::SYNC {
+                is_inner: true,
+                flag: UserFlag::new(1),
+                hid: VirtId::default(),
+                iid: 0,
+            }]
+        );
+    }
+
+    #[test]
+    fn sync_with_flag_round_trips_through_emit_assembly() {
+        let lreg = registry();
+        let mut ir: IR<DopLang> = IR::empty();
+        let (_, start) = ir.add_op(DopInstructionSet::_START, svec![]);
+        ir.add_op(
+            DopInstructionSet::SYNC {
+                is_inner: true,
+                flag: UserFlag::new(1),
+                hid: VirtId::default(),
+                iid: 0,
+            },
+            svec![start[0]],
+        );
+
+        let asm = emit_assembly(&ir, &lreg);
+        assert!(asm.contains("SYNC F1"), "{asm}");
+
+        let reparsed = parse_instructions(&asm, &lreg).expect("emitted listing must reparse");
+        assert_eq!(instructions(&ir), instructions(&reparsed));
+    }
+
+    #[test]
+    fn rejects_sync_with_too_many_operands() {
+        let lreg = registry();
+        let err = parse_instructions("SYNC F1 F2\n", &lreg).unwrap_err();
+        assert_eq!(err.line, 1);
+        assert!(err.message.contains("SYNC"), "{}", err.message);
     }
 
     #[test]

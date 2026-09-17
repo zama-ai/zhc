@@ -29,7 +29,7 @@ pub const MASK_PBS8: u8 = u8::MAX << 3;
 // -------------------------------------------------------------------------------------------
 
 /// A constant plaintext immediate value.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct PtConst {
     pub val: u8,
 }
@@ -51,7 +51,7 @@ impl Display for PtConst {
 }
 
 /// A ciphertext block located on the heap.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct CtHeap {
     pub addr: u16,
 }
@@ -73,7 +73,7 @@ impl Display for CtHeap {
 }
 
 /// A ciphertext block located in I/O memory.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct CtIo {
     pub addr: u16,
 }
@@ -96,7 +96,7 @@ impl Display for CtIo {
 
 /// A symbolic ciphertext source variable, patched to a physical address by
 /// the microcontroller.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct CtSrcVar {
     pub id: u8,
     pub block: u8,
@@ -120,7 +120,7 @@ impl Display for CtSrcVar {
 
 /// A symbolic ciphertext destination variable, patched to a physical address
 /// by the microcontroller.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct CtDstVar {
     pub id: u8,
     pub block: u8,
@@ -144,7 +144,7 @@ impl Display for CtDstVar {
 
 /// A symbolic plaintext source variable, patched to a `PtConst` by the
 /// microcontroller.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct PtSrcVar {
     pub id: u8,
     pub block: u8,
@@ -172,7 +172,7 @@ impl Display for PtSrcVar {
 /// masks are compared. This allows multi-output PBS results (which occupy
 /// consecutive aligned registers) to compare equal when their masks reflect
 /// the output arity.
-#[derive(Debug, Clone, Copy, Eq, Hash)]
+#[derive(Debug, Clone, Copy, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct CtReg {
     pub mask: u8,
     pub addr: u8,
@@ -239,7 +239,7 @@ impl Display for CtReg {
 /// Named `LutRef` rather than `LutId` to stay distinct from
 /// [`zhc_crypto::integer_semantics::lut::LutId`], the registry's own compact identifier type
 /// (which this simply wraps).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct LutRef {
     pub id: u16,
 }
@@ -267,7 +267,7 @@ impl Display for LutRef {
 }
 
 /// A user event flag: a hash/UUID for matching Ucore instructions together.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, serde::Serialize, serde::Deserialize)]
 pub struct UserFlag {
     pub flag: u8,
 }
@@ -289,7 +289,7 @@ impl Display for UserFlag {
 }
 
 /// A board (virtual HPU) identifier.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, serde::Serialize, serde::Deserialize)]
 pub struct VirtId {
     pub id: u8,
 }
@@ -315,7 +315,7 @@ impl Display for VirtId {
 // -------------------------------------------------------------------------------------------
 
 /// A ciphertext-scalar immediate: either a literal constant or a patchable template.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum PtArg {
     Const(PtConst),
     Var(PtSrcVar),
@@ -361,7 +361,7 @@ impl Display for PtArg {
 
 /// A ciphertext memory location: one of the four addressing modes a `LD`/`ST`/multi-HPU slot
 /// operand may name.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum CtMem {
     Heap(CtHeap),
     Io(CtIo),
@@ -468,7 +468,7 @@ impl Display for Affinity {
 /// bootstrapping (`PBS` family), and control (`_START`, `_END`).
 /// Scalar-operand arithmetic variants (`ADDS`, `SUBS`, `SSUB`,
 /// `MULS`, `MAC`) take a plaintext immediate in `cst`.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 #[allow(non_camel_case_types)]
 pub enum DopInstructionSet {
     /// Stream start marker. Produces the initial context
@@ -525,7 +525,20 @@ pub enum DopInstructionSet {
     /// 8-output many-LUT PBS with flush.
     PBS_ML8_F { dst: CtReg, src: CtReg, lut: LutRef },
     /// Synchronization barrier.
-    SYNC,
+    ///
+    /// `is_inner` distinguishes a sync inserted purely to sequence an internal side-effect
+    /// (e.g. a multi-HPU `NOTIFY` transfer) from one marking an IOp boundary. `flag`/`hid`/`iid`
+    /// carry sync metadata that only matters when `is_inner` is set; zhc's own doplang
+    /// parsing/assembly only ever produces `is_inner: false` with these left at their default
+    /// (parsing, encoding don't otherwise care). They're kept on this one shared variant — rather
+    /// than a separate type — so this struct and its hex encode/decode in
+    /// `zhc_pipeline::hpu::translation_table` stay the single spec both zhc and hpu_sim build on.
+    SYNC {
+        is_inner: bool,
+        flag: UserFlag,
+        hid: VirtId,
+        iid: u8,
+    },
     /// Wait virtual op for Multi-HPU
     WAIT { flag: UserFlag, slot: Option<CtMem> },
     /// Notify virtual op for Multi-HPU
@@ -566,7 +579,7 @@ impl Format for DopInstructionSet {
             PBS_ML8_F { dst, src, lut } => write!(f, "PBS8F<{dst}, {src}, {lut}>"),
             _START => write!(f, "_START"),
             _END => write!(f, "_END"),
-            SYNC => write!(f, "SYNC"),
+            SYNC { .. } => write!(f, "SYNC"),
             WAIT { flag, slot } => match slot {
                 Some(slot) => write!(f, "WAIT<{flag}, {slot}>"),
                 None => write!(f, "WAIT<{flag}>"),
@@ -631,7 +644,7 @@ impl DopInstructionSet {
             PBS_ML8_F { .. } => Pbs,
             _START => Ctl,
             _END => Ctl,
-            SYNC => Ctl,
+            SYNC { .. } => Ctl,
             NOTIFY { .. } => Ctl,
             WAIT { .. } => Ctl,
             LD_B2B { .. } => Ctl,
@@ -663,7 +676,7 @@ impl DialectInstructionSet for DopInstructionSet {
             | PBS_ML2_F { .. }
             | PBS_ML4_F { .. }
             | PBS_ML8_F { .. }
-            | SYNC
+            | SYNC { .. }
             | WAIT { .. }
             | NOTIFY { .. }
             | LD_B2B { .. } => sig![(Ctx(0)) -> (Ctx(0))],

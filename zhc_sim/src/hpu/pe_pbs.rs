@@ -550,7 +550,12 @@ mod tests {
             }
         } else {
             DOp {
-                raw: RawDOp::SYNC,
+                raw: RawDOp::SYNC {
+                    is_inner: false,
+                    flag: zhc_langs::doplang::UserFlag::default(),
+                    hid: zhc_langs::doplang::VirtId::default(),
+                    iid: 0,
+                },
                 id: DOpId(id),
             }
         }

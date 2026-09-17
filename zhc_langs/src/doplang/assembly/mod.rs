@@ -163,7 +163,13 @@ pub fn emit_assembly(ir: &IR<DopLang>, lreg: &LutRegistry) -> String {
                 src.asm(lreg),
                 lut.asm(lreg)
             ),
-            SYNC => writeln!(output, "SYNC"),
+            SYNC { is_inner, flag, .. } => {
+                if *is_inner {
+                    writeln!(output, "SYNC {}", flag.asm(lreg))
+                } else {
+                    writeln!(output, "SYNC")
+                }
+            }
             WAIT { flag, slot } => match slot {
                 Some(slot) => writeln!(output, "WAIT {} {}", flag.asm(lreg), slot.asm(lreg)),
                 None => writeln!(output, "WAIT {}", flag.asm(lreg)),
