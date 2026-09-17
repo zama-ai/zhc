@@ -286,6 +286,17 @@ pub fn generate_translation_table(
     ir: &IR<DopLang>,
     lut_relocation: Option<&[LutId]>,
 ) -> Vec<DOpRepr> {
+    // `gid` is a local/virtual `LutId` assigned by `LutRegistry` (shared across single- and
+    // multi-output PBS variants — see `LutRegistry::register_l1/l2/l4/l8`). When a relocation
+    // table is given, every PBS-family instruction must go through it to recover the physical
+    // LUT-cache slot; there is no PBS variant whose `gid` is exempt from this.
+    let relocate_gid = |gid: &u16| -> usize {
+        match lut_relocation {
+            Some(reloc) => reloc.get(*gid as usize).unwrap().0,
+            None => *gid as usize,
+        }
+    };
+
     let mut output = Vec::with_capacity(ir.n_ops().sas());
     output.push(0); // reserve room for the length of the stream at the beginning of the stream.
     for op in ir.walk_ops_topological() {
@@ -561,15 +572,11 @@ pub fn generate_translation_table(
                 src: CtReg { addr: src, .. },
                 lut: LutRef { id: gid },
             } => {
-                let gid = match lut_relocation {
-                    Some(reloc) => reloc.get(*gid as usize).unwrap().0,
-                    None => *gid as usize,
-                };
                 output.push(
                     PePbsHex::new()
                         .with_dst_rid((*dst).sas())
                         .with_src_rid((*src).sas())
-                        .with_gid(gid.sas())
+                        .with_gid(relocate_gid(gid).sas())
                         .with_opcode(u8::from(DOpCode::PBS))
                         .0,
                 );
@@ -583,7 +590,7 @@ pub fn generate_translation_table(
                     PePbsHex::new()
                         .with_dst_rid((*dst).sas())
                         .with_src_rid((*src).sas())
-                        .with_gid((*gid).sas())
+                        .with_gid(relocate_gid(gid).sas())
                         .with_opcode(u8::from(DOpCode::PBS_ML2))
                         .0,
                 );
@@ -597,7 +604,7 @@ pub fn generate_translation_table(
                     PePbsHex::new()
                         .with_dst_rid((*dst).sas())
                         .with_src_rid((*src).sas())
-                        .with_gid((*gid).sas())
+                        .with_gid(relocate_gid(gid).sas())
                         .with_opcode(u8::from(DOpCode::PBS_ML4))
                         .0,
                 );
@@ -611,7 +618,7 @@ pub fn generate_translation_table(
                     PePbsHex::new()
                         .with_dst_rid((*dst).sas())
                         .with_src_rid((*src).sas())
-                        .with_gid((*gid).sas())
+                        .with_gid(relocate_gid(gid).sas())
                         .with_opcode(u8::from(DOpCode::PBS_ML8))
                         .0,
                 );
@@ -625,7 +632,7 @@ pub fn generate_translation_table(
                     PePbsHex::new()
                         .with_dst_rid((*dst).sas())
                         .with_src_rid((*src).sas())
-                        .with_gid((*gid).sas())
+                        .with_gid(relocate_gid(gid).sas())
                         .with_opcode(u8::from(DOpCode::PBS_F))
                         .0,
                 );
@@ -639,7 +646,7 @@ pub fn generate_translation_table(
                     PePbsHex::new()
                         .with_dst_rid((*dst).sas())
                         .with_src_rid((*src).sas())
-                        .with_gid((*gid).sas())
+                        .with_gid(relocate_gid(gid).sas())
                         .with_opcode(u8::from(DOpCode::PBS_ML2_F))
                         .0,
                 );
@@ -653,7 +660,7 @@ pub fn generate_translation_table(
                     PePbsHex::new()
                         .with_dst_rid((*dst).sas())
                         .with_src_rid((*src).sas())
-                        .with_gid((*gid).sas())
+                        .with_gid(relocate_gid(gid).sas())
                         .with_opcode(u8::from(DOpCode::PBS_ML4_F))
                         .0,
                 );
@@ -667,7 +674,7 @@ pub fn generate_translation_table(
                     PePbsHex::new()
                         .with_dst_rid((*dst).sas())
                         .with_src_rid((*src).sas())
-                        .with_gid((*gid).sas())
+                        .with_gid(relocate_gid(gid).sas())
                         .with_opcode(u8::from(DOpCode::PBS_ML8_F))
                         .0,
                 );
@@ -767,11 +774,11 @@ pub fn generate_translation_table(
 /// `words` must start with the instruction-count word `generate_translation_table` writes,
 /// followed by exactly that many 32-bit DOp encodings.
 ///
-/// `lut_relocation`, when given, is applied in reverse to single-output `PBS`/`PBS_F`
-/// destinations only — the physical gid found in the hex is looked up by position in
-/// `lut_relocation` to recover the original logical [`LutId`]. Many-LUT `PBS_ML*` variants were
-/// never relocated by the encoder (see `generate_translation_table`), so their gid is always
-/// taken literally, matching encode.
+/// `lut_relocation`, when given, is applied in reverse to every `PBS`/`PBS_ML*`/`*_F` variant —
+/// the physical gid found in the hex is looked up by position in `lut_relocation` to recover the
+/// original logical [`LutId`]. All PBS variants share the same `LutId` space (see
+/// [`LutRegistry`](zhc_crypto::integer_semantics::lut::LutRegistry)), so none of them is exempt;
+/// this matches the encoder (see [`generate_translation_table`]).
 ///
 /// # Panics
 ///
@@ -839,11 +846,11 @@ impl std::error::Error for DopDecodeError {}
 /// Decode DopInstructionSet from raw DOpRepr.
 ///
 ///
-/// `lut_relocation`, when given, is applied in reverse to single-output `PBS`/`PBS_F`
-/// destinations only — the physical gid found in the hex is looked up by position in
-/// `lut_relocation` to recover the original logical [`LutId`]. Many-LUT `PBS_ML*` variants were
-/// never relocated by the encoder (see `generate_translation_table`), so their gid is always
-/// taken literally, matching encode.
+/// `lut_relocation`, when given, is applied in reverse to every `PBS`/`PBS_ML*`/`*_F` variant —
+/// the physical gid found in the hex is looked up by position in `lut_relocation` to recover the
+/// original logical [`LutId`]. All PBS variants share the same `LutId` space (see
+/// [`LutRegistry`](zhc_crypto::integer_semantics::lut::LutRegistry)), so none of them is exempt;
+/// this matches the encoder (see [`generate_translation_table`]).
 ///
 /// Also note a pre-existing ambiguity in the `NOTIFY` encoding: both `CtHeap` and `CtSrcVar`
 /// slots encode to the same `MEM_HEAP` mode tag (see `generate_translation_table`), so this
@@ -982,7 +989,6 @@ pub fn instruction_from_dop_repr(
         | DOpCode::PBS_ML8_F => {
             let hex = PePbsHex::from_bits(word);
             let src = ct_reg(u8::MAX, hex.src_rid());
-            let is_plain = matches!(dopcode, DOpCode::PBS | DOpCode::PBS_F);
             let mask = match dopcode {
                 DOpCode::PBS | DOpCode::PBS_F => u8::MAX,
                 DOpCode::PBS_ML2 | DOpCode::PBS_ML2_F => MASK_PBS2,
@@ -990,11 +996,9 @@ pub fn instruction_from_dop_repr(
                 _ => MASK_PBS8,
             };
             let dst = ct_reg(mask, hex.dst_rid());
-            let gid = if is_plain {
-                resolve_gid(hex.gid())?
-            } else {
-                hex.gid().sas()
-            };
+            // All PBS variants share the same `LutId` space (see `LutRegistry`), so every one of
+            // them must be resolved through `lut_relocation`, matching `generate_translation_table`.
+            let gid = resolve_gid(hex.gid())?;
             let lut = LutRef { id: gid as u16 };
             match dopcode {
                 DOpCode::PBS => PBS { dst, src, lut },
@@ -1168,6 +1172,93 @@ mod tests {
         let words = generate_translation_table(&ir, None);
         let decoded = decode_translation_table(&words, None);
 
+        assert_eq!(instructions(&ir), instructions(&decoded));
+    }
+
+    /// Regression test: every PBS variant (single- and multi-output alike) must be rewritten
+    /// through a non-identity `lut_relocation` table, not just plain `PBS`. Uses a relocation
+    /// table where virtual id `i` maps to a *different* physical slot, so a variant that's
+    /// silently left unrelocated would end up pointing at the wrong physical LUT.
+    #[test]
+    fn round_trips_through_generate_and_decode_with_non_identity_lut_relocation() {
+        use DopInstructionSet::*;
+
+        let mut ir: IR<DopLang> = IR::empty();
+        let (_, start) = ir.add_op(_START, svec![]);
+        let (_, r1) = ir.add_op(
+            PBS {
+                dst: CtReg::new(1_u8),
+                src: CtReg::new(0_u8),
+                lut: LutRef::from(LutId(0)),
+            },
+            svec![start[0]],
+        );
+        let (_, r2) = ir.add_op(
+            PBS_F {
+                dst: CtReg::new(2_u8),
+                src: CtReg::new(1_u8),
+                lut: LutRef::from(LutId(1)),
+            },
+            svec![r1[0]],
+        );
+        let (_, r3) = ir.add_op(
+            PBS_ML2 {
+                dst: CtReg::ml2(3_u8),
+                src: CtReg::new(2_u8),
+                lut: LutRef::from(LutId(2)),
+            },
+            svec![r2[0]],
+        );
+        let (_, r4) = ir.add_op(
+            PBS_ML2_F {
+                dst: CtReg::ml2(5_u8),
+                src: CtReg::new(3_u8),
+                lut: LutRef::from(LutId(3)),
+            },
+            svec![r3[0]],
+        );
+        let (_, r5) = ir.add_op(
+            PBS_ML4 {
+                dst: CtReg::ml4(7_u8),
+                src: CtReg::new(4_u8),
+                lut: LutRef::from(LutId(4)),
+            },
+            svec![r4[0]],
+        );
+        let (_, r6) = ir.add_op(
+            PBS_ML8 {
+                dst: CtReg::ml8(11_u8),
+                src: CtReg::new(5_u8),
+                lut: LutRef::from(LutId(5)),
+            },
+            svec![r5[0]],
+        );
+        ir.add_op(_END, svec![r6[0]]);
+
+        // Virtual id `i` (index) relocates to a distinct, non-matching physical slot.
+        let relocation = vec![
+            LutId(19),
+            LutId(18),
+            LutId(17),
+            LutId(16),
+            LutId(15),
+            LutId(14),
+        ];
+
+        let words = generate_translation_table(&ir, Some(&relocation));
+
+        // The physical gid actually written to the wire must be the relocated one, for every
+        // PBS variant — not the virtual `LutId` used in the IR.
+        for (word, expected_physical) in words[1..].iter().zip(relocation.iter()) {
+            let hex = PePbsHex::from_bits(*word);
+            assert_eq!(
+                hex.gid(),
+                expected_physical.0 as u16,
+                "PBS-family instruction was not relocated to its physical LUT slot"
+            );
+        }
+
+        let decoded = decode_translation_table(&words, Some(&relocation));
         assert_eq!(instructions(&ir), instructions(&decoded));
     }
 }
