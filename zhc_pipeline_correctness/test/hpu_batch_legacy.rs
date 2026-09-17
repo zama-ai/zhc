@@ -1,9 +1,9 @@
-use crate::equivalence_check::check_iop_hpu_equivalence;
 use zhc::compat::Iop;
 use zhc_builder::{CiphertextSpec, add};
 use zhc_config::hpu::PhysicalConfig;
 use zhc_ir::IR;
 use zhc_langs::{hpulang::HpuLang, ioplang::IopLang};
+use zhc_pipeline_correctness::equivalence_check::check_iop_hpu_equivalence;
 use zhc_pipeline_correctness_macro::test_matrix;
 use zhc_utils::assert_display_is;
 

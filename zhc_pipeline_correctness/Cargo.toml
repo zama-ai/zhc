@@ -6,13 +6,39 @@ license.workspace = true
 repository.workspace = true
 publish = false
 
-[dev-dependencies]
-zhc.workspace = true
-zhc_pipeline.workspace = true
+[dependencies]
 zhc_builder.workspace = true
-zhc_config.workspace = true
 zhc_crypto.workspace = true
 zhc_ir.workspace = true
 zhc_langs.workspace = true
 zhc_utils.workspace = true
+
+[dev-dependencies]
+zhc.workspace = true
+zhc_pipeline.workspace = true
+zhc_config.workspace = true
 zhc_pipeline_correctness_macro.workspace = true
+
+[[test]]
+name = "hpu_allocate_register"
+path = "test/hpu_allocate_register.rs"
+
+[[test]]
+name = "hpu_batch_legacy"
+path = "test/hpu_batch_legacy.rs"
+
+[[test]]
+name = "hpu_generate_translation_table"
+path = "test/hpu_generate_translation_table.rs"
+
+[[test]]
+name = "hpu_schedule"
+path = "test/hpu_schedule.rs"
+
+[[test]]
+name = "hpu_schedule_legacy"
+path = "test/hpu_schedule_legacy.rs"
+
+[[test]]
+name = "lower_iop_to_hpu"
+path = "test/lower_iop_to_hpu.rs"

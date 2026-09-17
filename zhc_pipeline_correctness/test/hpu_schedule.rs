@@ -153,5 +153,7 @@ fn correctness(iop: Iop, size: u16) {
     let spec = *b.spec();
     let iop_ir = b.optimize_ir();
     let hpu_ir = pipeline(&iop_ir);
-    crate::equivalence_check::check_iop_hpu_equivalence(&iop_ir, &hpu_ir, spec, 100);
+    zhc_pipeline_correctness::equivalence_check::check_iop_hpu_equivalence(
+        &iop_ir, &hpu_ir, spec, 100,
+    );
 }

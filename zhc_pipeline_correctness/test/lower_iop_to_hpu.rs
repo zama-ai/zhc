@@ -5,7 +5,7 @@ use zhc_langs::{hpulang::HpuLang, ioplang::IopLang};
 use zhc_pipeline_correctness_macro::test_matrix;
 use zhc_utils::assert_display_is;
 
-use crate::equivalence_check::check_iop_hpu_equivalence;
+use zhc_pipeline_correctness::equivalence_check::check_iop_hpu_equivalence;
 
 fn pipeline(ir: &IR<IopLang>) -> IR<HpuLang> {
     zhc_pipeline::passes::lower_iop_to_hpu(&ir).output
