@@ -21,7 +21,7 @@ use zhc_langs_macro::gen_pipeline_lang;
 pub fn pipeline() {
     'commons: {
         let unchecked_ioplang = input_unchecked_ioplang();
-        let partitions = input_partitions();
+        let partitioner_config = input_partitioner_config();
         let prototype = input_prototype();
         let ciphertext_block_spec = input_ciphertext_block_spec();
         let slack_drawing = draw_slack(unchecked_ioplang);
@@ -29,6 +29,7 @@ pub fn pipeline() {
         let ioplang = check_ioplang(unchecked_ioplang, ciphertext_block_spec);
         let fingerprint = compute_fingerprint(ioplang);
         let lut_registry = ioplang_to_lut_registry(ioplang);
+        let (remat_ioplang, partitions) = partition_ioplang(ioplang, partitioner_config);
     }
     'hpu: {
         let hpu_lut_relocation = input_hpu_lut_relocation();
@@ -45,7 +46,7 @@ pub fn pipeline() {
         let multi_hpu_lut_relocation = input_multi_hpu_lut_relocation();
         let multi_hpu_config = input_multi_hpu_config();
         let (multi_hpulang_translated, multi_hpu_localities) =
-            ioplang_to_multi_hpu(ioplang, partitions);
+            ioplang_to_multi_hpu(remat_ioplang, partitions);
         let multi_hpulang_scheduled = schedule_multi_hpulang(
             multi_hpulang_translated,
             multi_hpu_localities,

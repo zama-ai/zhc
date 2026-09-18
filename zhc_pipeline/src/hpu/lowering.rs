@@ -9,34 +9,42 @@ use zhc_ir::{
     translation::{Order, Translation, translate_ann},
 };
 use zhc_langs::{
-    hpulang::{HpuInstructionSet, HpuLang, Immediate, TDstId, TImmId, TSrcId},
-    ioplang::{IopInstructionSet, IopLang},
+    hpulang::{HpuId, HpuInstructionSet, HpuLang, Immediate, TDstId, TImmId, TSrcId},
+    ioplang::{IopInstructionSet, IopLang, IopTypeSystem},
 };
 use zhc_utils::{SafeAs, small::SmallMap, svec};
 
 /// Lowers integer operations to HPU operations, returning the IR and translation maps.
 pub fn lower_iop_to_hpu(ir: &IR<IopLang>) -> Translation<HpuLang> {
     use IopInstructionSet::*;
-    let remap = ir
-        .walk_ops_linear()
-        .filter(|op| {
-            matches!(
-                op.get_instruction(),
-                InputCiphertext { .. } | InputPlaintext { .. }
-            )
-        })
-        .scan((0, 0), |(ct_id, pt_id), op| match op.get_instruction() {
-            InputCiphertext { pos, .. } => {
-                *ct_id += 1;
-                Some((*pos, *ct_id - 1))
-            }
-            InputPlaintext { pos, .. } => {
-                *pt_id += 1;
-                Some((*pos, *pt_id - 1))
-            }
-            _ => unreachable!(),
-        })
-        .collect::<SmallMap<usize, usize>>();
+    // Inputs are numbered by distinct `pos`, since the same input op may appear several times
+    // (e.g. once per partition after materialization).
+    let mut ct_positions: Vec<usize> = Vec::new();
+    let mut pt_positions: Vec<usize> = Vec::new();
+    for op in ir.walk_ops_linear() {
+        match op.get_instruction() {
+            InputCiphertext { pos, .. } => ct_positions.push(*pos),
+            InputPlaintext { pos, .. } => pt_positions.push(*pos),
+            _ => {}
+        }
+    }
+    ct_positions.sort_unstable();
+    ct_positions.dedup();
+    pt_positions.sort_unstable();
+    pt_positions.dedup();
+    let mut remap = SmallMap::<usize, usize>::default();
+    remap.extend(
+        ct_positions
+            .iter()
+            .enumerate()
+            .map(|(rank, pos)| (*pos, rank)),
+    );
+    remap.extend(
+        pt_positions
+            .iter()
+            .enumerate()
+            .map(|(rank, pos)| (*pos, rank)),
+    );
     let ann_ir = ir
         .forward_dataflow_analysis(|a| {
             let opann = match a.get_instruction() {
@@ -60,9 +68,8 @@ pub fn lower_iop_to_hpu(ir: &IR<IopLang>) -> Translation<HpuLang> {
         .backward_dataflow_analysis(|a, prev| {
             let opann = match a.get_instruction() {
                 OutputCiphertext { pos, .. } => Some(*pos),
-                StoreCtBlock { .. } => {
+                StoreCtBlock { .. } | _Copy { .. } => {
                     let ret = a.get_returns_iter().next().unwrap();
-                    assert_eq!(ret.get_users_iter().count(), 1);
                     ret.get_users_iter()
                         .next()
                         .unwrap()
@@ -96,6 +103,7 @@ pub fn lower_iop_to_hpu(ir: &IR<IopLang>) -> Translation<HpuLang> {
                         reached.get_instruction(),
                         IopInstructionSet::StoreCtBlock { .. }
                             | IopInstructionSet::OutputCiphertext { .. }
+                            | IopInstructionSet::_Copy { .. }
                     )),
                     "Unexpectd use of DeclareCiphertext encountered."
                 )
@@ -105,8 +113,19 @@ pub fn lower_iop_to_hpu(ir: &IR<IopLang>) -> Translation<HpuLang> {
                 // should be no aliases remaining here,
                 panic!("Unexpected Alias op encountered.");
             }
+            IopInstructionSet::_Copy {
+                typ: IopTypeSystem::CiphertextBlock,
+            } => {
+                translator.direct_translation(
+                    &op,
+                    HpuInstructionSet::Transfer {
+                        from: HpuId(0),
+                        to: HpuId(0),
+                    },
+                );
+            }
             IopInstructionSet::_Copy { .. } => {
-                todo!()
+                // No-op, non ct blocks transfer have no semantics in hpulang
             }
             IopInstructionSet::LetCiphertextBlock { value } => {
                 translator.direct_translation(

@@ -12,12 +12,34 @@ use crate::{
     AnnIR, AnnIRView, AsOpId, AsValId, Dialect, DialectInstructionSet, IR, OpId, OpMap, ValMap,
 };
 
+/// Outcome of pushing a single operation into an [`EagerEvaluator`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PushOutcome {
+    /// The operation settled: it evaluated, panicked, or inherited a poison marker.
+    Settled,
+    /// The operation reported itself as not ready and remains pending.
+    Blocked,
+}
+
+/// Outcome of one [`push_ready`](EagerEvaluator::push_ready) sweep.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SweepOutcome {
+    /// Number of operations that settled during the sweep.
+    pub settled: usize,
+    /// Operations that reported themselves as not ready and remain pending.
+    pub blocked: Vec<OpId>,
+}
+
 /// Push-based driver evaluating operations as the caller advances them.
 ///
 /// Holds the evaluation state of every active operation and value of the borrowed [`IR`], and
 /// advances an operation only when it is pushed and its arguments have already settled.
-/// Operations must therefore be pushed in dependency order, which [`push_all`](Self::push_all)
-/// does for the whole IR.
+/// Operations must therefore be pushed in dependency order, which
+/// [`push_ready`](Self::push_ready) does for the whole IR.
+///
+/// This is the shared engine behind [`PureEvaluator`] and [`EffectfulEvaluator`], which
+/// differ only in how they treat an operation that reports itself as
+/// [`Blocked`](EvalOutcome::Blocked).
 pub struct EagerEvaluator<'ir, D: Dialect, V: Evaluation>
 where
     D::InstructionSet: Evaluable<V>,
@@ -79,6 +101,11 @@ where
         }
     }
 
+    /// Returns the IR this evaluator runs over.
+    pub fn ir(&self) -> &'ir IR<D> {
+        self.ir
+    }
+
     /// Returns the value bound to the given value id.
     ///
     /// # Errors
@@ -109,27 +136,49 @@ where
             .all(|val| val.get_annotation().is_evaluated())
     }
 
-    /// Pushes every active operation of the IR in topological order.
+    /// Pushes, once each and in topological order, every operation that is ready to be pushed.
     ///
-    /// Drives a complete run against `context`, the traversal order guaranteeing that each
-    /// operation's arguments have settled before it is pushed. Failures do not interrupt the walk:
-    /// a panicking operation poisons its results and the remaining operations are pushed anyway,
-    /// so the resulting state records every independent failure of the IR rather than just the
-    /// first one.
-    ///
-    /// # Panics
-    ///
-    /// Panics if any operation of the IR has already been pushed, and for the reasons listed on
-    /// [`push_op`](Self::push_op).
-    pub fn push_all(&mut self, context: &mut <D::InstructionSet as Evaluable<V>>::Context) {
+    /// An operation is ready when it is pending and none of its arguments is pending. Operations
+    /// that settle during the sweep make their users ready in turn, so a sweep over an IR without
+    /// blocking operations evaluates it completely. Failures do not interrupt the walk: a
+    /// panicking operation poisons its results and the remaining operations are pushed anyway, so
+    /// the resulting state records every independent failure of the IR rather than just the first
+    /// one. Returns how many operations settled and which ones reported themselves as blocked.
+    pub fn push_ready(
+        &mut self,
+        context: &mut <D::InstructionSet as Evaluable<V>>::Context,
+    ) -> SweepOutcome {
+        let mut outcome = SweepOutcome {
+            settled: 0,
+            blocked: Vec::new(),
+        };
         for opid in self
             .ir
             .walk_ops_topological()
             .map(|op| op.get_id())
             .intermediate()
         {
-            self.push_op(context, opid);
+            if !self.is_ready(opid) {
+                continue;
+            }
+            match self.push_op(context, opid) {
+                PushOutcome::Settled => outcome.settled += 1,
+                PushOutcome::Blocked => outcome.blocked.push(opid),
+            }
         }
+        outcome
+    }
+
+    /// Returns `true` if the operation is pending and none of its arguments is pending.
+    pub fn is_ready(&self, op: impl AsOpId) -> bool {
+        let opid = op.op_id();
+        self.opmap.get(opid).unwrap().is_pending()
+            && self
+                .ir
+                .get_op(opid)
+                .get_arg_valids()
+                .iter()
+                .all(|valid| !matches!(self.valmap.get(valid).unwrap(), ValState::Pending))
     }
 
     /// Pushes a single operation, evaluating it against the given context.
@@ -142,6 +191,10 @@ where
     /// already poisoned, `eval` is not called and both the operation and its results inherit the
     /// id carried by the first poisoned argument in signature order.
     ///
+    /// Returns [`PushOutcome::Blocked`] when `eval` reports the operation as not ready. The
+    /// operation and its results then stay pending and may be pushed again later. Every other
+    /// path returns [`PushOutcome::Settled`].
+    ///
     /// # Panics
     ///
     /// Panics if `op` does not refer to an active operation of the IR, if `op` is not pending, or
@@ -153,7 +206,7 @@ where
         &mut self,
         context: &mut <D::InstructionSet as Evaluable<V>>::Context,
         op: impl AsOpId,
-    ) {
+    ) -> PushOutcome {
         let ir = self.ir;
         let opid = op.op_id();
 
@@ -182,7 +235,7 @@ where
             for ret_valid in return_valids.iter() {
                 *(self.valmap.get_mut(ret_valid).unwrap()) = ValState::PoisonedBy(poison_opid)
             }
-            return;
+            return PushOutcome::Settled;
         }
 
         // All predecessors are healthy. We can evaluate the current op.
@@ -217,8 +270,10 @@ where
                 for ret_valid in return_valids.iter() {
                     *(self.valmap.get_mut(ret_valid).unwrap()) = ValState::PoisonedBy(opid)
                 }
+                PushOutcome::Settled
             }
-            Ok(ret_evals) => {
+            Ok(EvalOutcome::Blocked) => PushOutcome::Blocked,
+            Ok(EvalOutcome::Evaluated(ret_evals)) => {
                 // Typechecks the returns
                 for (i, (ret, expected_type)) in (ret_evals.iter(), sig.get_returns().iter())
                     .mzip()
@@ -237,6 +292,7 @@ where
                 for (ret_valid, ret_eval) in (return_valids.iter(), ret_evals.into_iter()).mzip() {
                     *(self.valmap.get_mut(ret_valid).unwrap()) = ValState::Evaluated(ret_eval)
                 }
+                PushOutcome::Settled
             }
         }
     }

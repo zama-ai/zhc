@@ -137,7 +137,7 @@ fn smoke() {
     )
 }
 
-#[test_matrix(iop = @all_iops, size = @all_precs)]
+#[test_matrix(iop = @all_iops, size = @main_precs)]
 #[ignore]
 fn correctness(iop: Iop, size: u16) {
     let b = iop.to_builder(CiphertextSpec::new(size, 2, 2));

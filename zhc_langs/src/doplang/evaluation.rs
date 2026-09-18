@@ -5,7 +5,7 @@ use zhc_crypto::integer_semantics::{
     CiphertextBlockSpec, EmulatedCiphertextBlock, EmulatedPlaintextBlock,
     EmulatedPlaintextBlockStorage, lut::LookupCheck,
 };
-use zhc_ir::evaluation::{Evaluable, EvaluatesTo, Evaluation};
+use zhc_ir::evaluation::{EvalOutcome, Evaluable, EvaluatesTo, Evaluation};
 use zhc_utils::small::SmallVec;
 use zhc_utils::{FastMap, SafeAs, svec};
 
@@ -179,9 +179,9 @@ impl Evaluable<DopValue> for super::DopInstructionSet {
         &self,
         context: &mut Self::Context,
         _arguments: SmallVec<&DopValue>,
-    ) -> SmallVec<DopValue> {
+    ) -> EvalOutcome<DopValue> {
         use super::DopInstructionSet::*;
-        match self {
+        let results = match self {
             // ── ALU: register arithmetic ─────────────────────────────
             ADD { dst, src1, src2 } => {
                 let left = context.read_ct_reg(src1);
@@ -288,6 +288,7 @@ impl Evaluable<DopValue> for super::DopInstructionSet {
             _END => svec![],
             SYNC { .. } => svec![DopValue::Ctx],
             WAIT { .. } | NOTIFY { .. } | LD_B2B { .. } => panic!("Multi-HPU not supported yet."),
-        }
+        };
+        EvalOutcome::Evaluated(results)
     }
 }

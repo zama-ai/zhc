@@ -5,12 +5,12 @@ use zhc_crypto::integer_semantics::{
     CiphertextBlockSpec, EmulatedCiphertextBlock, EmulatedCiphertextBlockStorage,
     EmulatedPlaintextBlock, EmulatedPlaintextBlockStorage, lut::LookupCheck,
 };
-use zhc_ir::evaluation::{Evaluable, EvaluatesTo, Evaluation};
+use zhc_ir::evaluation::{EvalOutcome, Evaluable, EvaluatesTo, Evaluation};
 use zhc_utils::iter::CollectInSmallVec;
 use zhc_utils::small::SmallVec;
 use zhc_utils::{FastMap, SafeAs, svec};
 
-use crate::hpulang::{HpuTypeSystem, TDstId, TImmId, TSrcId};
+use crate::hpulang::{HpuId, HpuTypeSystem, TDstId, TImmId, TSrcId, TransferId};
 
 /// Interpretation domain for HPU programs.
 ///
@@ -78,6 +78,12 @@ impl EvaluatesTo<HpuValue> for HpuTypeSystem {
 /// `destinations` is populated during interpretation by `DstSt`
 /// instructions. `batch_args` / `batch_rets` are managed internally
 /// during recursive `Batch` interpretation.
+///
+/// `transfers` is the mailbox between HPUs of a multi-HPU program:
+/// `TransferOut` posts a block under its `(from, to, id)` key and the
+/// matching `TransferIn` takes it, reporting itself as blocked until the
+/// block is there. Interpreting such a program therefore requires a driver
+/// that revisits blocked operations.
 #[derive(Debug)]
 pub struct HpuInterpreterContext {
     pub spec: CiphertextBlockSpec,
@@ -91,6 +97,8 @@ pub struct HpuInterpreterContext {
     pub lut1_table: FastMap<LutId, Lut1>,
     /// Reverse LUT table: LutId → Lut2 (for Pbs2/Pbs2F).
     pub lut2_table: FastMap<LutId, Lut2>,
+    /// Blocks in flight between HPUs, keyed by `(from, to, id)`.
+    pub transfers: FastMap<(HpuId, HpuId, TransferId), EmulatedCiphertextBlock>,
     /// Batch argument state for nested `Batch` interpretation.
     batch_args: FastMap<u8, HpuValue>,
     /// Batch return state for nested `Batch` interpretation.
@@ -107,6 +115,7 @@ impl HpuInterpreterContext {
             immediates: FastMap::default(),
             lut1_table: FastMap::default(),
             lut2_table: FastMap::default(),
+            transfers: FastMap::default(),
             batch_args: FastMap::default(),
             batch_rets: FastMap::default(),
         }
@@ -120,11 +129,26 @@ impl Evaluable<HpuValue> for super::HpuInstructionSet {
         &self,
         context: &mut Self::Context,
         arguments: SmallVec<&HpuValue>,
-    ) -> SmallVec<HpuValue> {
+    ) -> EvalOutcome<HpuValue> {
         use super::HpuInstructionSet::*;
-        match self {
-            TransferIn { .. } | TransferOut { .. } => {
-                panic!("Interpretation of multi-hpu graphs is not supported.")
+        let results = match self {
+            // ── Inter-HPU transfers ──────────────────────────────────
+            TransferOut { from, to, id } => {
+                let key = (*from, *to, *id);
+                assert!(
+                    !context.transfers.contains_key(&key),
+                    "Transfer {id} from {from} to {to} already posted"
+                );
+                context
+                    .transfers
+                    .insert(key, arguments[0].clone().unwrap_ct_register());
+                svec![]
+            }
+            TransferIn { from, to, id } => {
+                let Some(ct) = context.transfers.remove(&(*from, *to, *id)) else {
+                    return EvalOutcome::Blocked;
+                };
+                svec![HpuValue::CtRegister(ct)]
             }
             Transfer { .. } => {
                 let val = arguments[0].clone().unwrap_ct_register();
@@ -335,6 +359,7 @@ impl Evaluable<HpuValue> for super::HpuInstructionSet {
 
                 returns
             }
-        }
+        };
+        EvalOutcome::Evaluated(results)
     }
 }

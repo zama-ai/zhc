@@ -27,10 +27,10 @@ pub fn schedule<'a>(
     let mut sim = Simulator::from_simulatable(
         MHz(400),
         LightMultiHpu::new(&ann_ir, config, policy),
-        zhc_sim::TracingLevel::Events,
+        zhc_sim::TracingLevel::None,
     );
     sim.play();
-    let mut transfers_counter: SmallMap<HpuId, u8> =
+    let mut transfers_counter: SmallMap<HpuId, u16> =
         (0..config.n_hpus).map(|i| (HpuId(i), 1)).collect();
     let transfer_map: SmallMap<OpId, TransferId> = ir
         .walk_ops_linear()

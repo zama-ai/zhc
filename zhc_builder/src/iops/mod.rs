@@ -47,8 +47,10 @@ pub enum PropagationDirection {
     LsbToMsb,
 }
 
-/// Number of parallel transfers in a SIMD batch.
-pub const SIMD_N: usize = 12;
+/// Default batch size `n` for [`add_simd`] and [`erc7984_simd`].
+///
+/// Used by `Iop::ALL_STATIC` and `Iop::TEST_ITER` in the `zhc` crate, and by the SIMD tests.
+pub const SIMD_N: u16 = 12;
 
 mod add;
 mod adds;

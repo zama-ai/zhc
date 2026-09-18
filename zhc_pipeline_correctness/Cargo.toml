@@ -18,6 +18,14 @@ zhc_config.workspace = true
 zhc_pipeline_correctness_macro.workspace = true
 
 [[test]]
+name = "partitioning"
+path = "test/partitioning.rs"
+
+[[test]]
+name = "lower_iop_to_hpu"
+path = "test/lower_iop_to_hpu.rs"
+
+[[test]]
 name = "hpu_allocate_register"
 path = "test/hpu_allocate_register.rs"
 
@@ -38,9 +46,9 @@ name = "hpu_schedule_legacy"
 path = "test/hpu_schedule_legacy.rs"
 
 [[test]]
-name = "lower_iop_to_hpu"
-path = "test/lower_iop_to_hpu.rs"
+name = "lower_iop_to_multi_hpu"
+path = "test/lower_iop_to_multi_hpu.rs"
 
 [[test]]
-name = "partitioning"
-path = "test/partitioning.rs"
+name = "multi_hpu_schedule"
+path = "test/multi_hpu_schedule.rs"

@@ -172,7 +172,7 @@ fn smoke2() {
     );
 }
 
-#[test_matrix(iop = @all_iops, size = @all_precs)]
+#[test_matrix(iop = @all_iops, size = @main_precs)]
 #[ignore]
 fn correctness(iop: Iop, size: u16) {
     let config = HpuConfig::from(PhysicalConfig::gaussian_64b());

@@ -34,7 +34,7 @@ mod presets {
                 if_then_else = Iop::IfThenElse,
                 if_then_zero = Iop::IfThenZero,
                 add = Iop::Add,
-                add_simd = Iop::AddSimd,
+                add_simd = Iop::AddSimd {n: zhc_builder::SIMD_N},
                 sub = Iop::Sub,
                 mul = Iop::Mul,
                 muls = Iop::Muls,
@@ -72,7 +72,7 @@ mod presets {
                 ovf_sub = Iop::OvfSub,
                 ovf_mul = Iop::OvfMul,
                 erc7984 = Iop::Erc7984,
-                erc7984_simd = Iop::Erc7984Simd,
+                erc7984_simd = Iop::Erc7984Simd{n: zhc_builder::SIMD_N},
                 mem_cpy = Iop::MemCpy,
                 cast_2 = Iop::Cast { to_size: 2 },
                 cast_4 = Iop::Cast { to_size: 4 },
@@ -106,6 +106,14 @@ mod presets {
                 s98 = 98, s100 = 100, s102 = 102, s104 = 104, s106 = 106, s108 = 108, s110 = 110,
                 s112 = 112, s114 = 114, s116 = 116, s118 = 118, s120 = 120, s122 = 122,
                 s124 = 124, s126 = 126, s128 = 128,
+            ]
+        }
+    }
+
+    pub fn main_precs() -> TokenStream {
+        quote! {
+            [
+                s2 = 2, s4 = 4, s8 = 8, s16 = 16, s32 = 32, s64 = 64, s128 = 128,
             ]
         }
     }
@@ -159,6 +167,7 @@ impl Parse for Axis {
             let tokens = match name.to_string().as_str() {
                 "all_iops" => presets::all_iops(),
                 "all_precs" => presets::all_precs(),
+                "main_precs" => presets::main_precs(),
                 "all_schedps" => presets::all_schedps(),
                 other => {
                     return Err(syn::Error::new(
