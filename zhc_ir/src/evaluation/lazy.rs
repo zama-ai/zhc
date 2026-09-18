@@ -119,6 +119,33 @@ where
         self.pull_op(context, opid);
     }
 
+    /// Resets the operation that produces `valid`, and every operation transitively downstream
+    /// of it, back to [pending](ValState::Pending)/[pending](OpState::Pending).
+    ///
+    /// Meant to be called after mutating whatever external state an `eval` implementation reads
+    /// out-of-band (i.e. from its `Context` rather than its arguments) for the operation that
+    /// produces `valid` — most commonly a leaf input operation. Once evaluated, an operation is
+    /// never re-run on its own: a settled [`OpState::Evaluated`]/[`OpState::Panicked`]/
+    /// [`OpState::PoisonedBy`] is returned as-is by [`pull_op`](Self::pull_op), even if the
+    /// context it reads from has since changed. This makes that state stale, and everything
+    /// computed from it (transitively, through however many operations) stale as well; this
+    /// method un-settles exactly that operation and its downstream, and nothing else, so a
+    /// subsequent `pull_val`/`pull_op` recomputes them while operations unrelated to `valid`
+    /// keep whatever result they already settled on.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `valid` is out of bounds for the IR or refers to an inactive value.
+    pub fn invalidate_downstream(&mut self, valid: impl AsValId) {
+        let origin = self.ir.get_val(valid).get_origin().opref;
+        for op in std::iter::once(origin.clone()).chain(origin.get_reached_iter()) {
+            *self.opmap.get_mut(op.op_id()).unwrap() = OpState::Pending;
+            for ret_valid in op.get_return_valids() {
+                *self.valmap.get_mut(*ret_valid).unwrap() = ValState::Pending;
+            }
+        }
+    }
+
     /// Evaluates an operation, pulling its pending dependencies first.
     ///
     /// Returns without doing anything if `opid` has already settled. Otherwise each argument still
