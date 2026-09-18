@@ -2,7 +2,7 @@ use zhc_crypto::integer_semantics::lut::LutRegistry;
 use zhc_ir::{AnnIR, IR, ValId};
 use zhc_langs::{
     doplang::{CtMem, CtReg, DopInstructionSet, DopLang, LutRef, PtArg, UserFlag, VirtId},
-    hpulang::{HpuInstructionSet, HpuLang},
+    hpulang::{HpuInstructionSet, HpuLang, MAX_TRANSFER_ID},
 };
 use zhc_utils::{SafeAs, iter::MultiZip, small::SmallMap, svec};
 
@@ -37,8 +37,13 @@ pub fn translate<'ir>(ir: &AnnIR<'ir, HpuLang, Alloc, ()>, lut_reg: &LutRegistry
 
         match op.get_instruction() {
             TransferIn { id, .. } => {
+                assert!(
+                    id.0 < MAX_TRANSFER_ID,
+                    "Encountered a transfer with tid too large {:?}",
+                    op
+                );
                 add_op(DopInstructionSet::LD_B2B {
-                    flag: UserFlag { flag: id.0 },
+                    flag: UserFlag { flag: id.0.sas() },
                     slot: CtMem::heap(slots[0].0),
                 });
             }
@@ -86,13 +91,13 @@ pub fn translate<'ir>(ir: &AnnIR<'ir, HpuLang, Alloc, ()>, lut_reg: &LutRegistry
                 });
                 add_op(DopInstructionSet::NOTIFY {
                     virt_id: VirtId { id: to.0 },
-                    flag: UserFlag { flag: id.0 },
+                    flag: UserFlag { flag: id.0.sas() },
                     slot: CtMem::heap(slots[0].0 as u16),
                 });
             }
             TransferIn { id, .. } => {
                 add_op(DopInstructionSet::WAIT {
-                    flag: UserFlag { flag: id.0 },
+                    flag: UserFlag { flag: id.0.sas() },
                     slot: Some(CtMem::heap(slots[0].0 as u16)),
                 });
                 add_op(DopInstructionSet::LD {

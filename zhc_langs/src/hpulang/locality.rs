@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use serde::Serialize;
 use zhc_ir::visualization::VisualAnnotation;
-use zhc_utils::{Dumpable, small::SmallSet};
+use zhc_utils::Dumpable;
 
 /// Identifies a single HPU board within a partitioned multi-HPU program.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Copy, Hash)]
@@ -14,6 +14,9 @@ impl Display for HpuId {
     }
 }
 
+/// Maximal number of transfer ids currently supported at runtime.
+pub const MAX_TRANSFER_ID: u16 = 64;
+
 /// Identifies a single inter-HPU transfer, pairing its two split halves.
 ///
 /// The `TransferOut` on the source board and the `TransferIn` on the
@@ -21,7 +24,7 @@ impl Display for HpuId {
 /// `TransferId`, and it doubles as the handshake flag exchanged between
 /// the boards at runtime.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq, PartialOrd, Ord, Copy, Hash)]
-pub struct TransferId(pub u8);
+pub struct TransferId(pub u16);
 
 impl Display for TransferId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -37,7 +40,6 @@ impl Display for TransferId {
 pub enum HpuLocality {
     OnHpu(HpuId),
     Transfer { from: HpuId, to: HpuId },
-    Shared(SmallSet<HpuId>),
 }
 
 impl HpuLocality {
@@ -49,7 +51,6 @@ impl HpuLocality {
         match self {
             HpuLocality::OnHpu(hpu_id) => hpu_id == hid,
             HpuLocality::Transfer { from, to } => from == hid || to == hid,
-            HpuLocality::Shared(set) => set.contains(hid),
         }
     }
 }

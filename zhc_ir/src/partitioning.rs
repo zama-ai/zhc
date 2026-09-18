@@ -12,6 +12,18 @@ use crate::visualization::{
 #[derive(Serialize, Debug, Clone, Copy, StoreIndex, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PartitionId(pub u16);
 
+impl VisualAnnotation for PartitionId {
+    fn style_modifier(&self) -> Option<StyleModifier> {
+        let fill = Fill::Solid(
+            ColorScale::RAINBOW.interpolate((self.0 as f64 * 0.6180339887498949) % 1.0),
+        );
+        Some(StyleModifier {
+            fill: Some(fill),
+            ..Default::default()
+        })
+    }
+}
+
 #[fsm]
 #[derive(Serialize, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PartitionPlacement {

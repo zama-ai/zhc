@@ -27,9 +27,10 @@ pub fn add(spec: CiphertextSpec) -> Builder {
 ///
 /// Declares `SIMD_N * 2` inputs and `SIMD_N` outputs. Each pair is added independently
 /// using [`Builder::iop_add_ripple_carry`]. Optimized for throughput over latency.
-pub fn add_simd(spec: CiphertextSpec) -> Builder {
+pub fn add_simd(spec: CiphertextSpec, n: u16) -> Builder {
+    assert!(n > 1);
     let builder = Builder::new(spec.block_spec());
-    for _ in 0..crate::SIMD_N {
+    for _ in 0..n {
         let src_a = builder.ciphertext_input(spec.int_size());
         let src_b = builder.ciphertext_input(spec.int_size());
         let res = builder.iop_add_ripple_carry(&src_a, &src_b, None).0;
@@ -509,6 +510,8 @@ impl Builder {
 
 #[cfg(test)]
 mod test {
+    use crate::SIMD_N;
+
     use super::*;
     use zhc_langs::ioplang::IopValue;
     use zhc_utils::assert_display_is;
@@ -665,7 +668,7 @@ mod test {
                 .into()
         }
         for size in (2..128).step_by(2) {
-            add_simd(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+            add_simd(CiphertextSpec::new(size, 2, 2), SIMD_N).test_random(100, semantic);
         }
     }
 
@@ -735,7 +738,7 @@ mod test {
     #[test]
     fn noise_add_simd() {
         for size in (2..128).step_by(2) {
-            add_simd(CiphertextSpec::new(size, 2, 2)).check_noise();
+            add_simd(CiphertextSpec::new(size, 2, 2), SIMD_N).check_noise();
         }
     }
 

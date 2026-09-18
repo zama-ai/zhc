@@ -13,29 +13,27 @@ fn pipeline(ir: &IR<IopLang>, config: &PartitionerConfig) -> IR<IopLang> {
 
 #[test_matrix(
     iop = @all_iops,
-    size = @all_precs,
+    size = @main_precs,
     schedp = @all_schedps,
     tiep = [tiep_concentrate = TiePolicy::Concentrate, tiep_balance = TiePolicy::Balance],
-    spreadp = [spreadp_latency = SpreadPolicy::FavorLatency, spreadp_bandwidth = SpreadPolicy::FavorBandwidth])
+    spreadp = [spreadp_latency = SpreadPolicy::FavorLatency, spreadp_bandwidth = SpreadPolicy::FavorBandwidth],
+    n = [m2 = 2, m4 = 4, m8 = 8])
 ]
 #[ignore]
-fn correctness(iop: Iop, size: u16, schedp: SchedPolicy, tiep: TiePolicy, spreadp: SpreadPolicy) {
+fn correctness(
+    iop: Iop,
+    size: u16,
+    schedp: SchedPolicy,
+    tiep: TiePolicy,
+    spreadp: SpreadPolicy,
+    n: usize,
+) {
     let config = PartitionerConfig {
-        specs: [
-            PartitionSpec {
-                parallelism: 12,
-                latency: Cycle(1),
-            },
-            PartitionSpec {
-                parallelism: 12,
-                latency: Cycle(1),
-            },
-            PartitionSpec {
-                parallelism: 12,
-                latency: Cycle(1),
-            },
-        ]
-        .into_iter()
+        specs: std::iter::repeat(PartitionSpec {
+            parallelism: 12,
+            latency: Cycle(1),
+        })
+        .take(n)
         .collect(),
         sched_policy: schedp,
         tie_policy: tiep,

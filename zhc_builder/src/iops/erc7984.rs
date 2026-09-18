@@ -23,10 +23,10 @@ pub fn erc7984(spec: CiphertextSpec) -> Builder {
 /// Declares `SIMD_N` independent transfer triplets as inputs and output pairs.
 /// Each transfer uses [`Builder::iop_erc_7984_ripple`] — optimized for throughput.
 /// For single-transfer latency see [`erc7984`].
-pub fn erc7984_simd(spec: CiphertextSpec) -> Builder {
+pub fn erc7984_simd(spec: CiphertextSpec, n: u16) -> Builder {
+    assert!(n > 1);
     let builder = Builder::new(spec.block_spec());
-
-    for _ in 0..crate::SIMD_N {
+    for _ in 0..n {
         let src_from = builder.ciphertext_input(spec.int_size());
         let src_to = builder.ciphertext_input(spec.int_size());
         let src_amount = builder.ciphertext_input(spec.int_size());
@@ -121,6 +121,8 @@ impl Builder {
 
 #[cfg(test)]
 mod test {
+    use crate::SIMD_N;
+
     use super::*;
     use zhc_langs::ioplang::IopValue;
 
@@ -176,7 +178,7 @@ mod test {
                 .into()
         }
         for size in (2..64).step_by(2) {
-            erc7984_simd(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+            erc7984_simd(CiphertextSpec::new(size, 2, 2), SIMD_N).test_random(100, semantic);
         }
     }
 
@@ -190,7 +192,7 @@ mod test {
     #[test]
     fn noise_erc7984_simd() {
         for size in (2..64).step_by(2) {
-            erc7984_simd(CiphertextSpec::new(size, 2, 2)).check_noise();
+            erc7984_simd(CiphertextSpec::new(size, 2, 2), SIMD_N).check_noise();
         }
     }
 }

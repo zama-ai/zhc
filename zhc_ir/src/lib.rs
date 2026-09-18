@@ -73,7 +73,4 @@ pub use val_ref::*;
 pub use val_use::*;
 
 #[cfg(test)]
-#[allow(unused)]
-pub(crate) mod testlang;
-#[cfg(test)]
 mod tests;

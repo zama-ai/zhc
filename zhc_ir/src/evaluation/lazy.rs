@@ -1,7 +1,8 @@
 //! Pull-based IR evaluation.
 //!
 //! Hosts [`LazyEvaluator`], the driver that evaluates on demand whatever a requested value depends
-//! on, and is the scheduling counterpart of [`EagerEvaluator`].
+//! on, and is the scheduling counterpart of the push-based [`PureEvaluator`] and
+//! [`EffectfulEvaluator`].
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
@@ -171,7 +172,9 @@ where
     /// Panics if `opid` does not refer to an active operation of the IR, or if an argument or a
     /// result does not inhabit the type the signature declares for it; unlike an `eval` panic, such
     /// a mismatch propagates out of the driver rather than being recorded, as it indicates a faulty
-    /// [`Evaluable`] implementation.
+    /// [`Evaluable`] implementation. Also panics if `eval` reports the operation as
+    /// [`Blocked`](EvalOutcome::Blocked): a pull evaluates each operation at most once, so a
+    /// blocked one could never complete.
     pub fn pull_op(
         &mut self,
         context: &mut <D::InstructionSet as Evaluable<V>>::Context,
@@ -258,7 +261,14 @@ where
                     *(self.valmap.get_mut(ret_valid).unwrap()) = ValState::PoisonedBy(opid)
                 }
             }
-            Ok(ret_evals) => {
+            Ok(EvalOutcome::Blocked) => {
+                panic!(
+                    "Operation {} blocked during a lazy pull; the lazy driver never revisits an \
+                     operation, so a blocked one could never complete.",
+                    ir.get_op(opid).format()
+                )
+            }
+            Ok(EvalOutcome::Evaluated(ret_evals)) => {
                 // Typechecks the returns
                 for (i, (ret, expected_type)) in (ret_evals.iter(), sig.get_returns().iter())
                     .mzip()

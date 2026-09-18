@@ -1,5 +1,5 @@
 use super::*;
-use crate::testlang::{TestInstructionSet, TestLang};
+use crate::tests::testlang::{TestInstructionSet, TestLang};
 use crate::visualization::Hierarchy;
 use crate::visualization::composition::{Fill, NoClass, StyleModifier, TextBox};
 use crate::{AnnIR, IR};

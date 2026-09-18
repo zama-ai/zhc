@@ -1,4 +1,4 @@
-use zhc_ir::evaluation::{Evaluable, EvaluatesTo};
+use zhc_ir::evaluation::{EvalOutcome, Evaluable, EvaluatesTo};
 use zhc_langs::{
     doplang::{emit_assembly, emit_preamble},
     ioplang::check_noise,
@@ -6,16 +6,17 @@ use zhc_langs::{
 };
 use zhc_profiling::{interval_begin, interval_end};
 use zhc_utils::{
-    Dumpable, fast_hash,
+    Dumpable, SafeAs, fast_hash,
     files::{Extension, FileHandle, PerfettoTrace},
     small::SmallVec,
     svec,
+    units::Cycle,
 };
 
 use crate::{
-    Fingerprint, SchedPolicy, hpu,
+    Fingerprint, PartitionSpec, PartitionerConfig, SchedPolicy, SpreadPolicy, TiePolicy, hpu,
     iop::{self, extract_lut_registry},
-    multi_hpu,
+    multi_hpu, partition_and_materialize,
     pipeline::context::PipelineContext,
     vm,
 };
@@ -59,6 +60,8 @@ impl EvaluatesTo<PipelineArtifact> for PipelineTypeSystem {
             PipelineArtifact::LutRegistry(_) => PipelineTypeSystem::LutRegistry,
             PipelineArtifact::HpuLutRelocation(_) => PipelineTypeSystem::HpuLutRelocation,
             PipelineArtifact::MultiHpuLutRelocation(_) => PipelineTypeSystem::MultiHpuLutRelocation,
+            PipelineArtifact::RematIopLang(_) => PipelineTypeSystem::RematIoplang,
+            PipelineArtifact::PartitionerConfig(_) => PipelineTypeSystem::PartitionerConfig,
         }
     }
 }
@@ -70,8 +73,8 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
         &self,
         context: &mut Self::Context,
         arguments: SmallVec<&PipelineArtifact>,
-    ) -> SmallVec<PipelineArtifact> {
-        match self {
+    ) -> EvalOutcome<PipelineArtifact> {
+        let oup = match self {
             PipelineInstructionSet::InputHpuConfig => {
                 interval_begin(c"InputHpuConfig", 0);
                 let config = context.hpu_config.clone().unwrap();
@@ -105,16 +108,6 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                     ioplang
                 )))];
                 interval_end(c"ComputeFingerprint", 0);
-                result
-            }
-            PipelineInstructionSet::InputPartitions => {
-                interval_begin(c"InputPartitions", 0);
-                let partitions = context
-                    .partitions
-                    .clone()
-                    .expect("Missing pipeline input: partitions");
-                let result = svec![PipelineArtifact::Partitions(partitions)];
-                interval_end(c"InputPartitions", 0);
                 result
             }
             PipelineInstructionSet::InputPrototype => {
@@ -248,7 +241,7 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
             }
             PipelineInstructionSet::IoplangToMultiHpu => {
                 interval_begin(c"IopLangToMultiHpu", 0);
-                let ioplang = arguments[0].unwrap_iop_lang_ref();
+                let remat_ioplang = arguments[0].unwrap_remat_iop_lang_ref();
                 let partitions = arguments[1].unwrap_partitions_ref();
                 let (hpulang, localities) = todo!();
                 // multi_hpu::translation::lower_iop_to_multi_hpu(ioplang, partitions);
@@ -414,6 +407,45 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                 interval_end(c"InputMultiHpuLutRelocation", 0);
                 result
             }
-        }
+            PipelineInstructionSet::InputPartitionerConfig => {
+                interval_begin(c"InputPartitionerConfig", 0);
+                let (parallelism, n) = if let Some(multi_hpu_config) =
+                    context.multi_hpu_config.as_ref()
+                {
+                    let parallelism = multi_hpu_config.hpu_config.pbs_max_batch_size.sas::<u16>();
+                    let n_hpus = multi_hpu_config.n_hpus.sas::<usize>();
+                    (parallelism, n_hpus)
+                } else {
+                    panic!()
+                };
+                let specs = std::iter::repeat(PartitionSpec {
+                    parallelism,
+                    latency: Cycle(1),
+                })
+                .take(n)
+                .collect();
+                let result = svec![PipelineArtifact::PartitionerConfig(PartitionerConfig {
+                    specs,
+                    sched_policy: SchedPolicy::AsSoonAsPossible,
+                    tie_policy: TiePolicy::Concentrate,
+                    spread_policy: SpreadPolicy::FavorLatency
+                })];
+                interval_end(c"InputPartitionerConfig", 0);
+                result
+            }
+            PipelineInstructionSet::PartitionIoplang => {
+                interval_begin(c"PartitionIoplang", 0);
+                let ioplang = arguments[0].unwrap_iop_lang_ref();
+                let partitioner_config = arguments[1].unwrap_partitioner_config_ref();
+                let (remat, partitions) = partition_and_materialize(ioplang, partitioner_config);
+                let result = svec![
+                    PipelineArtifact::RematIopLang(Box::new(remat)),
+                    PipelineArtifact::Partitions(partitions)
+                ];
+                interval_end(c"PartitionIoplang", 0);
+                result
+            }
+        };
+        EvalOutcome::Evaluated(oup)
     }
 }

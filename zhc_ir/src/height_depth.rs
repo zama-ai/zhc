@@ -56,7 +56,7 @@ pub fn analyze_height_depth<D: Dialect>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testlang::{TestInstructionSet::*, TestLang};
+    use crate::tests::testlang::{TestInstructionSet::*, TestLang};
 
     #[test]
     fn weighted_branches_and_rounding() {

@@ -4,7 +4,7 @@ use zhc_langs::{
     doplang::{DopInstructionSet, UserFlag, VirtId},
     hpulang::TransferId,
 };
-use zhc_utils::{FastMap, fsm};
+use zhc_utils::{FastMap, SafeAs, fsm};
 
 use crate::Dispatch;
 
@@ -111,7 +111,7 @@ impl Simulatable for UCore {
                             };
                             match self
                                 .inbound_transfers
-                                .insert(TransferId(flag), InboundTransferState::Awaited)
+                                .insert(TransferId(flag.sas()), InboundTransferState::Awaited)
                             {
                                 None => {
                                     // No transfers registered yet for this tid.
@@ -128,7 +128,7 @@ impl Simulatable for UCore {
                             flag: UserFlag { flag },
                             ..
                         }) => {
-                            match self.inbound_transfers.get(&TransferId(*flag)) {
+                            match self.inbound_transfers.get(&TransferId((*flag).into())) {
                                 Some(InboundTransferState::Loading)
                                 | Some(InboundTransferState::Awaited) => {
                                     self.condition.transition(|old| match old {
@@ -179,7 +179,7 @@ impl Simulatable for UCore {
                                 unreachable!()
                             };
                             self.outbound_transfers
-                                .insert(id, (HpuId(hid), TransferId(flag)));
+                                .insert(id, (HpuId(hid), TransferId(flag.sas())));
                             dispatcher.dispatch_now(Events::IscPushDOp(DOp {
                                 raw: SYNC {
                                     is_inner: true,

@@ -20,6 +20,8 @@ use zhc_utils::{
     small::SmallVec,
 };
 
+const DEBUG_TRANSLATOR_ACTIONS: bool = false;
+
 /// Specifies the order in which operations are visited during translation.
 ///
 /// The choice of traversal order affects which values are available when the driver is called
@@ -150,6 +152,9 @@ impl<ID: Dialect, OD: Dialect> Translator<ID, OD> {
     ///
     /// Panics if no translation has been registered for `old`.
     pub fn translate_val(&self, old: impl AsValId) -> ValId {
+        if DEBUG_TRANSLATOR_ACTIONS {
+            println!("translate_val({:?})", old.val_id());
+        }
         match self.valmap.get(old.val_id()) {
             Some(val) => val.clone(),
             None => panic!("Failed to translate val {}", old.val_id()),
@@ -162,6 +167,9 @@ impl<ID: Dialect, OD: Dialect> Translator<ID, OD> {
     /// or [`translate_val`](Self::translate_val) calls. The number of returned values is
     /// determined by `instr`'s signature.
     pub fn add_op(&mut self, instr: OD::InstructionSet, args: SmallVec<ValId>) -> SmallVec<ValId> {
+        if DEBUG_TRANSLATOR_ACTIONS {
+            println!("add_op({:?}, {:?})", instr, args);
+        }
         let (opid, valids) = self.output.add_op(instr, args);
         self.operation_provenance
             .resize_with(opid.0 as usize + 1, || None);
@@ -183,6 +191,13 @@ impl<ID: Dialect, OD: Dialect> Translator<ID, OD> {
     ///
     /// Panics if a translation has already been registered for `old`.
     pub fn register_translation(&mut self, old: impl AsValId, new: impl AsValId) {
+        if DEBUG_TRANSLATOR_ACTIONS {
+            println!(
+                "register_translations({:?}, {:?})",
+                old.val_id(),
+                new.val_id()
+            );
+        }
         let old = old.val_id();
         let new = new.val_id();
         assert!(
@@ -330,7 +345,7 @@ pub fn translate_ann<'a, 'b, ID: Dialect, OpAnn: Annotation, ValAnn: Annotation,
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testlang::{TestInstructionSet, TestLang};
+    use crate::tests::testlang::{TestInstructionSet, TestLang};
     use zhc_utils::svec;
 
     #[test]

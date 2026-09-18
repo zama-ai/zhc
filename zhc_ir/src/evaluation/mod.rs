@@ -10,12 +10,17 @@
 //! through a whole run. A dialect may be evaluated in several domains at once, each selected by
 //! its value type.
 //!
-//! Two drivers consume those traits and differ only in scheduling. [`EagerEvaluator`] is
-//! push-based: the caller advances operations whose arguments have already settled, typically the
-//! whole IR in dependency order. [`LazyEvaluator`] is pull-based: the caller names a value or an
-//! operation and the driver evaluates exactly the dependencies needed to produce it. Both record
-//! their outcome as one [`OpState`] per operation and one [`ValState`] per value, and both can be
-//! turned into an annotated IR carrying those states.
+//! Three drivers consume those traits. [`PureEvaluator`] and [`EffectfulEvaluator`] are
+//! push-based: they sweep the IR in dependency order, advancing operations whose arguments have
+//! already settled. [`LazyEvaluator`] is pull-based: the caller names a value or an operation and
+//! the driver evaluates exactly the dependencies needed to produce it. All record their outcome
+//! as one [`OpState`] per operation and one [`ValState`] per value, and all can be turned into an
+//! annotated IR carrying those states.
+//!
+//! An operation may also report through [`EvalOutcome::Blocked`] that it is not ready, when its
+//! readiness depends on the context rather than on its arguments. Only [`EffectfulEvaluator`]
+//! supports this: it sweeps again until every operation has settled, and reports the ones still
+//! blocked when no sweep makes progress. The two other drivers panic on a blocked operation.
 //!
 //! Runtime failures are contained rather than propagated. A panic raised by
 //! [`eval`](Evaluable::eval) is captured as [`OpState::Panicked`] holding its message, and the
@@ -33,10 +38,14 @@ use crate::{
 use std::{fmt::Debug, time::Duration};
 
 mod eager;
+mod effectful;
 mod lazy;
+mod pure;
 
-pub use eager::*;
+pub(crate) use eager::*;
+pub use effectful::*;
 pub use lazy::*;
+pub use pure::*;
 use zhc_utils::{graphics::Color, small::SmallVec};
 
 /// Marker trait for types that serve as evaluation values.
@@ -85,14 +94,53 @@ where
     /// Executes the operation on the given arguments.
     ///
     /// `arguments` holds one value per argument of the operation's signature, in declaration
-    /// order, and the returned vector must likewise hold one value per declared result, in the
-    /// same order; the drivers bind results positionally without checking the count. `context` is
-    /// shared with every other operation of the run and may be mutated freely.
+    /// order. On [`EvalOutcome::Evaluated`], the returned vector must likewise hold one value per
+    /// declared result, in the same order; the drivers bind results positionally without checking
+    /// the count. `context` is shared with every other operation of the run and may be mutated
+    /// freely.
+    ///
+    /// An operation whose readiness depends on the context rather than on its arguments alone,
+    /// such as one waiting for a message another operation has not yet posted, returns
+    /// [`EvalOutcome::Blocked`]. The operation then stays pending and may be evaluated again
+    /// later. An implementation must check its readiness before mutating `context`, so that a
+    /// blocked call leaves no trace of itself and a later retry does not apply an effect twice.
     ///
     /// Panicking is the supported way to signal a runtime failure: the drivers catch the panic,
     /// record its message on the operation and poison the operation's results rather than
     /// unwinding any further.
-    fn eval(&self, context: &mut Self::Context, arguments: SmallVec<&I>) -> SmallVec<I>;
+    fn eval(&self, context: &mut Self::Context, arguments: SmallVec<&I>) -> EvalOutcome<I>;
+}
+
+/// Result of a single [`eval`](Evaluable::eval) call.
+///
+/// Separates an operation that ran from one that could not run yet. Only operations with effects
+/// on the [`Context`](Evaluable::Context) ever block; a pure operation always evaluates once its
+/// arguments are available.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EvalOutcome<I: Evaluation> {
+    /// The operation ran and produced one value per declared result.
+    Evaluated(SmallVec<I>),
+    /// The operation is not ready yet and left the context untouched.
+    Blocked,
+}
+
+impl<I: Evaluation> EvalOutcome<I> {
+    /// Returns `true` if the outcome is [`Blocked`](EvalOutcome::Blocked).
+    pub fn is_blocked(&self) -> bool {
+        matches!(self, EvalOutcome::Blocked)
+    }
+
+    /// Returns the produced values.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the outcome is [`Blocked`](EvalOutcome::Blocked).
+    pub fn unwrap_evaluated(self) -> SmallVec<I> {
+        match self {
+            EvalOutcome::Evaluated(values) => values,
+            EvalOutcome::Blocked => panic!("Called unwrap_evaluated on Blocked"),
+        }
+    }
 }
 
 /// State of a value during evaluation.

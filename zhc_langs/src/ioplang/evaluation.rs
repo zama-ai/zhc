@@ -3,7 +3,7 @@ use zhc_crypto::integer_semantics::{
     CiphertextBlockSpec, EmulatedCiphertext, EmulatedCiphertextBlock, EmulatedPlaintext,
     EmulatedPlaintextBlock,
 };
-use zhc_ir::evaluation::{Evaluable, EvaluatesTo, Evaluation};
+use zhc_ir::evaluation::{EvalOutcome, Evaluable, EvaluatesTo, Evaluation};
 use zhc_ir::visualization::{DynamicElement, VisualAnnotation};
 use zhc_utils::iter::CollectInSmallVec;
 use zhc_utils::small::SmallVec;
@@ -158,10 +158,10 @@ impl Evaluable<IopValue> for super::IopInstructionSet {
         &self,
         context: &mut Self::Context,
         arguments: SmallVec<&IopValue>,
-    ) -> SmallVec<IopValue> {
+    ) -> EvalOutcome<IopValue> {
         use super::IopInstructionSet::*;
         let ct = |v: EmulatedCiphertextBlock| IopValue::CiphertextBlock(v);
-        match self {
+        let results = match self {
             InputCiphertext { pos, int_size } => {
                 assert!(
                     context.inputs.contains_key(pos),
@@ -303,6 +303,7 @@ impl Evaluable<IopValue> for super::IopInstructionSet {
                     ct(o7)
                 ]
             }
-        }
+        };
+        EvalOutcome::Evaluated(results)
     }
 }

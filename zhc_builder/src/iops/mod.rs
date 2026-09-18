@@ -48,7 +48,7 @@ pub enum PropagationDirection {
 }
 
 /// Number of parallel transfers in a SIMD batch.
-pub const SIMD_N: usize = 12;
+pub const SIMD_N: u16 = 12;
 
 mod add;
 mod adds;

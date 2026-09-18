@@ -90,7 +90,7 @@ pub fn eliminate_dead_code<D: Dialect>(ir: &mut IR<D>) {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{testlang::*, *};
+    use crate::{tests::testlang::*, *};
     use zhc_utils::{assert_display_is, svec};
 
     #[test]

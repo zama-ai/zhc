@@ -1,4 +1,4 @@
-use crate::evaluation::{EagerEvaluator, Evaluable, EvaluatesTo, Evaluation, OpState, ValState};
+use crate::evaluation::{Evaluable, EvaluatesTo, Evaluation, OpState, PureEvaluator, ValState};
 use crate::failure::Failure;
 use crate::val_ref::ValRef;
 use crate::visualization::{Hierarchy, draw_ir_to_html};
@@ -985,8 +985,8 @@ impl<D: Dialect> IR<D> {
         D::InstructionSet: Evaluable<I>,
         D::TypeSystem: EvaluatesTo<I>,
     {
-        let mut evaluator = EagerEvaluator::from_ir(self);
-        evaluator.push_all(context);
+        let mut evaluator = PureEvaluator::from_ir(self);
+        evaluator.push_to_completion(context);
 
         if evaluator.is_ok() {
             Ok(evaluator.into_value_ir())
@@ -1009,6 +1009,88 @@ impl<D: Dialect> IR<D> {
     /// Creates a configurable formatter for the entire IR.
     pub fn format(&self) -> Formatted<'_, Self> {
         Formatted::new(self)
+    }
+
+    /// Concatenates several IRs into one.
+    ///
+    /// The output holds all operations and values of the inputs, in order.
+    /// Nothing is dropped: inactive operations and values are kept, so the
+    /// layout of each input is preserved. The operation and value IDs of an
+    /// input are shifted by the total number of operations and values, active
+    /// or not, of the inputs before it. Depths are unchanged, since inputs
+    /// share no edges.
+    ///
+    /// Concatenating a single IR yields an equal IR. Concatenating no IR
+    /// yields an empty IR.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the total number of operations or values does not fit in
+    /// the ID range.
+    pub fn concat(irs: &[IR<D>]) -> IR<D> {
+        let mut ops: OpIdRaw = 0;
+        let mut vals: ValIdRaw = 0;
+        for ir in irs {
+            ops = ops
+                .checked_add(ir.raw_n_ops())
+                .expect("concat: too many operations");
+            vals = vals
+                .checked_add(ir.raw_n_vals())
+                .expect("concat: too many values");
+        }
+
+        let mut output = IR::with_capacity(vals, ops);
+        for ir in irs {
+            let op_offset = output.raw_n_ops();
+            let val_offset = output.raw_n_vals();
+
+            let shift_op = move |opid: &OpId| *opid + op_offset;
+            let shift_val = move |valid: &ValId| *valid + val_offset;
+
+            output
+                .op_operations
+                .0
+                .extend(ir.op_operations.iter().cloned());
+            output
+                .op_signatures
+                .0
+                .extend(ir.op_signatures.iter().cloned());
+            output.op_arguments.0.extend(
+                ir.op_arguments
+                    .iter()
+                    .map(|args| args.iter().map(shift_val).collect()),
+            );
+            output.op_returns.0.extend(
+                ir.op_returns
+                    .iter()
+                    .map(|rets| rets.iter().map(shift_val).collect()),
+            );
+            output.op_states.0.extend(ir.op_states.iter().cloned());
+            output.op_depth.0.extend(ir.op_depth.iter().cloned());
+            output.op_comments.0.extend(ir.op_comments.iter().cloned());
+            output.op_count += ir.op_count;
+
+            output.val_users.0.extend(ir.val_users.iter().map(|users| {
+                users
+                    .iter()
+                    .map(|u| ValUse {
+                        opid: shift_op(&u.opid),
+                        position: u.position,
+                    })
+                    .collect()
+            }));
+            output
+                .val_origins
+                .0
+                .extend(ir.val_origins.iter().map(|o| ValOrigin {
+                    opid: shift_op(&o.opid),
+                    position: o.position,
+                }));
+            output.val_types.0.extend(ir.val_types.iter().cloned());
+            output.val_states.0.extend(ir.val_states.iter().cloned());
+            output.val_count += ir.val_count;
+        }
+        output
     }
 }
 

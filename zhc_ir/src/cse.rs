@@ -163,7 +163,7 @@ mod test {
 
     use super::ValueNumber;
     use super::*;
-    use crate::{testlang::*, *};
+    use crate::{tests::testlang::*, *};
 
     // For the commutative Add test we normalize Add arguments by sorting the value numbers.
     impl AllowCse for TestLang {

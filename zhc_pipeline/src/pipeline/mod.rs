@@ -1052,7 +1052,7 @@ impl Pipeline {
     /// let partitions = pipeline.get_partitions();
     /// println!("{} operations placed in partitions", partitions.iter().count());
     /// ```
-    pub fn get_partitions(&mut self) -> &OpMap<PartitionAnnotation> {
+    pub fn get_partitions(&mut self) -> &OpMap<PartitionId> {
         self.eval.pull_val(&mut self.context, VALIDS().partitions);
         self.eventually_report_failure();
         self.eval
@@ -1872,7 +1872,7 @@ impl Pipeline {
     /// # Panics
     ///
     /// See [`get_partitions`](Self::get_partitions).
-    pub fn into_partitions(mut self) -> OpMap<PartitionAnnotation> {
+    pub fn into_partitions(mut self) -> OpMap<PartitionId> {
         self.eval.pull_val(&mut self.context, VALIDS().partitions);
         self.eventually_report_failure();
         self.eval

@@ -28,10 +28,12 @@ pub enum PipelineArtifact {
     // Commons
     UncheckedIopLang(Box<IR<IopLang>>),
     IopLang(Box<IR<IopLang>>),
+    PartitionerConfig(PartitionerConfig),
+    RematIopLang(Box<IR<IopLang>>),
     Fingerprint(Fingerprint),
     PbsMetrics(Box<PbsMetrics>),
     SlackDrawing(FileHandle),
-    Partitions(OpMap<PartitionAnnotation>),
+    Partitions(OpMap<PartitionId>),
     Prototype(Box<Signature<Type>>),
     CiphertextBlockSpec(CiphertextBlockSpec),
     LutRegistry(LutRegistry),

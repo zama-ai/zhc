@@ -1,6 +1,6 @@
 use zhc_builder::CiphertextBlockSpec;
 use zhc_crypto::integer_semantics::lut::LutRegistry;
-use zhc_ir::IR;
+use zhc_ir::{IR, evaluation::EffectfulEvaluator};
 use zhc_langs::{
     doplang::{DopInterpreterContext, DopLang, DopValue},
     hpulang::{HpuInterpreterContext, HpuLang, HpuValue, TDstId, TImmId, TSrcId},
@@ -66,6 +66,55 @@ pub fn check_iop_hpu_equivalence(
     hpu_ir: &IR<HpuLang>,
     spec: CiphertextBlockSpec,
     nreps: usize,
+) {
+    check_iop_hpu_equivalence_with(iop_ir, hpu_ir, spec, nreps, |ir, ctx| {
+        if let Err(eval_ir) = ir.evaluate::<HpuValue>(ctx) {
+            eval_ir.dump_and_panic();
+        }
+    });
+}
+
+/// Checks a multi-HPU program against its IOP source.
+///
+/// The per-HPU programs are concatenated into one IR and interpreted with an
+/// [`EffectfulEvaluator`], so `TransferOut` and `TransferIn` pairs exchange
+/// blocks through the context mailbox. Panics if some transfers can never
+/// complete (a deadlock), if a posted block is never taken, if an operation
+/// fails, or if an output block differs from the IOP result.
+pub fn check_iop_multi_hpu_equivalence(
+    iop_ir: &IR<IopLang>,
+    hpu_irs: &[IR<HpuLang>],
+    spec: CiphertextBlockSpec,
+    nreps: usize,
+) {
+    let hpu_ir = IR::concat(hpu_irs);
+    check_iop_hpu_equivalence_with(iop_ir, &hpu_ir, spec, nreps, |ir, ctx| {
+        let mut evaluator = EffectfulEvaluator::from_ir(ir);
+        if let Err(blocked) = evaluator.push_to_completion(ctx) {
+            let blocked = blocked
+                .iter()
+                .map(|opid| format!("  {}", ir.get_op(opid).format()))
+                .collect::<Vec<_>>()
+                .join("\n");
+            panic!("Multi-HPU deadlock: these transfers never completed:\n{blocked}");
+        }
+        if !evaluator.is_ok() {
+            evaluator.into_eval_ir().dump_and_panic();
+        }
+        assert!(
+            ctx.transfers.is_empty(),
+            "Transfers posted but never taken: {:?}",
+            ctx.transfers.keys().collect::<Vec<_>>()
+        );
+    });
+}
+
+fn check_iop_hpu_equivalence_with(
+    iop_ir: &IR<IopLang>,
+    hpu_ir: &IR<HpuLang>,
+    spec: CiphertextBlockSpec,
+    nreps: usize,
+    evaluate: impl Fn(&IR<HpuLang>, &mut HpuInterpreterContext),
 ) {
     // Discover input slots from the IOP IR.
     let mut input_slots: Vec<(usize, bool, u16)> = Vec::new(); // (pos, is_ct, int_size)
@@ -144,10 +193,7 @@ pub fn check_iop_hpu_equivalence(
         }
 
         // Interpret HPU.
-        match hpu_ir.evaluate::<HpuValue>(&mut hpu_ctx) {
-            Err(eval_ir) => eval_ir.dump_and_panic(),
-            Ok(_) => {}
-        };
+        evaluate(hpu_ir, &mut hpu_ctx);
 
         // Compare: check each output block matches.
         for (pos, iop_output) in &iop_ctx.outputs {
