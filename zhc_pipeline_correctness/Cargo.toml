@@ -12,8 +12,6 @@ zhc_crypto.workspace = true
 zhc_ir.workspace = true
 zhc_langs.workspace = true
 zhc_utils.workspace = true
-
-[dev-dependencies]
 zhc.workspace = true
 zhc_pipeline.workspace = true
 zhc_config.workspace = true

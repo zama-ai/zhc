@@ -452,6 +452,7 @@ impl Pipeline {
     /// checks noise lazily using [`with_ciphertext_block_spec`](Self::with_ciphertext_block_spec).
     pub fn with_unchecked_ioplang(mut self, ir: IR<IopLang>) -> Self {
         self.context.unchecked_ioplang = Some(ir);
+        self.eval.invalidate_from_val(VALIDS().unchecked_ioplang);
         self
     }
 
@@ -460,6 +461,7 @@ impl Pipeline {
     /// The map must refer to the operations of the supplied unchecked IR.
     pub fn with_partitions(mut self, partitions: OpMap<PartitionId>) -> Self {
         self.context.partitions = Some(partitions);
+        self.eval.invalidate_from_val(VALIDS().partitions);
         self
     }
 
@@ -468,12 +470,15 @@ impl Pipeline {
     /// The signature must match the supplied IR. It is only required when requesting the prototype.
     pub fn with_prototype(mut self, prototype: Signature<Type>) -> Self {
         self.context.prototype = Some(prototype);
+        self.eval.invalidate_from_val(VALIDS().prototype);
         self
     }
 
     /// Supplies the ciphertext block layout used to check the input IR's noise.
     pub fn with_ciphertext_block_spec(mut self, spec: CiphertextBlockSpec) -> Self {
         self.context.ciphertext_block_spec = Some(spec);
+        self.eval
+            .invalidate_from_val(VALIDS().ciphertext_block_spec);
         self
     }
 
@@ -500,6 +505,7 @@ impl Pipeline {
     pub fn with_hpu_config(mut self, config: HpuConfig) -> Self {
         assert!(self.context.multi_hpu_config.is_none() && self.context.vm_config.is_none());
         self.context.hpu_config = Some(config);
+        self.eval.invalidate_from_val(VALIDS().hpu_config);
         self
     }
 
@@ -525,6 +531,7 @@ impl Pipeline {
     pub fn with_multi_hpu_config(mut self, config: MultiHpuConfig) -> Self {
         assert!(self.context.hpu_config.is_none() && self.context.vm_config.is_none());
         self.context.multi_hpu_config = Some(config);
+        self.eval.invalidate_from_val(VALIDS().multi_hpu_config);
         self
     }
 
@@ -554,6 +561,7 @@ impl Pipeline {
     pub fn with_vm_config(mut self, config: VmConfig) -> Self {
         assert!(self.context.multi_hpu_config.is_none() && self.context.hpu_config.is_none());
         self.context.vm_config = Some(config);
+        self.eval.invalidate_from_val(VALIDS().vm_config);
         self
     }
 
@@ -585,6 +593,9 @@ impl Pipeline {
     /// ```
     pub fn with_legacy_hpu_scheduler(mut self) -> Self {
         self.context.legacy_hpu_scheduler = true;
+        // `legacy_hpu_scheduler` has no `Input*` op of its own: `ScheduleHpuLang` reads it
+        // directly from the context, so its own result (`hpulang_scheduled`) is the seed.
+        self.eval.invalidate_from_val(VALIDS().hpulang_scheduled);
         self
     }
 
@@ -624,6 +635,11 @@ impl Pipeline {
     /// ```
     pub fn with_trace_hpu_events(mut self) -> Self {
         self.context.hpu_trace_events = true;
+        // `hpu_trace_events` has no `Input*` op of its own: `TraceHpuExecution` and
+        // `TraceMultiHpuExecution` read it directly from the context, so their own results
+        // (`hpu_trace`/`multi_hpu_trace`) are the seeds.
+        self.eval.invalidate_from_val(VALIDS().hpu_trace);
+        self.eval.invalidate_from_val(VALIDS().multi_hpu_trace);
         self
     }
 
@@ -665,6 +681,11 @@ impl Pipeline {
     /// ```
     pub fn with_hpu_lut_relocation(mut self, relocation: Vec<LutId>) -> Self {
         self.context.hpu_lut_relocation = Some(relocation);
+        // Feeds two separate leaf ops (`InputHpuLutRelocation`/`InputMultiHpuLutRelocation`),
+        // one per flow, so both need their own seed.
+        self.eval.invalidate_from_val(VALIDS().hpu_lut_relocation);
+        self.eval
+            .invalidate_from_val(VALIDS().multi_hpu_lut_relocation);
         self
     }
 
@@ -687,6 +708,7 @@ impl Pipeline {
     /// ```
     pub fn with_topology(mut self, topology: Topology) -> Self {
         self.context.topology = topology;
+        self.eval.invalidate_from_val(VALIDS().topology);
         self
     }
 

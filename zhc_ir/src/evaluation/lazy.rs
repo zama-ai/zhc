@@ -119,6 +119,42 @@ where
         self.pull_op(context, opid);
     }
 
+    /// Resets an operation and everything downstream of it to pending.
+    ///
+    /// Marks `opid`, every operation that directly or indirectly uses its results, and all the
+    /// return values of those operations as pending again, so the next pull re-evaluates them.
+    /// Any settled state is discarded along the way, evaluated results as well as panic and poison
+    /// markers. Operations that do not depend on `opid` keep their state, so work unrelated to the
+    /// invalidated region is still shared by later pulls. Use this after changing something the
+    /// operation's outcome depends on, such as the IR or the evaluation context.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `opid` is out of bounds for the IR or refers to an inactive operation.
+    pub fn invalidate_from_op(&mut self, opid: impl AsOpId) {
+        let origin = self.ir.get_op(opid);
+        for op in std::iter::once(origin.clone()).chain(origin.get_reached_iter()) {
+            *self.opmap.get_mut(op.op_id()).unwrap() = OpState::Pending;
+            for ret_valid in op.get_return_valids() {
+                *self.valmap.get_mut(*ret_valid).unwrap() = ValState::Pending;
+            }
+        }
+    }
+
+    /// Resets the operation producing a value, and everything downstream of it, to pending.
+    ///
+    /// Resolves `valid` to its producing operation and invalidates from there, exactly like
+    /// [`invalidate_from_op`](Self::invalidate_from_op). Note that the whole producer is reset,
+    /// so the sibling results of `valid` become pending again as well.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `valid` is out of bounds for the IR or refers to an inactive value.
+    pub fn invalidate_from_val(&mut self, valid: impl AsValId) {
+        let origin = self.ir.get_val(valid).get_origin().opref;
+        self.invalidate_from_op(origin);
+    }
+
     /// Evaluates an operation, pulling its pending dependencies first.
     ///
     /// Returns without doing anything if `opid` has already settled. Otherwise each argument still
