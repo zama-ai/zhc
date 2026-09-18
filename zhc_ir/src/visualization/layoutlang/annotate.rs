@@ -19,14 +19,18 @@ pub fn annotate_layout<OpAnn: VisualAnnotation + Clone>(
     ir: &mut IR<LayoutDialect>,
     annotations: &OpMap<OpAnn>,
 ) {
-    ir.mutate_ops_linear(|op| match op {
-        LayoutInstructionSet::Operation { opid, op, .. } => {
-            op.annotation = Some(Rc::new(annotations.get(opid).unwrap().clone()));
+    ir.replace_ops_instr_linear(|op| {
+        let mut op = op.get_instruction().clone();
+        match &mut op {
+            LayoutInstructionSet::Operation { opid, op, .. } => {
+                op.annotation = Some(Rc::new(annotations.get(*opid).unwrap().clone()));
+            }
+            LayoutInstructionSet::Group { ir, .. } => {
+                annotate_layout(ir, annotations);
+            }
+            _ => {}
         }
-        LayoutInstructionSet::Group { ir, .. } => {
-            annotate_layout(ir, annotations);
-        }
-        _ => {}
+        op
     });
 }
 
@@ -44,19 +48,23 @@ pub fn annotate_layout_vals<ValAnn: VisualAnnotation + Clone>(
     ir: &mut IR<LayoutDialect>,
     annotations: &ValMap<ValAnn>,
 ) {
-    ir.mutate_ops_linear(|op| match op {
-        LayoutInstructionSet::Operation {
-            op, args, returns, ..
-        } => {
-            let annotate = |valid: &crate::ValId| -> Option<Rc<dyn VisualAnnotation>> {
-                Some(Rc::new(annotations.get(*valid).unwrap().clone()))
-            };
-            op.arg_annotations = args.iter().map(annotate).collect();
-            op.return_annotations = returns.iter().map(annotate).collect();
+    ir.replace_ops_instr_linear(|op| {
+        let mut op = op.get_instruction().clone();
+        match &mut op {
+            LayoutInstructionSet::Operation {
+                op, args, returns, ..
+            } => {
+                let annotate = |valid: &crate::ValId| -> Option<Rc<dyn VisualAnnotation>> {
+                    Some(Rc::new(annotations.get(*valid).unwrap().clone()))
+                };
+                op.arg_annotations = args.iter().map(annotate).collect();
+                op.return_annotations = returns.iter().map(annotate).collect();
+            }
+            LayoutInstructionSet::Group { ir, .. } => {
+                annotate_layout_vals(ir, annotations);
+            }
+            _ => {}
         }
-        LayoutInstructionSet::Group { ir, .. } => {
-            annotate_layout_vals(ir, annotations);
-        }
-        _ => {}
+        op
     });
 }

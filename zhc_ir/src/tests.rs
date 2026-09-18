@@ -1857,3 +1857,39 @@ fn test_replace_val_use_at_multi_return_arg() {
     assert_eq!(v2_val.users[0].opid, add_id);
     assert_eq!(v2_val.users[0].position, 1);
 }
+
+/// A `ValUse` pointing at a deleted operation must be rejected. Otherwise the dead op's
+/// arguments get rewritten, its depth is recomputed, and a use coming from a dead op is
+/// pushed onto the users of `new`.
+#[test]
+#[should_panic(expected = "Unknown or inactive op.")]
+fn test_replace_val_use_at_dead_op() {
+    let mut store: IR<TestLang> = IR::empty();
+    let (_, v0) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![]);
+    let (_, v1) = store.add_op(TestInstructionSet::IntInput { pos: 1 }, svec![]);
+    let (inc_id, _) = store.add_op(TestInstructionSet::Inc, svec![v0[0]]);
+    store.delete_op(inc_id);
+    store.replace_val_use_at(
+        ValUse {
+            opid: inc_id,
+            position: 0,
+        },
+        v1[0],
+    );
+}
+
+/// In-place instruction mutation must not change the signature. The stored signature and the
+/// types of the return values are derived from the instruction at insertion and are never
+/// re-validated.
+#[test]
+#[should_panic(expected = "signature")]
+fn test_replace_op_instr_signature_drift() {
+    let mut store: IR<TestLang> = IR::empty();
+    let (_, v0) = store.add_op(TestInstructionSet::IntInput { pos: 0 }, svec![]);
+    let _ = store.add_op(TestInstructionSet::Inc, svec![v0[0]]);
+    // Inc is Int -> Int, Return is Int -> (). Same arity, different signature.
+    store.replace_ops_instr_linear(|op| match op.get_instruction() {
+        TestInstructionSet::Inc => TestInstructionSet::Return,
+        other => other.clone(),
+    });
+}

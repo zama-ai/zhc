@@ -398,9 +398,38 @@ impl<D: Dialect> IR<D> {
         walker.map(|valid| self.get_val(valid))
     }
 
-    /// Applies a mutation function to all active operations in linear order.
-    pub fn mutate_ops_linear(&mut self, f: impl FnMut(&mut D::InstructionSet)) {
-        self.mutate_ops_with(
+    /// Replaces the instruction of an active operation.
+    ///
+    /// The arguments, return values, and signature of the operation are left
+    /// untouched, so `new` must have the same signature as the instruction it
+    /// replaces.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the operation ID is unknown or inactive, or if `new` has a
+    /// different signature than the current instruction, since the stored
+    /// signature and the types of the return values would no longer match it.
+    pub fn replace_op_instr(&mut self, opid: impl AsOpId, new: D::InstructionSet) {
+        let opid = opid.op_id();
+        assert!(self.has_opid(opid), "Unknown or inactive op.");
+        let opmut = self.raw_get_op_mut(opid);
+        assert_eq!(
+            new.get_signature(),
+            *opmut.signature,
+            "Tried to replace an instruction with one of different signature."
+        );
+        *opmut.instruction = new;
+    }
+
+    /// Replaces the instructions of all active operations in linear order.
+    ///
+    /// See [`replace_ops_instr_with`](Self::replace_ops_instr_with).
+    ///
+    /// # Panics
+    ///
+    /// Same as [`replace_ops_instr_with`](Self::replace_ops_instr_with).
+    pub fn replace_ops_instr_linear(&mut self, f: impl FnMut(OpRef<'_, D>) -> D::InstructionSet) {
+        self.replace_ops_instr_with(
             self.raw_linear_opwalker()
                 .collect::<SmallVec<_>>()
                 .into_iter(),
@@ -408,19 +437,30 @@ impl<D: Dialect> IR<D> {
         );
     }
 
-    /// Applies a mutation function to operations visited by the specified walker.
+    /// Replaces the instructions of the operations visited by the specified walker.
     ///
-    /// Only active operations are mutated; inactive operations are skipped.
-    pub fn mutate_ops_with(
+    /// For every active operation, `f` receives a reference to the operation,
+    /// with full read access to the IR, and returns the instruction that
+    /// replaces its current one. Inactive operations are skipped.
+    ///
+    /// Replacements are applied in place as the walk proceeds: `f` observes the
+    /// new instruction of operations visited earlier, and the old instruction
+    /// of operations not yet visited.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a returned instruction has a different signature than the one
+    /// it replaces, see [`replace_op_instr`](Self::replace_op_instr).
+    pub fn replace_ops_instr_with(
         &mut self,
         walker: impl Iterator<Item = OpId>,
-        mut f: impl FnMut(&mut D::InstructionSet),
+        mut f: impl FnMut(OpRef<'_, D>) -> D::InstructionSet,
     ) {
         walker.for_each(|opid| {
-            let opmut = self.raw_get_op_mut(opid);
-            if opmut.state.is_active() {
-                f(opmut.instruction);
-            };
+            if self.has_opid(opid) {
+                let new = f(self.get_op(opid));
+                self.replace_op_instr(opid, new);
+            }
         });
     }
 
@@ -695,12 +735,13 @@ impl<D: Dialect> IR<D> {
     ///
     /// # Panics
     ///
-    /// Panics if `use_site.position` is out of range for the consuming
-    /// operation's argument list, if `new` or the value currently at the slot
-    /// is unknown or inactive, if the two values have different types, or if
-    /// the replacement would introduce a cycle (i.e. `new` is produced by an
-    /// operation reachable from the consuming operation).
+    /// Panics if `use_site.opid` is unknown or inactive, if `use_site.position`
+    /// is out of range for the consuming operation's argument list, if `new` or
+    /// the value currently at the slot is unknown or inactive, if the two values
+    /// have different types, or if the replacement would introduce a cycle (i.e.
+    /// `new` is produced by an operation reachable from the consuming operation).
     pub fn replace_val_use_at(&mut self, use_site: ValUse, new: impl AsValId) {
+        assert!(self.has_opid(use_site.opid), "Unknown or inactive op.");
         assert!(
             (use_site.position as usize) < self.op_arguments[use_site.opid].len(),
             "Invalid use_site."
