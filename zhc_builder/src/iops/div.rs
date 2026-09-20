@@ -1,5 +1,5 @@
 use zhc_crypto::integer_semantics::IntegerCiphertextSpec;
-use zhc_langs::ioplang::{Lut1Def, Lut2Def};
+use zhc_langs::ioplang::{Lut1, Lut2};
 
 use crate::{
     BitType, CiphertextBlock, PropagationDirection,
@@ -244,9 +244,10 @@ impl Builder {
                     // if the result is 'b100, this means that the result is positive.
                     // In all other case ('b11 or 'b10) the result is negative.
                     is_lt = self.block_sub(&diff_x_a[block_nb], &div_x_is_not_null_v[xi][block_nb]);
-                    is_lt = self.block_lookup(is_lt, Lut1Def::MsgNotNullPos1);
+                    is_lt = self.block_lookup(is_lt, Lut1::msg_not_null_pos1(*self.spec()));
                 } else {
-                    is_lt = self.block_lookup(diff_x_a[block_nb], Lut1Def::MsgNotNullPos1);
+                    is_lt = self
+                        .block_lookup(diff_x_a[block_nb], Lut1::msg_not_null_pos1(*self.spec()));
                 }
                 // Note that here the lt boolean is stored in position 1 and not 0
                 // to ease the if_then_else later.
@@ -260,11 +261,17 @@ impl Builder {
             // {r_lt_div_x3, r_lt_div_x2, r_lt_div_x1, 0} xor {1, r_lt_div_x3,
             // r_lt_div_x2,r_lt_div_x1}
             let mut q_1h = Vec::new();
-            let ct1 =
-                self.block_pack_then_lookup(r_lt_div_x_v[0], &r_lt_div_x_v[1], Lut1Def::BwXor);
-            let ct2 =
-                self.block_pack_then_lookup(r_lt_div_x_v[1], &r_lt_div_x_v[2], Lut1Def::BwXor);
-            let ct3 = self.block_lookup(r_lt_div_x_v[2], Lut1Def::IsNullPos1);
+            let ct1 = self.block_pack_then_lookup(
+                r_lt_div_x_v[0],
+                &r_lt_div_x_v[1],
+                Lut1::bw_xor(*self.spec()),
+            );
+            let ct2 = self.block_pack_then_lookup(
+                r_lt_div_x_v[1],
+                &r_lt_div_x_v[2],
+                Lut1::bw_xor(*self.spec()),
+            );
+            let ct3 = self.block_lookup(r_lt_div_x_v[2], Lut1::is_null_pos1(*self.spec()));
             q_1h.push(r_lt_div_x_v[0].clone());
             q_1h.push(ct1);
             q_1h.push(ct2);
@@ -288,7 +295,7 @@ impl Builder {
                 remain_tmp_v[0][i] = self.block_add(&remain_tmp_v[0][i], &remain_tmp_v[1][i]);
                 remain_tmp_v[2][i] = self.block_add(&remain_tmp_v[2][i], &remain_tmp_v[3][i]);
                 remain_tmp_v[0][i] = self.block_add(&remain_tmp_v[0][i], &remain_tmp_v[2][i]);
-                remain_a.push(self.block_lookup(remain_tmp_v[0][i], Lut1Def::None));
+                remain_a.push(self.block_lookup(remain_tmp_v[0][i], Lut1::none(*self.spec())));
             }
 
             // Quotient
@@ -303,7 +310,7 @@ impl Builder {
             let ct01 = r_lt_div_x_v[0].clone(); // + 0
             let ct23 = self.block_add(&r_lt_div_x_v[1], &r_lt_div_x_v[2]);
             let ct0123 = self.block_add(&ct01, &ct23);
-            quotient_a.push(self.block_lookup(ct0123, Lut1Def::SolveQuotientPos1));
+            quotient_a.push(self.block_lookup(ct0123, Lut1::solve_quotient_pos1(*self.spec())));
         } // for loop_idx
 
         quotient_a.reverse();
@@ -327,14 +334,18 @@ impl Builder {
             .map(
                 |ct| match select_type.unwrap_or(IfThenElse0Select::SelPos0Msg) {
                     IfThenElse0Select::SelPos0Msg => {
-                        self.block_pack_then_lookup(select, ct, Lut1Def::IfFalseZeroed)
+                        self.block_pack_then_lookup(select, ct, Lut1::if_false_zeroed(*self.spec()))
                     }
-                    IfThenElse0Select::SelPos1Msg => {
-                        self.block_pack_then_lookup(select, ct, Lut1Def::IfPos1FalseZeroed)
-                    }
-                    IfThenElse0Select::SelPos1MsgCarry1 => {
-                        self.block_pack_then_lookup(select, ct, Lut1Def::IfPos1FalseZeroedMsgCarry1)
-                    }
+                    IfThenElse0Select::SelPos1Msg => self.block_pack_then_lookup(
+                        select,
+                        ct,
+                        Lut1::if_pos1_false_zeroed(*self.spec()),
+                    ),
+                    IfThenElse0Select::SelPos1MsgCarry1 => self.block_pack_then_lookup(
+                        select,
+                        ct,
+                        Lut1::if_pos1_false_zeroed_msg_carry1(*self.spec()),
+                    ),
                 },
             )
             .collect::<Vec<_>>()
@@ -421,7 +432,7 @@ impl Builder {
         // Compute x2
         let mut x2_a: Vec<CiphertextBlock> = Vec::new(); // Will contain lsb part of the msg
         let last_msb = src.iter().fold(None, |prev_msb, x| {
-            let (mut lsb, msb) = self.block_lookup2(x, Lut2Def::ManyMsgSplitShift1);
+            let (mut lsb, msb) = self.block_lookup2(x, Lut2::many_msg_split_shift1(*self.spec()));
             if let Some(v) = prev_msb {
                 lsb = self.block_add(lsb, v); // add with previous msb
             }

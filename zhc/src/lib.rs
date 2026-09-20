@@ -18,8 +18,8 @@ pub mod prelude {
     pub use zhc_builder::Builder;
     pub use zhc_config::*;
     pub use zhc_crypto::integer_semantics::CiphertextBlockSpec;
+    pub use zhc_crypto::integer_semantics::lut::{Lut1, Lut2, Lut4, Lut8};
     pub use zhc_langs::ioplang::IopValue;
-    pub use zhc_langs::ioplang::{Lut1Def, Lut2Def};
     pub use zhc_pipeline::*;
     pub use zhc_utils::{Dumpable, topology::Topology};
 }

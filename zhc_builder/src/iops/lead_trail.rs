@@ -1,5 +1,5 @@
 use zhc_crypto::integer_semantics::IntegerCiphertextSpec;
-use zhc_langs::ioplang::{Lut1Def, Lut2Def};
+use zhc_langs::ioplang::{Lut1, Lut2};
 use zhc_utils::{SafeAs, n_bits_to_encode};
 
 use crate::{
@@ -311,14 +311,14 @@ impl Builder {
             };
             let v = if bit_type == BitType::One {
                 if direction == PropagationDirection::LsbToMsb {
-                    self.block_lookup2(m, Lut2Def::Manyl2mPropBit1MsgSplit)
+                    self.block_lookup2(m, Lut2::manyl2m_prop_bit1_msg_split(*self.spec()))
                 } else {
-                    self.block_lookup2(m, Lut2Def::Manym2lPropBit1MsgSplit)
+                    self.block_lookup2(m, Lut2::manym2l_prop_bit1_msg_split(*self.spec()))
                 }
             } else if direction == PropagationDirection::LsbToMsb {
-                self.block_lookup2(m, Lut2Def::Manyl2mPropBit0MsgSplit)
+                self.block_lookup2(m, Lut2::manyl2m_prop_bit0_msg_split(*self.spec()))
             } else {
-                self.block_lookup2(m, Lut2Def::Manym2lPropBit0MsgSplit)
+                self.block_lookup2(m, Lut2::manym2l_prop_bit0_msg_split(*self.spec()))
             };
             res_v.push(v.0.clone());
             res_v.push(v.1.clone());
@@ -376,10 +376,10 @@ impl Builder {
                 let tmp;
                 if let Some(x) = acc {
                     tmp = self.block_add(x, elt);
-                    is_not_null = self.block_lookup(tmp, Lut1Def::NotNull);
+                    is_not_null = self.block_lookup(tmp, Lut1::not_null(*self.spec()));
                 } else {
                     tmp = elt.clone();
-                    is_not_null = self.block_lookup(elt, Lut1Def::NotNull);
+                    is_not_null = self.block_lookup(elt, Lut1::not_null(*self.spec()));
                 };
                 g_a.insert(c_id * proc_nb, is_not_null); // Reverse insertion per chunk
                 Some(tmp)
@@ -400,7 +400,7 @@ impl Builder {
                     .fold(None, |acc, sub_chk| {
                         if let Some(x) = acc {
                             let tmp = self.block_add(x, sub_chk[0]);
-                            sub_chk[0] = self.block_lookup(tmp, Lut1Def::NotNull);
+                            sub_chk[0] = self.block_lookup(tmp, Lut1::not_null(*self.spec()));
                             Some(tmp)
                         } else {
                             Some(sub_chk[0].clone())
@@ -447,9 +447,9 @@ impl Builder {
                     }
                     // Need to inverse it for 0 if needed
                     if inverse_output {
-                        *v = self.block_lookup(&v, Lut1Def::IsNull);
+                        *v = self.block_lookup(&v, Lut1::is_null(*self.spec()));
                     } else {
-                        *v = self.block_lookup(&v, Lut1Def::NotNull);
+                        *v = self.block_lookup(&v, Lut1::not_null(*self.spec()));
                     }
                 }
 

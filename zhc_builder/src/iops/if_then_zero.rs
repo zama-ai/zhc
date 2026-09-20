@@ -1,5 +1,5 @@
 use zhc_crypto::integer_semantics::IntegerCiphertextSpec;
-use zhc_langs::ioplang::Lut1Def;
+use zhc_langs::ioplang::Lut1;
 use zhc_utils::iter::CollectInSmallVec;
 
 use crate::{BoolCiphertext, IntegerCiphertext, builder::Builder};
@@ -52,7 +52,7 @@ impl Builder {
             .iter()
             .map(|b| {
                 let out = self.block_pack(&cond_block, b);
-                self.block_lookup(&out, Lut1Def::IfFalseZeroed)
+                self.block_lookup(&out, Lut1::if_false_zeroed(*self.spec()))
             })
             .cosvec();
 

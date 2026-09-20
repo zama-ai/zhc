@@ -3,7 +3,7 @@ use crate::{
     builder::{BoolCiphertext, Builder, IntegerCiphertext, IntegerPlaintext},
 };
 use zhc_crypto::integer_semantics::IntegerCiphertextSpec;
-use zhc_langs::ioplang::{Lut1Def, Lut2Def};
+use zhc_langs::ioplang::{Lut1, Lut2};
 use zhc_utils::SafeAs;
 
 /// Order in which the carries coming out of a column enter the reduction of the next one.
@@ -192,7 +192,7 @@ impl Builder {
             let first_dropped = cut_off.saturating_sub(i);
             let is_some = (first_dropped < src_p_blocks.len()).then(|| {
                 self.comment(format!("ovf_is_some_{i}"))
-                    .block_lookup(ci, Lut1Def::IsSome)
+                    .block_lookup(ci, Lut1::is_some(*self.spec()))
             });
             for (j, pj) in src_p_blocks.iter().enumerate() {
                 if (i + j) < cut_off {
@@ -284,14 +284,17 @@ impl Builder {
         let many_capacity = self.spec().data_mask().sas::<usize>() >> 1;
         match (want_carry, acc_deg <= many_capacity) {
             (true, true) => {
-                let (msg, carry) = self.block_lookup2(acc_ct, Lut2Def::ManyCarryMsg);
+                let (msg, carry) = self.block_lookup2(acc_ct, Lut2::many_carry_msg(*self.spec()));
                 (msg, Some(carry))
             }
             (true, false) => (
-                self.block_lookup(acc_ct, Lut1Def::MsgOnly),
-                Some(self.block_lookup(acc_ct, Lut1Def::CarryInMsg)),
+                self.block_lookup(acc_ct, Lut1::msg_only(*self.spec())),
+                Some(self.block_lookup(acc_ct, Lut1::carry_in_msg(*self.spec()))),
             ),
-            (false, _) => (self.block_lookup(acc_ct, Lut1Def::MsgOnly), None),
+            (false, _) => (
+                self.block_lookup(acc_ct, Lut1::msg_only(*self.spec())),
+                None,
+            ),
         }
     }
 
@@ -325,7 +328,7 @@ impl Builder {
             let mut acc_len = 1;
             for (ct, deg) in term_iter {
                 if acc_deg + deg > capacity || acc_len == max_terms {
-                    merged.push((self.block_lookup(acc_ct, Lut1Def::IsSome), 1));
+                    merged.push((self.block_lookup(acc_ct, Lut1::is_some(*self.spec())), 1));
                     (acc_ct, acc_deg, acc_len) = (ct, deg, 1);
                 } else {
                     acc_ct = self.block_add(ct, acc_ct);
@@ -333,7 +336,7 @@ impl Builder {
                     acc_len += 1;
                 }
             }
-            merged.push((self.block_lookup(acc_ct, Lut1Def::IsSome), 1));
+            merged.push((self.block_lookup(acc_ct, Lut1::is_some(*self.spec())), 1));
             terms = merged;
             max_terms = NU_BOOL;
         }

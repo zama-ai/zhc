@@ -22,8 +22,8 @@
 //! flavors one-to-one. PBS instructions exist in 1-, 2-, 4- and 8-output
 //! variants, each carrying a
 //! [`LookupCheck`](zhc_crypto::integer_semantics::lut::LookupCheck) policy and a
-//! table built from the [`Lut1Def`], [`Lut2Def`], [`Lut4Def`] or [`Lut8Def`]
-//! enums. The dialect supports CSE via the [`AllowCse`](zhc_ir::cse::AllowCse)
+//! precomputed [`Lut1`], [`Lut2`], [`Lut4`] or [`Lut8`] table.
+//! The dialect supports CSE via the [`AllowCse`](zhc_ir::cse::AllowCse)
 //! trait, normalizing commutative addition operand order.
 //!
 //! Two dialect-specific optimization passes are provided:
@@ -39,7 +39,6 @@ mod dialect;
 mod eliminate_aliases;
 mod evaluation;
 mod instruction_set;
-mod lut;
 mod noise_analysis;
 mod skip_redundant_stores;
 mod skip_store_load;
@@ -49,8 +48,8 @@ pub use dialect::*;
 pub use eliminate_aliases::*;
 pub use evaluation::*;
 pub use instruction_set::*;
-pub use lut::*;
 pub use noise_analysis::*;
 pub use skip_redundant_stores::*;
 pub use skip_store_load::*;
 pub use type_system::*;
+pub use zhc_crypto::integer_semantics::lut::{Lut1, Lut2, Lut4, Lut8};

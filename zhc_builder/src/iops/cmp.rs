@@ -1,6 +1,6 @@
 use crate::{BoolCiphertext, IntegerCiphertext, builder::Builder};
-use zhc_crypto::integer_semantics::IntegerCiphertextSpec;
-use zhc_langs::ioplang::Lut1Def;
+use zhc_crypto::integer_semantics::{CiphertextBlockSpec, IntegerCiphertextSpec};
+use zhc_langs::ioplang::Lut1;
 use zhc_utils::iter::MultiZip;
 
 /// Creates an IR for greater-than comparison of two encrypted integers.
@@ -155,25 +155,25 @@ pub enum CmpKind {
 }
 
 impl CmpKind {
-    fn merge(&self) -> Lut1Def {
+    fn merge(&self, spec: CiphertextBlockSpec) -> Lut1 {
         match self {
-            CmpKind::Greater => Lut1Def::CmpGtMrg,
-            CmpKind::GreaterOrEqual => Lut1Def::CmpGteMrg,
-            CmpKind::Lower => Lut1Def::CmpLtMrg,
-            CmpKind::LowerOrEqual => Lut1Def::CmpLteMrg,
-            CmpKind::Equal => Lut1Def::CmpEqMrg,
-            CmpKind::NotEqual => Lut1Def::CmpNeqMrg,
+            CmpKind::Greater => Lut1::cmp_gt_mrg(spec),
+            CmpKind::GreaterOrEqual => Lut1::cmp_gte_mrg(spec),
+            CmpKind::Lower => Lut1::cmp_lt_mrg(spec),
+            CmpKind::LowerOrEqual => Lut1::cmp_lte_mrg(spec),
+            CmpKind::Equal => Lut1::cmp_eq_mrg(spec),
+            CmpKind::NotEqual => Lut1::cmp_neq_mrg(spec),
         }
     }
 
-    fn compare(&self) -> Lut1Def {
+    fn compare(&self, spec: CiphertextBlockSpec) -> Lut1 {
         match self {
-            CmpKind::Greater => Lut1Def::CmpGt,
-            CmpKind::GreaterOrEqual => Lut1Def::CmpGte,
-            CmpKind::Lower => Lut1Def::CmpLt,
-            CmpKind::LowerOrEqual => Lut1Def::CmpLte,
-            CmpKind::Equal => Lut1Def::CmpEq,
-            CmpKind::NotEqual => Lut1Def::CmpNeq,
+            CmpKind::Greater => Lut1::cmp_gt(spec),
+            CmpKind::GreaterOrEqual => Lut1::cmp_gte(spec),
+            CmpKind::Lower => Lut1::cmp_lt(spec),
+            CmpKind::LowerOrEqual => Lut1::cmp_lte(spec),
+            CmpKind::Equal => Lut1::cmp_eq(spec),
+            CmpKind::NotEqual => Lut1::cmp_neq(spec),
         }
     }
 }
@@ -222,7 +222,7 @@ impl Builder {
             .map(|(i, (l, r))| {
                 self.with_comment(format!("{i}-th"), || {
                     let sub_lr = self.block_wrapping_sub(l, r);
-                    let pbsed = self.block_wrapping_lookup(&sub_lr, Lut1Def::CmpSign);
+                    let pbsed = self.block_wrapping_lookup(&sub_lr, Lut1::cmp_sign(*self.spec()));
                     let cst = self.block_let_plaintext(1);
                     self.block_wrapping_add_plaintext(&pbsed, &cst)
                 })
@@ -235,7 +235,8 @@ impl Builder {
         while merged.len() > 2 {
             // use vector_pack_then_lookup instead of vector_pack to handle odd number
             // of elements and not apply Reduce to a single element out of CmpSign
-            merged = self.vector_pack_then_lookup(merged.as_slice(), Lut1Def::CmpReduce);
+            merged =
+                self.vector_pack_then_lookup(merged.as_slice(), Lut1::cmp_reduce(*self.spec()));
         }
         self.pop_comment();
 
@@ -243,9 +244,9 @@ impl Builder {
         let cmp_res = match merged.len() {
             2 => {
                 let p = self.vector_pack(merged.as_slice());
-                self.block_lookup(&p[0], kind.merge())
+                self.block_lookup(&p[0], kind.merge(*self.spec()))
             }
-            1 => self.block_lookup(&merged[0], kind.compare()),
+            1 => self.block_lookup(&merged[0], kind.compare(*self.spec())),
             _ => unreachable!(),
         };
 
@@ -345,7 +346,7 @@ mod test {
         let res = builder.vector_zip_then_lookup(
             lhs_blocks,
             rhs_blocks,
-            zhc_langs::ioplang::Lut1Def::BwOr,
+            zhc_langs::ioplang::Lut1::bw_or(spec),
             crate::ExtensionBehavior::Panic,
         );
         let res = builder.integer_ciphertext_join(res, None);

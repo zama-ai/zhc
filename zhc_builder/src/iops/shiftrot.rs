@@ -1,5 +1,5 @@
 use zhc_crypto::integer_semantics::IntegerCiphertextSpec;
-use zhc_langs::ioplang::Lut1Def;
+use zhc_langs::ioplang::Lut1;
 
 use crate::{
     CiphertextBlock, NU, NU_BOOL,
@@ -295,7 +295,7 @@ impl Builder {
         if matches!(kind, ShiftRotKind::RotateLeft | ShiftRotKind::RotateRight) {
             merged = merged
                 .into_iter()
-                .map(|b| self.block_lookup(&b, Lut1Def::MsgOnly))
+                .map(|b| self.block_lookup(&b, Lut1::msg_only(*self.spec())))
                 .collect();
         }
 
@@ -316,12 +316,12 @@ impl Builder {
     ) -> (CiphertextBlock, CiphertextBlock) {
         let (lut_msg, lut_next) = match kind {
             ShiftRotKind::ShiftRight | ShiftRotKind::RotateRight => (
-                Lut1Def::ShiftRightByCarryPos0Msg,
-                Lut1Def::ShiftRightByCarryPos0MsgNext,
+                Lut1::shift_right_by_carry_pos0_msg(*self.spec()),
+                Lut1::shift_right_by_carry_pos0_msg_next(*self.spec()),
             ),
             ShiftRotKind::ShiftLeft | ShiftRotKind::RotateLeft => (
-                Lut1Def::ShiftLeftByCarryPos0Msg,
-                Lut1Def::ShiftLeftByCarryPos0MsgNext,
+                Lut1::shift_left_by_carry_pos0_msg(*self.spec()),
+                Lut1::shift_left_by_carry_pos0_msg_next(*self.spec()),
             ),
         };
 
@@ -345,8 +345,14 @@ impl Builder {
         cond_pos: CondPos,
     ) -> CiphertextBlock {
         let (lut_true_zeroed, lut_false_zeroed) = match cond_pos {
-            CondPos::Pos0 => (Lut1Def::IfPos0TrueZeroed, Lut1Def::IfPos0FalseZeroed),
-            CondPos::Pos1 => (Lut1Def::IfPos1TrueZeroed, Lut1Def::IfPos1FalseZeroed),
+            CondPos::Pos0 => (
+                Lut1::if_pos0_true_zeroed(*self.spec()),
+                Lut1::if_pos0_false_zeroed(*self.spec()),
+            ),
+            CondPos::Pos1 => (
+                Lut1::if_pos1_true_zeroed(*self.spec()),
+                Lut1::if_pos1_false_zeroed(*self.spec()),
+            ),
         };
 
         // Pack: cond in carry (high), value in message (low).
@@ -407,7 +413,7 @@ impl Builder {
             let mixed = &amount_blocks[num_low_blocks - 1];
             let one = self.block_let_ciphertext(1);
             let packed = self.block_pack(mixed, &one);
-            nz_signals.push(self.block_lookup(&packed, Lut1Def::IfPos1FalseZeroed));
+            nz_signals.push(self.block_lookup(&packed, Lut1::if_pos1_false_zeroed(*self.spec())));
         }
 
         // High blocks: sum raw blocks in groups of NU,
@@ -418,7 +424,7 @@ impl Builder {
                 .iter()
                 .fold(chunk[0], |acc, b| self.block_add(&acc, b));
             self.push_comment("IsSome on chunk");
-            nz_signals.push(self.block_lookup(&sum, Lut1Def::IsSome));
+            nz_signals.push(self.block_lookup(&sum, Lut1::is_some(*self.spec())));
             self.pop_comment();
         }
 
@@ -442,7 +448,7 @@ impl Builder {
                         .iter()
                         .fold(chunk[0], |acc, b| self.block_add(&acc, b));
                     if chunk.len() > 1 {
-                        self.block_lookup(&sum, Lut1Def::IsSome)
+                        self.block_lookup(&sum, Lut1::is_some(*self.spec()))
                     } else {
                         // Single element — already a boolean, no PBS needed.
                         sum
@@ -460,7 +466,7 @@ impl Builder {
             .iter()
             .map(|b| {
                 let packed = self.block_pack(&nz_signals[0], b);
-                self.block_lookup(&packed, Lut1Def::IfTrueZeroed)
+                self.block_lookup(&packed, Lut1::if_true_zeroed(*self.spec()))
             })
             .collect();
         self.pop_comment();

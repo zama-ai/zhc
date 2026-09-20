@@ -40,8 +40,8 @@ use zhc_ir::{
     visualization::{Hierarchy, draw_ann_ir_to_html, draw_ir_to_html},
 };
 use zhc_langs::ioplang::{
-    IopInstructionSet, IopLang, IopTypeSystem, IopValue, Lut1Def, Lut2Def, Lut4Def, Lut8Def,
-    analyze_noise, check_noise, eliminate_aliases, skip_redundant_stores, skip_store_load,
+    IopInstructionSet, IopLang, IopTypeSystem, IopValue, Lut1, Lut2, Lut4, Lut8, analyze_noise,
+    check_noise, eliminate_aliases, skip_redundant_stores, skip_store_load,
 };
 use zhc_utils::{
     Dumpable, FastSet, SafeAs, Store,
@@ -1688,12 +1688,12 @@ impl Builder {
     ///
     /// ```rust,no_run
     /// # use zhc_builder::*;
-    /// # use zhc_langs::ioplang::Lut1Def;
+    /// # use zhc_langs::ioplang::Lut1;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
     /// let ct = builder.integer_ciphertext_input(4);
     /// let blocks = builder.integer_ciphertext_split(&ct);
     /// let packed = builder.block_pack(&blocks[1], &blocks[0]);
-    /// let result = builder.block_lookup(&packed, Lut1Def::MsgOnly);
+    /// let result = builder.block_lookup(&packed, Lut1::msg_only(*builder.spec()));
     /// ```
     pub fn block_pack(
         &self,
@@ -1742,20 +1742,20 @@ impl Builder {
     ///
     /// ```rust,no_run
     /// # use zhc_builder::*;
-    /// # use zhc_langs::ioplang::Lut1Def;
+    /// # use zhc_langs::ioplang::Lut1;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
     /// let ct = builder.integer_ciphertext_input(4);
     /// let blocks = builder.integer_ciphertext_split(&ct);
-    /// let result = builder.block_pack_then_lookup(&blocks[1], &blocks[0], Lut1Def::MsgOnly);
+    /// let result = builder.block_pack_then_lookup(&blocks[1], &blocks[0], Lut1::msg_only(*builder.spec()));
     /// ```
     pub fn block_pack_then_lookup(
         &self,
         src_a: impl AsRef<CiphertextBlock>,
         src_b: impl AsRef<CiphertextBlock>,
-        def: Lut1Def,
+        lut: Lut1,
     ) -> CiphertextBlock {
         let packed = self.block_pack(src_a, src_b);
-        self.block_lookup(&packed, def)
+        self.block_lookup(&packed, lut)
     }
 
     /// Computes `src_a * mul + src_b` and applies a single-output PBS lookup.
@@ -1768,27 +1768,27 @@ impl Builder {
     ///
     /// ```rust,no_run
     /// # use zhc_builder::*;
-    /// # use zhc_langs::ioplang::Lut1Def;
+    /// # use zhc_langs::ioplang::Lut1;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
     /// let ct = builder.integer_ciphertext_input(4);
     /// let blocks = builder.integer_ciphertext_split(&ct);
     /// // Compute blocks[0] * 2 + blocks[1], then extract the message
-    /// let result = builder.block_mac_then_lookup(&blocks[0], &blocks[1], 2, Lut1Def::MsgOnly);
+    /// let result = builder.block_mac_then_lookup(&blocks[0], &blocks[1], 2, Lut1::msg_only(*builder.spec()));
     /// ```
     pub fn block_mac_then_lookup(
         &self,
         src_a: impl AsRef<CiphertextBlock>,
         src_b: impl AsRef<CiphertextBlock>,
         mul: u8,
-        def: Lut1Def,
+        lut: Lut1,
     ) -> CiphertextBlock {
         let mac = self.block_mac(src_a, src_b, mul);
-        self.block_lookup(&mac, def)
+        self.block_lookup(&mac, lut)
     }
 
     /// Applies a single-output PBS lookup with an explicit padding-check policy.
     ///
-    /// The `def` defines the function computed by the bootstrapping. The input block's
+    /// The `lut` defines the function computed by the bootstrapping. The input block's
     /// data bits (carry + message) index into the lookup table, and the result is a fresh
     /// ciphertext block with clean noise. When the input padding bit is set, the output is
     /// negacyclically negated. The `check` controls which padding bits are asserted clear
@@ -1797,23 +1797,27 @@ impl Builder {
     /// [`block_padding_lookup`](Self::block_padding_lookup) and
     /// [`block_wrapping_lookup`](Self::block_wrapping_lookup) when the policy is fixed.
     ///
+    /// # Panics
+    ///
+    /// Panics if the table's block specification differs from the builder's.
+    ///
     /// # Examples
     ///
     /// ```rust,no_run
     /// # use zhc_builder::*;
-    /// # use zhc_langs::ioplang::Lut1Def;
+    /// # use zhc_langs::ioplang::Lut1;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
     /// let ct = builder.integer_ciphertext_input(4);
     /// let blocks = builder.integer_ciphertext_split(&ct);
-    /// let out = builder.block_lookup_with(&blocks[0], Lut1Def::MsgOnly, LookupCheck::AllowInputPadding);
+    /// let out = builder.block_lookup_with(&blocks[0], Lut1::msg_only(*builder.spec()), LookupCheck::Permissive);
     /// ```
     pub fn block_lookup_with(
         &self,
         src: impl AsRef<CiphertextBlock>,
-        def: Lut1Def,
+        lut: Lut1,
         check: LookupCheck,
     ) -> CiphertextBlock {
-        let lut = def.into_lut(self.spec);
+        assert_eq!(*lut.spec(), self.spec, "LUT spec mismatch.");
         self.emit_block(
             IopInstructionSet::Pbs { check, lut },
             svec![src.as_ref().valid],
@@ -1822,7 +1826,7 @@ impl Builder {
 
     /// Applies a single-output programmable bootstrapping (PBS) lookup to a block.
     ///
-    /// The `def` defines the function computed by the bootstrapping. The input block's
+    /// The `lut` defines the function computed by the bootstrapping. The input block's
     /// full data bits (carry + message) index into the lookup table, and the result is a
     /// fresh ciphertext block with clean noise. Both the input and the output padding bits
     /// are asserted clear ([`LookupCheck::Protect`]).
@@ -1831,15 +1835,15 @@ impl Builder {
     ///
     /// ```rust,no_run
     /// # use zhc_builder::*;
-    /// # use zhc_langs::ioplang::Lut1Def;
+    /// # use zhc_langs::ioplang::Lut1;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
     /// let ct = builder.integer_ciphertext_input(4);
     /// let blocks = builder.integer_ciphertext_split(&ct);
     /// // Extract only the message bits, clearing the carry.
-    /// let clean = builder.block_lookup(&blocks[0], Lut1Def::MsgOnly);
+    /// let clean = builder.block_lookup(&blocks[0], Lut1::msg_only(*builder.spec()));
     /// ```
-    pub fn block_lookup(&self, src: impl AsRef<CiphertextBlock>, def: Lut1Def) -> CiphertextBlock {
-        self.block_lookup_with(src, def, LookupCheck::Protect)
+    pub fn block_lookup(&self, src: impl AsRef<CiphertextBlock>, lut: Lut1) -> CiphertextBlock {
+        self.block_lookup_with(src, lut, LookupCheck::Protect)
     }
 
     /// Applies a single-output PBS lookup allowing output padding overflow.
@@ -1853,18 +1857,22 @@ impl Builder {
     ///
     /// ```rust,no_run
     /// # use zhc_builder::*;
-    /// # use zhc_langs::ioplang::Lut1Def;
+    /// # use zhc_langs::ioplang::Lut1;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
     /// let ct = builder.integer_ciphertext_input(4);
     /// let blocks = builder.integer_ciphertext_split(&ct);
-    /// let result = builder.block_padding_lookup(&blocks[0], Lut1Def::MsgOnly);
+    /// let result = builder.block_padding_lookup(&blocks[0], Lut1::msg_only(*builder.spec()));
     /// ```
     pub fn block_padding_lookup(
         &self,
         src: impl AsRef<CiphertextBlock>,
-        def: Lut1Def,
+        lut: Lut1,
     ) -> CiphertextBlock {
-        self.block_lookup_with(src, def, LookupCheck::AllowOutputPadding)
+        let check = LookupCheck {
+            allow_output_padding: true,
+            ..LookupCheck::Protect
+        };
+        self.block_lookup_with(src, lut, check)
     }
 
     /// Applies a single-output PBS lookup using wrapping (negacyclic) semantics.
@@ -1877,18 +1885,18 @@ impl Builder {
     ///
     /// ```rust,no_run
     /// # use zhc_builder::*;
-    /// # use zhc_langs::ioplang::Lut1Def;
+    /// # use zhc_langs::ioplang::Lut1;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
     /// let ct = builder.integer_ciphertext_input(4);
     /// let blocks = builder.integer_ciphertext_split(&ct);
-    /// let result = builder.block_wrapping_lookup(&blocks[0], Lut1Def::MsgOnly);
+    /// let result = builder.block_wrapping_lookup(&blocks[0], Lut1::msg_only(*builder.spec()));
     /// ```
     pub fn block_wrapping_lookup(
         &self,
         src: impl AsRef<CiphertextBlock>,
-        def: Lut1Def,
+        lut: Lut1,
     ) -> CiphertextBlock {
-        self.block_lookup_with(src, def, LookupCheck::AllowBothPadding)
+        self.block_lookup_with(src, lut, LookupCheck::Permissive)
     }
 
     /// Applies a dual-output PBS lookup with an explicit padding-check policy.
@@ -1897,13 +1905,14 @@ impl Builder {
     /// bootstrapping reserves the topmost data bit of the input, so only
     /// [`LookupCheck::Protect`] and [`LookupCheck::AllowOutputPadding`] are accepted; the
     /// interpreter panics on the other policies.
+    /// Panics if the table's block specification differs from the builder's.
     pub fn block_lookup2_with(
         &self,
         src: impl AsRef<CiphertextBlock>,
-        def: Lut2Def,
+        lut: Lut2,
         check: LookupCheck,
     ) -> (CiphertextBlock, CiphertextBlock) {
-        let lut = def.into_lut(self.spec);
+        assert_eq!(*lut.spec(), self.spec, "LUT spec mismatch.");
         let [o0, o1] = self.emit_blocks::<2>(
             IopInstructionSet::Pbs2 { check, lut },
             svec![src.as_ref().valid],
@@ -1915,7 +1924,7 @@ impl Builder {
     ///
     /// Like [`block_lookup`](Self::block_lookup), but the bootstrapping produces two
     /// output blocks from a single input. The two lookup functions are defined by the
-    /// [`Lut2Def`] variant. This amortizes the cost of a PBS when two related values
+    /// [`Lut2`] table. This amortizes the cost of a PBS when two related values
     /// need to be extracted simultaneously. The input must have its padding bit and its
     /// topmost data bit clear.
     ///
@@ -1923,32 +1932,33 @@ impl Builder {
     ///
     /// ```rust,no_run
     /// # use zhc_builder::*;
-    /// # use zhc_langs::ioplang::Lut2Def;
+    /// # use zhc_langs::ioplang::Lut2;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
     /// let ct = builder.integer_ciphertext_input(4);
     /// let blocks = builder.integer_ciphertext_split(&ct);
     /// let packed = builder.block_pack(&blocks[1], &blocks[0]);
-    /// let (msg, carry) = builder.block_lookup2(&packed, Lut2Def::ManyCarryMsg);
+    /// let (msg, carry) = builder.block_lookup2(&packed, Lut2::many_carry_msg(*builder.spec()));
     /// ```
     pub fn block_lookup2(
         &self,
         src: impl AsRef<CiphertextBlock>,
-        def: Lut2Def,
+        lut: Lut2,
     ) -> (CiphertextBlock, CiphertextBlock) {
-        self.block_lookup2_with(src, def, LookupCheck::Protect)
+        self.block_lookup2_with(src, lut, LookupCheck::Protect)
     }
 
     /// Applies a four-output PBS lookup with an explicit padding-check policy.
     ///
     /// Like [`block_lookup4`](Self::block_lookup4) with a configurable `check`. Only
     /// [`LookupCheck::Protect`] and [`LookupCheck::AllowOutputPadding`] are accepted.
+    /// Panics if the table's block specification differs from the builder's.
     pub fn block_lookup4_with(
         &self,
         src: impl AsRef<CiphertextBlock>,
-        def: Lut4Def,
+        lut: Lut4,
         check: LookupCheck,
     ) -> [CiphertextBlock; 4] {
-        let lut = def.into_lut(self.spec);
+        assert_eq!(*lut.spec(), self.spec, "LUT spec mismatch.");
         self.emit_blocks::<4>(
             IopInstructionSet::Pbs4 { check, lut },
             svec![src.as_ref().valid],
@@ -1958,44 +1968,45 @@ impl Builder {
     /// Applies a four-output programmable bootstrapping (PBS) lookup to a block.
     ///
     /// Produces four output blocks from a single input, one per function of the
-    /// [`Lut4Def`]. The input must have its padding bit and its two topmost data bits
+    /// [`Lut4`]. The input must have its padding bit and its two topmost data bits
     /// clear, since those bits are reserved by the many-LUT encoding.
     ///
     /// # Examples
     ///
     /// ```rust,no_run
     /// # use zhc_builder::*;
-    /// # use zhc_langs::ioplang::Lut4Def;
+    /// # use zhc_langs::ioplang::Lut4;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
     /// let ct = builder.integer_ciphertext_input(2);
     /// let blocks = builder.integer_ciphertext_split(&ct);
-    /// let def = Lut4Def::custom("shifts", [
+    /// let lut = Lut4::from_fn("shifts", *builder.spec(),
     ///     |b| b,
     ///     |b| b.spec().from_data((b.raw_message_bits() << 1) & b.spec().data_mask()),
     ///     |b| b.spec().from_data((b.raw_message_bits() << 2) & b.spec().data_mask()),
     ///     |b| b.spec().from_data((b.raw_message_bits() << 3) & b.spec().data_mask()),
-    /// ]);
-    /// let [s0, s1, s2, s3] = builder.block_lookup4(&blocks[0], def);
+    /// );
+    /// let [s0, s1, s2, s3] = builder.block_lookup4(&blocks[0], lut);
     /// ```
     pub fn block_lookup4(
         &self,
         src: impl AsRef<CiphertextBlock>,
-        def: Lut4Def,
+        lut: Lut4,
     ) -> [CiphertextBlock; 4] {
-        self.block_lookup4_with(src, def, LookupCheck::Protect)
+        self.block_lookup4_with(src, lut, LookupCheck::Protect)
     }
 
     /// Applies an eight-output PBS lookup with an explicit padding-check policy.
     ///
     /// Like [`block_lookup8`](Self::block_lookup8) with a configurable `check`. Only
     /// [`LookupCheck::Protect`] and [`LookupCheck::AllowOutputPadding`] are accepted.
+    /// Panics if the table's block specification differs from the builder's.
     pub fn block_lookup8_with(
         &self,
         src: impl AsRef<CiphertextBlock>,
-        def: Lut8Def,
+        lut: Lut8,
         check: LookupCheck,
     ) -> [CiphertextBlock; 8] {
-        let lut = def.into_lut(self.spec);
+        assert_eq!(*lut.spec(), self.spec, "LUT spec mismatch.");
         self.emit_blocks::<8>(
             IopInstructionSet::Pbs8 { check, lut },
             svec![src.as_ref().valid],
@@ -2005,15 +2016,15 @@ impl Builder {
     /// Applies an eight-output programmable bootstrapping (PBS) lookup to a block.
     ///
     /// Produces eight output blocks from a single input, one per function of the
-    /// [`Lut8Def`]. The input must have its padding bit and its three topmost data bits
+    /// [`Lut8`]. The input must have its padding bit and its three topmost data bits
     /// clear, since those bits are reserved by the many-LUT encoding. With a
     /// `CiphertextBlockSpec(2, 2)` this leaves a single usable input bit.
     pub fn block_lookup8(
         &self,
         src: impl AsRef<CiphertextBlock>,
-        def: Lut8Def,
+        lut: Lut8,
     ) -> [CiphertextBlock; 8] {
-        self.block_lookup8_with(src, def, LookupCheck::Protect)
+        self.block_lookup8_with(src, lut, LookupCheck::Protect)
     }
 }
 
@@ -2055,7 +2066,7 @@ impl Builder {
     /// Packs consecutive pairs and applies an identity PBS to clean noise.
     ///
     /// Equivalent to calling [`vector_pack_then_lookup`](Self::vector_pack_then_lookup)
-    /// with [`Lut1Def::None`]. The PBS acts as a noise-refresh: each packed pair is
+    /// with [`Lut1::none`]. The PBS acts as a noise-refresh: each packed pair is
     /// bootstrapped through the identity function, producing a clean block. Trailing
     /// odd blocks are passed through without bootstrapping.
     ///
@@ -2076,7 +2087,7 @@ impl Builder {
         &self,
         blocks: impl AsRef<[CiphertextBlock]>,
     ) -> Vec<CiphertextBlock> {
-        self.vector_pack_then_lookup(blocks, Lut1Def::None)
+        self.vector_pack_then_lookup(blocks, Lut1::none(*self.spec()))
     }
 
     /// Packs consecutive pairs and applies a single-output PBS lookup to each.
@@ -2096,16 +2107,16 @@ impl Builder {
     ///
     /// ```rust,no_run
     /// # use zhc_builder::*;
-    /// # use zhc_langs::ioplang::Lut1Def;
+    /// # use zhc_langs::ioplang::Lut1;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
     /// let ct = builder.integer_ciphertext_input(8);
     /// let blocks = builder.integer_ciphertext_split(&ct);
-    /// let results = builder.vector_pack_then_lookup(&blocks, Lut1Def::MsgOnly);
+    /// let results = builder.vector_pack_then_lookup(&blocks, Lut1::msg_only(*builder.spec()));
     /// ```
     pub fn vector_pack_then_lookup(
         &self,
         blocks: impl AsRef<[CiphertextBlock]>,
-        def: Lut1Def,
+        lut: Lut1,
     ) -> Vec<CiphertextBlock> {
         blocks
             .as_ref()
@@ -2114,7 +2125,7 @@ impl Builder {
             .map(|a| match a {
                 Chunk::Complete(sv) => {
                     let packed = self.block_pack(sv[1], sv[0]);
-                    self.block_lookup(&packed, def.clone())
+                    self.block_lookup(&packed, lut.clone())
                 }
                 Chunk::Rest(sv) => *sv[0],
             })
@@ -2139,7 +2150,7 @@ impl Builder {
     ///
     /// ```rust,no_run
     /// # use zhc_builder::*;
-    /// # use zhc_langs::ioplang::Lut1Def;
+    /// # use zhc_langs::ioplang::Lut1;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
     /// let a = builder.integer_ciphertext_input(8);
     /// let b = builder.integer_ciphertext_input(8);
@@ -2148,7 +2159,7 @@ impl Builder {
     /// let results = builder.vector_zip_then_lookup(
     ///     &a_blocks,
     ///     &b_blocks,
-    ///     Lut1Def::MsgOnly,
+    ///     Lut1::msg_only(*builder.spec()),
     ///     ExtensionBehavior::Panic,
     /// );
     /// ```
@@ -2156,7 +2167,7 @@ impl Builder {
         &self,
         lhs: impl AsRef<[CiphertextBlock]>,
         rhs: impl AsRef<[CiphertextBlock]>,
-        def: Lut1Def,
+        lut: Lut1,
         extension: ExtensionBehavior,
     ) -> Vec<CiphertextBlock> {
         let mut output = Vec::new();
@@ -2166,7 +2177,7 @@ impl Builder {
             match (&extension, lhs_i.next(), rhs_i.next()) {
                 (_, Some(li), Some(ri)) => {
                     let packed = self.block_pack(li, ri);
-                    output.push(self.block_lookup(packed, def.clone()))
+                    output.push(self.block_lookup(packed, lut.clone()))
                 }
                 (_, None, None) => break,
                 (ExtensionBehavior::Panic, _, _) => panic!(),
@@ -2188,21 +2199,21 @@ impl Builder {
     ///
     /// ```rust,no_run
     /// # use zhc_builder::*;
-    /// # use zhc_langs::ioplang::Lut1Def;
+    /// # use zhc_langs::ioplang::Lut1;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
     /// let ct = builder.integer_ciphertext_input(8);
     /// let blocks = builder.integer_ciphertext_split(&ct);
-    /// let cleaned = builder.vector_lookup(&blocks, Lut1Def::MsgOnly);
+    /// let cleaned = builder.vector_lookup(&blocks, Lut1::msg_only(*builder.spec()));
     /// ```
     pub fn vector_lookup(
         &self,
         blocks: impl AsRef<[CiphertextBlock]>,
-        def: Lut1Def,
+        lut: Lut1,
     ) -> Vec<CiphertextBlock> {
         blocks
             .as_ref()
             .iter()
-            .map(|b| self.block_lookup(b, def.clone()))
+            .map(|b| self.block_lookup(b, lut.clone()))
             .collect()
     }
 
@@ -2215,22 +2226,22 @@ impl Builder {
     ///
     /// ```rust,no_run
     /// # use zhc_builder::*;
-    /// # use zhc_langs::ioplang::Lut2Def;
+    /// # use zhc_langs::ioplang::Lut2;
     /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
     /// let ct = builder.integer_ciphertext_input(8);
     /// let blocks = builder.integer_ciphertext_split(&ct);
     /// let packed = builder.vector_pack(&blocks);
-    /// let pairs = builder.vector_lookup2(&packed, Lut2Def::ManyCarryMsg);
+    /// let pairs = builder.vector_lookup2(&packed, Lut2::many_carry_msg(*builder.spec()));
     /// ```
     pub fn vector_lookup2(
         &self,
         blocks: impl AsRef<[CiphertextBlock]>,
-        def: Lut2Def,
+        lut: Lut2,
     ) -> Vec<(CiphertextBlock, CiphertextBlock)> {
         blocks
             .as_ref()
             .iter()
-            .map(|b| self.block_lookup2(b, def.clone()))
+            .map(|b| self.block_lookup2(b, lut.clone()))
             .collect()
     }
 
@@ -2241,12 +2252,12 @@ impl Builder {
     pub fn vector_lookup4(
         &self,
         blocks: impl AsRef<[CiphertextBlock]>,
-        def: Lut4Def,
+        lut: Lut4,
     ) -> Vec<[CiphertextBlock; 4]> {
         blocks
             .as_ref()
             .iter()
-            .map(|b| self.block_lookup4(b, def.clone()))
+            .map(|b| self.block_lookup4(b, lut.clone()))
             .collect()
     }
 
@@ -2257,12 +2268,12 @@ impl Builder {
     pub fn vector_lookup8(
         &self,
         blocks: impl AsRef<[CiphertextBlock]>,
-        def: Lut8Def,
+        lut: Lut8,
     ) -> Vec<[CiphertextBlock; 8]> {
         blocks
             .as_ref()
             .iter()
-            .map(|b| self.block_lookup8(b, def.clone()))
+            .map(|b| self.block_lookup8(b, lut.clone()))
             .collect()
     }
 
@@ -2272,13 +2283,13 @@ impl Builder {
     pub fn vector_lookup_with(
         &self,
         blocks: impl AsRef<[CiphertextBlock]>,
-        def: Lut1Def,
+        lut: Lut1,
         check: LookupCheck,
     ) -> Vec<CiphertextBlock> {
         blocks
             .as_ref()
             .iter()
-            .map(|b| self.block_lookup_with(b, def.clone(), check))
+            .map(|b| self.block_lookup_with(b, lut.clone(), check))
             .collect()
     }
 

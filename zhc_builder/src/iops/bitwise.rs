@@ -1,5 +1,5 @@
-use zhc_crypto::integer_semantics::IntegerCiphertextSpec;
-use zhc_langs::ioplang::Lut1Def;
+use zhc_crypto::integer_semantics::{CiphertextBlockSpec, IntegerCiphertextSpec};
+use zhc_langs::ioplang::Lut1;
 
 use crate::builder::{Builder, IntegerCiphertext};
 
@@ -83,11 +83,11 @@ pub enum BwKind {
 }
 
 impl BwKind {
-    fn lut(&self) -> Lut1Def {
+    fn lut(&self, spec: CiphertextBlockSpec) -> Lut1 {
         match self {
-            BwKind::And => Lut1Def::BwAnd,
-            BwKind::Or => Lut1Def::BwOr,
-            BwKind::Xor => Lut1Def::BwXor,
+            BwKind::And => Lut1::bw_and(spec),
+            BwKind::Or => Lut1::bw_or(spec),
+            BwKind::Xor => Lut1::bw_xor(spec),
         }
     }
 }
@@ -123,7 +123,7 @@ impl Builder {
         let res = self.vector_zip_then_lookup(
             lhs_blocks,
             rhs_blocks,
-            kind.lut(),
+            kind.lut(*self.spec()),
             crate::ExtensionBehavior::Panic,
         );
         self.integer_ciphertext_join(res, None)

@@ -10,9 +10,7 @@ use zhc_crypto::integer_semantics::{
     CiphertextBlockSpec, EmulatedCiphertextBlock, EmulatedCiphertextBlockStorage, Flavor,
     lut::LookupCheck,
 };
-use zhc_langs::ioplang::{
-    IopInterepreterContext, IopValue, Lut1Def, Lut2Def, Lut4Def, Lut8Def, LutFn,
-};
+use zhc_langs::ioplang::{IopInterepreterContext, IopValue, Lut1, Lut2, Lut4, Lut8};
 use zhc_utils::FastMap;
 
 use crate::{Builder, CiphertextBlock};
@@ -66,7 +64,7 @@ fn run1(
     run(inputs, |b, x| vec![body(b, x)]).map(|mut v| v.remove(0))
 }
 
-/// A non-capturing closure adding `$k` to the data bits, usable as a [`LutFn`].
+/// A closure adding `$k` to the data bits.
 macro_rules! inc {
     ($k:literal) => {
         |b| {
@@ -278,22 +276,79 @@ fn plaintext_ops_match_crypto() {
 
 #[test]
 fn lookup_checks_match_crypto() {
-    let def = Lut1Def::custom("shift_up", |b| {
+    let table = Lut1::from_fn("shift_up", SPEC, |b| {
         b.spec()
             .from_complete((b.raw_data_bits() << 1) & b.spec().complete_mask())
     });
-    let table = def.into_lut(SPEC);
     for a in 0..=SPEC.complete_mask() {
-        for check in [
-            LookupCheck::Protect,
-            LookupCheck::AllowInputPadding,
-            LookupCheck::AllowOutputPadding,
-            LookupCheck::AllowBothPadding,
-        ] {
+        for check in all_checks() {
             let expected = catch_unwind(|| table.lookup(SPEC.from_complete(a), check)).ok();
-            let got = run1(&[a], |bd, x| bd.block_lookup_with(x[0], def.clone(), check));
+            let got = run1(&[a], |bd, x| {
+                bd.block_lookup_with(x[0], table.clone(), check)
+            });
             assert_eq!(got, expected, "lookup {check:?} on {a:#b}");
         }
+    }
+}
+
+#[test]
+fn lookup_accepts_capturing_closures() {
+    let offset = 2;
+    let table = Lut1::from_fn("offset", SPEC, |b| {
+        SPEC.from_message((b.raw_message_bits() + offset) & SPEC.message_mask())
+    });
+    for value in 0..=SPEC.data_mask() {
+        assert_eq!(
+            run1(&[value], |builder, blocks| builder
+                .block_lookup(blocks[0], table.clone())),
+            Some(SPEC.from_message((value + offset) & SPEC.message_mask())),
+        );
+    }
+}
+
+#[test]
+fn lookup_rejects_mismatched_specs() {
+    let builder = Builder::new(SPEC);
+    let block = builder.block_let_ciphertext(0);
+    // Same total width, different message/carry split.
+    let other = CiphertextBlockSpec(1, 3);
+    for arity in [1, 2, 4, 8] {
+        let result = catch_unwind(AssertUnwindSafe(|| match arity {
+            1 => {
+                builder.block_lookup(block, Lut1::none(other));
+            }
+            2 => {
+                builder.block_lookup2(block, Lut2::from_fn("id", other, |b| b, |b| b));
+            }
+            4 => {
+                builder.block_lookup4(
+                    block,
+                    Lut4::from_fn("id", other, |b| b, |b| b, |b| b, |b| b),
+                );
+            }
+            8 => {
+                builder.block_lookup8(
+                    block,
+                    Lut8::from_fn(
+                        "id",
+                        other,
+                        |b| b,
+                        |b| b,
+                        |b| b,
+                        |b| b,
+                        |b| b,
+                        |b| b,
+                        |b| b,
+                        |b| b,
+                    ),
+                );
+            }
+            _ => unreachable!(),
+        }));
+        assert!(
+            result.is_err(),
+            "Lut{arity} should reject a mismatched spec"
+        );
     }
 }
 
@@ -301,17 +356,22 @@ fn lookup_checks_match_crypto() {
 fn lookup_shortcuts_pick_the_documented_checks() {
     // Padding set on the input: only the wrapping shortcut accepts it.
     let a = 0b1_00_01;
-    assert!(run1(&[a], |bd, x| bd.block_lookup(x[0], Lut1Def::None)).is_none());
-    assert!(run1(&[a], |bd, x| bd.block_padding_lookup(x[0], Lut1Def::None)).is_none());
+    assert!(run1(&[a], |bd, x| bd.block_lookup(x[0], Lut1::none(SPEC))).is_none());
+    assert!(
+        run1(&[a], |bd, x| bd
+            .block_padding_lookup(x[0], Lut1::none(SPEC)))
+        .is_none()
+    );
     assert_eq!(
-        run1(&[a], |bd, x| bd.block_wrapping_lookup(x[0], Lut1Def::None)),
+        run1(&[a], |bd, x| bd
+            .block_wrapping_lookup(x[0], Lut1::none(SPEC))),
         // The table is indexed by the data bits only, then negated because of the padding bit.
         Some(SPEC.from_data(a & SPEC.data_mask()).neg())
     );
     // Padding clear on the input, table writes the padding bit.
     let a = 0b0_01_01;
     let set_padding = || {
-        Lut1Def::custom("set_padding", |b| {
+        Lut1::from_fn("set_padding", SPEC, |b| {
             b.spec().from_complete(b.spec().padding_mask())
         })
     };
@@ -324,14 +384,13 @@ fn lookup_shortcuts_pick_the_documented_checks() {
 
 #[test]
 fn lookup2_matches_crypto() {
-    let def = Lut2Def::custom("id_inc", [|b| b, inc!(1)]);
-    let table = def.into_lut(SPEC);
+    let table = Lut2::from_fn("id_inc", SPEC, |b| b, inc!(1));
     for a in 0..=SPEC.data_mask() {
         let expected = catch_unwind(|| table.lookup(SPEC.from_data(a), LookupCheck::Protect))
             .ok()
             .map(|(o0, o1)| vec![o0, o1]);
         let got = run(&[a], |bd, x| {
-            let (o0, o1) = bd.block_lookup2(x[0], def.clone());
+            let (o0, o1) = bd.block_lookup2(x[0], table.clone());
             vec![o0, o1]
         });
         assert_eq!(got, expected, "lookup2 on {a:#b}");
@@ -340,20 +399,21 @@ fn lookup2_matches_crypto() {
 
 #[test]
 fn lookup4_matches_crypto() {
-    let def = Lut4Def::custom("plus_k", [|b| b, inc!(1), inc!(2), inc!(3)]);
-    let table = def.into_lut(SPEC);
+    let table = Lut4::from_fn("plus_k", SPEC, |b| b, inc!(1), inc!(2), inc!(3));
     for a in 0..=SPEC.data_mask() {
         let expected = catch_unwind(|| table.lookup(SPEC.from_data(a), LookupCheck::Protect))
             .ok()
             .map(|(o0, o1, o2, o3)| vec![o0, o1, o2, o3]);
-        let got = run(&[a], |bd, x| bd.block_lookup4(x[0], def.clone()).to_vec());
+        let got = run(&[a], |bd, x| bd.block_lookup4(x[0], table.clone()).to_vec());
         assert_eq!(got, expected, "lookup4 on {a:#b}");
     }
 }
 
 #[test]
 fn lookup8_matches_crypto() {
-    let fs: [LutFn; 8] = [
+    let table = Lut8::from_fn(
+        "plus_k",
+        SPEC,
         |b| b,
         inc!(1),
         inc!(2),
@@ -362,30 +422,30 @@ fn lookup8_matches_crypto() {
         inc!(5),
         inc!(6),
         inc!(7),
-    ];
-    let def = Lut8Def::custom("plus_k", fs);
-    let table = def.into_lut(SPEC);
+    );
     for a in 0..=SPEC.data_mask() {
         let expected = catch_unwind(|| table.lookup(SPEC.from_data(a), LookupCheck::Protect))
             .ok()
             .map(|(o0, o1, o2, o3, o4, o5, o6, o7)| vec![o0, o1, o2, o3, o4, o5, o6, o7]);
-        let got = run(&[a], |bd, x| bd.block_lookup8(x[0], def.clone()).to_vec());
+        let got = run(&[a], |bd, x| bd.block_lookup8(x[0], table.clone()).to_vec());
         assert_eq!(got, expected, "lookup8 on {a:#b}");
     }
 }
 
 #[test]
-fn many_lut_rejects_input_padding_checks() {
-    let def = Lut2Def::custom("id", [|b| b, |b| b]);
-    for check in [
-        LookupCheck::AllowInputPadding,
-        LookupCheck::AllowBothPadding,
-    ] {
-        let got = run(&[0], |bd, x| {
-            let (o0, o1) = bd.block_lookup2_with(x[0], def.clone(), check);
-            vec![o0, o1]
-        });
-        assert!(got.is_none(), "{check:?} should be rejected by a many-LUT");
+fn many_lut_checks_match_crypto() {
+    let table = Lut2::from_fn("id_inc", SPEC, |b| b, inc!(1));
+    for a in 0..=SPEC.complete_mask() {
+        for check in all_checks() {
+            let expected = catch_unwind(|| table.lookup(SPEC.from_complete(a), check))
+                .ok()
+                .map(|(o0, o1)| vec![o0, o1]);
+            let got = run(&[a], |bd, x| {
+                let (o0, o1) = bd.block_lookup2_with(x[0], table.clone(), check);
+                vec![o0, o1]
+            });
+            assert_eq!(got, expected, "lookup2 {check:?} on {a:#b}");
+        }
     }
 }
 
