@@ -1,5 +1,5 @@
 use zhc_crypto::integer_semantics::IntegerCiphertextSpec;
-use zhc_langs::ioplang::{Lut1Def, Lut2Def};
+use zhc_langs::ioplang::{Lut1, Lut2};
 use zhc_utils::{
     SafeAs,
     iter::{ChunkIt, CollectInVec, UnwrapChunks},
@@ -84,7 +84,7 @@ impl Builder {
             let blocks = self.integer_ciphertext_split(inp);
             let bits = self
                 .comment("extract bits")
-                .vector_lookup2(blocks, Lut2Def::ManyMsgSplit)
+                .vector_lookup2(blocks, Lut2::many_msg_split(*self.spec()))
                 .into_iter()
                 .flat_map(|(l, r)| [l, r].into_iter())
                 .take(inp.spec().int_size().sas())
@@ -137,19 +137,40 @@ impl Builder {
                             if kind == BitType::Zero && reduction_iteration == 1 {
                                 self.with_comment("zero and first reduction", || {
                                     match chunk.len() {
-                                        1 => self.block_lookup2(sum, Lut2Def::ManyInv1CarryMsg),
-                                        2 => self.block_lookup2(sum, Lut2Def::ManyInv2CarryMsg),
-                                        3 => self.block_lookup2(sum, Lut2Def::ManyInv3CarryMsg),
-                                        4 => self.block_lookup2(sum, Lut2Def::ManyInv4CarryMsg),
-                                        5 => self.block_lookup2(sum, Lut2Def::ManyInv5CarryMsg),
-                                        6 => self.block_lookup2(sum, Lut2Def::ManyInv6CarryMsg),
-                                        7 => self.block_lookup2(sum, Lut2Def::ManyInv7CarryMsg),
+                                        1 => self.block_lookup2(
+                                            sum,
+                                            Lut2::many_inv1_carry_msg(*self.spec()),
+                                        ),
+                                        2 => self.block_lookup2(
+                                            sum,
+                                            Lut2::many_inv2_carry_msg(*self.spec()),
+                                        ),
+                                        3 => self.block_lookup2(
+                                            sum,
+                                            Lut2::many_inv3_carry_msg(*self.spec()),
+                                        ),
+                                        4 => self.block_lookup2(
+                                            sum,
+                                            Lut2::many_inv4_carry_msg(*self.spec()),
+                                        ),
+                                        5 => self.block_lookup2(
+                                            sum,
+                                            Lut2::many_inv5_carry_msg(*self.spec()),
+                                        ),
+                                        6 => self.block_lookup2(
+                                            sum,
+                                            Lut2::many_inv6_carry_msg(*self.spec()),
+                                        ),
+                                        7 => self.block_lookup2(
+                                            sum,
+                                            Lut2::many_inv7_carry_msg(*self.spec()),
+                                        ),
                                         _ => unreachable!(),
                                     }
                                 })
                             } else {
                                 self.with_comment("common branch", || {
-                                    self.block_lookup2(sum, Lut2Def::ManyCarryMsg)
+                                    self.block_lookup2(sum, Lut2::many_carry_msg(*self.spec()))
                                 })
                             }
                         })
@@ -168,12 +189,12 @@ impl Builder {
                             let sum = self.vector_add_reduce(&chunk);
                             if chunk.len() <= 2 {
                                 // We have enough room to use a 2lookup in this case
-                                self.block_lookup2(sum, Lut2Def::ManyCarryMsg)
+                                self.block_lookup2(sum, Lut2::many_carry_msg(*self.spec()))
                             } else {
                                 // We don't have enough room. We must do two pbses
                                 (
-                                    self.block_lookup(sum, Lut1Def::MsgOnly),
-                                    self.block_lookup(sum, Lut1Def::CarryInMsg),
+                                    self.block_lookup(sum, Lut1::msg_only(*self.spec())),
+                                    self.block_lookup(sum, Lut1::carry_in_msg(*self.spec())),
                                 )
                             }
                         })

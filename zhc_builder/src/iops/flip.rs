@@ -1,5 +1,5 @@
 use zhc_crypto::integer_semantics::IntegerCiphertextSpec;
-use zhc_langs::ioplang::Lut1Def;
+use zhc_langs::ioplang::Lut1;
 use zhc_utils::iter::{CollectInSmallVec, MultiZip};
 
 use crate::{BoolCiphertext, IntegerCiphertext, builder::Builder};
@@ -52,20 +52,24 @@ impl Builder {
                 .map(|(a, b)| {
                     // Mask each value both ways depending on the conditition
                     let packed_a = self.block_pack(&cond_block, a);
-                    let a_if_true = self.block_lookup(&packed_a, Lut1Def::IfFalseZeroed);
-                    let a_if_false = self.block_lookup(&packed_a, Lut1Def::IfTrueZeroed);
+                    let a_if_true =
+                        self.block_lookup(&packed_a, Lut1::if_false_zeroed(*self.spec()));
+                    let a_if_false =
+                        self.block_lookup(&packed_a, Lut1::if_true_zeroed(*self.spec()));
 
                     let packed_b = self.block_pack(&cond_block, b);
-                    let b_if_true = self.block_lookup(&packed_b, Lut1Def::IfFalseZeroed);
-                    let b_if_false = self.block_lookup(&packed_b, Lut1Def::IfTrueZeroed);
+                    let b_if_true =
+                        self.block_lookup(&packed_b, Lut1::if_false_zeroed(*self.spec()));
+                    let b_if_false =
+                        self.block_lookup(&packed_b, Lut1::if_true_zeroed(*self.spec()));
 
                     // Crossing the masks is the swap; one operand per add is zero.
                     // Bootstrap the sums so the outputs are fresh.
                     let out_a = self.block_add(&a_if_false, &b_if_true);
                     let out_b = self.block_add(&a_if_true, &b_if_false);
                     (
-                        self.block_lookup(&out_a, Lut1Def::MsgOnly),
-                        self.block_lookup(&out_b, Lut1Def::MsgOnly),
+                        self.block_lookup(&out_a, Lut1::msg_only(*self.spec())),
+                        self.block_lookup(&out_b, Lut1::msg_only(*self.spec())),
                     )
                 })
                 .unzip();

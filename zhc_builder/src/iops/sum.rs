@@ -1,5 +1,5 @@
 use zhc_crypto::integer_semantics::IntegerCiphertextSpec;
-use zhc_langs::ioplang::Lut1Def;
+use zhc_langs::ioplang::Lut1;
 
 use crate::{CiphertextBlock, IntegerCiphertext, NU, builder::Builder};
 
@@ -133,9 +133,10 @@ impl Builder {
                 reduced[position].extend(chunks.remainder());
                 for chunk in chunks {
                     let acc = self.vector_add_reduce(chunk); // one dirty block: message + carry occupied, 0 PBS
-                    reduced[position].push(self.block_lookup(&acc, Lut1Def::MsgOnly)); // low digit, clean, stays at this weight
+                    reduced[position].push(self.block_lookup(&acc, Lut1::msg_only(*self.spec()))); // low digit, clean, stays at this weight
                     if position + 1 < block_count {
-                        reduced[position + 1].push(self.block_lookup(&acc, Lut1Def::CarryInMsg)); // high digit, clean, re-based one weight up
+                        reduced[position + 1]
+                            .push(self.block_lookup(&acc, Lut1::carry_in_msg(*self.spec()))); // high digit, clean, re-based one weight up
                     }
                 }
             }
@@ -157,9 +158,9 @@ impl Builder {
                 messages.push(acc);
                 continue;
             }
-            messages.push(self.block_lookup(&acc, Lut1Def::MsgOnly));
+            messages.push(self.block_lookup(&acc, Lut1::msg_only(*self.spec())));
             if position + 1 < block_count {
-                carries[position + 1] = self.block_lookup(&acc, Lut1Def::CarryInMsg);
+                carries[position + 1] = self.block_lookup(&acc, Lut1::carry_in_msg(*self.spec()));
             }
         }
         self.pop_comment();
@@ -220,9 +221,9 @@ impl Builder {
                 // Carry space is full, extract it before it overflows the padding bit.
                 if acc_terms == NU {
                     if sends_carry {
-                        carry.push(self.block_lookup(&acc, Lut1Def::CarryInMsg));
+                        carry.push(self.block_lookup(&acc, Lut1::carry_in_msg(*self.spec())));
                     }
-                    acc = self.block_lookup(&acc, Lut1Def::MsgOnly);
+                    acc = self.block_lookup(&acc, Lut1::msg_only(*self.spec()));
                     acc_terms = 1;
                 }
             }
@@ -230,9 +231,9 @@ impl Builder {
             // Outputs must be carry-clean, so a partly filled accumulator is split too.
             if acc_terms != 1 {
                 if sends_carry {
-                    carry.push(self.block_lookup(&acc, Lut1Def::CarryInMsg));
+                    carry.push(self.block_lookup(&acc, Lut1::carry_in_msg(*self.spec())));
                 }
-                acc = self.block_lookup(&acc, Lut1Def::MsgOnly);
+                acc = self.block_lookup(&acc, Lut1::msg_only(*self.spec()));
             }
             output_blocks.push(acc);
 

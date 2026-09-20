@@ -1026,7 +1026,7 @@ mod tests {
 
     use super::*;
     use crate::doplang::emit_assembly;
-    use crate::ioplang::Lut1Def;
+    use crate::ioplang::Lut1;
 
     #[test]
     fn parses_full_preamble_and_body() {
@@ -1230,8 +1230,8 @@ mod tests {
     fn registry() -> LutRegistry {
         let spec = CiphertextBlockSpec(2, 2);
         let mut lreg = LutRegistry::empty();
-        lreg.register_l1(&Lut1Def::None.into_lut(spec));
-        lreg.register_l1(&Lut1Def::CarryInMsg.into_lut(spec));
+        lreg.register_l1(&Lut1::none(spec));
+        lreg.register_l1(&Lut1::carry_in_msg(spec));
         lreg
     }
 

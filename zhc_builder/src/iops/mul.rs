@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use crate::{BoolCiphertext, CiphertextBlock, IntegerCiphertext, NU, NU_BOOL, builder::Builder};
 use zhc_crypto::integer_semantics::IntegerCiphertextSpec;
-use zhc_langs::ioplang::Lut1Def;
+use zhc_langs::ioplang::Lut1;
 use zhc_utils::SafeAs;
 
 /// Creates an IR for multiplication of two encrypted integers.
@@ -142,19 +142,19 @@ impl Builder {
                     // Compute Lsb
                     partial_product_map.entry(i + j).or_default().push(
                         self.comment(format!("pp_{i}_{j}_lsb"))
-                            .block_lookup(packed, Lut1Def::MultCarryMsgLsb),
+                            .block_lookup(packed, Lut1::mult_carry_msg_lsb(*self.spec())),
                     );
                     // Compute Msb
                     partial_product_map.entry(i + j + 1).or_default().push(
                         self.comment(format!("pp_{i}_{j}_msb"))
-                            .block_lookup(packed, Lut1Def::MultCarryMsgMsb),
+                            .block_lookup(packed, Lut1::mult_carry_msg_msb(*self.spec())),
                     );
                 } else {
                     // Only overflow extraction
                     let mul_is_some = self.comment(format!("ovf_{i}_{j}")).block_pack_then_lookup(
                         ai,
                         bj,
-                        Lut1Def::MultCarryMsgIsSome,
+                        Lut1::mult_carry_msg_is_some(*self.spec()),
                     );
                     overflow_v.push(mul_is_some);
                 }
@@ -187,15 +187,15 @@ impl Builder {
                     // Extract carry if required
                     if acc_nu == NU {
                         acc_nu = 1;
-                        nxt_stage.push(self.block_lookup(acc_ct, Lut1Def::CarryInMsg));
-                        acc_ct = self.block_lookup(acc_ct, Lut1Def::MsgOnly);
+                        nxt_stage.push(self.block_lookup(acc_ct, Lut1::carry_in_msg(*self.spec())));
+                        acc_ct = self.block_lookup(acc_ct, Lut1::msg_only(*self.spec()));
                     }
                 }
 
                 // Current stage is completly reduce. Clear block if needed
                 if acc_nu != 1 {
-                    nxt_stage.push(self.block_lookup(acc_ct, Lut1Def::CarryInMsg));
-                    acc_ct = self.block_lookup(acc_ct, Lut1Def::MsgOnly);
+                    nxt_stage.push(self.block_lookup(acc_ct, Lut1::carry_in_msg(*self.spec())));
+                    acc_ct = self.block_lookup(acc_ct, Lut1::msg_only(*self.spec()));
                 }
                 dst_blk.push(acc_ct);
 
@@ -222,7 +222,7 @@ impl Builder {
                 let mut chunk_iter = chunk.iter();
                 let init = *chunk_iter.next().unwrap();
                 let chunk_sum = chunk_iter.fold(init, |acc, v| self.block_add(&acc, v));
-                let is_some_flag = self.block_lookup(chunk_sum, Lut1Def::IsSome);
+                let is_some_flag = self.block_lookup(chunk_sum, Lut1::is_some(*self.spec()));
                 overflow_v.push(is_some_flag);
             }
         }
@@ -238,7 +238,7 @@ impl Builder {
                         let mut chunk_iter = chunk.iter();
                         let init = *chunk_iter.next().unwrap();
                         let chunk_sum = chunk_iter.fold(init, |acc, v| self.block_add(&acc, v));
-                        self.block_lookup(chunk_sum, Lut1Def::IsSome)
+                        self.block_lookup(chunk_sum, Lut1::is_some(*self.spec()))
                     })
                     .collect();
             }

@@ -4,7 +4,7 @@ use crate::{
     CiphertextBlock, PlaintextBlock,
     builder::{BoolCiphertext, Builder, ExtensionBehavior, IntegerCiphertext, IntegerPlaintext},
 };
-use zhc_langs::ioplang::{Lut1Def, Lut2Def};
+use zhc_langs::ioplang::{Lut1, Lut2};
 use zhc_utils::{
     iter::{ChunkIt, CollectInSmallVec, IterMapFirst, MultiZip, ReconcilerOf2, Slide, SliderExt},
     svec,
@@ -187,7 +187,7 @@ impl Builder {
             self.push_comment(format!("{i}-th"));
             let raw_sum = self.block_add_plaintext(lhs_blocks[i], rhs_blocks[i]);
             let sum = self.block_add(raw_sum, carry);
-            let (message, carry_tmp) = self.block_lookup2(sum, Lut2Def::ManyCarryMsg);
+            let (message, carry_tmp) = self.block_lookup2(sum, Lut2::many_carry_msg(*self.spec()));
             carry = carry_tmp;
             output_blocks.push(message);
             self.pop_comment();
@@ -284,26 +284,26 @@ impl Builder {
             .map_first(|sum| {
                 [
                     self.comment("G0-B0")
-                        .block_lookup2(sum[0], Lut2Def::ManyCarryMsg)
+                        .block_lookup2(sum[0], Lut2::many_carry_msg(*self.spec()))
                         .1,
                     self.comment("G0-B1")
-                        .block_lookup(sum[1], Lut1Def::ExtractPropGroup0),
+                        .block_lookup(sum[1], Lut1::extract_prop_group0(*self.spec())),
                     self.comment("G0-B2")
-                        .block_lookup(sum[2], Lut1Def::ExtractPropGroup1),
+                        .block_lookup(sum[2], Lut1::extract_prop_group1(*self.spec())),
                     self.comment("G0-B3")
-                        .block_lookup(sum[3], Lut1Def::ExtractPropGroup2),
+                        .block_lookup(sum[3], Lut1::extract_prop_group2(*self.spec())),
                 ]
             })
             .map_rest(|sum| {
                 [
                     self.comment("GN-B0")
-                        .block_lookup(sum[0], Lut1Def::ExtractPropGroup0),
+                        .block_lookup(sum[0], Lut1::extract_prop_group0(*self.spec())),
                     self.comment("GN-B1")
-                        .block_lookup(sum[1], Lut1Def::ExtractPropGroup1),
+                        .block_lookup(sum[1], Lut1::extract_prop_group1(*self.spec())),
                     self.comment("GN-B2")
-                        .block_lookup(sum[2], Lut1Def::ExtractPropGroup2),
+                        .block_lookup(sum[2], Lut1::extract_prop_group2(*self.spec())),
                     self.comment("GN-B3")
-                        .block_padding_lookup(sum[3], Lut1Def::ExtractPropGroup3),
+                        .block_padding_lookup(sum[3], Lut1::extract_prop_group3(*self.spec())),
                 ]
             })
             .cosvec();
@@ -319,7 +319,7 @@ impl Builder {
                 let b1 = self.block_add(&b0, &states[1]);
                 let b2 = self.block_add(&b1, &states[2]);
                 let b3 = self.block_temper_add(&b2, &states[3]);
-                let b3 = self.block_lookup(&b3, Lut1Def::SolvePropGroupFinal2);
+                let b3 = self.block_lookup(&b3, Lut1::solve_prop_group_final2(*self.spec()));
                 [
                     self.comment("G0-B0").block_inspect(b0),
                     self.comment("G0-B1").block_inspect(b1),
@@ -332,7 +332,7 @@ impl Builder {
                 let b1 = self.block_add(&b0, &states[1]);
                 let b2 = self.block_add(&b1, &states[2]);
                 let b3 = self.block_temper_add(&b2, &states[3]);
-                let b3 = self.block_wrapping_lookup(&b3, Lut1Def::ReduceCarryPad);
+                let b3 = self.block_wrapping_lookup(&b3, Lut1::reduce_carry_pad(*self.spec()));
                 let b3 = self.block_wrapping_add_plaintext(&b3, &self.block_let_plaintext(1));
                 [
                     self.comment("GN-B0").block_inspect(b0),
@@ -373,7 +373,7 @@ impl Builder {
                     self.vector_zip_then_lookup(
                         status,
                         prev_carry,
-                        Lut1Def::SolvePropCarry,
+                        Lut1::solve_prop_carry(*self.spec()),
                         ExtensionBehavior::Panic,
                     )
                     .into_iter()
@@ -385,7 +385,7 @@ impl Builder {
                     self.vector_zip_then_lookup(
                         status,
                         prev_carry,
-                        Lut1Def::SolveProp,
+                        Lut1::solve_prop(*self.spec()),
                         ExtensionBehavior::Panic,
                     )
                     .into_iter()
@@ -407,8 +407,8 @@ impl Builder {
             .skip_postludes()
             .map_first(|slider| {
                 let (states, carry) = slider.unwrap_prelude()[0];
-                let b1 = self.block_lookup(&states[1], Lut1Def::SolvePropGroupFinal0);
-                let b2 = self.block_lookup(&states[2], Lut1Def::SolvePropGroupFinal1);
+                let b1 = self.block_lookup(&states[1], Lut1::solve_prop_group_final0(*self.spec()));
+                let b2 = self.block_lookup(&states[2], Lut1::solve_prop_group_final1(*self.spec()));
                 [
                     self.comment("G0-B0").block_inspect(states[0]),
                     self.comment("G0-B1").block_inspect(b1),
@@ -419,11 +419,11 @@ impl Builder {
             .map_rest(|slider| {
                 let [(_, previous_carry), (states, carry)] = slider.unwrap_complete().into_array();
                 let b0 = self.block_add(&states[0], &previous_carry);
-                let b0 = self.block_lookup(&b0, Lut1Def::SolvePropGroupFinal0);
+                let b0 = self.block_lookup(&b0, Lut1::solve_prop_group_final0(*self.spec()));
                 let b1 = self.block_add(&states[1], &previous_carry);
-                let b1 = self.block_lookup(&b1, Lut1Def::SolvePropGroupFinal1);
+                let b1 = self.block_lookup(&b1, Lut1::solve_prop_group_final1(*self.spec()));
                 let b2 = self.block_add(&states[2], &previous_carry);
-                let b2 = self.block_lookup(&b2, Lut1Def::SolvePropGroupFinal2);
+                let b2 = self.block_lookup(&b2, Lut1::solve_prop_group_final2(*self.spec()));
                 [
                     self.comment("GN-B0").block_inspect(b0),
                     self.comment("GN-B1").block_inspect(b1),
@@ -436,7 +436,10 @@ impl Builder {
         self.pop_comment();
 
         self.push_comment("Carry propagation");
-        let mut result = svec![self.block_lookup2(&sums[0], Lut2Def::ManyCarryMsg).0];
+        let mut result = svec![
+            self.block_lookup2(&sums[0], Lut2::many_carry_msg(*self.spec()))
+                .0
+        ];
         result.extend(
             (sums.into_iter().skip(1), carries.into_iter())
                 .mzip()
@@ -444,13 +447,14 @@ impl Builder {
         );
         self.pop_comment();
 
-        let carry_out = self.block_lookup(&result[output_size - 1], Lut1Def::CarryIsSome);
+        let carry_out =
+            self.block_lookup(&result[output_size - 1], Lut1::carry_is_some(*self.spec()));
 
         if clean {
             self.push_comment("Cleanup");
             result = result
                 .into_iter()
-                .map(|ct| self.block_lookup(&ct, Lut1Def::MsgOnly))
+                .map(|ct| self.block_lookup(&ct, Lut1::msg_only(*self.spec())))
                 .cosvec();
             self.pop_comment();
         }

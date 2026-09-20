@@ -1,6 +1,6 @@
 use crate::builder::{BoolCiphertext, Builder, IntegerCiphertext, IntegerPlaintext};
 use zhc_crypto::integer_semantics::IntegerCiphertextSpec;
-use zhc_langs::ioplang::Lut1Def;
+use zhc_langs::ioplang::Lut1;
 
 /// Creates an IR for the subtraction of a scalar from an encrypted integer (`ct - imm`).
 ///
@@ -184,7 +184,7 @@ impl Builder {
 
         // carry_out=1 means NO overflow (lhs >= rhs), carry_out=0 means overflow (lhs < rhs).
         let carry_out = self.bool_ciphertext_get_block(carry_out);
-        let overflow_flag = self.block_lookup(&carry_out, Lut1Def::IsNull);
+        let overflow_flag = self.block_lookup(&carry_out, Lut1::is_null(*self.spec()));
         (res, self.bool_ciphertext_from_block(overflow_flag))
     }
 }

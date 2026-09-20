@@ -95,9 +95,10 @@
 //! and [`block_lookup8`](Builder::block_lookup8) are *many-LUT* bootstrappings producing 2, 4
 //! or 8 blocks from a single input. A many-LUT of `2^k` outputs reserves the `k` topmost data
 //! bits of its input for the table index, so the input must be small enough, and only the
-//! `Protect` and `AllowOutputPadding` checks are meaningful. Tables are named by the
-//! [`Lut1Def`], [`Lut2Def`], [`Lut4Def`] and [`Lut8Def`] enums, which also accept custom
-//! functions through their `custom` constructor.
+//! `Protect` and `AllowOutputPadding` checks are meaningful. The builder accepts precomputed
+//! [`Lut1`], [`Lut2`], [`Lut4`] and [`Lut8`] tables. Use named builtin constructors such as
+//! [`Lut1::msg_only`], or `from_fn` to build custom tables from closures, passing the builder's
+//! block specification in either case.
 //!
 //! # Typical Workflow
 //!

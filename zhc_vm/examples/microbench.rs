@@ -5,7 +5,7 @@ use tfhe::shortint::parameters::v1_6::V1_6_PARAM_MESSAGE_2_CARRY_2_KS32_PBS_TUNI
 use zhc::prelude::VmExecutionPlan;
 use zhc_config::vm::VmConfig;
 use zhc_crypto::integer_semantics::{CiphertextBlockSpec, lut::LutRegistry};
-use zhc_langs::{ioplang::Lut1Def, vmlang::VmByteCode};
+use zhc_langs::{ioplang::Lut1, vmlang::VmByteCode};
 use zhc_utils::{SafeAs, small::SmallVec, svec};
 use zhc_vm::{Vm, VmConfigExt};
 
@@ -14,30 +14,30 @@ const REPS: u32 = 3;
 
 /// Builtin tables the PBS microbench cycles through, so that consecutive bootstrappings
 /// do not hit the same accumulator in cache.
-const PBS_LUTS: [Lut1Def; 16] = [
-    Lut1Def::None,
-    Lut1Def::MsgOnly,
-    Lut1Def::CarryOnly,
-    Lut1Def::CarryInMsg,
-    Lut1Def::MultCarryMsg,
-    Lut1Def::MultCarryMsgLsb,
-    Lut1Def::MultCarryMsgMsb,
-    Lut1Def::BwAnd,
-    Lut1Def::BwOr,
-    Lut1Def::BwXor,
-    Lut1Def::CmpSign,
-    Lut1Def::CmpReduce,
-    Lut1Def::CmpGt,
-    Lut1Def::CmpGte,
-    Lut1Def::CmpLt,
-    Lut1Def::CmpLte,
+const PBS_LUTS: [fn(CiphertextBlockSpec) -> Lut1; 16] = [
+    Lut1::none,
+    Lut1::msg_only,
+    Lut1::carry_only,
+    Lut1::carry_in_msg,
+    Lut1::mult_carry_msg,
+    Lut1::mult_carry_msg_lsb,
+    Lut1::mult_carry_msg_msb,
+    Lut1::bw_and,
+    Lut1::bw_or,
+    Lut1::bw_xor,
+    Lut1::cmp_sign,
+    Lut1::cmp_reduce,
+    Lut1::cmp_gt,
+    Lut1::cmp_gte,
+    Lut1::cmp_lt,
+    Lut1::cmp_lte,
 ];
 
 fn pbs_registry(params: &VmConfig) -> LutRegistry {
     let spec = CiphertextBlockSpec(params.carry_size.sas(), params.message_size.sas());
     let mut reg = LutRegistry::empty();
     for def in PBS_LUTS {
-        reg.register_l1(&def.into_lut(spec));
+        reg.register_l1(&def(spec));
     }
     reg
 }

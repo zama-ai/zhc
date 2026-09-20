@@ -1,5 +1,5 @@
 use zhc_crypto::integer_semantics::IntegerCiphertextSpec;
-use zhc_langs::ioplang::Lut1Def;
+use zhc_langs::ioplang::Lut1;
 use zhc_utils::iter::{CollectInSmallVec, MultiZip};
 
 use crate::{BoolCiphertext, IntegerCiphertext, builder::Builder};
@@ -57,11 +57,11 @@ impl Builder {
             .mzip()
             .map(|(a, b)| {
                 let cond_a = self.block_pack(&cond_block, a);
-                let cond_a = self.block_lookup(&cond_a, Lut1Def::IfFalseZeroed);
+                let cond_a = self.block_lookup(&cond_a, Lut1::if_false_zeroed(*self.spec()));
                 let cond_b = self.block_pack(&cond_block, b);
-                let cond_b = self.block_lookup(&cond_b, Lut1Def::IfTrueZeroed);
+                let cond_b = self.block_lookup(&cond_b, Lut1::if_true_zeroed(*self.spec()));
                 let sum = self.block_add(&cond_a, &cond_b);
-                self.block_lookup(&sum, Lut1Def::MsgOnly)
+                self.block_lookup(&sum, Lut1::msg_only(*self.spec()))
             })
             .cosvec();
 
