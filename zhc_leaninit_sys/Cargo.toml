@@ -1,0 +1,16 @@
+[package]
+name = "zhc_leaninit_sys"
+description = "ZHC: The Lean 4 `Init` library, compiled from vendored C code"
+version.workspace = true
+edition.workspace = true
+license = "BSD-3-Clause-Clear AND Apache-2.0"
+repository.workspace = true
+publish = false
+links = "leaninit"
+build = "build.rs"
+
+[dependencies]
+zhc_leanrt_sys.workspace = true
+
+[build-dependencies]
+cc.workspace = true

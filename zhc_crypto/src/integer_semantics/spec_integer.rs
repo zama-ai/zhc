@@ -152,10 +152,7 @@ impl SpecInteger {
                 self.int_size()
             );
         }
-        EmulatedCiphertextInteger {
-            storage: int,
-            spec: *self,
-        }
+        EmulatedCiphertextInteger::from_storage(*self, int)
     }
 
     /// Checks whether a value exceeds the integer's capacity.

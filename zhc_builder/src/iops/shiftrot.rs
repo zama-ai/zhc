@@ -274,7 +274,7 @@ impl Builder {
         );
         let mut bits = Vec::with_capacity(num_stages);
         for blk in amount_blocks.iter().take(num_stages.div_ceil(2)) {
-            let (b0, b1) = self.block_lookup2(blk, split_bits.clone());
+            let [b0, b1] = self.block_lookup2(blk, split_bits.clone());
             bits.push(b0);
             bits.push(b1);
         }
@@ -300,6 +300,7 @@ impl Builder {
             src_blocks
                 .iter()
                 .map(|blk| self.block_lookup2(&self.block_pack(&bits[0], blk), lut.clone()))
+                .map(|[l, r]| (l, r))
                 .unzip()
         } else {
             src_blocks
@@ -332,6 +333,7 @@ impl Builder {
             let (keep, moved): (Vec<_>, Vec<_>) = merged
                 .iter()
                 .map(|blk| self.block_lookup2(&self.block_pack(&bits[stg], blk), keep_move.clone()))
+                .map(|[l, r]| (l, r))
                 .unzip();
             merged = (0..blk_w)
                 .map(|i| match shiftrot_swap_source(kind, &moved, i, stride) {
@@ -525,7 +527,10 @@ mod test {
                 let value = spec.random();
                 let outputs = builder
                     .interpret()
-                    .with_inputs([IopValue::CiphertextInteger(value), amount_value.clone()])
+                    .with_inputs([
+                        IopValue::CiphertextInteger(value.clone()),
+                        amount_value.clone(),
+                    ])
                     .get_outputs();
                 let expected = scalar_reference(kind, int_size, value.as_storage(), amount);
                 assert_eq!(
@@ -665,7 +670,7 @@ mod test {
                 unreachable!()
             };
             let amount = src.spec().from_int(amount.as_storage());
-            Some(vec![IopValue::CiphertextInteger(src.shift_right(amount))])
+            Some(vec![IopValue::CiphertextInteger(src.shift_right(&amount))])
         }
         for size in [4, 8, 16, 32, 64] {
             shifts_right(SpecInteger::new(size, 2, 2)).test_random(100, semantic);
@@ -683,7 +688,7 @@ mod test {
                 unreachable!()
             };
             let amount = src.spec().from_int(amount.as_storage());
-            Some(vec![IopValue::CiphertextInteger(src.shift_left(amount))])
+            Some(vec![IopValue::CiphertextInteger(src.shift_left(&amount))])
         }
         for size in [4, 8, 16, 32, 64] {
             shifts_left(SpecInteger::new(size, 2, 2)).test_random(100, semantic);
@@ -701,7 +706,7 @@ mod test {
                 unreachable!()
             };
             let amount = src.spec().from_int(amount.as_storage());
-            Some(vec![IopValue::CiphertextInteger(src.rotate_right(amount))])
+            Some(vec![IopValue::CiphertextInteger(src.rotate_right(&amount))])
         }
         for size in [4, 8, 16, 32, 64] {
             rots_right(SpecInteger::new(size, 2, 2)).test_random(100, semantic);
@@ -719,7 +724,7 @@ mod test {
                 unreachable!()
             };
             let amount = src.spec().from_int(amount.as_storage());
-            Some(vec![IopValue::CiphertextInteger(src.rotate_left(amount))])
+            Some(vec![IopValue::CiphertextInteger(src.rotate_left(&amount))])
         }
         for size in [4, 8, 16, 32, 64] {
             rots_left(SpecInteger::new(size, 2, 2)).test_random(100, semantic);
@@ -736,7 +741,7 @@ mod test {
             else {
                 unreachable!()
             };
-            Some(vec![IopValue::CiphertextInteger(src.shift_right(*amount))])
+            Some(vec![IopValue::CiphertextInteger(src.shift_right(amount))])
         }
         for size in [4, 8, 16, 32, 64] {
             shift_right(SpecInteger::new(size, 2, 2)).test_random(100, semantic);
@@ -753,7 +758,7 @@ mod test {
             else {
                 unreachable!()
             };
-            Some(vec![IopValue::CiphertextInteger(src.shift_left(*amount))])
+            Some(vec![IopValue::CiphertextInteger(src.shift_left(amount))])
         }
         for size in [4, 8, 16, 32, 64] {
             shift_left(SpecInteger::new(size, 2, 2)).test_random(100, semantic);
@@ -770,7 +775,7 @@ mod test {
             else {
                 unreachable!()
             };
-            Some(vec![IopValue::CiphertextInteger(src.rotate_right(*amount))])
+            Some(vec![IopValue::CiphertextInteger(src.rotate_right(amount))])
         }
         for size in [4, 8, 16, 32, 64] {
             rotate_right(SpecInteger::new(size, 2, 2)).test_random(100, semantic);
@@ -787,7 +792,7 @@ mod test {
             else {
                 unreachable!()
             };
-            Some(vec![IopValue::CiphertextInteger(src.rotate_left(*amount))])
+            Some(vec![IopValue::CiphertextInteger(src.rotate_left(amount))])
         }
         for size in [4, 8, 16, 32, 64] {
             rotate_left(SpecInteger::new(size, 2, 2)).test_random(100, semantic);

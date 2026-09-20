@@ -347,7 +347,7 @@ mod test {
             else {
                 unreachable!()
             };
-            Some(vec![IopValue::CiphertextInteger(lhs.bitwise_and(*rhs))])
+            Some(vec![IopValue::CiphertextInteger(lhs.bitwise_and(rhs))])
         }
         for size in (2..128).step_by(2) {
             bitwise_and(SpecInteger::new(size, 2, 2)).test_random(100, semantic);
@@ -364,7 +364,7 @@ mod test {
             else {
                 unreachable!()
             };
-            Some(vec![IopValue::CiphertextInteger(lhs.bitwise_or(*rhs))])
+            Some(vec![IopValue::CiphertextInteger(lhs.bitwise_or(rhs))])
         }
         for size in (2..128).step_by(2) {
             bitwise_or(SpecInteger::new(size, 2, 2)).test_random(100, semantic);
@@ -381,7 +381,7 @@ mod test {
             else {
                 unreachable!()
             };
-            Some(vec![IopValue::CiphertextInteger(lhs.bitwise_xor(*rhs))])
+            Some(vec![IopValue::CiphertextInteger(lhs.bitwise_xor(rhs))])
         }
         for size in (2..128).step_by(2) {
             bitwise_xor(SpecInteger::new(size, 2, 2)).test_random(100, semantic);

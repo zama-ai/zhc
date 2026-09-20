@@ -1,47 +1,83 @@
-.PHONY: test big-test update-expects fmt fmt-check check bench bench-export bench-diff bench-compile analyze bench-vm vm-bench vm-throughput vm-throughput-verify vm-microbench vm-model vm-bootstrap vm-profile-model vm-profile vm-profile-remote mem-topo zhc-profile
+.PHONY: all-test all-big-test all-fmt-check all-check \
+	zhc-test zhc-big-test zhc-brrr zhc-update-expects zhc-fmt zhc-fmt-check zhc-mem-topo zhc-check \
+	zhc-bench zhc-bench-export zhc-bench-diff zhc-bench-compile zhc-analyze zhc-profile \
+	lean-extern-libs lean-update-ffi lean-check-ffi lean-test \
+	vm-test vm-check vm-bench vm-throughput vm-throughput-verify vm-microbench vm-profile-throughput vm-profile
 
 # Wall-clock seconds the profiled bench_vm run loops for (override: make vm-profile SECS=30).
 SECS ?= 20
 
-test:
-	cargo test --locked --release
+all-test: zhc-test lean-test
 
-big-test:
+all-big-test:
 	RUST_MIN_STACK=268435456 cargo test --release -- --ignored
 
-brrr:
+all-fmt-check: zhc-fmt-check
+
+all-check: zhc-check lean-check-ffi
+
+lean-extern-libs:
+	cd zhc_lean && lake build libzhc_lean_shim:shared libzhc_iops_l2r:shared
+
+lean-update-ffi: lean-extern-libs
+	cargo run --locked -p zhc_scripts --example generate_lean
+
+lean-check-ffi: lean-extern-libs
+	cargo test --locked -p zhc_scripts --example generate_lean -- --ignored --nocapture generated_files_are_up_to_date
+
+lean-test: lean-extern-libs
+	cd zhc_lean && lake test
+
+zhc-test:
+	cargo test --locked --release
+
+zhc-big-test:
+	cargo test --release -- --ignored
+
+zhc-brrr:
 	cargo test --locked --release -- brrr
 
-update-expects:
+zhc-update-expects:
 	cargo run --locked --bin update-expects
 
-fmt:
+zhc-fmt:
 	cargo +nightly fmt
 
-fmt-check:
+zhc-fmt-check:
 	cargo +nightly fmt --check
 
-mem-topo:
+zhc-mem-topo:
 	cargo run --locked -p zhc_utils --example mem_topo
 
-check:
+zhc-check:
 	RUSTFLAGS="-D warnings" cargo check --locked
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked --no-deps
 
-bench:
+zhc-bench:
 	cargo run --locked --release -p zhc_bench
 
-bench-export:
+zhc-bench-export:
 	cargo run --locked --release -p zhc_bench -- export
 
-bench-diff:
+zhc-bench-diff:
 	RUSTFLAGS="-A warnings" cargo run --locked --release -p zhc_bench -- diff
 
-bench-compile:
+zhc-bench-compile:
 	cargo run --locked --release -p zhc_bench -- compile
 
-analyze:
+zhc-analyze:
 	cargo run --locked --release -p zhc_bench -- analyze
+
+zhc-profile:
+	rm -rf zhc_profile_pipeline.trace
+	EXAMPLE_BIN=$$(RUSTFLAGS="-C target-cpu=native -A warnings" CARGO_PROFILE_RELEASE_LTO=fat \
+		cargo build --locked -p zhc --example profile_pipeline --profile profiling \
+		--message-format=json 2>/dev/null \
+		| grep -o '"executable":"[^"]*/profile_pipeline[^"]*"' | tail -1 | sed 's/.*:"//;s/"$$//'); \
+	xcrun xctrace record --template "Time Profiler (High Freq)" \
+		--output zhc_profile_pipeline.trace \
+		--launch -- $$EXAMPLE_BIN
+	open zhc_profile_pipeline.trace
 
 vm-test:
 	cargo test --locked -p zhc_vm --release
@@ -81,14 +117,3 @@ vm-profile:
 		--output bench_vm.trace \
 		--launch -- $$BENCH_BIN --bench --profile-time $(SECS)
 	open bench_vm.trace
-
-zhc-profile:
-	rm -rf zhc_profile_pipeline.trace
-	EXAMPLE_BIN=$$(RUSTFLAGS="-C target-cpu=native -A warnings" CARGO_PROFILE_RELEASE_LTO=fat \
-		cargo build --locked -p zhc --example profile_pipeline --profile profiling \
-		--message-format=json 2>/dev/null \
-		| grep -o '"executable":"[^"]*/profile_pipeline[^"]*"' | tail -1 | sed 's/.*:"//;s/"$$//'); \
-	xcrun xctrace record --template "Time Profiler (High Freq)" \
-		--output zhc_profile_pipeline.trace \
-		--launch -- $$EXAMPLE_BIN
-	open zhc_profile_pipeline.trace

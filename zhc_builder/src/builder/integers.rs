@@ -1,3 +1,4 @@
+use super::builder::{BuilderId, BuilderIded};
 use std::fmt::Debug;
 use zhc_crypto::integer_semantics::{
     EmulatedCiphertextBlockStorage, EmulatedCiphertextBool, EmulatedCiphertextIntegerStorage,
@@ -27,6 +28,13 @@ use zhc_utils::Dumpable;
 pub struct CiphertextBlock {
     pub(crate) valid: ValId,
     pub(super) spec: SpecBlock,
+    pub(super) bid: BuilderId,
+}
+
+impl BuilderIded for CiphertextBlock {
+    fn bid(&self) -> BuilderId {
+        self.bid
+    }
 }
 
 impl Debug for CiphertextBlock {
@@ -90,6 +98,13 @@ impl CiphertextBlock {
 pub struct CiphertextBool {
     pub(crate) valid: ValId,
     pub(super) spec: SpecBlock,
+    pub(super) bid: BuilderId,
+}
+
+impl BuilderIded for CiphertextBool {
+    fn bid(&self) -> BuilderId {
+        self.bid
+    }
 }
 
 impl Debug for CiphertextBool {
@@ -160,6 +175,13 @@ impl CiphertextBool {
 pub struct CiphertextInteger {
     pub(crate) valid: ValId,
     pub(super) spec: SpecInteger,
+    pub(super) bid: BuilderId,
+}
+
+impl BuilderIded for CiphertextInteger {
+    fn bid(&self) -> BuilderId {
+        self.bid
+    }
 }
 
 impl Debug for CiphertextInteger {
@@ -213,6 +235,13 @@ impl CiphertextInteger {
 pub struct PlaintextBlock {
     pub(crate) valid: ValId,
     pub(super) spec: SpecBlock,
+    pub(super) bid: BuilderId,
+}
+
+impl BuilderIded for PlaintextBlock {
+    fn bid(&self) -> BuilderId {
+        self.bid
+    }
 }
 
 impl Debug for PlaintextBlock {
@@ -271,6 +300,13 @@ impl PlaintextBlock {
 pub struct PlaintextInteger {
     pub(crate) valid: ValId,
     pub(super) spec: SpecInteger,
+    pub(super) bid: BuilderId,
+}
+
+impl BuilderIded for PlaintextInteger {
+    fn bid(&self) -> BuilderId {
+        self.bid
+    }
 }
 
 impl Debug for PlaintextInteger {

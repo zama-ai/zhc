@@ -187,7 +187,7 @@ impl Builder {
             self.push_comment(format!("{i}-th"));
             let raw_sum = self.block_add_plaintext(lhs_blocks[i], rhs_blocks[i]);
             let sum = self.block_add(raw_sum, carry);
-            let (message, carry_tmp) = self.block_lookup2(sum, Lut2::many_carry_msg(*self.spec()));
+            let [message, carry_tmp] = self.block_lookup2(sum, Lut2::many_carry_msg(*self.spec()));
             carry = carry_tmp;
             output_blocks.push(message);
             self.pop_comment();
@@ -285,8 +285,7 @@ impl Builder {
             .map_first(|sum| {
                 [
                     self.comment("G0-B0")
-                        .block_lookup2(sum[0], Lut2::many_carry_msg(*self.spec()))
-                        .1,
+                        .block_lookup2(sum[0], Lut2::many_carry_msg(*self.spec()))[1],
                     self.comment("G0-B1")
                         .block_lookup(sum[1], Lut1::extract_prop_group0(*self.spec())),
                     self.comment("G0-B2")
@@ -437,10 +436,7 @@ impl Builder {
         self.pop_comment();
 
         self.push_comment("Carry propagation");
-        let mut result = svec![
-            self.block_lookup2(&sums[0], Lut2::many_carry_msg(*self.spec()))
-                .0
-        ];
+        let mut result = svec![self.block_lookup2(&sums[0], Lut2::many_carry_msg(*self.spec()))[0]];
         result.extend(
             (sums.into_iter().skip(1), carries.into_iter())
                 .mzip()

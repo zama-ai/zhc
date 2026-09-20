@@ -1,0 +1,17 @@
+[package]
+name = "zhc_iops_l2r"
+description = "ZHC: C ABI bindings for the Lean shim of zhc_iops"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+zhc_builder.workspace = true
+zhc_crypto.workspace = true
+zhc_langs.workspace = true
+zhc_utils.workspace = true

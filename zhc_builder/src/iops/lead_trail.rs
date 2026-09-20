@@ -320,8 +320,8 @@ impl Builder {
             } else {
                 self.block_lookup2(m, Lut2::manym2l_prop_bit0_msg_split(*self.spec()))
             };
-            res_v.push(v.0.clone());
-            res_v.push(v.1.clone());
+            res_v.push(v[0].clone());
+            res_v.push(v[1].clone());
         }
 
         let output = self.comment("output").vector_inspect(res_v);

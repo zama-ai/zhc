@@ -107,7 +107,7 @@ mod test {
             else {
                 unreachable!()
             };
-            Some(vec![IopValue::CiphertextInteger(lhs.sub(*rhs))])
+            Some(vec![IopValue::CiphertextInteger(lhs.sub(rhs))])
         }
         for size in (2..128).step_by(2) {
             sub(SpecInteger::new(size, 2, 2)).test_random(100, semantic);
@@ -124,7 +124,7 @@ mod test {
             else {
                 unreachable!()
             };
-            let (diff, flag) = lhs.overflow_sub(*rhs);
+            let (diff, flag) = lhs.overflow_sub(rhs);
             Some(vec![
                 IopValue::CiphertextInteger(diff),
                 IopValue::CiphertextBool(flag),

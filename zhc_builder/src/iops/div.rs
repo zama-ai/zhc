@@ -461,7 +461,7 @@ impl Builder {
         // Compute x2
         let mut x2_a: Vec<CiphertextBlock> = Vec::new(); // Will contain lsb part of the msg
         let last_msb = src.iter().fold(None, |prev_msb, x| {
-            let (mut lsb, msb) = self.block_lookup2(x, Lut2::many_msg_split_shift1(*self.spec()));
+            let [mut lsb, msb] = self.block_lookup2(x, Lut2::many_msg_split_shift1(*self.spec()));
             if let Some(v) = prev_msb {
                 lsb = self.block_add(lsb, v); // add with previous msb
             }
