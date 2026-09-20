@@ -716,6 +716,121 @@ impl Builder {
         );
     }
 
+    /// Declares a fresh, uninitialized [`IntegerCiphertext`] of the given bit-width.
+    ///
+    /// The returned integer has `int_size / message_size` blocks, none of which hold a
+    /// value yet. Fill them with
+    /// [`integer_ciphertext_store_block`](Self::integer_ciphertext_store_block) before
+    /// reading or outputting the integer.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let zero = builder.block_let_ciphertext(0);
+    /// let mut ct = builder.integer_ciphertext_declare(4);
+    /// ct = builder.integer_ciphertext_store_block(&ct, 0, &zero);
+    /// ct = builder.integer_ciphertext_store_block(&ct, 1, &zero);
+    /// ```
+    pub fn integer_ciphertext_declare(&self, int_size: u16) -> IntegerCiphertext {
+        let spec = self.spec.integer_ciphertext_spec(int_size);
+        let (_, ret) = self.inner_mut().insert_op(
+            IopInstructionSet::DeclareIntegerCiphertext { int_size },
+            svec![],
+            self.current_hierarchy(),
+            self.current_partition(),
+        );
+        IntegerCiphertext {
+            valid: ret[0],
+            spec,
+        }
+    }
+
+    /// Stores a block at position `index` of an [`IntegerCiphertext`].
+    ///
+    /// Returns the updated integer. Block 0 is the least-significant radix block.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `index` is out of range or if the block spec differs from the builder's.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let ct = builder.integer_ciphertext_input(4);
+    /// let one = builder.block_let_ciphertext(1);
+    /// let ct = builder.integer_ciphertext_store_block(&ct, 0, &one);
+    /// ```
+    pub fn integer_ciphertext_store_block(
+        &self,
+        ct: impl AsRef<IntegerCiphertext>,
+        index: u8,
+        block: impl AsRef<CiphertextBlock>,
+    ) -> IntegerCiphertext {
+        let ct = ct.as_ref();
+        let block = block.as_ref();
+        assert_eq!(block.spec(), self.spec, "Spec mismatch.");
+        assert!(
+            index.sas::<u16>() < ct.spec().block_count().sas::<u16>(),
+            "Tried to store block {index}, but the integer only has {} blocks.",
+            ct.spec().block_count()
+        );
+        let (_, ret) = self.inner_mut().insert_op(
+            IopInstructionSet::StoreIntegerCiphertextBlock { index },
+            svec![block.valid, ct.valid],
+            self.current_hierarchy(),
+            self.current_partition(),
+        );
+        IntegerCiphertext {
+            valid: ret[0],
+            spec: ct.spec(),
+        }
+    }
+
+    /// Extracts the block at position `index` of an [`IntegerCiphertext`].
+    ///
+    /// Block 0 is the least-significant radix block. See
+    /// [`integer_ciphertext_split`](Self::integer_ciphertext_split) to extract all blocks
+    /// at once.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `index` is out of range.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let ct = builder.integer_ciphertext_input(8);
+    /// let lsb = builder.integer_ciphertext_get_block(&ct, 0);
+    /// ```
+    pub fn integer_ciphertext_get_block(
+        &self,
+        ct: impl AsRef<IntegerCiphertext>,
+        index: u8,
+    ) -> CiphertextBlock {
+        let ct = ct.as_ref();
+        assert!(
+            index.sas::<u16>() < ct.spec().block_count().sas::<u16>(),
+            "Tried to extract block {index}, but the integer only has {} blocks.",
+            ct.spec().block_count()
+        );
+        let (_, ret) = self.inner_mut().insert_op(
+            IopInstructionSet::ExtractIntegerCiphertextBlock { index },
+            svec![ct.valid],
+            self.current_hierarchy(),
+            self.current_partition(),
+        );
+        CiphertextBlock {
+            valid: ret[0],
+            spec: self.spec,
+        }
+    }
+
     /// Decomposes an [`IntegerCiphertext`] into its individual radix blocks.
     ///
     /// Returns one [`CiphertextBlock`] per block in the radix-decomposed
@@ -787,6 +902,47 @@ impl Builder {
         IntegerPlaintext {
             valid: inp[0],
             spec,
+        }
+    }
+
+    /// Extracts the block at position `index` of an [`IntegerPlaintext`].
+    ///
+    /// Block 0 is the least-significant radix block. See
+    /// [`integer_plaintext_split`](Self::integer_plaintext_split) to extract all blocks
+    /// at once.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `index` is out of range.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// let builder = Builder::new(CiphertextBlockSpec(2, 2));
+    /// let pt = builder.integer_plaintext_input(8);
+    /// let lsb = builder.integer_plaintext_get_block(&pt, 0);
+    /// ```
+    pub fn integer_plaintext_get_block(
+        &self,
+        pt: impl AsRef<IntegerPlaintext>,
+        index: u8,
+    ) -> PlaintextBlock {
+        let pt = pt.as_ref();
+        assert!(
+            index.sas::<u16>() < pt.spec().block_count().sas::<u16>(),
+            "Tried to extract block {index}, but the integer only has {} blocks.",
+            pt.spec().block_count()
+        );
+        let (_, ret) = self.inner_mut().insert_op(
+            IopInstructionSet::ExtractIntegerPlaintextBlock { index },
+            svec![pt.valid],
+            self.current_hierarchy(),
+            self.current_partition(),
+        );
+        PlaintextBlock {
+            valid: ret[0],
+            spec: self.spec.matching_plaintext_block_spec(),
         }
     }
 
