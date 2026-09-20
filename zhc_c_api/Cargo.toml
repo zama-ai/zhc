@@ -1,0 +1,19 @@
+[package]
+name = "zhc_c_api"
+description = "ZHC: C ABI bindings"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+publish = false
+
+[lib]
+crate-type = ["staticlib", "cdylib"]
+
+[dependencies]
+zhc.workspace = true
+zhc_builder.workspace = true
+zhc_config.workspace = true
+zhc_pipeline.workspace = true
+zhc_utils.workspace = true

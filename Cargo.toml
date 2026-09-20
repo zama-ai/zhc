@@ -17,6 +17,7 @@ members = [
     "zhc_pipeline_correctness",
     "zhc_pipeline_correctness_macro",
     "zhc_cli",
+    "zhc_c_api",
 ]
 default-members = [
     "zhc",
@@ -35,6 +36,7 @@ default-members = [
     "zhc_pipeline_correctness",
     "zhc_pipeline_correctness_macro",
     "zhc_cli",
+    "zhc_c_api",
 ]
 resolver = "3"
 
@@ -63,6 +65,7 @@ zhc_profiling = {path = "zhc_profiling", version = "0.10.0" }
 zhc_pipeline_correctness = { path = "zhc_pipeline_correctness", version = "0.10.0" }
 zhc_pipeline_correctness_macro = { path = "zhc_pipeline_correctness_macro", version = "0.10.0" }
 zhc_cli = { path = "zhc_cli", version = "0.10.0" }
+zhc_c_api = { path = "zhc_c_api", version = "0.10.0" }
 
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

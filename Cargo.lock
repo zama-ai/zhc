@@ -1514,6 +1514,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "zhc_c_api"
+version = "0.10.0"
+dependencies = [
+ "zhc",
+ "zhc_builder",
+ "zhc_config",
+ "zhc_pipeline",
+ "zhc_utils",
+]
+
+[[package]]
 name = "zhc_cli"
 version = "0.10.0"
 dependencies = [
