@@ -276,6 +276,11 @@ impl Pipeline {
         self
     }
 
+    /// In-place form of [`with_unchecked_ioplang`](Self::with_unchecked_ioplang).
+    pub fn set_unchecked_ioplang(&mut self, ir: IR<IopLang>) {
+        self.context.unchecked_ioplang = Some(ir);
+    }
+
     /// Supplies partition assignments for multi-HPU compilation.
     ///
     /// The map must refer to the operations of the supplied unchecked IR.
@@ -283,6 +288,11 @@ impl Pipeline {
         self.context.partitions = Some(partitions);
         self.eval.invalidate_from_val(VALIDS().partitions);
         self
+    }
+
+    /// In-place form of [`with_partitions`](Self::with_partitions).
+    pub fn set_partitions(&mut self, partitions: OpMap<PartitionId>) {
+        self.context.partitions = Some(partitions);
     }
 
     /// Supplies the circuit's input and output signature.
@@ -294,12 +304,22 @@ impl Pipeline {
         self
     }
 
+    /// In-place form of [`with_prototype`](Self::with_prototype).
+    pub fn set_prototype(&mut self, prototype: Signature<Type>) {
+        self.context.prototype = Some(prototype);
+    }
+
     /// Supplies the ciphertext block layout used to check the input IR's noise.
     pub fn with_ciphertext_block_spec(mut self, spec: CiphertextBlockSpec) -> Self {
         self.context.ciphertext_block_spec = Some(spec);
         self.eval
             .invalidate_from_val(VALIDS().ciphertext_block_spec);
         self
+    }
+
+    /// In-place form of [`with_ciphertext_block_spec`](Self::with_ciphertext_block_spec).
+    pub fn set_ciphertext_block_spec(&mut self, spec: CiphertextBlockSpec) {
+        self.context.ciphertext_block_spec = Some(spec);
     }
 
     /// Sets the configuration of the single HPU to compile for.
@@ -323,10 +343,15 @@ impl Pipeline {
     /// let pipeline = Pipeline::new().with_hpu_config(HpuConfig::default());
     /// ```
     pub fn with_hpu_config(mut self, config: HpuConfig) -> Self {
+        self.set_hpu_config(config);
+        self
+    }
+
+    /// In-place form of [`with_hpu_config`](Self::with_hpu_config).
+    pub fn set_hpu_config(&mut self, config: HpuConfig) {
         assert!(self.context.multi_hpu_config.is_none() && self.context.vm_config.is_none());
         self.context.hpu_config = Some(config);
         self.eval.invalidate_from_val(VALIDS().hpu_config);
-        self
     }
 
     /// Sets the configuration of the multi-HPU system to compile for.
@@ -349,10 +374,15 @@ impl Pipeline {
     /// let pipeline = Pipeline::new().with_multi_hpu_config(MultiHpuConfig::default());
     /// ```
     pub fn with_multi_hpu_config(mut self, config: MultiHpuConfig) -> Self {
+        self.set_multi_hpu_config(config);
+        self
+    }
+
+    /// In-place form of [`with_multi_hpu_config`](Self::with_multi_hpu_config).
+    pub fn set_multi_hpu_config(&mut self, config: MultiHpuConfig) {
         assert!(self.context.hpu_config.is_none() && self.context.vm_config.is_none());
         self.context.multi_hpu_config = Some(config);
         self.eval.invalidate_from_val(VALIDS().multi_hpu_config);
-        self
     }
 
     /// Sets the configuration of the software VM to compile for.
@@ -379,10 +409,15 @@ impl Pipeline {
     /// let pipeline = Pipeline::new().with_vm_config(config);
     /// ```
     pub fn with_vm_config(mut self, config: VmConfig) -> Self {
+        self.set_vm_config(config);
+        self
+    }
+
+    /// In-place form of [`with_vm_config`](Self::with_vm_config).
+    pub fn set_vm_config(&mut self, config: VmConfig) {
         assert!(self.context.multi_hpu_config.is_none() && self.context.hpu_config.is_none());
         self.context.vm_config = Some(config);
         self.eval.invalidate_from_val(VALIDS().vm_config);
-        self
     }
 
     /// Selects the legacy scheduler for the single-HPU flow.
@@ -417,6 +452,11 @@ impl Pipeline {
         // directly from the context, so its own result (`hpulang_scheduled`) is the seed.
         self.eval.invalidate_from_val(VALIDS().hpulang_scheduled);
         self
+    }
+
+    /// In-place form of [`with_legacy_hpu_scheduler`](Self::with_legacy_hpu_scheduler).
+    pub fn set_legacy_hpu_scheduler(&mut self) {
+        self.context.legacy_hpu_scheduler = true;
     }
 
     /// Records the individual events of the simulated device in the execution traces.
@@ -461,6 +501,11 @@ impl Pipeline {
         self.eval.invalidate_from_val(VALIDS().hpu_trace);
         self.eval.invalidate_from_val(VALIDS().multi_hpu_trace);
         self
+    }
+
+    /// In-place form of [`with_trace_hpu_events`](Self::with_trace_hpu_events).
+    pub fn set_trace_hpu_events(&mut self) {
+        self.context.hpu_trace_events = true;
     }
 
     /// Sets the relocation table applied to LUT ids when encoding instruction streams.
@@ -509,6 +554,11 @@ impl Pipeline {
         self
     }
 
+    /// In-place form of [`with_hpu_lut_relocation`](Self::with_hpu_lut_relocation).
+    pub fn set_hpu_lut_relocation(&mut self, relocation: Vec<LutId>) {
+        self.context.hpu_lut_relocation = Some(relocation);
+    }
+
     /// Sets the hardware topology the software VM schedules across.
     ///
     /// The `topology` argument describes the cores and memory of the machine the VM's compiled
@@ -530,6 +580,11 @@ impl Pipeline {
         self.context.topology = topology;
         self.eval.invalidate_from_val(VALIDS().topology);
         self
+    }
+
+    /// In-place form of [`with_topology`](Self::with_topology).
+    pub fn set_topology(&mut self, topology: Topology) {
+        self.context.topology = topology;
     }
 
     /// Returns the supplied IR without running noise checking or optimization.
