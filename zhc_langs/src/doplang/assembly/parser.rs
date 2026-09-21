@@ -339,7 +339,7 @@ fn parse_lut_section(
             });
         }
         let lut = Lut1::from_fn(name, block_spec, move |b| {
-            block_spec.from_data(values[b.raw_data_bits() as usize])
+            block_spec.from_complete(values[b.raw_data_bits() as usize])
         });
         registry.register_l1(&lut);
     }
