@@ -12,6 +12,10 @@ publish = false
 name = "dop_fmt"
 path = "src/dop_fmt/main.rs"
 
+[[bin]]
+name = "fw"
+path = "src/fw/main.rs"
+
 [dependencies]
 zhc.workspace = true
 zhc_config.workspace = true
