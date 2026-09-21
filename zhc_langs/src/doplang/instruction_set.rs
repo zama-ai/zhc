@@ -267,7 +267,9 @@ impl Display for LutRef {
 }
 
 /// A user event flag: a hash/UUID for matching Ucore instructions together.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, Default, serde::Serialize, serde::Deserialize,
+)]
 pub struct UserFlag {
     pub flag: u8,
 }
@@ -289,7 +291,9 @@ impl Display for UserFlag {
 }
 
 /// A board (virtual HPU) identifier.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, Default, serde::Serialize, serde::Deserialize,
+)]
 pub struct VirtId {
     pub id: u8,
 }

@@ -755,7 +755,7 @@ pub fn generate_translation_table(
                             )
                         }
                     }
-                    CtMem::Dst(ct_dst_var) => {
+                    CtMem::Dst(_ct_dst_var) => {
                         panic!("Unexpected CtMem::Dst slot argument in LD_B2B")
                     }
                 };
