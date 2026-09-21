@@ -6,12 +6,48 @@
 
 use crate::doplang::{DopInstructionSet, DopLang};
 use std::fmt::Write;
+use zhc_crypto::integer_semantics::Type;
 use zhc_crypto::integer_semantics::lut::LutRegistry;
-use zhc_ir::IR;
+use zhc_ir::{IR, Signature};
 
 mod parser;
 
 pub use parser::*;
+
+const SEPARATOR_WIDTH: usize = 80;
+
+fn separator(prefix: &str) -> String {
+    let head = format!("; {prefix}");
+    let dashes = SEPARATOR_WIDTH.saturating_sub(head.len());
+    format!("{head}{}\n", "-".repeat(dashes))
+}
+
+/// Renders a `!preamble { ... }` block: `signature` and every `luts` entry, in the exact form
+/// [`parse_preamble`] expects at the top of a `dop.asm` file (see that module's format
+/// description) — the write-side counterpart of [`parse_preamble`], the way [`emit_assembly`] is
+/// the write-side counterpart of the body parser. Combine both to produce a full, loadable
+/// `dop.asm` file: this preamble first, then [`emit_assembly`]'s instruction listing.
+pub fn emit_preamble(signature: &Signature<Type>, luts: &LutRegistry) -> String {
+    let mut out = String::new();
+    out.push_str(&separator(""));
+    out.push_str("; !preamble {\n");
+    out.push_str("; [signature]\n");
+    out.push_str(&format!("; {signature}\n"));
+    out.push_str("; [lut]\n");
+    let mut luts = luts.iter_luts().collect::<Vec<_>>();
+    luts.sort_by_key(|(lid, _)| lid.0);
+    for (_, raw) in luts {
+        let values = raw
+            .lut()
+            .iter()
+            .map(|b| b.raw_complete_bits().to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        out.push_str(&format!("; {}: [{values}]\n", raw.name()));
+    }
+    out.push_str(&separator("} "));
+    out
+}
 
 /// Emits a textual assembly listing from a DOP instruction stream.
 ///

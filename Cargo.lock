@@ -1517,6 +1517,7 @@ dependencies = [
 name = "zhc_cli"
 version = "0.9.1"
 dependencies = [
+ "zhc",
  "zhc_config",
  "zhc_crypto",
  "zhc_ir",

@@ -21,7 +21,7 @@ use zhc_crypto::integer_semantics::CiphertextBlockSpec;
 use zhc_crypto::integer_semantics::Type;
 use zhc_crypto::integer_semantics::lut::LutRegistry;
 use zhc_ir::{IR, Signature};
-use zhc_langs::doplang::{DopLang, emit_assembly, parse_assembly, parse_preamble};
+use zhc_langs::doplang::{DopLang, emit_assembly, emit_preamble, parse_assembly, parse_preamble};
 use zhc_pipeline::passes::{hpu_decode_translation_table, hpu_generate_translation_table};
 
 /// A loaded DOP program, with enough context (block spec, signature, LUT registry) to run
@@ -110,36 +110,6 @@ fn format_hex_words(words: &[u32]) -> String {
     words.iter().map(|w| format!("{w:x}\n")).collect()
 }
 
-const SEPARATOR_WIDTH: usize = 80;
-
-fn separator(prefix: &str) -> String {
-    let head = format!("; {prefix}");
-    let dashes = SEPARATOR_WIDTH.saturating_sub(head.len());
-    format!("{head}{}\n", "-".repeat(dashes))
-}
-
-fn render_preamble(signature: &Signature<Type>, luts: &LutRegistry) -> String {
-    let mut out = String::new();
-    out.push_str(&separator(""));
-    out.push_str("; !preamble {\n");
-    out.push_str("; [signature]\n");
-    out.push_str(&format!("; {signature}\n"));
-    out.push_str("; [lut]\n");
-    let mut luts = luts.iter_luts().collect::<Vec<_>>();
-    luts.sort_by_key(|(lid, _)| lid.0);
-    for (_, raw) in luts {
-        let values = raw
-            .lut()
-            .iter()
-            .map(|b| b.raw_data_bits().to_string())
-            .collect::<Vec<_>>()
-            .join(", ");
-        out.push_str(&format!("; {}: [{values}]\n", raw.name()));
-    }
-    out.push_str(&separator("} "));
-    out
-}
-
 /// Converts a loaded program to hex text (the format [`load_hex`] reads back): the same
 /// preamble as [`to_asm_text`], followed by one hex-encoded DOp word per line.
 ///
@@ -153,7 +123,7 @@ fn render_preamble(signature: &Signature<Type>, luts: &LutRegistry) -> String {
 /// needs sync metadata (`iid`/`hid`/`flag`) that `DopInstructionSet::SYNC` doesn't carry.
 pub fn to_hex_text(loaded: &Loaded) -> Result<String, String> {
     let framed = catch(|| hpu_generate_translation_table(&loaded.ir, None))?;
-    let mut out = render_preamble(&loaded.signature, &loaded.luts);
+    let mut out = emit_preamble(&loaded.signature, &loaded.luts);
     out.push_str(&format_hex_words(&framed[1..]));
     Ok(out)
 }
@@ -164,7 +134,7 @@ pub fn to_hex_text(loaded: &Loaded) -> Result<String, String> {
 /// Always re-renders from `loaded`'s IR, even if it was itself loaded from `dop.asm` text — so
 /// running the tool `--from x.asm --to x.asm` reformats rather than copying the file unchanged.
 pub fn to_asm_text(loaded: &Loaded) -> String {
-    let mut out = render_preamble(&loaded.signature, &loaded.luts);
+    let mut out = emit_preamble(&loaded.signature, &loaded.luts);
     out.push_str(&emit_assembly(&loaded.ir, &loaded.luts));
     out
 }

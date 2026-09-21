@@ -193,7 +193,7 @@ impl DialectInstructionSet for PipelineInstructionSet {
             GenerateHpuStream => sig![(DopLang, HpuLutRelocation) -> (HpuStream)],
             ComputeHpuMetrics => sig![(DopLang, HpuLangScheduled) -> (HpuMetrics)],
             TraceHpuExecution => sig![(DopLang, HpuConfig) -> (HpuTrace)],
-            GenerateHpuAssembly => sig![(DopLang, LutRegistry) -> (HpuAssembly)],
+            GenerateHpuAssembly => sig![(DopLang, LutRegistry, Prototype) -> (HpuAssembly)],
             // MultiHpu
             InputMultiHpuLutRelocation => sig![() -> (MultiHpuLutRelocation)],
             InputMultiHpuConfig => sig![() -> (MultiHpuConfig)],
@@ -211,7 +211,9 @@ impl DialectInstructionSet for PipelineInstructionSet {
             }
             ComputeMultiHpuMetrics => sig![(MultiDopLang, MultiHpuConfig) -> (MultiHpuMetrics)],
             TraceMultiHpuExecution => sig![(MultiDopLang, MultiHpuConfig) -> (MultiHpuTrace)],
-            GenerateMultiHpuAssembly => sig![(MultiDopLang, LutRegistry) -> (MultiHpuAssembly)],
+            GenerateMultiHpuAssembly => {
+                sig![(MultiDopLang, LutRegistry, Prototype) -> (MultiHpuAssembly)]
+            }
             // Vm
             InputVmConfig => sig![() -> (VmConfig)],
             InputTopology => sig![() -> (Topology)],

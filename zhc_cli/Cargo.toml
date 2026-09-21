@@ -13,6 +13,7 @@ name = "dop_fmt"
 path = "src/dop_fmt/main.rs"
 
 [dependencies]
+zhc.workspace = true
 zhc_config.workspace = true
 zhc_crypto.workspace = true
 zhc_ir.workspace = true

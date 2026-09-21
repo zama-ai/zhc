@@ -1,6 +1,6 @@
 use zhc_ir::evaluation::{Evaluable, EvaluatesTo};
 use zhc_langs::{
-    doplang::emit_assembly,
+    doplang::{emit_assembly, emit_preamble},
     ioplang::check_noise,
     pipelinelang::{PipelineInstructionSet, PipelineTypeSystem},
 };
@@ -228,8 +228,10 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                 interval_begin(c"GenerateHpuAssembly", 0);
                 let doplang = arguments[0].unwrap_dop_lang_ref();
                 let lut_reg = arguments[1].unwrap_lut_registry_ref();
+                let prototype = arguments[2].unwrap_prototype_ref();
                 let file = FileHandle::random(Extension::Asm);
-                let asm = emit_assembly(doplang, lut_reg);
+                let mut asm = emit_preamble(prototype, lut_reg);
+                asm.push_str(&emit_assembly(doplang, lut_reg));
                 asm.dump_to_file(&file);
                 let result = svec![PipelineArtifact::HpuAssembly(file)];
                 interval_end(c"GenerateHpuAssembly", 0);
@@ -328,11 +330,13 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                 interval_begin(c"GenerateMultiHpuAssembly", 0);
                 let allocated = arguments[0].unwrap_multi_dop_lang_ref();
                 let lut_reg = arguments[1].unwrap_lut_registry_ref();
+                let prototype = arguments[2].unwrap_prototype_ref();
                 let files = allocated
                     .iter()
                     .map(|ir| {
                         let file = FileHandle::random(Extension::Asm);
-                        let asm = emit_assembly(ir, lut_reg);
+                        let mut asm = emit_preamble(prototype, lut_reg);
+                        asm.push_str(&emit_assembly(ir, lut_reg));
                         asm.dump_to_file(&file);
                         file
                     })

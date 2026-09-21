@@ -215,7 +215,7 @@ static PIPELINE: LazyLock<(IR<PipelineLang>, ArtifactsValids)> = LazyLock::new(|
     let hpu_trace = rets[0];
     let (_, rets) = ir.add_op(ComputeHpuMetrics, svec![doplang, hpulang_scheduled]);
     let hpu_metrics = rets[0];
-    let (_, rets) = ir.add_op(GenerateHpuAssembly, svec![doplang, lut_registry]);
+    let (_, rets) = ir.add_op(GenerateHpuAssembly, svec![doplang, lut_registry, prototype]);
     let hpu_assembly = rets[0];
 
     // Multi-Hpu
@@ -255,7 +255,10 @@ static PIPELINE: LazyLock<(IR<PipelineLang>, ArtifactsValids)> = LazyLock::new(|
         svec![multi_doplang, multi_hpu_lut_relocation],
     );
     let multi_hpu_stream = rets[0];
-    let (_, rets) = ir.add_op(GenerateMultiHpuAssembly, svec![multi_doplang, lut_registry]);
+    let (_, rets) = ir.add_op(
+        GenerateMultiHpuAssembly,
+        svec![multi_doplang, lut_registry, prototype],
+    );
     let multi_hpu_assembly = rets[0];
 
     // Vm
