@@ -1562,7 +1562,17 @@ dependencies = [
  "serde",
  "zhc_crypto",
  "zhc_ir",
+ "zhc_langs_macro",
  "zhc_utils",
+]
+
+[[package]]
+name = "zhc_langs_macro"
+version = "0.10.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
 ]
 
 [[package]]

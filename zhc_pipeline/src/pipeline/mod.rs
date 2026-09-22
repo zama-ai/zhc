@@ -103,25 +103,22 @@
 //! println!("{} worker threads", plan.irs.len());
 //! ```
 
-use std::sync::LazyLock;
-
 use zhc_config::{hpu::HpuConfig, multi_hpu::MultiHpuConfig, vm::VmConfig};
 use zhc_crypto::integer_semantics::lut::{LutId, LutRegistry};
 use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
 use zhc_ir::{
-    IR, OpMap, Signature, ValId, evaluation::LazyEvaluator, partition::PartitionId,
+    IR, OpMap, Signature, evaluation::LazyEvaluator, partition::PartitionId,
     visualization::Hierarchy,
 };
 use zhc_langs::{
     doplang::DopLang,
     hpulang::{HpuLang, HpuLocality},
     ioplang::IopLang,
-    pipelinelang::{PipelineInstructionSet, PipelineLang},
+    pipelinelang::{PipelineLang, PipelineValIds},
     vmlang::VmLang,
 };
 use zhc_utils::{
     files::{FileHandle, PerfettoTrace},
-    svec,
     topology::Topology,
 };
 
@@ -133,193 +130,13 @@ use crate::{
     vm::scheduler::VmExecutionPlan,
 };
 
-struct ArtifactsValids {
-    unchecked_ioplang: ValId,
-    ioplang: ValId,
-    fingerprint: ValId,
-    slack_drawing: ValId,
-    pbs_metrics: ValId,
-    partitions: ValId,
-    prototype: ValId,
-    ciphertext_block_spec: ValId,
-    lut_registry: ValId,
-    hpu_lut_relocation: ValId,
-    hpu_config: ValId,
-    hpulang_translated: ValId,
-    hpulang_scheduled: ValId,
-    doplang: ValId,
-    hpu_stream: ValId,
-    hpu_metrics: ValId,
-    hpu_trace: ValId,
-    hpu_assembly: ValId,
-    multi_hpu_lut_relocation: ValId,
-    multi_hpu_config: ValId,
-    multi_hpulang_translated: ValId,
-    multi_hpu_localities: ValId,
-    multi_hpulang_scheduled: ValId,
-    multi_doplang: ValId,
-    multi_hpu_metrics: ValId,
-    multi_hpu_trace: ValId,
-    multi_hpu_stream: ValId,
-    multi_hpu_assembly: ValId,
-    vm_config: ValId,
-    topology: ValId,
-    vmlang: ValId,
-    vm_execution_plan: ValId,
-}
-
-static PIPELINE: LazyLock<(IR<PipelineLang>, ArtifactsValids)> = LazyLock::new(|| {
-    use PipelineInstructionSet::*;
-    let mut ir = IR::<PipelineLang>::empty();
-
-    // Commons
-    let (_, rets) = ir.add_op(InputUncheckedIopLang, svec![]);
-    let unchecked_ioplang = rets[0];
-    let (_, rets) = ir.add_op(InputPartitions, svec![]);
-    let partitions = rets[0];
-    let (_, rets) = ir.add_op(InputPrototype, svec![]);
-    let prototype = rets[0];
-    let (_, rets) = ir.add_op(InputCiphertextBlockSpec, svec![]);
-    let ciphertext_block_spec = rets[0];
-    let (_, rets) = ir.add_op(DrawSlack, svec![unchecked_ioplang]);
-    let slack_drawing = rets[0];
-    let (_, rets) = ir.add_op(ComputePbsMetrics, svec![unchecked_ioplang]);
-    let pbs_metrics = rets[0];
-    let (_, rets) = ir.add_op(
-        CheckIopLang,
-        svec![unchecked_ioplang, ciphertext_block_spec],
-    );
-    let ioplang = rets[0];
-    let (_, rets) = ir.add_op(ComputeFingerprint, svec![ioplang]);
-    let fingerprint = rets[0];
-    let (_, rets) = ir.add_op(IopLangToLutRegistry, svec![ioplang]);
-    let lut_registry = rets[0];
-
-    // Hpu
-    let (_, rets) = ir.add_op(InputHpuLutRelocation, svec![]);
-    let hpu_lut_relocation = rets[0];
-    let (_, rets) = ir.add_op(InputHpuConfig, svec![]);
-    let hpu_config = rets[0];
-    let (_, rets) = ir.add_op(IopLangToHpuLang, svec![ioplang]);
-    let hpulang_translated = rets[0];
-    let (_, rets) = ir.add_op(ScheduleHpuLang, svec![hpulang_translated, hpu_config]);
-    let hpulang_scheduled = rets[0];
-    let (_, rets) = ir.add_op(
-        AllocateDopLang,
-        svec![hpulang_scheduled, hpu_config, lut_registry],
-    );
-    let doplang = rets[0];
-    let (_, rets) = ir.add_op(GenerateHpuStream, svec![doplang, hpu_lut_relocation]);
-    let hpu_stream = rets[0];
-    let (_, rets) = ir.add_op(TraceHpuExecution, svec![doplang, hpu_config]);
-    let hpu_trace = rets[0];
-    let (_, rets) = ir.add_op(ComputeHpuMetrics, svec![doplang, hpulang_scheduled]);
-    let hpu_metrics = rets[0];
-    let (_, rets) = ir.add_op(GenerateHpuAssembly, svec![doplang, lut_registry, prototype]);
-    let hpu_assembly = rets[0];
-
-    // Multi-Hpu
-    let (_, rets) = ir.add_op(InputMultiHpuLutRelocation, svec![]);
-    let multi_hpu_lut_relocation = rets[0];
-    let (_, rets) = ir.add_op(InputMultiHpuConfig, svec![]);
-    let multi_hpu_config = rets[0];
-    let (_, rets) = ir.add_op(IopLangToMultiHpu, svec![ioplang, partitions]);
-    let multi_hpulang_translated = rets[0];
-    let multi_hpu_localities = rets[1];
-    let (_, rets) = ir.add_op(
-        ScheduleMultiHpuLang,
-        svec![
-            multi_hpulang_translated,
-            multi_hpu_localities,
-            multi_hpu_config
-        ],
-    );
-    let multi_hpulang_scheduled = rets[0];
-    let (_, rets) = ir.add_op(
-        AllocateMultiDopLang,
-        svec![multi_hpulang_scheduled, multi_hpu_config, lut_registry],
-    );
-    let multi_doplang = rets[0];
-    let (_, rets) = ir.add_op(
-        ComputeMultiHpuMetrics,
-        svec![multi_doplang, multi_hpu_config],
-    );
-    let multi_hpu_metrics = rets[0];
-    let (_, rets) = ir.add_op(
-        TraceMultiHpuExecution,
-        svec![multi_doplang, multi_hpu_config],
-    );
-    let multi_hpu_trace = rets[0];
-    let (_, rets) = ir.add_op(
-        GenerateMultiHpuStream,
-        svec![multi_doplang, multi_hpu_lut_relocation],
-    );
-    let multi_hpu_stream = rets[0];
-    let (_, rets) = ir.add_op(
-        GenerateMultiHpuAssembly,
-        svec![multi_doplang, lut_registry, prototype],
-    );
-    let multi_hpu_assembly = rets[0];
-
-    // Vm
-    let (_, rets) = ir.add_op(InputVmConfig, svec![]);
-    let vm_config = rets[0];
-    let (_, rets) = ir.add_op(InputTopology, svec![]);
-    let topology = rets[0];
-    let (_, rets) = ir.add_op(IopLangToVmLang, svec![ioplang]);
-    let vmlang = rets[0];
-    let (_, rets) = ir.add_op(
-        GenerateVmExecutionPlan,
-        svec![vmlang, vm_config, topology, lut_registry],
-    );
-    let vm_execution_plan = rets[0];
-
-    (
-        ir,
-        ArtifactsValids {
-            unchecked_ioplang,
-            ioplang,
-            fingerprint,
-            pbs_metrics,
-            slack_drawing,
-            partitions,
-            prototype,
-            ciphertext_block_spec,
-            lut_registry,
-            hpu_lut_relocation,
-            hpu_config,
-            hpulang_translated,
-            hpulang_scheduled,
-            doplang,
-            hpu_stream,
-            hpu_metrics,
-            hpu_trace,
-            hpu_assembly,
-            multi_hpu_lut_relocation,
-            multi_hpu_config,
-            multi_hpulang_translated,
-            multi_hpu_localities,
-            multi_hpulang_scheduled,
-            multi_doplang,
-            multi_hpu_metrics,
-            multi_hpu_trace,
-            multi_hpu_stream,
-            multi_hpu_assembly,
-            vm_config,
-            topology,
-            vmlang,
-            vm_execution_plan,
-        },
-    )
-});
-
 #[allow(non_snake_case)]
 fn IR() -> &'static IR<PipelineLang> {
-    &PIPELINE.0
+    PipelineLang::ir()
 }
 #[allow(non_snake_case)]
-fn VALIDS() -> &'static ArtifactsValids {
-    &PIPELINE.1
+fn VALIDS() -> &'static PipelineValIds {
+    PipelineLang::val_ids()
 }
 
 mod artifacts;
@@ -353,7 +170,7 @@ impl Pipeline {
         let h_mhpu = h_root.make_child("Multi-Hpu");
         let h_vm = h_root.make_child("Vm");
         let opmap = IR().totally_mapped_opmap(|op| {
-            use zhc_langs::pipelinelang::Affinity::*;
+            use zhc_langs::pipelinelang::PipelineAffinity::*;
             match op.get_instruction().get_affinity() {
                 Commons => h_commons.clone(),
                 Hpu => h_hpu.clone(),
@@ -437,7 +254,7 @@ impl Pipeline {
         let h_mhpu = h_root.make_child("Multi-Hpu");
         let h_vm = h_root.make_child("Vm");
         let opmap = self.eval.as_view().totally_mapped_opmap(|op| {
-            use zhc_langs::pipelinelang::Affinity::*;
+            use zhc_langs::pipelinelang::PipelineAffinity::*;
             match op.get_instruction().get_affinity() {
                 Commons => h_commons.clone(),
                 Hpu => h_hpu.clone(),

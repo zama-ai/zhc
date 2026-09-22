@@ -10,6 +10,7 @@ publish = true
 
 [dependencies]
 zhc_ir.workspace = true
+zhc_langs_macro.workspace = true
 zhc_utils.workspace = true
 zhc_crypto.workspace = true
 serde.workspace = true

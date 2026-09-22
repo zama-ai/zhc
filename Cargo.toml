@@ -3,6 +3,7 @@ members = [
     "zhc",
     "zhc_ir",
     "zhc_langs",
+    "zhc_langs_macro",
     "zhc_pipeline",
     "zhc_sim",
     "zhc_utils",
@@ -21,6 +22,7 @@ default-members = [
     "zhc",
     "zhc_ir",
     "zhc_langs",
+    "zhc_langs_macro",
     "zhc_pipeline",
     "zhc_sim",
     "zhc_utils",
@@ -48,6 +50,7 @@ zhc = { path = "zhc", version = "0.10.0" }
 zhc_ir = { path = "zhc_ir", version = "0.10.0" }
 zhc_config = { path = "zhc_config", version = "0.10.0" }
 zhc_langs = { path = "zhc_langs", version = "0.10.0" }
+zhc_langs_macro = { path = "zhc_langs_macro", version = "0.10.0" }
 zhc_pipeline = { path = "zhc_pipeline", version = "0.10.0" }
 zhc_sim = { path = "zhc_sim", version = "0.10.0" }
 zhc_utils = { path = "zhc_utils", version = "0.10.0" }

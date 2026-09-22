@@ -25,13 +25,13 @@ use super::PipelineArtifact;
 impl EvaluatesTo<PipelineArtifact> for PipelineTypeSystem {
     fn type_of(interp: &PipelineArtifact) -> Self {
         match interp {
-            PipelineArtifact::UncheckedIopLang(_) => PipelineTypeSystem::UncheckedIopLang,
-            PipelineArtifact::IopLang(_) => PipelineTypeSystem::IopLang,
+            PipelineArtifact::UncheckedIopLang(_) => PipelineTypeSystem::UncheckedIoplang,
+            PipelineArtifact::IopLang(_) => PipelineTypeSystem::Ioplang,
             PipelineArtifact::Fingerprint(_) => PipelineTypeSystem::Fingerprint,
             PipelineArtifact::HpuConfig(_) => PipelineTypeSystem::HpuConfig,
-            PipelineArtifact::HpuLangTranslated(_) => PipelineTypeSystem::HpuLangTranslated,
-            PipelineArtifact::HpuLangScheduled(_) => PipelineTypeSystem::HpuLangScheduled,
-            PipelineArtifact::DopLang(_) => PipelineTypeSystem::DopLang,
+            PipelineArtifact::HpuLangTranslated(_) => PipelineTypeSystem::HpulangTranslated,
+            PipelineArtifact::HpuLangScheduled(_) => PipelineTypeSystem::HpulangScheduled,
+            PipelineArtifact::DopLang(_) => PipelineTypeSystem::Doplang,
             PipelineArtifact::HpuStream(_) => PipelineTypeSystem::HpuStream,
             PipelineArtifact::PbsMetrics(_) => PipelineTypeSystem::PbsMetrics,
             PipelineArtifact::HpuMetrics(_) => PipelineTypeSystem::HpuMetrics,
@@ -42,11 +42,11 @@ impl EvaluatesTo<PipelineArtifact> for PipelineTypeSystem {
             PipelineArtifact::HpuAssembly(_) => PipelineTypeSystem::HpuAssembly,
             PipelineArtifact::MultiHpuConfig(_) => PipelineTypeSystem::MultiHpuConfig,
             PipelineArtifact::MultiHpuLangTranslated(_) => {
-                PipelineTypeSystem::MultiHpuLangTranslated
+                PipelineTypeSystem::MultiHpulangTranslated
             }
             PipelineArtifact::MultiHpuLocalities(_) => PipelineTypeSystem::MultiHpuLocalities,
-            PipelineArtifact::MultiHpuLangScheduled(_) => PipelineTypeSystem::MultiHpuLangScheduled,
-            PipelineArtifact::MultiDopLang(_) => PipelineTypeSystem::MultiDopLang,
+            PipelineArtifact::MultiHpuLangScheduled(_) => PipelineTypeSystem::MultiHpulangScheduled,
+            PipelineArtifact::MultiDopLang(_) => PipelineTypeSystem::MultiDoplang,
             PipelineArtifact::MultiHpuMetrics(_) => PipelineTypeSystem::MultiHpuMetrics,
             PipelineArtifact::MultiHpuTrace(_) => PipelineTypeSystem::MultiHpuTrace,
             PipelineArtifact::MultiHpuStream(_) => PipelineTypeSystem::MultiHpuStream,
@@ -54,7 +54,7 @@ impl EvaluatesTo<PipelineArtifact> for PipelineTypeSystem {
             PipelineArtifact::Prototype(_) => PipelineTypeSystem::Prototype,
             PipelineArtifact::VmConfig(_) => PipelineTypeSystem::VmConfig,
             PipelineArtifact::Topology(_) => PipelineTypeSystem::Topology,
-            PipelineArtifact::VmLang(_) => PipelineTypeSystem::VmLang,
+            PipelineArtifact::VmLang(_) => PipelineTypeSystem::Vmlang,
             PipelineArtifact::VmExecutionPlan(_) => PipelineTypeSystem::VmExecutionPlan,
             PipelineArtifact::LutRegistry(_) => PipelineTypeSystem::LutRegistry,
             PipelineArtifact::HpuLutRelocation(_) => PipelineTypeSystem::HpuLutRelocation,
@@ -79,7 +79,7 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                 interval_end(c"InputHpuConfig", 0);
                 result
             }
-            PipelineInstructionSet::InputUncheckedIopLang => {
+            PipelineInstructionSet::InputUncheckedIoplang => {
                 interval_begin(c"InputUncheckedIopLang", 0);
                 let unchecked = context
                     .unchecked_ioplang
@@ -89,7 +89,7 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                 interval_end(c"InputUncheckedIopLang", 0);
                 result
             }
-            PipelineInstructionSet::CheckIopLang => {
+            PipelineInstructionSet::CheckIoplang => {
                 interval_begin(c"CheckIopLang", 0);
                 let unchecked = arguments[0].unwrap_unchecked_iop_lang_ref();
                 let spec = arguments[1].unwrap_ciphertext_block_spec_ref();
@@ -137,7 +137,7 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                 interval_end(c"InputCiphertextBlockSpec", 0);
                 result
             }
-            PipelineInstructionSet::IopLangToHpuLang => {
+            PipelineInstructionSet::IoplangToHpulang => {
                 interval_begin(c"IopLangToHpuLang", 0);
                 let ioplang = arguments[0].unwrap_iop_lang_ref();
                 let hpulang = hpu::lowering::lower_iop_to_hpu(ioplang);
@@ -145,7 +145,7 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                 interval_end(c"IopLangToHpuLang", 0);
                 result
             }
-            PipelineInstructionSet::ScheduleHpuLang => {
+            PipelineInstructionSet::ScheduleHpulang => {
                 interval_begin(c"ScheduleHpuLang", 0);
                 let translated = arguments[0].unwrap_hpu_lang_translated_ref();
                 let config = arguments[1].unwrap_hpu_config_ref();
@@ -167,7 +167,7 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                 interval_end(c"ScheduleHpuLang", 0);
                 result
             }
-            PipelineInstructionSet::AllocateDopLang => {
+            PipelineInstructionSet::AllocateDoplang => {
                 interval_begin(c"AllocateDopLang", 0);
                 let scheduled = arguments[0].unwrap_hpu_lang_scheduled_ref();
                 let config = arguments[1].unwrap_hpu_config_ref();
@@ -244,7 +244,7 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                 interval_end(c"InputMultiHpuConfig", 0);
                 result
             }
-            PipelineInstructionSet::IopLangToMultiHpu => {
+            PipelineInstructionSet::IoplangToMultiHpu => {
                 interval_begin(c"IopLangToMultiHpu", 0);
                 let ioplang = arguments[0].unwrap_iop_lang_ref();
                 let partitions = arguments[1].unwrap_partitions_ref();
@@ -257,7 +257,7 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                 interval_end(c"IopLangToMultiHpu", 0);
                 result
             }
-            PipelineInstructionSet::ScheduleMultiHpuLang => {
+            PipelineInstructionSet::ScheduleMultiHpulang => {
                 interval_begin(c"ScheduleMultiHpuLang", 0);
                 let hpulang = arguments[0].unwrap_multi_hpu_lang_translated_ref();
                 let localities = arguments[1].unwrap_multi_hpu_localities_ref();
@@ -272,7 +272,7 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                 interval_end(c"ScheduleMultiHpuLang", 0);
                 result
             }
-            PipelineInstructionSet::AllocateMultiDopLang => {
+            PipelineInstructionSet::AllocateMultiDoplang => {
                 interval_begin(c"AllocateMultiDopLang", 0);
                 let scheduled = arguments[0].unwrap_multi_hpu_lang_scheduled_ref();
                 let config = arguments[1].unwrap_multi_hpu_config_ref();
@@ -359,7 +359,7 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                 interval_end(c"InputTopology", 0);
                 result
             }
-            PipelineInstructionSet::IopLangToVmLang => {
+            PipelineInstructionSet::IoplangToVmlang => {
                 interval_begin(c"IopLangToVmLang", 0);
                 let ioplang = arguments[0].unwrap_iop_lang_ref();
                 let vmlang = vm::lowering::lower_iop_to_vm(ioplang);
@@ -384,7 +384,7 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                 interval_end(c"GenerateVmExecutionPlan", 0);
                 result
             }
-            PipelineInstructionSet::IopLangToLutRegistry => {
+            PipelineInstructionSet::IoplangToLutRegistry => {
                 interval_begin(c"IopLangToLutRegistry", 0);
                 let ioplang = arguments[0].unwrap_iop_lang_ref();
                 let lut_reg = extract_lut_registry(ioplang);

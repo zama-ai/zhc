@@ -1,0 +1,17 @@
+[package]
+name = "zhc_langs_macro"
+description = "ZHC: Dialect definition macros"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+publish = true
+
+[lib]
+proc-macro = true
+
+[dependencies]
+quote.workspace = true
+syn.workspace = true
+proc-macro2.workspace = true
