@@ -6,6 +6,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 readme.workspace = true
+publish = true
 
 [dependencies]
 tracy-client = {version = "0.18.4", optional = true}
