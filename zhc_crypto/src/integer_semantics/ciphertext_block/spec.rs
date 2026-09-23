@@ -34,7 +34,7 @@ use super::{EmulatedCiphertextBlock, EmulatedCiphertextBlockStorage};
 /// let carry_block = spec.from_carry(0b11);
 /// let data_block = spec.from_data(0b11_1010); // carry | message
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct CiphertextBlockSpec(
     /// The number of carry bits in this block layout.
     pub u8,

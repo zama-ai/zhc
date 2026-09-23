@@ -39,6 +39,13 @@ use super::{Lut1, Lut2, Lut4, Lut8, LutId, RawLut};
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LutRegistry(BiMap<RawLut, LutId>);
 
+/// Expose decoding trait used in some parsing function
+/// Lut registry could be backed by other structure in Hw. This trait enable to
+///  expose a decoding interface without strictly stick with LutRegistry structure
+pub trait LutDecoder {
+    fn decode_lut_id(&self, lid: &LutId) -> &RawLut;
+}
+
 impl LutRegistry {
     /// Creates an empty registry with no registered lookup tables.
     ///
@@ -222,5 +229,11 @@ impl LutRegistry {
     /// successfully registered appears exactly once.
     pub fn iter_luts(&self) -> impl Iterator<Item = (&LutId, &RawLut)> {
         self.0.iter().map(|(d, c)| (c, d))
+    }
+}
+
+impl LutDecoder for LutRegistry {
+    fn decode_lut_id(&self, lid: &LutId) -> &RawLut {
+        self.get_raw_lut(lid)
     }
 }

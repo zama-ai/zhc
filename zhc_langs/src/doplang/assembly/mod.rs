@@ -6,8 +6,8 @@
 
 use crate::doplang::{DopInstructionSet, DopLang};
 use std::fmt::Write;
-use zhc_crypto::integer_semantics::Type;
 use zhc_crypto::integer_semantics::lut::LutRegistry;
+use zhc_crypto::integer_semantics::{Type, lut::LutDecoder};
 use zhc_ir::{IR, Signature};
 
 mod parser;
@@ -57,175 +57,124 @@ pub fn emit_preamble(signature: &Signature<Type>, luts: &LutRegistry) -> String 
 /// present.
 ///
 /// Returns an empty string when the IR contains no instructions.
-pub fn emit_assembly(ir: &IR<DopLang>, lreg: &LutRegistry) -> String {
+pub fn emit_assembly(ir: &IR<DopLang>, lreg: &impl LutDecoder) -> String {
     let mut output = String::new();
     for op in ir.walk_ops_linear() {
-        use DopInstructionSet::*;
-        match op.get_instruction() {
-            _START => Ok(()),
-            _END => Ok(()),
-            ADD { dst, src1, src2 } => {
-                writeln!(
-                    output,
-                    "ADD {} {} {}",
-                    dst.asm(lreg),
-                    src1.asm(lreg),
-                    src2.asm(lreg)
-                )
-            }
-            SUB { dst, src1, src2 } => {
-                writeln!(
-                    output,
-                    "SUB {} {} {}",
-                    dst.asm(lreg),
-                    src1.asm(lreg),
-                    src2.asm(lreg)
-                )
-            }
-            MAC {
-                dst,
-                src1,
-                src2,
-                cst,
-            } => writeln!(
-                output,
-                "MAC {} {} {} {}",
-                dst.asm(lreg),
-                src1.asm(lreg),
-                src2.asm(lreg),
-                cst.asm(lreg)
-            ),
-            ADDS { dst, src, cst } => {
-                writeln!(
-                    output,
-                    "ADDS {} {} {}",
-                    dst.asm(lreg),
-                    src.asm(lreg),
-                    cst.asm(lreg)
-                )
-            }
-            SUBS { dst, src, cst } => {
-                writeln!(
-                    output,
-                    "SUBS {} {} {}",
-                    dst.asm(lreg),
-                    src.asm(lreg),
-                    cst.asm(lreg)
-                )
-            }
-            SSUB { dst, src, cst } => {
-                writeln!(
-                    output,
-                    "SSUB {} {} {}",
-                    dst.asm(lreg),
-                    src.asm(lreg),
-                    cst.asm(lreg)
-                )
-            }
-            MULS { dst, src, cst } => {
-                writeln!(
-                    output,
-                    "MULS {} {} {}",
-                    dst.asm(lreg),
-                    src.asm(lreg),
-                    cst.asm(lreg)
-                )
-            }
-            LD { dst, src } => writeln!(output, "LD {} {}", dst.asm(lreg), src.asm(lreg)),
-            ST { dst, src } => writeln!(output, "ST {} {}", dst.asm(lreg), src.asm(lreg)),
-            PBS { dst, src, lut } => {
-                writeln!(
-                    output,
-                    "PBS {} {} {}",
-                    dst.asm(lreg),
-                    src.asm(lreg),
-                    lut.asm(lreg)
-                )
-            }
-            PBS_ML2 { dst, src, lut } => {
-                writeln!(
-                    output,
-                    "PBS_ML2 {} {} {}",
-                    dst.asm(lreg),
-                    src.asm(lreg),
-                    lut.asm(lreg)
-                )
-            }
-            PBS_ML4 { dst, src, lut } => {
-                writeln!(
-                    output,
-                    "PBS_ML4 {} {} {}",
-                    dst.asm(lreg),
-                    src.asm(lreg),
-                    lut.asm(lreg)
-                )
-            }
-            PBS_ML8 { dst, src, lut } => {
-                writeln!(
-                    output,
-                    "PBS_ML8 {} {} {}",
-                    dst.asm(lreg),
-                    src.asm(lreg),
-                    lut.asm(lreg)
-                )
-            }
-            PBS_F { dst, src, lut } => {
-                writeln!(
-                    output,
-                    "PBS_F {} {} {}",
-                    dst.asm(lreg),
-                    src.asm(lreg),
-                    lut.asm(lreg)
-                )
-            }
-            PBS_ML2_F { dst, src, lut } => writeln!(
-                output,
-                "PBS_ML2_F {} {} {}",
-                dst.asm(lreg),
-                src.asm(lreg),
-                lut.asm(lreg)
-            ),
-            PBS_ML4_F { dst, src, lut } => writeln!(
-                output,
-                "PBS_ML4_F {} {} {}",
-                dst.asm(lreg),
-                src.asm(lreg),
-                lut.asm(lreg)
-            ),
-            PBS_ML8_F { dst, src, lut } => writeln!(
-                output,
-                "PBS_ML8_F {} {} {}",
-                dst.asm(lreg),
-                src.asm(lreg),
-                lut.asm(lreg)
-            ),
-            SYNC { is_inner, flag, .. } => {
-                if *is_inner {
-                    writeln!(output, "SYNC {}", flag.asm(lreg))
-                } else {
-                    writeln!(output, "SYNC")
-                }
-            }
-            WAIT { flag, slot } => match slot {
-                Some(slot) => writeln!(output, "WAIT {} {}", flag.asm(lreg), slot.asm(lreg)),
-                None => writeln!(output, "WAIT {}", flag.asm(lreg)),
-            },
-            NOTIFY {
-                virt_id,
-                flag,
-                slot,
-            } => writeln!(
-                output,
-                "NOTIFY {} {} {}",
-                virt_id.asm(lreg),
-                flag.asm(lreg),
-                slot.asm(lreg)
-            ),
-            LD_B2B { flag, slot } => {
-                writeln!(output, "LD_B2B {} {}", flag.asm(lreg), slot.asm(lreg))
-            }
-        }
-        .unwrap();
+        let asm = format_assembly(op.get_instruction(), lreg);
+        writeln!(output, "{}", asm).unwrap();
     }
     output
+}
+
+/// Emits a textual assembly for a DOP instruction.
+pub fn format_assembly(dop: &DopInstructionSet, lreg: &impl LutDecoder) -> String {
+    use DopInstructionSet::*;
+    match dop {
+        _START | _END => "".to_string(),
+        ADD { dst, src1, src2 } => format!(
+            "ADD {} {} {}",
+            dst.asm(lreg),
+            src1.asm(lreg),
+            src2.asm(lreg)
+        ),
+        SUB { dst, src1, src2 } => format!(
+            "SUB {} {} {}",
+            dst.asm(lreg),
+            src1.asm(lreg),
+            src2.asm(lreg)
+        ),
+        MAC {
+            dst,
+            src1,
+            src2,
+            cst,
+        } => format!(
+            "MAC {} {} {} {}",
+            dst.asm(lreg),
+            src1.asm(lreg),
+            src2.asm(lreg),
+            cst.asm(lreg)
+        ),
+        ADDS { dst, src, cst } => {
+            format!("ADDS {} {} {}", dst.asm(lreg), src.asm(lreg), cst.asm(lreg))
+        }
+        SUBS { dst, src, cst } => {
+            format!("SUBS {} {} {}", dst.asm(lreg), src.asm(lreg), cst.asm(lreg))
+        }
+        SSUB { dst, src, cst } => {
+            format!("SSUB {} {} {}", dst.asm(lreg), src.asm(lreg), cst.asm(lreg))
+        }
+        MULS { dst, src, cst } => {
+            format!("MULS {} {} {}", dst.asm(lreg), src.asm(lreg), cst.asm(lreg))
+        }
+        LD { dst, src } => format!("LD {} {}", dst.asm(lreg), src.asm(lreg)),
+        ST { dst, src } => format!("ST {} {}", dst.asm(lreg), src.asm(lreg)),
+        PBS { dst, src, lut } => {
+            format!("PBS {} {} {}", dst.asm(lreg), src.asm(lreg), lut.asm(lreg))
+        }
+        PBS_ML2 { dst, src, lut } => format!(
+            "PBS_ML2 {} {} {}",
+            dst.asm(lreg),
+            src.asm(lreg),
+            lut.asm(lreg)
+        ),
+        PBS_ML4 { dst, src, lut } => format!(
+            "PBS_ML4 {} {} {}",
+            dst.asm(lreg),
+            src.asm(lreg),
+            lut.asm(lreg)
+        ),
+        PBS_ML8 { dst, src, lut } => format!(
+            "PBS_ML8 {} {} {}",
+            dst.asm(lreg),
+            src.asm(lreg),
+            lut.asm(lreg)
+        ),
+        PBS_F { dst, src, lut } => format!(
+            "PBS_F {} {} {}",
+            dst.asm(lreg),
+            src.asm(lreg),
+            lut.asm(lreg)
+        ),
+        PBS_ML2_F { dst, src, lut } => format!(
+            "PBS_ML2_F {} {} {}",
+            dst.asm(lreg),
+            src.asm(lreg),
+            lut.asm(lreg)
+        ),
+        PBS_ML4_F { dst, src, lut } => format!(
+            "PBS_ML4_F {} {} {}",
+            dst.asm(lreg),
+            src.asm(lreg),
+            lut.asm(lreg)
+        ),
+        PBS_ML8_F { dst, src, lut } => format!(
+            "PBS_ML8_F {} {} {}",
+            dst.asm(lreg),
+            src.asm(lreg),
+            lut.asm(lreg)
+        ),
+        SYNC { is_inner, flag, .. } => {
+            if *is_inner {
+                format!("SYNC {}", flag.asm(lreg))
+            } else {
+                format!("SYNC")
+            }
+        }
+        WAIT { flag, slot } => match slot {
+            Some(slot) => format!("WAIT {} {}", flag.asm(lreg), slot.asm(lreg)),
+            None => format!("WAIT {}", flag.asm(lreg)),
+        },
+        NOTIFY {
+            virt_id,
+            flag,
+            slot,
+        } => format!(
+            "NOTIFY {} {} {}",
+            virt_id.asm(lreg),
+            flag.asm(lreg),
+            slot.asm(lreg)
+        ),
+        LD_B2B { flag, slot } => format!("LD_B2B {} {}", flag.asm(lreg), slot.asm(lreg)),
+    }
 }

@@ -21,7 +21,7 @@ use std::fmt::Debug;
 ///
 /// - Default format: `{padding}_{carry}_{message}_cblk` (decimal values)
 /// - Alternate format (`{:#?}`): binary representation with proper bit widths
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub struct EmulatedCiphertextBlock {
     pub(crate) storage: EmulatedCiphertextBlockStorage,
     pub(crate) spec: CiphertextBlockSpec,

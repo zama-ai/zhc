@@ -1,7 +1,7 @@
 use super::type_system::DopTypeSystem;
 use serde::Serialize;
 use std::fmt::{Debug, Display};
-use zhc_crypto::integer_semantics::lut::{LutId, LutRegistry};
+use zhc_crypto::integer_semantics::lut::{LutDecoder, LutId};
 use zhc_ir::{DialectInstructionSet, Format, FormatContext, Signature, sig};
 
 /// Register address mask that compares all bits (single-output PBS or
@@ -39,7 +39,7 @@ impl PtConst {
         Self { val }
     }
 
-    pub fn asm(&self, _lreg: &LutRegistry) -> String {
+    pub fn asm(&self, _lreg: &impl LutDecoder) -> String {
         format!("{}", self.val)
     }
 }
@@ -61,7 +61,7 @@ impl CtHeap {
         Self { addr }
     }
 
-    pub fn asm(&self, _lreg: &LutRegistry) -> String {
+    pub fn asm(&self, _lreg: &impl LutDecoder) -> String {
         format!("TH.{}", self.addr)
     }
 }
@@ -83,7 +83,7 @@ impl CtIo {
         Self { addr }
     }
 
-    pub fn asm(&self, _lreg: &LutRegistry) -> String {
+    pub fn asm(&self, _lreg: &impl LutDecoder) -> String {
         format!("@{}", self.addr)
     }
 }
@@ -107,7 +107,7 @@ impl CtSrcVar {
         Self { id, block }
     }
 
-    pub fn asm(&self, _lreg: &LutRegistry) -> String {
+    pub fn asm(&self, _lreg: &impl LutDecoder) -> String {
         format!("TS[{}].{}", self.id, self.block)
     }
 }
@@ -131,7 +131,7 @@ impl CtDstVar {
         Self { id, block }
     }
 
-    pub fn asm(&self, _lreg: &LutRegistry) -> String {
+    pub fn asm(&self, _lreg: &impl LutDecoder) -> String {
         format!("TD[{}].{}", self.id, self.block)
     }
 }
@@ -155,7 +155,7 @@ impl PtSrcVar {
         Self { id, block }
     }
 
-    pub fn asm(&self, _lreg: &LutRegistry) -> String {
+    pub fn asm(&self, _lreg: &impl LutDecoder) -> String {
         format!("TI[{}].{}", self.id, self.block)
     }
 }
@@ -211,7 +211,7 @@ impl CtReg {
         }
     }
 
-    pub fn asm(&self, _lreg: &LutRegistry) -> String {
+    pub fn asm(&self, _lreg: &impl LutDecoder) -> String {
         format!("R{}", self.addr)
     }
 }
@@ -234,7 +234,8 @@ impl Display for CtReg {
     }
 }
 
-/// A reference to a lookup table registered in a [`LutRegistry`].
+/// A reference to a lookup table registered in a
+/// [`zhc_crypto::integer_semantics::lut::LutRegistry`].
 ///
 /// Named `LutRef` rather than `LutId` to stay distinct from
 /// [`zhc_crypto::integer_semantics::lut::LutId`], the registry's own compact identifier type
@@ -249,8 +250,8 @@ impl LutRef {
         Self { id: id.into() }
     }
 
-    pub fn asm(&self, lreg: &LutRegistry) -> String {
-        format!("Pbs{}", lreg.get_raw_lut(&LutId(self.id as usize)).name())
+    pub fn asm(&self, lreg: &impl LutDecoder) -> String {
+        format!("Pbs{}", lreg.decode_lut_id(&LutId(self.id as usize)).name())
     }
 }
 
@@ -279,7 +280,7 @@ impl UserFlag {
         Self { flag }
     }
 
-    pub fn asm(&self, _lreg: &LutRegistry) -> String {
+    pub fn asm(&self, _lreg: &impl LutDecoder) -> String {
         format!("F{}", self.flag)
     }
 }
@@ -303,7 +304,7 @@ impl VirtId {
         Self { id }
     }
 
-    pub fn asm(&self, _lreg: &LutRegistry) -> String {
+    pub fn asm(&self, _lreg: &impl LutDecoder) -> String {
         format!("N{}", self.id)
     }
 }
@@ -334,7 +335,7 @@ impl PtArg {
         Self::Var(PtSrcVar::new(id, block))
     }
 
-    pub fn asm(&self, lreg: &LutRegistry) -> String {
+    pub fn asm(&self, lreg: &impl LutDecoder) -> String {
         match self {
             PtArg::Const(inner) => inner.asm(lreg),
             PtArg::Var(inner) => inner.asm(lreg),
@@ -390,7 +391,7 @@ impl CtMem {
         Self::Dst(CtDstVar::new(id, block))
     }
 
-    pub fn asm(&self, lreg: &LutRegistry) -> String {
+    pub fn asm(&self, lreg: &impl LutDecoder) -> String {
         match self {
             CtMem::Heap(inner) => inner.asm(lreg),
             CtMem::Io(inner) => inner.asm(lreg),
@@ -583,7 +584,18 @@ impl Format for DopInstructionSet {
             PBS_ML8_F { dst, src, lut } => write!(f, "PBS8F<{dst}, {src}, {lut}>"),
             _START => write!(f, "_START"),
             _END => write!(f, "_END"),
-            SYNC { .. } => write!(f, "SYNC"),
+            SYNC {
+                is_inner,
+                flag,
+                hid,
+                iid,
+            } => {
+                if *is_inner {
+                    write!(f, "SYNC<{iid}, {flag}, {hid}>")
+                } else {
+                    write!(f, "SYNC<{iid}>")
+                }
+            }
             WAIT { flag, slot } => match slot {
                 Some(slot) => write!(f, "WAIT<{flag}, {slot}>"),
                 None => write!(f, "WAIT<{flag}>"),

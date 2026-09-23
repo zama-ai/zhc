@@ -12,3 +12,4 @@ publish = true
 zhc_utils.workspace = true
 paste.workspace = true
 rand.workspace = true
+serde.workspace = true

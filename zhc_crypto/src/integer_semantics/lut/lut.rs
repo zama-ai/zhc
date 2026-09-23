@@ -44,7 +44,7 @@ impl LookupCheck {
 /// for diagnostic output. `RawLut` is the underlying storage shared by the
 /// typed wrappers [`Lut1`], [`Lut2`], [`Lut4`], and [`Lut8`] — most users
 /// interact with those types instead of constructing a `RawLut` directly.
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct RawLut {
     lut: Vec<EmulatedCiphertextBlock>,
     name: String,

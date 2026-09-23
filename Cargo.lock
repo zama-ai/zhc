@@ -1543,6 +1543,7 @@ version = "0.10.0"
 dependencies = [
  "paste",
  "rand",
+ "serde",
  "zhc_utils",
 ]
 
