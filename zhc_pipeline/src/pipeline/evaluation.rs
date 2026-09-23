@@ -266,7 +266,11 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                     hpulang,
                     localities,
                     config,
-                    SchedPolicy::AsLateAsPossible,
+                    // A micro-core stops reading at a `WAIT`, so anything behind one waits with
+                    // it whether it needs the transfer or not. Scheduling as late as possible
+                    // puts a sub-product's partial products behind the `WAIT` its accumulation
+                    // needs, though a partial product depends on the input digits alone.
+                    SchedPolicy::AsSoonAsPossible,
                 );
                 let result = svec![PipelineArtifact::MultiHpuLangScheduled(scheduled)];
                 interval_end(c"ScheduleMultiHpuLang", 0);

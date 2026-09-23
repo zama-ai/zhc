@@ -55,6 +55,8 @@ pub struct UCore {
     outbound_transfers: FastMap<DOpId, (HpuId, TransferId)>,
     mhdma_latency: ConstantLatency,
     condition: UCoreCondition,
+    /// Inner `SYNC` operations standing in for a `NOTIFY`, and the transfer each one signals.
+    pending_notifies: FastMap<DOpId, (HpuId, TransferId)>,
 }
 
 impl UCore {
@@ -67,6 +69,7 @@ impl UCore {
             outbound_transfers: FastMap::default(),
             condition: UCoreCondition::Starved,
             mhdma_latency,
+            pending_notifies: FastMap::default(),
         }
     }
 }

@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use crate::{CiphertextBlock, NU, NU_BOOL, builder::Builder};
 use zhc_crypto::integer_semantics::CiphertextSpec;
-use zhc_langs::ioplang::Lut1Def;
+use zhc_langs::ioplang::{Lut1Def, Lut2Def};
 use zhc_utils::SafeAs;
 
 /// Creates an IR for a multiplication of two encrypted integers split into mh_factor sub-graph.
@@ -254,6 +254,15 @@ impl Builder {
             let mut carry_in = carry_buffer.remove(&k).unwrap_or_default();
 
             self.push_comment(format!("Limb reduce[{k}]"));
+            // A carry gates the whole adder it enters, since it is folded into the first
+            // operation of the sum, so a carry given to a leaf has to climb every remaining
+            // round. A binary tree over L limbs has L-1 adders and a column always gets two more
+            // adders than carries, so the carries go to the last adders instead. Taken from the
+            // front, which is production order, so the earliest carry gets the shallowest adder
+            // and the latest one the root.
+            let n_adders = stage_limb.len().saturating_sub(1);
+            let first_with_carry = n_adders.saturating_sub(carry_in.len());
+            let mut adder_idx = 0;
             if stage_limb.len() > 1 {
                 // Tree-like reduction
                 let mut tree_iter = 0;
@@ -264,13 +273,17 @@ impl Builder {
                     loop {
                         match (current.next(), current.next()) {
                             (Some(a), Some(b)) => {
+                                let cin =
+                                    (adder_idx >= first_with_carry).then(|| carry_in.remove(0));
+                                adder_idx += 1;
+
                                 self.new_partition(format!("LimbRed[{tree_iter}] @{{{k}}}"));
                                 let (sum, cout) =
                                     self.comment(format!("iter {tree_iter}")).iop_add_raw(
                                         limbs_size,
                                         a.as_blocks(),
                                         b.as_blocks(),
-                                        carry_in.pop().as_ref(),
+                                        cin.as_ref(),
                                     );
                                 next.push(CiphertextLimb::new(k, &sum));
                                 carry_buffer.entry(k + 1).or_default().push(cout)
@@ -474,8 +487,19 @@ impl Builder {
 
                 // Current stage is completly reduce. Clear block if needed
                 if acc_nu != 1 {
-                    nxt_stage.push(self.block_lookup(acc_ct, Lut1Def::CarryInMsg));
-                    acc_ct = self.block_lookup(acc_ct, Lut1Def::MsgOnly);
+                    // Every term is a clean digit, so the accumulator holds acc_nu of them. A
+                    // many-lut gives the message and the carry in one PBS instead of two, but it
+                    // halves the input space, the top data bit carrying the second table, so it
+                    // only has room for two terms.
+                    let many_capacity = self.spec().data_mask().sas::<usize>() >> 1;
+                    if acc_nu * self.spec().message_mask().sas::<usize>() <= many_capacity {
+                        let (msg, carry) = self.block_lookup2(acc_ct, Lut2Def::ManyCarryMsg);
+                        nxt_stage.push(carry);
+                        acc_ct = msg;
+                    } else {
+                        nxt_stage.push(self.block_lookup(acc_ct, Lut1Def::CarryInMsg));
+                        acc_ct = self.block_lookup(acc_ct, Lut1Def::MsgOnly);
+                    }
                 }
                 dst_blk.push(acc_ct);
 
@@ -617,92 +641,91 @@ mod test {
                 @42    // SubMul[0][0]_msb / reduction_2      | %42 = pbs<Protect, Lut1("CarryInMsg")>(%41);
                 @43    // SubMul[0][0]_msb / reduction_2      | %43 = pbs<Protect, Lut1("MsgOnly")>(%41);
                 @44    // SubMul[0][0]_msb / reduction_3      | %44 = add_ct(%42, %38);
-                @45    // SubMul[0][0]_msb / reduction_3      | %45 = pbs<Protect, Lut1("CarryInMsg")>(%44);
-                @46    // SubMul[0][0]_msb / reduction_3      | %46 = pbs<Protect, Lut1("MsgOnly")>(%44);
-                @47    // SubMul[0][0]_msb / ovf / carry_in   | %47 = pbs<Protect, Lut1("IsSome")>(%45);
-                @48    // SubMul[0][0]_msb / ovf / merge      | %48 = add_ct(%31, %33);
-                @49    // SubMul[0][0]_msb / ovf / merge      | %49 = add_ct(%48, %35);
-                @50    // SubMul[0][0]_msb / ovf / merge      | %50 = add_ct(%49, %47);
-                @51    // SubMul[0][0]_msb / ovf / merge      | %51 = pbs<Protect, Lut1("IsSome")>(%50);
-                @52    // SubMul[0][1] / pack_0_0             | %52 = pack_ct<4>(%2, %8);
-                @53    // SubMul[0][1] / pp_0_0_lsb           | %53 = pbs<Protect, Lut1("MultCarryMsgLsb")>(%52);
-                @54    // SubMul[0][1] / pp_0_0_msb           | %54 = pbs<Protect, Lut1("MultCarryMsgMsb")>(%52);
-                @55    // SubMul[0][1] / pack_0_1             | %55 = pack_ct<4>(%2, %9);
-                @56    // SubMul[0][1] / pp_0_1_lsb           | %56 = pbs<Protect, Lut1("MultCarryMsgLsb")>(%55);
-                @57    // SubMul[0][1] / pp_0_1_msb           | %57 = pbs<Protect, Lut1("MultCarryMsgMsb")>(%55);
-                @58    // SubMul[0][1] / pack_1_0             | %58 = pack_ct<4>(%3, %8);
-                @59    // SubMul[0][1] / pp_1_0_lsb           | %59 = pbs<Protect, Lut1("MultCarryMsgLsb")>(%58);
-                @60    // SubMul[0][1] / pp_1_0_msb           | %60 = pbs<Protect, Lut1("MultCarryMsgMsb")>(%58);
-                @61    // SubMul[0][1] / ovf_1_1              | %61 = pack_ct<4>(%3, %9);
-                @62    // SubMul[0][1] / ovf_1_1              | %62 = pbs<Protect, Lut1("MultCarryMsgIsSome")>(%61);
-                @63    // SubMul[0][1] / reduction_1          | %63 = add_ct(%56, %54);
-                @64    // SubMul[0][1] / reduction_1          | %64 = add_ct(%59, %63);
-                @65    // SubMul[0][1] / reduction_1          | %65 = pbs<Protect, Lut1("CarryInMsg")>(%64);
-                @66    // SubMul[0][1] / reduction_1          | %66 = pbs<Protect, Lut1("MsgOnly")>(%64);
-                @67    // SubMul[0][1] / ovf / carry_in       | %67 = add_ct(%57, %60);
-                @68    // SubMul[0][1] / ovf / carry_in       | %68 = add_ct(%67, %65);
-                @69    // SubMul[0][1] / ovf / carry_in       | %69 = pbs<Protect, Lut1("IsSome")>(%68);
-                @70    // SubMul[0][1] / ovf / merge          | %70 = add_ct(%62, %69);
-                @71    // SubMul[0][1] / ovf / merge          | %71 = pbs<Protect, Lut1("IsSome")>(%70);
-                @72    // SubMul[1][0] / pack_0_0             | %72 = pack_ct<4>(%4, %6);
-                @73    // SubMul[1][0] / pp_0_0_lsb           | %73 = pbs<Protect, Lut1("MultCarryMsgLsb")>(%72);
-                @74    // SubMul[1][0] / pp_0_0_msb           | %74 = pbs<Protect, Lut1("MultCarryMsgMsb")>(%72);
-                @75    // SubMul[1][0] / pack_0_1             | %75 = pack_ct<4>(%4, %7);
-                @76    // SubMul[1][0] / pp_0_1_lsb           | %76 = pbs<Protect, Lut1("MultCarryMsgLsb")>(%75);
-                @77    // SubMul[1][0] / pp_0_1_msb           | %77 = pbs<Protect, Lut1("MultCarryMsgMsb")>(%75);
-                @78    // SubMul[1][0] / pack_1_0             | %78 = pack_ct<4>(%5, %6);
-                @79    // SubMul[1][0] / pp_1_0_lsb           | %79 = pbs<Protect, Lut1("MultCarryMsgLsb")>(%78);
-                @80    // SubMul[1][0] / pp_1_0_msb           | %80 = pbs<Protect, Lut1("MultCarryMsgMsb")>(%78);
-                @81    // SubMul[1][0] / ovf_1_1              | %81 = pack_ct<4>(%5, %7);
-                @82    // SubMul[1][0] / ovf_1_1              | %82 = pbs<Protect, Lut1("MultCarryMsgIsSome")>(%81);
-                @83    // SubMul[1][0] / reduction_1          | %83 = add_ct(%76, %74);
-                @84    // SubMul[1][0] / reduction_1          | %84 = add_ct(%79, %83);
-                @85    // SubMul[1][0] / reduction_1          | %85 = pbs<Protect, Lut1("CarryInMsg")>(%84);
-                @86    // SubMul[1][0] / reduction_1          | %86 = pbs<Protect, Lut1("MsgOnly")>(%84);
-                @87    // SubMul[1][0] / ovf / carry_in       | %87 = add_ct(%77, %80);
-                @88    // SubMul[1][0] / ovf / carry_in       | %88 = add_ct(%87, %85);
-                @89    // SubMul[1][0] / ovf / carry_in       | %89 = pbs<Protect, Lut1("IsSome")>(%88);
-                @90    // SubMul[1][0] / ovf / merge          | %90 = add_ct(%82, %89);
-                @91    // SubMul[1][0] / ovf / merge          | %91 = pbs<Protect, Lut1("IsSome")>(%90);
-                @92    // SubMul[1][1] / ovf_0_0              | %92 = pack_ct<4>(%4, %8);
-                @93    // SubMul[1][1] / ovf_0_0              | %93 = pbs<Protect, Lut1("MultCarryMsgIsSome")>(%92);
-                @94    // SubMul[1][1] / ovf_0_1              | %94 = pack_ct<4>(%4, %9);
-                @95    // SubMul[1][1] / ovf_0_1              | %95 = pbs<Protect, Lut1("MultCarryMsgIsSome")>(%94);
-                @96    // SubMul[1][1] / ovf_1_0              | %96 = pack_ct<4>(%5, %8);
-                @97    // SubMul[1][1] / ovf_1_0              | %97 = pbs<Protect, Lut1("MultCarryMsgIsSome")>(%96);
-                @98    // SubMul[1][1] / ovf_1_1              | %98 = pack_ct<4>(%5, %9);
-                @99    // SubMul[1][1] / ovf_1_1              | %99 = pbs<Protect, Lut1("MultCarryMsgIsSome")>(%98);
-                @100   // SubMul[1][1] / ovf / merge          | %100 = add_ct(%93, %95);
-                @101   // SubMul[1][1] / ovf / merge          | %101 = add_ct(%100, %97);
-                @102   // SubMul[1][1] / ovf / merge          | %102 = add_ct(%101, %99);
-                @103   // SubMul[1][1] / ovf / merge          | %103 = pbs<Protect, Lut1("IsSome")>(%102);
-                @104   // Limb reduce[1] / iter 0             | %104 = let_ct_block<0>();
-                @105   // Limb reduce[1] / iter 0 / 0-th      | %105 = add_ct(%43, %53);
-                @106   // Limb reduce[1] / iter 0 / 0-th      | %106 = add_ct(%105, %104);
-                @107   // Limb reduce[1] / iter 0 / 0-th      | %107, %108 = pbs2<Protect, Lut2("ManyCarryMsg")>(%106);
-                @108   // Limb reduce[1] / iter 0 / 1-th      | %109 = add_ct(%46, %66);
-                @109   // Limb reduce[1] / iter 0 / 1-th      | %110 = add_ct(%109, %108);
-                @110   // Limb reduce[1] / iter 0 / 1-th      | %111, %112 = pbs2<Protect, Lut2("ManyCarryMsg")>(%110);
-                @111   // Limb reduce[1] / iter 1             | %113 = let_ct_block<0>();
-                @112   // Limb reduce[1] / iter 1 / 0-th      | %114 = add_ct(%107, %73);
-                @113   // Limb reduce[1] / iter 1 / 0-th      | %115 = add_ct(%114, %113);
-                @114   // Limb reduce[1] / iter 1 / 0-th      | %116, %117 = pbs2<Protect, Lut2("ManyCarryMsg")>(%115);
-                @115   // Limb reduce[1] / iter 1 / 1-th      | %118 = add_ct(%111, %86);
-                @116   // Limb reduce[1] / iter 1 / 1-th      | %119 = add_ct(%118, %117);
-                @117   // Limb reduce[1] / iter 1 / 1-th      | %120, %121 = pbs2<Protect, Lut2("ManyCarryMsg")>(%119);
-                @118   // Limb_ovf / merge                    | %122 = add_ct(%112, %121);
-                @119   // Limb_ovf / merge                    | %123 = pbs<Protect, Lut1("IsSome")>(%122);
-                @120                                          | %124 = decl_ct<8>();
-                @121                                          | %125 = let_ct_block<0>();
-                @122                                          | %126 = store_ct_block<0>(%125, %124);
-                @123                                          | %127 = store_ct_block<1>(%125, %126);
-                @124                                          | %128 = store_ct_block<2>(%125, %127);
-                @125                                          | %129 = store_ct_block<3>(%125, %128);
-                @126                                          | %130 = store_ct_block<0>(%11, %129);
-                @127                                          | %131 = store_ct_block<1>(%24, %130);
-                @128                                          | %132 = store_ct_block<2>(%116, %131);
-                @129                                          | %133 = store_ct_block<3>(%120, %132);
-                @130                                          | output<0>(%133);
+                @45    // SubMul[0][0]_msb / reduction_3      | %45, %46 = pbs2<Protect, Lut2("ManyCarryMsg")>(%44);
+                @46    // SubMul[0][0]_msb / ovf / carry_in   | %47 = pbs<Protect, Lut1("IsSome")>(%46);
+                @47    // SubMul[0][0]_msb / ovf / merge      | %48 = add_ct(%31, %33);
+                @48    // SubMul[0][0]_msb / ovf / merge      | %49 = add_ct(%48, %35);
+                @49    // SubMul[0][0]_msb / ovf / merge      | %50 = add_ct(%49, %47);
+                @50    // SubMul[0][0]_msb / ovf / merge      | %51 = pbs<Protect, Lut1("IsSome")>(%50);
+                @51    // SubMul[0][1] / pack_0_0             | %52 = pack_ct<4>(%2, %8);
+                @52    // SubMul[0][1] / pp_0_0_lsb           | %53 = pbs<Protect, Lut1("MultCarryMsgLsb")>(%52);
+                @53    // SubMul[0][1] / pp_0_0_msb           | %54 = pbs<Protect, Lut1("MultCarryMsgMsb")>(%52);
+                @54    // SubMul[0][1] / pack_0_1             | %55 = pack_ct<4>(%2, %9);
+                @55    // SubMul[0][1] / pp_0_1_lsb           | %56 = pbs<Protect, Lut1("MultCarryMsgLsb")>(%55);
+                @56    // SubMul[0][1] / pp_0_1_msb           | %57 = pbs<Protect, Lut1("MultCarryMsgMsb")>(%55);
+                @57    // SubMul[0][1] / pack_1_0             | %58 = pack_ct<4>(%3, %8);
+                @58    // SubMul[0][1] / pp_1_0_lsb           | %59 = pbs<Protect, Lut1("MultCarryMsgLsb")>(%58);
+                @59    // SubMul[0][1] / pp_1_0_msb           | %60 = pbs<Protect, Lut1("MultCarryMsgMsb")>(%58);
+                @60    // SubMul[0][1] / ovf_1_1              | %61 = pack_ct<4>(%3, %9);
+                @61    // SubMul[0][1] / ovf_1_1              | %62 = pbs<Protect, Lut1("MultCarryMsgIsSome")>(%61);
+                @62    // SubMul[0][1] / reduction_1          | %63 = add_ct(%56, %54);
+                @63    // SubMul[0][1] / reduction_1          | %64 = add_ct(%59, %63);
+                @64    // SubMul[0][1] / reduction_1          | %65 = pbs<Protect, Lut1("CarryInMsg")>(%64);
+                @65    // SubMul[0][1] / reduction_1          | %66 = pbs<Protect, Lut1("MsgOnly")>(%64);
+                @66    // SubMul[0][1] / ovf / carry_in       | %67 = add_ct(%57, %60);
+                @67    // SubMul[0][1] / ovf / carry_in       | %68 = add_ct(%67, %65);
+                @68    // SubMul[0][1] / ovf / carry_in       | %69 = pbs<Protect, Lut1("IsSome")>(%68);
+                @69    // SubMul[0][1] / ovf / merge          | %70 = add_ct(%62, %69);
+                @70    // SubMul[0][1] / ovf / merge          | %71 = pbs<Protect, Lut1("IsSome")>(%70);
+                @71    // SubMul[1][0] / pack_0_0             | %72 = pack_ct<4>(%4, %6);
+                @72    // SubMul[1][0] / pp_0_0_lsb           | %73 = pbs<Protect, Lut1("MultCarryMsgLsb")>(%72);
+                @73    // SubMul[1][0] / pp_0_0_msb           | %74 = pbs<Protect, Lut1("MultCarryMsgMsb")>(%72);
+                @74    // SubMul[1][0] / pack_0_1             | %75 = pack_ct<4>(%4, %7);
+                @75    // SubMul[1][0] / pp_0_1_lsb           | %76 = pbs<Protect, Lut1("MultCarryMsgLsb")>(%75);
+                @76    // SubMul[1][0] / pp_0_1_msb           | %77 = pbs<Protect, Lut1("MultCarryMsgMsb")>(%75);
+                @77    // SubMul[1][0] / pack_1_0             | %78 = pack_ct<4>(%5, %6);
+                @78    // SubMul[1][0] / pp_1_0_lsb           | %79 = pbs<Protect, Lut1("MultCarryMsgLsb")>(%78);
+                @79    // SubMul[1][0] / pp_1_0_msb           | %80 = pbs<Protect, Lut1("MultCarryMsgMsb")>(%78);
+                @80    // SubMul[1][0] / ovf_1_1              | %81 = pack_ct<4>(%5, %7);
+                @81    // SubMul[1][0] / ovf_1_1              | %82 = pbs<Protect, Lut1("MultCarryMsgIsSome")>(%81);
+                @82    // SubMul[1][0] / reduction_1          | %83 = add_ct(%76, %74);
+                @83    // SubMul[1][0] / reduction_1          | %84 = add_ct(%79, %83);
+                @84    // SubMul[1][0] / reduction_1          | %85 = pbs<Protect, Lut1("CarryInMsg")>(%84);
+                @85    // SubMul[1][0] / reduction_1          | %86 = pbs<Protect, Lut1("MsgOnly")>(%84);
+                @86    // SubMul[1][0] / ovf / carry_in       | %87 = add_ct(%77, %80);
+                @87    // SubMul[1][0] / ovf / carry_in       | %88 = add_ct(%87, %85);
+                @88    // SubMul[1][0] / ovf / carry_in       | %89 = pbs<Protect, Lut1("IsSome")>(%88);
+                @89    // SubMul[1][0] / ovf / merge          | %90 = add_ct(%82, %89);
+                @90    // SubMul[1][0] / ovf / merge          | %91 = pbs<Protect, Lut1("IsSome")>(%90);
+                @91    // SubMul[1][1] / ovf_0_0              | %92 = pack_ct<4>(%4, %8);
+                @92    // SubMul[1][1] / ovf_0_0              | %93 = pbs<Protect, Lut1("MultCarryMsgIsSome")>(%92);
+                @93    // SubMul[1][1] / ovf_0_1              | %94 = pack_ct<4>(%4, %9);
+                @94    // SubMul[1][1] / ovf_0_1              | %95 = pbs<Protect, Lut1("MultCarryMsgIsSome")>(%94);
+                @95    // SubMul[1][1] / ovf_1_0              | %96 = pack_ct<4>(%5, %8);
+                @96    // SubMul[1][1] / ovf_1_0              | %97 = pbs<Protect, Lut1("MultCarryMsgIsSome")>(%96);
+                @97    // SubMul[1][1] / ovf_1_1              | %98 = pack_ct<4>(%5, %9);
+                @98    // SubMul[1][1] / ovf_1_1              | %99 = pbs<Protect, Lut1("MultCarryMsgIsSome")>(%98);
+                @99    // SubMul[1][1] / ovf / merge          | %100 = add_ct(%93, %95);
+                @100   // SubMul[1][1] / ovf / merge          | %101 = add_ct(%100, %97);
+                @101   // SubMul[1][1] / ovf / merge          | %102 = add_ct(%101, %99);
+                @102   // SubMul[1][1] / ovf / merge          | %103 = pbs<Protect, Lut1("IsSome")>(%102);
+                @103   // Limb reduce[1] / iter 0             | %104 = let_ct_block<0>();
+                @104   // Limb reduce[1] / iter 0 / 0-th      | %105 = add_ct(%43, %53);
+                @105   // Limb reduce[1] / iter 0 / 0-th      | %106 = add_ct(%105, %104);
+                @106   // Limb reduce[1] / iter 0 / 0-th      | %107, %108 = pbs2<Protect, Lut2("ManyCarryMsg")>(%106);
+                @107   // Limb reduce[1] / iter 0 / 1-th      | %109 = add_ct(%45, %66);
+                @108   // Limb reduce[1] / iter 0 / 1-th      | %110 = add_ct(%109, %108);
+                @109   // Limb reduce[1] / iter 0 / 1-th      | %111, %112 = pbs2<Protect, Lut2("ManyCarryMsg")>(%110);
+                @110   // Limb reduce[1] / iter 1             | %113 = let_ct_block<0>();
+                @111   // Limb reduce[1] / iter 1 / 0-th      | %114 = add_ct(%107, %73);
+                @112   // Limb reduce[1] / iter 1 / 0-th      | %115 = add_ct(%114, %113);
+                @113   // Limb reduce[1] / iter 1 / 0-th      | %116, %117 = pbs2<Protect, Lut2("ManyCarryMsg")>(%115);
+                @114   // Limb reduce[1] / iter 1 / 1-th      | %118 = add_ct(%111, %86);
+                @115   // Limb reduce[1] / iter 1 / 1-th      | %119 = add_ct(%118, %117);
+                @116   // Limb reduce[1] / iter 1 / 1-th      | %120, %121 = pbs2<Protect, Lut2("ManyCarryMsg")>(%119);
+                @117   // Limb_ovf / merge                    | %122 = add_ct(%112, %121);
+                @118   // Limb_ovf / merge                    | %123 = pbs<Protect, Lut1("IsSome")>(%122);
+                @119                                          | %124 = decl_ct<8>();
+                @120                                          | %125 = let_ct_block<0>();
+                @121                                          | %126 = store_ct_block<0>(%125, %124);
+                @122                                          | %127 = store_ct_block<1>(%125, %126);
+                @123                                          | %128 = store_ct_block<2>(%125, %127);
+                @124                                          | %129 = store_ct_block<3>(%125, %128);
+                @125                                          | %130 = store_ct_block<0>(%11, %129);
+                @126                                          | %131 = store_ct_block<1>(%24, %130);
+                @127                                          | %132 = store_ct_block<2>(%116, %131);
+                @128                                          | %133 = store_ct_block<3>(%120, %132);
+                @129                                          | output<0>(%133);
             "#
         );
     }

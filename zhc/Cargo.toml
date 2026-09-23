@@ -21,3 +21,7 @@ zhc_config.workspace = true
 [[example]]
 name = "profile_pipeline"
 path = "examples/profile_pipeline.rs"
+
+[[example]]
+name = "mh_mul_latency"
+path = "examples/mh_mul_latency.rs"
