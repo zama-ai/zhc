@@ -563,7 +563,7 @@ mod test {
                 // Block States / GN-B0            | %35 = pbs<Protect, Lut1("ExtractPropGroup0")>(%24);
                 // Block States / GN-B1            | %36 = pbs<Protect, Lut1("ExtractPropGroup1")>(%25);
                 // Block States / GN-B2            | %37 = pbs<Protect, Lut1("ExtractPropGroup2")>(%26);
-                // Block States / GN-B3            | %38 = pbs<AllowOutputPadding, Lut1("ExtractPropGroup3")>(%27);
+                // Block States / GN-B3            | %38 = pbs<LookupCheck { allow_input_padding: false, allow_index_bits: false, allow_output_padding: true }, Lut1("ExtractPropGroup3")>(%27);
                 // Group states                    | %47 = add_ct(%31, %32);
                 // Group states                    | %48 = add_ct(%47, %33);
                 // Group states                    | %49 = temper_add_ct(%48, %34);
@@ -571,7 +571,7 @@ mod test {
                 // Group states                    | %55 = add_ct(%35, %36);
                 // Group states                    | %56 = add_ct(%55, %37);
                 // Group states                    | %57 = temper_add_ct(%56, %38);
-                // Group states                    | %58 = pbs<AllowBothPadding, Lut1("ReduceCarryPad")>(%57);
+                // Group states                    | %58 = pbs<Permissive, Lut1("ReduceCarryPad")>(%57);
                 // Group states                    | %59 = let_pt_block<1>();
                 // Group states                    | %60 = wrapping_add_pt(%58, %59);
                 // Group carries / HS 0-th stage   | %85 = pack_ct<4>(%60, %50);

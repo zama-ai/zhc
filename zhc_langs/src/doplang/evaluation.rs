@@ -11,6 +11,11 @@ use zhc_utils::{FastMap, SafeAs, svec};
 
 use super::{CtMem, CtReg, DopTypeSystem, LutRef, PtArg};
 
+const MANY_LUT_CHECK: LookupCheck = LookupCheck {
+    allow_output_padding: true,
+    ..LookupCheck::Protect
+};
+
 /// Interpretation domain for DOP programs.
 ///
 /// DOP uses context-threading: all data flows through inline
@@ -256,7 +261,7 @@ impl Evaluable<DopValue> for super::DopInstructionSet {
                 let ct = context.read_ct_reg(src);
                 let lut_id = DopInterpreterContext::resolve_lut(lut);
                 let lut_def = context.lut_reg.get_l1(&lut_id);
-                context.write_ct_reg(dst, lut_def.lookup(ct, LookupCheck::AllowBothPadding));
+                context.write_ct_reg(dst, lut_def.lookup(ct, LookupCheck::Permissive));
                 svec![DopValue::Ctx]
             }
 
@@ -265,7 +270,7 @@ impl Evaluable<DopValue> for super::DopInstructionSet {
                 let ct = context.read_ct_reg(src);
                 let lut_id = DopInterpreterContext::resolve_lut(lut);
                 let lut_def = context.lut_reg.get_l2(&lut_id);
-                let (ct0, ct1) = lut_def.lookup(ct, LookupCheck::AllowOutputPadding);
+                let (ct0, ct1) = lut_def.lookup(ct, MANY_LUT_CHECK);
                 // Write to consecutive registers from the aligned base.
                 let base = dst.addr & dst.mask;
                 context.registers[base as usize] = Some(ct0);

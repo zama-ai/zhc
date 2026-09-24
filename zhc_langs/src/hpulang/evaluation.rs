@@ -12,6 +12,11 @@ use zhc_utils::{FastMap, SafeAs, svec};
 
 use crate::hpulang::{HpuTypeSystem, TDstId, TImmId, TSrcId};
 
+const MANY_LUT_CHECK: LookupCheck = LookupCheck {
+    allow_output_padding: true,
+    ..LookupCheck::Protect
+};
+
 /// Interpretation domain for HPU programs.
 ///
 /// Each variant corresponds to a [`HpuTypeSystem`]
@@ -247,17 +252,17 @@ impl Evaluable<HpuValue> for super::HpuInstructionSet {
             Pbs { lut } | PbsF { lut } => {
                 let ct = arguments[0].clone().unwrap_ct_register();
                 svec![HpuValue::CtRegister(
-                    lut.lookup(ct, LookupCheck::AllowBothPadding)
+                    lut.lookup(ct, LookupCheck::Permissive)
                 )]
             }
             Pbs2 { lut } | Pbs2F { lut } => {
                 let ct = arguments[0].clone().unwrap_ct_register();
-                let (ct0, ct1) = lut.lookup(ct, LookupCheck::AllowOutputPadding);
+                let (ct0, ct1) = lut.lookup(ct, MANY_LUT_CHECK);
                 svec![HpuValue::CtRegister(ct0), HpuValue::CtRegister(ct1)]
             }
             Pbs4 { lut } | Pbs4F { lut } => {
                 let ct = arguments[0].clone().unwrap_ct_register();
-                let (o0, o1, o2, o3) = lut.lookup(ct, LookupCheck::AllowOutputPadding);
+                let (o0, o1, o2, o3) = lut.lookup(ct, MANY_LUT_CHECK);
                 [o0, o1, o2, o3]
                     .into_iter()
                     .map(HpuValue::CtRegister)
@@ -266,7 +271,7 @@ impl Evaluable<HpuValue> for super::HpuInstructionSet {
             Pbs8 { lut } | Pbs8F { lut } => {
                 let ct = arguments[0].clone().unwrap_ct_register();
                 let (o0, o1, o2, o3, o4, o5, o6, o7) =
-                    lut.lookup(ct, LookupCheck::AllowOutputPadding);
+                    lut.lookup(ct, MANY_LUT_CHECK);
                 [o0, o1, o2, o3, o4, o5, o6, o7]
                     .into_iter()
                     .map(HpuValue::CtRegister)

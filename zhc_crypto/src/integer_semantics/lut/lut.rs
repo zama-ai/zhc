@@ -10,30 +10,68 @@ use zhc_utils::{Dumpable, SafeAs};
 /// on the operation being emulated, you may need to relax that guard on the input side,
 /// the output side, or both.
 ///
-/// Each variant selectively relaxes the input and/or output padding-bit check.
 /// [`Protect`](Self::Protect) is the strictest mode (both ends checked);
-/// [`AllowBothPadding`](Self::AllowBothPadding) disables all assertions.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum LookupCheck {
-    /// Assert both input and output padding bits are zero.
-    Protect,
-    /// Skip the input check; still assert the output padding bit is zero.
-    AllowInputPadding,
-    /// Skip the output check; still assert the input padding bit is zero.
-    AllowOutputPadding,
-    /// Skip both checks.
-    AllowBothPadding,
+/// [`Permissive`](Self::Permissive) disables all assertions.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct LookupCheck {
+    pub allow_input_padding: bool,
+    pub allow_index_bits: bool,
+    pub allow_output_padding: bool,
+}
+
+#[allow(non_upper_case_globals)]
+impl LookupCheck {
+    pub const Protect: Self = Self {
+        allow_input_padding: false,
+        allow_index_bits: false,
+        allow_output_padding: false,
+    };
+    pub const Permissive: Self = Self {
+        allow_input_padding: true,
+        allow_index_bits: true,
+        allow_output_padding: true,
+    };
+}
+
+impl Debug for LookupCheck {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if *self == LookupCheck::Protect {
+            write!(f, "Protect")
+        } else if *self == LookupCheck::Permissive {
+            write!(f, "Permissive")
+        } else {
+            f.debug_struct("LookupCheck")
+                .field("allow_input_padding", &self.allow_input_padding)
+                .field("allow_index_bits", &self.allow_index_bits)
+                .field("allow_output_padding", &self.allow_output_padding)
+                .finish()
+        }
+    }
 }
 
 impl LookupCheck {
-    /// Returns `true` when the input padding bit must be zero.
-    pub fn should_check_input_padding(&self) -> bool {
-        matches!(self, LookupCheck::Protect | LookupCheck::AllowOutputPadding)
+    fn check_input(&self, inp: EmulatedCiphertextBlock, sub_table_size: usize) {
+        if !self.allow_input_padding {
+            assert!(
+                !inp.has_active_padding_bit(),
+                "Encountered active padding bit in input when executing lookup with check {self:?}."
+            );
+        }
+        if !self.allow_index_bits {
+            assert!(
+                inp.raw_data_bits().sas::<usize>() < sub_table_size,
+                "Encountered active many lut bit in input when executing lookup with check {self:?}."
+            );
+        }
     }
 
-    /// Returns `true` when the output padding bit must be zero.
-    pub fn should_check_output_padding(&self) -> bool {
-        matches!(self, LookupCheck::Protect | LookupCheck::AllowInputPadding)
+    fn check_output(&self, out: EmulatedCiphertextBlock) {
+        if !self.allow_output_padding {
+            assert!(
+                !out.has_active_padding_bit(),
+                "Encountered active padding bit in output when executing lookup with check {self:?}."
+            );
+        }
     }
 }
 
@@ -85,6 +123,22 @@ impl Debug for RawLut {
 impl Hash for RawLut {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.lut.hash(state);
+    }
+}
+
+impl RawLut {
+    fn pbs(&self, inp: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
+        assert_eq!(inp.spec(), self.spec, "Spec mismatch.");
+        let output = self.lut[inp.raw_data_bits().sas::<usize>()];
+        assert!(
+            output.storage >> inp.spec().complete_size() == 0,
+            "Lookup output is invalid."
+        );
+        if inp.has_active_padding_bit() {
+            output.neg()
+        } else {
+            output
+        }
     }
 }
 
@@ -176,29 +230,11 @@ impl Lut1 {
         inp: EmulatedCiphertextBlock,
         check: LookupCheck,
     ) -> EmulatedCiphertextBlock {
-        assert_eq!(inp.spec(), self.0.spec, "Spec mismatch.");
-        if check.should_check_input_padding() {
-            assert!(
-                !inp.has_active_padding_bit(),
-                "Encountered active padding bit in input when executing lookup with check {check:?}."
-            );
-        }
-        let wop_inp = inp.raw_data_bits();
-        let mut output = self.0.lut[wop_inp.sas::<usize>()];
-        assert!(
-            output.storage >> inp.spec().complete_size() == 0,
-            "Lookup output is invalid."
-        );
-        if inp.has_active_padding_bit() {
-            output = output.neg();
-        }
-        if check.should_check_output_padding() {
-            assert!(
-                !output.has_active_padding_bit(),
-                "Encountered active padding bit in output when executing lookup with check {check:?}."
-            );
-        }
-        output
+        let lut_len = self.0.lut.len();
+        check.check_input(inp, lut_len);
+        let o = self.0.pbs(inp);
+        check.check_output(o);
+        o
     }
 }
 
@@ -367,45 +403,18 @@ impl Lut2 {
         inp: EmulatedCiphertextBlock,
         check: LookupCheck,
     ) -> (EmulatedCiphertextBlock, EmulatedCiphertextBlock) {
-        assert_eq!(inp.spec(), self.0.spec, "Spec mismatch.");
-        assert!(
-            matches!(
-                check,
-                LookupCheck::Protect | LookupCheck::AllowOutputPadding
-            ),
-            "Encountered incompatible check for many-lut lookup"
-        );
-        assert!(
-            !inp.has_active_padding_bit(),
-            "Encountered active padding bit in input when executing lookup2."
-        );
-        assert!(
-            !inp.has_active_last_ith_bit(1),
-            "Encountered active many lut bit in input when executing lookup2."
-        );
-
-        let wop_inp = inp.raw_data_bits();
-        let output1 = self.0.lut[wop_inp.sas::<usize>()];
-        assert!(
-            output1.storage >> inp.spec().complete_size() == 0,
-            "Lookup output is invalid."
-        );
-        let output2 = self.0.lut[wop_inp.sas::<usize>() + self.0.lut.len() / 2];
-        assert!(
-            output2.storage >> inp.spec().complete_size() == 0,
-            "Lookup output is invalid."
-        );
-        if check.should_check_output_padding() {
-            assert!(
-                !output1.has_active_padding_bit(),
-                "Encountered active padding bit in output when executing lookup2."
-            );
-            assert!(
-                !output2.has_active_padding_bit(),
-                "Encountered active padding bit in output when executing lookup2."
-            );
-        }
-        (output1, output2)
+        let lut_len = self.0.lut.len() / 2;
+        check.check_input(inp, lut_len);
+        let shift = inp.spec().from_complete(lut_len.sas());
+        let pt_spec = inp.spec().complete_plaintext_block_spec();
+        let out = |j| {
+            let j = pt_spec.from_message(j);
+            let shifter = shift.wrapping_mul_pt(j);
+            let o = self.0.pbs(inp.wrapping_add(shifter));
+            check.check_output(o);
+            o
+        };
+        (out(0), out(1))
     }
 }
 
@@ -532,42 +541,18 @@ impl Lut4 {
         EmulatedCiphertextBlock,
         EmulatedCiphertextBlock,
     ) {
-        assert_eq!(inp.spec(), self.0.spec, "Spec mismatch.");
-        assert!(
-            matches!(
-                check,
-                LookupCheck::Protect | LookupCheck::AllowOutputPadding
-            ),
-            "Encountered incompatible check for many-lut lookup"
-        );
-        assert!(
-            !inp.has_active_padding_bit(),
-            "Encountered active padding bit in input when executing lookup4."
-        );
-        for i in [1, 2] {
-            assert!(
-                !inp.has_active_last_ith_bit(i),
-                "Encountered active many lut bit in input when executing lookup4."
-            );
-        }
-
-        let wop_inp = inp.raw_data_bits();
-        let quarter = self.0.lut.len() / 4;
-        let outputs = [0usize, 1, 2, 3].map(|k| {
-            let output = self.0.lut[wop_inp.sas::<usize>() + k * quarter];
-            assert!(
-                output.storage >> inp.spec().complete_size() == 0,
-                "Lookup output is invalid."
-            );
-            if check.should_check_output_padding() {
-                assert!(
-                    !output.has_active_padding_bit(),
-                    "Encountered active padding bit in output when executing lookup4."
-                );
-            }
-            output
-        });
-        (outputs[0], outputs[1], outputs[2], outputs[3])
+        let lut_len = self.0.lut.len() / 4;
+        check.check_input(inp, lut_len);
+        let shift = inp.spec().from_complete(lut_len.sas());
+        let pt_spec = inp.spec().complete_plaintext_block_spec();
+        let out = |j| {
+            let j = pt_spec.from_message(j);
+            let shifter = shift.wrapping_mul_pt(j);
+            let o = self.0.pbs(inp.wrapping_add(shifter));
+            check.check_output(o);
+            o
+        };
+        (out(0), out(1), out(2), out(3))
     }
 }
 
@@ -717,45 +702,18 @@ impl Lut8 {
         EmulatedCiphertextBlock,
         EmulatedCiphertextBlock,
     ) {
-        assert_eq!(inp.spec(), self.0.spec, "Spec mismatch.");
-        assert!(
-            matches!(
-                check,
-                LookupCheck::Protect | LookupCheck::AllowOutputPadding
-            ),
-            "Encountered incompatible check for many-lut lookup"
-        );
-        assert!(
-            !inp.has_active_padding_bit(),
-            "Encountered active padding bit in input when executing lookup8."
-        );
-        for i in [1, 2, 3] {
-            assert!(
-                !inp.has_active_last_ith_bit(i),
-                "Encountered active many lut bit in input when executing lookup8."
-            );
-        }
-
-        let wop_inp = inp.raw_data_bits();
-        let eighth = self.0.lut.len() / 8;
-        let outputs = [0usize, 1, 2, 3, 4, 5, 6, 7].map(|k| {
-            let output = self.0.lut[wop_inp.sas::<usize>() + k * eighth];
-            assert!(
-                output.storage >> inp.spec().complete_size() == 0,
-                "Lookup output is invalid."
-            );
-            if check.should_check_output_padding() {
-                assert!(
-                    !output.has_active_padding_bit(),
-                    "Encountered active padding bit in output when executing lookup8."
-                );
-            }
-            output
-        });
-        (
-            outputs[0], outputs[1], outputs[2], outputs[3], outputs[4], outputs[5], outputs[6],
-            outputs[7],
-        )
+        let lut_len = self.0.lut.len() / 8;
+        check.check_input(inp, lut_len);
+        let shift = inp.spec().from_complete(lut_len.sas());
+        let pt_spec = inp.spec().complete_plaintext_block_spec();
+        let out = |j| {
+            let j = pt_spec.from_message(j);
+            let shifter = shift.wrapping_mul_pt(j);
+            let o = self.0.pbs(inp.wrapping_add(shifter));
+            check.check_output(o);
+            o
+        };
+        (out(0), out(1), out(2), out(3), out(4), out(5), out(6), out(7))
     }
 }
 
@@ -770,12 +728,22 @@ mod tests {
     use super::*;
     use crate::integer_semantics::CiphertextBlockSpec;
 
+    const ALLOW_INPUT_PADDING: LookupCheck = LookupCheck {
+        allow_input_padding: true,
+        ..LookupCheck::Protect
+    };
+
+    const ALLOW_OUTPUT_PADDING: LookupCheck = LookupCheck {
+        allow_output_padding: true,
+        ..LookupCheck::Protect
+    };
+
     #[test]
     fn test_lookup_identity_with_clean_padding() {
         let spec = CiphertextBlockSpec(2, 4);
         let lut = Lut1::from_fn("test", spec, |x| x);
         for c in spec.iter_data_space() {
-            let result = lut.lookup(c, LookupCheck::AllowBothPadding);
+            let result = lut.lookup(c, LookupCheck::Permissive);
             if c.raw_padding_bits() == 1 {
                 assert_eq!(result, c.neg());
             } else {
@@ -824,13 +792,13 @@ mod tests {
         // Should not panic; negacyclic wraparound may apply
         let lut = Lut1::from_fn("test", spec, |_| spec.from_message(0));
         for c in spec.iter_complete_space() {
-            let _ = lut.lookup(c, LookupCheck::AllowInputPadding);
+            let _ = lut.lookup(c, ALLOW_INPUT_PADDING);
         }
     }
 
     #[test]
     #[should_panic(
-        expected = "Encountered active padding bit in output when executing lookup with check AllowInputPadding."
+        expected = "Encountered active padding bit in output when executing lookup with check LookupCheck { allow_input_padding: true, allow_index_bits: false, allow_output_padding: false }."
     )]
     fn test_lookup_allow_input_padding_still_panics_on_output_padding() {
         let spec = CiphertextBlockSpec(2, 4);
@@ -838,7 +806,7 @@ mod tests {
         let lut = Lut1::from_fn("test", spec, |x| {
             x.spec().from_complete(1 << spec.data_size())
         });
-        lut.lookup(inp, LookupCheck::AllowInputPadding);
+        lut.lookup(inp, ALLOW_INPUT_PADDING);
     }
 
     #[test]
@@ -848,19 +816,19 @@ mod tests {
             x.spec().from_complete(1 << spec.data_size())
         });
         for c in spec.iter_data_space() {
-            let _ = lut.lookup(c, LookupCheck::AllowOutputPadding);
+            let _ = lut.lookup(c, ALLOW_OUTPUT_PADDING);
         }
     }
 
     #[test]
     #[should_panic(
-        expected = "Encountered active padding bit in input when executing lookup with check AllowOutputPadding."
+        expected = "Encountered active padding bit in input when executing lookup with check LookupCheck { allow_input_padding: false, allow_index_bits: false, allow_output_padding: true }."
     )]
     fn test_lookup_allow_output_padding_still_panics_on_input_padding() {
         let spec = CiphertextBlockSpec(2, 4);
         let inp = spec.from_complete(1 << spec.data_size());
         let lut = Lut1::from_fn("test", spec, |x| x);
-        lut.lookup(inp, LookupCheck::AllowOutputPadding);
+        lut.lookup(inp, ALLOW_OUTPUT_PADDING);
     }
 
     #[test]
@@ -897,7 +865,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Encountered active padding bit in input when executing lookup2.")]
+    #[should_panic(expected = "Encountered active padding bit in input when executing lookup with check Protect.")]
     fn test_lut2_panics_on_input_padding_set() {
         let spec = CiphertextBlockSpec(2, 4);
         let lut = Lut2::from_fn("test", spec, |x| x, |x| x);
@@ -906,7 +874,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Encountered active many lut bit in input when executing lookup2.")]
+    #[should_panic(expected = "Encountered active many lut bit in input when executing lookup with check Protect.")]
     fn test_lut2_panics_on_many_lut_bit_set() {
         let spec = CiphertextBlockSpec(2, 4);
         let lut = Lut2::from_fn("test", spec, |x| x, |x| x);
@@ -915,7 +883,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Encountered active padding bit in output when executing lookup2.")]
+    #[should_panic(expected = "Encountered active padding bit in output when executing lookup with check Protect.")]
     fn test_lut2_protect_panics_on_output_padding() {
         let spec = CiphertextBlockSpec(2, 4);
         let lut = Lut2::from_fn(
@@ -938,25 +906,7 @@ mod tests {
             |_| spec.from_complete(1 << spec.data_size()), // padding set
         );
         let inp = spec.from_message(0);
-        let _ = lut.lookup(inp, LookupCheck::AllowOutputPadding); // should not panic
-    }
-
-    #[test]
-    #[should_panic(expected = "Encountered incompatible check for many-lut lookup")]
-    fn test_lut2_rejects_allow_input_padding_check() {
-        let spec = CiphertextBlockSpec(2, 4);
-        let lut = Lut2::from_fn("test", spec, |x| x, |x| x);
-        let inp = spec.from_message(0);
-        let _ = lut.lookup(inp, LookupCheck::AllowInputPadding);
-    }
-
-    #[test]
-    #[should_panic(expected = "Encountered incompatible check for many-lut lookup")]
-    fn test_lut2_rejects_allow_both_padding_check() {
-        let spec = CiphertextBlockSpec(2, 4);
-        let lut = Lut2::from_fn("test", spec, |x| x, |x| x);
-        let inp = spec.from_message(0);
-        let _ = lut.lookup(inp, LookupCheck::AllowBothPadding);
+        let _ = lut.lookup(inp, ALLOW_OUTPUT_PADDING); // should not panic
     }
 
     #[test]
@@ -999,7 +949,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Encountered active padding bit in input when executing lookup4.")]
+    #[should_panic(expected = "Encountered active padding bit in input when executing lookup with check Protect.")]
     fn test_lut4_panics_on_input_padding_set() {
         let spec = CiphertextBlockSpec(2, 4);
         let lut = Lut4::from_fn("test", spec, |x| x, |x| x, |x| x, |x| x);
@@ -1008,7 +958,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Encountered active many lut bit in input when executing lookup4.")]
+    #[should_panic(expected = "Encountered active many lut bit in input when executing lookup with check Protect.")]
     fn test_lut4_panics_on_first_many_lut_bit_set() {
         let spec = CiphertextBlockSpec(2, 4);
         let lut = Lut4::from_fn("test", spec, |x| x, |x| x, |x| x, |x| x);
@@ -1017,7 +967,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Encountered active many lut bit in input when executing lookup4.")]
+    #[should_panic(expected = "Encountered active many lut bit in input when executing lookup with check Protect.")]
     fn test_lut4_panics_on_second_many_lut_bit_set() {
         let spec = CiphertextBlockSpec(2, 4);
         let lut = Lut4::from_fn("test", spec, |x| x, |x| x, |x| x, |x| x);
@@ -1026,7 +976,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Encountered active padding bit in output when executing lookup4.")]
+    #[should_panic(expected = "Encountered active padding bit in output when executing lookup with check Protect.")]
     fn test_lut4_protect_panics_on_output_padding() {
         let spec = CiphertextBlockSpec(2, 4);
         let lut = Lut4::from_fn(
@@ -1045,23 +995,7 @@ mod tests {
         let spec = CiphertextBlockSpec(2, 4);
         let padded = move |_| spec.from_complete(1 << spec.data_size());
         let lut = Lut4::from_fn("test", spec, padded, padded, padded, padded);
-        let _ = lut.lookup(spec.from_message(0), LookupCheck::AllowOutputPadding);
-    }
-
-    #[test]
-    #[should_panic(expected = "Encountered incompatible check for many-lut lookup")]
-    fn test_lut4_rejects_allow_input_padding_check() {
-        let spec = CiphertextBlockSpec(2, 4);
-        let lut = Lut4::from_fn("test", spec, |x| x, |x| x, |x| x, |x| x);
-        let _ = lut.lookup(spec.from_message(0), LookupCheck::AllowInputPadding);
-    }
-
-    #[test]
-    #[should_panic(expected = "Encountered incompatible check for many-lut lookup")]
-    fn test_lut4_rejects_allow_both_padding_check() {
-        let spec = CiphertextBlockSpec(2, 4);
-        let lut = Lut4::from_fn("test", spec, |x| x, |x| x, |x| x, |x| x);
-        let _ = lut.lookup(spec.from_message(0), LookupCheck::AllowBothPadding);
+        let _ = lut.lookup(spec.from_message(0), ALLOW_OUTPUT_PADDING);
     }
 
     #[test]
@@ -1101,7 +1035,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Encountered active padding bit in input when executing lookup8.")]
+    #[should_panic(expected = "Encountered active padding bit in input when executing lookup with check Protect.")]
     fn test_lut8_panics_on_input_padding_set() {
         let spec = CiphertextBlockSpec(2, 4);
         let lut = Lut8::from_fn(
@@ -1121,7 +1055,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Encountered active many lut bit in input when executing lookup8.")]
+    #[should_panic(expected = "Encountered active many lut bit in input when executing lookup with check Protect.")]
     fn test_lut8_panics_on_many_lut_bit_set() {
         let spec = CiphertextBlockSpec(2, 4);
         let lut = Lut8::from_fn(
@@ -1141,7 +1075,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Encountered active padding bit in output when executing lookup8.")]
+    #[should_panic(expected = "Encountered active padding bit in output when executing lookup with check Protect.")]
     fn test_lut8_protect_panics_on_output_padding() {
         let spec = CiphertextBlockSpec(2, 4);
         let zero = move |_| spec.from_message(0);
@@ -1159,25 +1093,41 @@ mod tests {
         let lut = Lut8::from_fn(
             "test", spec, padded, padded, padded, padded, padded, padded, padded, padded,
         );
-        let _ = lut.lookup(spec.from_message(0), LookupCheck::AllowOutputPadding);
+        let _ = lut.lookup(spec.from_message(0), ALLOW_OUTPUT_PADDING);
     }
 
     #[test]
-    #[should_panic(expected = "Encountered incompatible check for many-lut lookup")]
-    fn test_lut8_rejects_allow_input_padding_check() {
+    fn test_lut2_allow_input_padding_negates_outputs() {
         let spec = CiphertextBlockSpec(2, 4);
-        let lut = Lut8::from_fn(
+        let lut = Lut2::from_fn(
             "test",
             spec,
-            |x| x,
-            |x| x,
-            |x| x,
-            |x| x,
-            |x| x,
-            |x| x,
-            |x| x,
-            |x| x,
+            |_| spec.from_message(3),
+            |_| spec.from_message(5),
         );
-        let _ = lut.lookup(spec.from_message(0), LookupCheck::AllowInputPadding);
+        let inp = spec.from_complete((1 << spec.data_size()) | 1);
+        let (out1, out2) = lut.lookup(inp, LookupCheck::Permissive);
+        assert_eq!(out1, spec.from_message(3).neg());
+        assert_eq!(out2, spec.from_message(5).neg());
+    }
+
+    #[test]
+    fn test_lut2_allow_index_bits_rotates_tables() {
+        let spec = CiphertextBlockSpec(2, 4);
+        let lut = Lut2::from_fn(
+            "test",
+            spec,
+            |_| spec.from_message(3),
+            |_| spec.from_message(5),
+        );
+        let check = LookupCheck {
+            allow_input_padding: false,
+            allow_index_bits: true,
+            allow_output_padding: true,
+        };
+        let inp = spec.from_data(0b10_0001);
+        let (out1, out2) = lut.lookup(inp, check);
+        assert_eq!(out1, spec.from_message(5));
+        assert_eq!(out2, spec.from_message(3).neg());
     }
 }
