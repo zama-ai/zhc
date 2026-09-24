@@ -19,7 +19,7 @@ pub fn lookup(
     inp: EmulatedCiphertextBlock,
     check: LookupCheck,
 ) -> EmulatedCiphertextBlock {
-    if check.should_check_input_padding() {
+    if !check.allow_input_padding {
         assert!(
             inp.raw_padding_bits() == 0,
             "Encountered active padding bit in input when executing lookup with check {check:?}."
@@ -30,7 +30,7 @@ pub fn lookup(
     if inp.raw_padding_bits() == 1 {
         output = output.neg();
     }
-    if check.should_check_output_padding() {
+    if !check.allow_output_padding {
         assert!(
             output.raw_padding_bits() == 0,
             "Encountered active padding bit in output when executing lookup with check {check:?}."

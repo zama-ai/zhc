@@ -274,6 +274,22 @@ fn plaintext_ops_match_crypto() {
     }
 }
 
+fn all_checks() -> Vec<LookupCheck> {
+    let mut checks = Vec::new();
+    for allow_input_padding in [false, true] {
+        for allow_index_bits in [false, true] {
+            for allow_output_padding in [false, true] {
+                checks.push(LookupCheck {
+                    allow_input_padding,
+                    allow_index_bits,
+                    allow_output_padding,
+                });
+            }
+        }
+    }
+    checks
+}
+
 #[test]
 fn lookup_checks_match_crypto() {
     let table = Lut1::from_fn("shift_up", SPEC, |b| {
