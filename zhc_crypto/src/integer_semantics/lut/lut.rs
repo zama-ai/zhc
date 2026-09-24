@@ -1,4 +1,6 @@
-use crate::integer_semantics::{CiphertextBlockSpec, EmulatedCiphertextBlock};
+use crate::integer_semantics::{
+    CiphertextBlockSpec, EmulatedCiphertextBlock, EmulatedCiphertextBlockStorage,
+};
 use std::fmt::Debug;
 use std::hash::Hash;
 use zhc_utils::iter::CollectInVec;
@@ -41,12 +43,13 @@ impl LookupCheck {
 ///
 /// Stores the computed entries of a lookup table alongside the
 /// [`CiphertextBlockSpec`] that governs its layout and a human-readable name
-/// for diagnostic output. `RawLut` is the underlying storage shared by the
-/// typed wrappers [`Lut1`], [`Lut2`], [`Lut4`], and [`Lut8`] — most users
-/// interact with those types instead of constructing a `RawLut` directly.
+/// for diagnostic output. Entries are kept as raw storage: every entry shares
+/// the table's spec, so it is stored once at the table level. `RawLut` is the
+/// underlying storage shared by the typed wrappers [`Lut1`], [`Lut2`], [`Lut4`], and [`Lut8`] —
+/// most users interact with those types instead of constructing a `RawLut` directly.
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct RawLut {
-    lut: Vec<EmulatedCiphertextBlock>,
+    lut: Vec<EmulatedCiphertextBlockStorage>,
     name: String,
     spec: CiphertextBlockSpec,
 }
@@ -62,15 +65,44 @@ impl RawLut {
         &self.spec
     }
 
-    /// Returns the precomputed table entries as a slice.
-    pub fn lut(&self) -> &[EmulatedCiphertextBlock] {
+    /// Returns the precomputed table entries as raw storage.
+    pub fn lut(&self) -> &[EmulatedCiphertextBlockStorage] {
         self.lut.as_slice()
+    }
+
+    /// Returns entry `i` as a block of this table's spec.
+    pub fn entry(&self, i: usize) -> EmulatedCiphertextBlock {
+        EmulatedCiphertextBlock {
+            storage: self.lut[i],
+            spec: self.spec,
+        }
+    }
+
+    /// Builds a table from blocks, asserting they all share `spec`.
+    fn from_blocks(
+        name: impl AsRef<str>,
+        spec: CiphertextBlockSpec,
+        blocks: impl IntoIterator<Item = EmulatedCiphertextBlock>,
+    ) -> Self {
+        let lut = blocks
+            .into_iter()
+            .map(|b| {
+                assert_eq!(b.spec(), spec, "Lut entry spec mismatch.");
+                b.storage
+            })
+            .covec();
+        assert_eq!(lut.len(), 2_usize.pow(spec.data_size().sas()));
+        RawLut {
+            lut,
+            name: name.as_ref().to_string(),
+            spec,
+        }
     }
 }
 
 impl PartialEq for RawLut {
     fn eq(&self, other: &Self) -> bool {
-        self.lut == other.lut
+        self.spec == other.spec && self.lut == other.lut
     }
 }
 
@@ -84,6 +116,7 @@ impl Debug for RawLut {
 
 impl Hash for RawLut {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.spec.hash(state);
         self.lut.hash(state);
     }
 }
@@ -144,10 +177,11 @@ impl Lut1 {
         spec: CiphertextBlockSpec,
         f: impl Fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
     ) -> Self {
-        let name = name.as_ref().to_string();
-        let lut = spec.iter_data_space().map(f).covec();
-        assert_eq!(lut.len(), 2_usize.pow(spec.data_size().sas()));
-        Self(RawLut { name, lut, spec })
+        Self(RawLut::from_blocks(
+            name,
+            spec,
+            spec.iter_data_space().map(f),
+        ))
     }
 
     /// Applies the LUT to an input block with the specified padding-bit policy.
@@ -184,7 +218,7 @@ impl Lut1 {
             );
         }
         let wop_inp = inp.raw_data_bits();
-        let mut output = self.0.lut[wop_inp.sas::<usize>()];
+        let mut output = self.0.entry(wop_inp.sas());
         assert!(
             output.storage >> inp.spec().complete_size() == 0,
             "Lookup output is invalid."
@@ -243,7 +277,7 @@ fn dump_lut_table(raw: &RawLut, kind: &str, n_out: usize) -> String {
     for i in 0..rows {
         let inp = raw.spec.from_data(i.sas());
         let cells = std::iter::once(inp)
-            .chain((0..n_out).map(|k| raw.lut[i + k * rows]))
+            .chain((0..n_out).map(|k| raw.entry(i + k * rows)))
             .map(|c| format!(" {:^col_w$} ", c.dump_to_string()))
             .covec();
         result.push_str(&format!("\n║{}║", cells.join("║")));
@@ -323,7 +357,6 @@ impl Lut2 {
         f1: impl Fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
         f2: impl Fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
     ) -> Self {
-        let name = name.as_ref().to_string();
         let lut = spec
             .iter_data_space()
             .filter(|c| !c.has_active_last_ith_bit(1))
@@ -332,10 +365,8 @@ impl Lut2 {
                 spec.iter_data_space()
                     .filter(|c| !c.has_active_last_ith_bit(1))
                     .map(|c| f2(c)),
-            )
-            .covec();
-        assert_eq!(lut.len(), 2_usize.pow(spec.data_size().sas()));
-        Self(RawLut { name, lut, spec })
+            );
+        Self(RawLut::from_blocks(name, spec, lut))
     }
 
     /// Applies the LUT to an input block, returning both output values.
@@ -385,12 +416,12 @@ impl Lut2 {
         );
 
         let wop_inp = inp.raw_data_bits();
-        let output1 = self.0.lut[wop_inp.sas::<usize>()];
+        let output1 = self.0.entry(wop_inp.sas());
         assert!(
             output1.storage >> inp.spec().complete_size() == 0,
             "Lookup output is invalid."
         );
-        let output2 = self.0.lut[wop_inp.sas::<usize>() + self.0.lut.len() / 2];
+        let output2 = self.0.entry(wop_inp.sas::<usize>() + self.0.lut.len() / 2);
         assert!(
             output2.storage >> inp.spec().complete_size() == 0,
             "Lookup output is invalid."
@@ -487,19 +518,14 @@ impl Lut4 {
         f3: impl Fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
         f4: impl Fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
     ) -> Self {
-        let name = name.as_ref().to_string();
         let fs: [&dyn Fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock; 4] =
             [&f1, &f2, &f3, &f4];
-        let lut = fs
-            .iter()
-            .flat_map(|f| {
-                spec.iter_data_space()
-                    .filter(|c| !c.has_active_last_ith_bit(1) && !c.has_active_last_ith_bit(2))
-                    .map(|c| f(c))
-            })
-            .covec();
-        assert_eq!(lut.len(), 2_usize.pow(spec.data_size().sas()));
-        Self(RawLut { name, lut, spec })
+        let lut = fs.iter().flat_map(|f| {
+            spec.iter_data_space()
+                .filter(|c| !c.has_active_last_ith_bit(1) && !c.has_active_last_ith_bit(2))
+                .map(|c| f(c))
+        });
+        Self(RawLut::from_blocks(name, spec, lut))
     }
 
     /// Applies the LUT to an input block, returning all four output values.
@@ -554,7 +580,7 @@ impl Lut4 {
         let wop_inp = inp.raw_data_bits();
         let quarter = self.0.lut.len() / 4;
         let outputs = [0usize, 1, 2, 3].map(|k| {
-            let output = self.0.lut[wop_inp.sas::<usize>() + k * quarter];
+            let output = self.0.entry(wop_inp.sas::<usize>() + k * quarter);
             assert!(
                 output.storage >> inp.spec().complete_size() == 0,
                 "Lookup output is invalid."
@@ -660,23 +686,18 @@ impl Lut8 {
         f7: impl Fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
         f8: impl Fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock,
     ) -> Self {
-        let name = name.as_ref().to_string();
         let fs: [&dyn Fn(EmulatedCiphertextBlock) -> EmulatedCiphertextBlock; 8] =
             [&f1, &f2, &f3, &f4, &f5, &f6, &f7, &f8];
-        let lut = fs
-            .iter()
-            .flat_map(|f| {
-                spec.iter_data_space()
-                    .filter(|c| {
-                        !c.has_active_last_ith_bit(1)
-                            && !c.has_active_last_ith_bit(2)
-                            && !c.has_active_last_ith_bit(3)
-                    })
-                    .map(|c| f(c))
-            })
-            .covec();
-        assert_eq!(lut.len(), 2_usize.pow(spec.data_size().sas()));
-        Self(RawLut { name, lut, spec })
+        let lut = fs.iter().flat_map(|f| {
+            spec.iter_data_space()
+                .filter(|c| {
+                    !c.has_active_last_ith_bit(1)
+                        && !c.has_active_last_ith_bit(2)
+                        && !c.has_active_last_ith_bit(3)
+                })
+                .map(|c| f(c))
+        });
+        Self(RawLut::from_blocks(name, spec, lut))
     }
 
     /// Applies the LUT to an input block, returning all eight output values.
@@ -739,7 +760,7 @@ impl Lut8 {
         let wop_inp = inp.raw_data_bits();
         let eighth = self.0.lut.len() / 8;
         let outputs = [0usize, 1, 2, 3, 4, 5, 6, 7].map(|k| {
-            let output = self.0.lut[wop_inp.sas::<usize>() + k * eighth];
+            let output = self.0.entry(wop_inp.sas::<usize>() + k * eighth);
             assert!(
                 output.storage >> inp.spec().complete_size() == 0,
                 "Lookup output is invalid."

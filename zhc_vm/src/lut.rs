@@ -50,8 +50,8 @@ fn build_accumulator(params: &VmConfig, raw: &RawLut, out: &mut [u64]) {
 
     let encode = |v: u64| v.wrapping_mul(params.delta.sas::<u64>());
 
-    for (entry, sub_lut_box) in raw.lut().iter().zip(body.chunks_exact_mut(box_size)) {
-        sub_lut_box.fill(encode(entry.raw_complete_bits().sas()));
+    for (&entry, sub_lut_box) in raw.lut().iter().zip(body.chunks_exact_mut(box_size)) {
+        sub_lut_box.fill(encode(entry.sas()));
     }
 
     let half_box = box_size / 2;

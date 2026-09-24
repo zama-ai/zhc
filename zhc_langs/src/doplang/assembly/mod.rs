@@ -40,7 +40,7 @@ pub fn emit_preamble(signature: &Signature<Type>, luts: &LutRegistry) -> String 
         let values = raw
             .lut()
             .iter()
-            .map(|b| b.raw_complete_bits().to_string())
+            .map(|b| b.to_string())
             .collect::<Vec<_>>()
             .join(", ");
         out.push_str(&format!("; {}: [{values}]\n", raw.name()));
