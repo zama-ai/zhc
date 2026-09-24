@@ -17,7 +17,7 @@ use super::*;
 /// `Loaded` when the DMA completes and the corresponding `WAIT` may proceed.
 #[fsm]
 #[derive(Debug, Serialize)]
-pub enum TransferState {
+pub enum InboundTransferState {
     Awaited,
     Loading,
     Loaded,
@@ -26,17 +26,14 @@ pub enum TransferState {
 /// Scheduling condition of a [`UCore`].
 ///
 /// `Starved` has no pending work; `Incuring` is actively draining its DOP queue
-/// to the instruction scheduler; `WaitingTransferIn` is blocked until an inbound
-/// transfer finishes loading; and `WaitingTransferOut` is blocked until the
-/// scheduler drains so the identified outbound transfer can be signalled to its
-/// destination board.
+/// to the instruction scheduler; and `WaitingTransferIn` is blocked until an inbound
+/// transfer finishes loading.
 #[fsm]
 #[derive(Debug, Serialize)]
 pub enum UCoreCondition {
     Starved,
     Incuring,
     WaitingTransferIn,
-    WaitingTransferOut { hid: HpuId, tid: TransferId },
 }
 
 /// Micro-core that sequences an HPU's DOP stream and mediates inter-HPU
@@ -44,13 +41,18 @@ pub enum UCoreCondition {
 ///
 /// Forwards ordinary compute operations to the instruction scheduler while
 /// intercepting the `LD_B2B`, `WAIT`, and `NOTIFY` virtual operations to run the
-/// cross-board transfer handshake, stalling the stream on outstanding inbound or
-/// outbound transfers as tracked by its [`UCoreCondition`] and per-transfer
-/// [`TransferState`].
+/// cross-board transfer handshake, stalling the stream on outstanding inbound
+/// transfers as tracked by its [`UCoreCondition`] and per-transfer
+/// [`InboundTransferState`].
+///
+/// A `NOTIFY` does not stall it. The micro-core replaces it with an inner `SYNC` pushed to the
+/// scheduler and reads on, and the destination board is signalled when that `SYNC` retires. Only a
+/// `WAIT` blocks.
 #[derive(Debug, Serialize)]
 pub struct UCore {
     dops: VecDeque<DOp>,
-    transfers: FastMap<TransferId, TransferState>,
+    inbound_transfers: FastMap<TransferId, InboundTransferState>,
+    outbound_transfers: FastMap<DOpId, (HpuId, TransferId)>,
     mhdma_latency: ConstantLatency,
     condition: UCoreCondition,
 }
@@ -61,7 +63,8 @@ impl UCore {
     pub fn new(mhdma_latency: ConstantLatency) -> Self {
         UCore {
             dops: VecDeque::new(),
-            transfers: FastMap::default(),
+            inbound_transfers: FastMap::default(),
+            outbound_transfers: FastMap::default(),
             condition: UCoreCondition::Starved,
             mhdma_latency,
         }
@@ -104,10 +107,15 @@ impl Simulatable for UCore {
                                 unreachable!()
                             };
                             match self
-                                .transfers
-                                .insert(TransferId(flag), TransferState::Awaited)
+                                .inbound_transfers
+                                .insert(TransferId(flag), InboundTransferState::Awaited)
                             {
-                                Some(TransferState::Loaded) | None => {}
+                                None => {
+                                    // No transfers registered yet for this tid.
+                                }
+                                Some(InboundTransferState::Loaded) => {
+                                    // Tid already used. Recycling.
+                                }
                                 s => panic!(
                                     "Encountered invalid transfer state {s:?} for flag {flag}"
                                 ),
@@ -117,22 +125,33 @@ impl Simulatable for UCore {
                             flag: UserFlag { flag },
                             ..
                         }) => {
-                            match self.transfers.get(&TransferId(*flag)) {
-                                Some(TransferState::Loading) | Some(TransferState::Awaited) => {
+                            match self.inbound_transfers.get(&TransferId(*flag)) {
+                                Some(InboundTransferState::Loading)
+                                | Some(InboundTransferState::Awaited) => {
                                     self.condition.transition(|old| match old {
-                                        UCoreCondition::Incuring
-                                        | UCoreCondition::WaitingTransferIn => {
+                                        UCoreCondition::Incuring => {
+                                            // UCore stalls, waiting for the transfer.
+                                            UCoreCondition::WaitingTransferIn
+                                        }
+                                        UCoreCondition::WaitingTransferIn => {
+                                            // Ucore was stalled, and likely got wake up by a later
+                                            // inbound transfer.
                                             UCoreCondition::WaitingTransferIn
                                         }
                                         s => unreachable!("Encountered unexpected state {:?}", s),
                                     });
                                     break;
                                 }
-                                Some(TransferState::Loaded) => {
+                                Some(InboundTransferState::Loaded) => {
                                     self.dops.pop_front().unwrap();
                                     self.condition.transition(|old| match old {
-                                        UCoreCondition::Incuring
-                                        | UCoreCondition::WaitingTransferIn => {
+                                        UCoreCondition::Incuring => {
+                                            // Fast path -> The transfer landed before the UCore
+                                            // arrived to it.
+                                            UCoreCondition::Incuring
+                                        }
+                                        UCoreCondition::WaitingTransferIn => {
+                                            // Unstalling of the UCore.
                                             UCoreCondition::Incuring
                                         }
                                         _ => unreachable!(),
@@ -156,6 +175,8 @@ impl Simulatable for UCore {
                             else {
                                 unreachable!()
                             };
+                            self.outbound_transfers
+                                .insert(id, (HpuId(hid), TransferId(flag)));
                             dispatcher.dispatch_now(Events::IscPushDOp(DOp {
                                 raw: SYNC {
                                     is_inner: true,
@@ -165,22 +186,12 @@ impl Simulatable for UCore {
                                 },
                                 id,
                             }));
-                            self.condition.transition(|old| match old {
-                                UCoreCondition::Incuring => UCoreCondition::WaitingTransferOut {
-                                    hid: HpuId(hid),
-                                    tid: TransferId(flag),
-                                },
-                                s => unreachable!("Encountered unexpected state {:?}", s),
-                            });
-                            break;
+                            continue;
                         }
                         Some(_) => {
                             let dop = self.dops.pop_front().unwrap();
                             self.condition.transition(|old| match old {
-                                UCoreCondition::Incuring
-                                | UCoreCondition::WaitingTransferOut { .. } => {
-                                    UCoreCondition::Incuring
-                                }
+                                UCoreCondition::Incuring => UCoreCondition::Incuring,
                                 s => unreachable!("Encountered unexpected state {:?}", s),
                             });
                             dispatcher.dispatch_now(Events::IscPushDOp(dop));
@@ -189,18 +200,16 @@ impl Simulatable for UCore {
                 }
                 assert!(matches!(
                     self.condition,
-                    UCoreCondition::Starved
-                        | UCoreCondition::WaitingTransferIn
-                        | UCoreCondition::WaitingTransferOut { .. }
+                    UCoreCondition::Starved | UCoreCondition::WaitingTransferIn
                 ));
             }
             Events::UCoreTransferInNotified(tid) => {
-                assert!(self.transfers.contains_key(&tid));
-                self.transfers
+                assert!(self.inbound_transfers.contains_key(&tid));
+                self.inbound_transfers
                     .get_mut(&tid)
                     .unwrap()
                     .transition(|old| match old {
-                        TransferState::Awaited => TransferState::Loading,
+                        InboundTransferState::Awaited => InboundTransferState::Loading,
                         _ => unreachable!(),
                     });
                 dispatcher.dispatch_after(
@@ -209,28 +218,29 @@ impl Simulatable for UCore {
                 );
             }
             Events::UCoreTransferInFinished(tid) => {
-                assert!(self.transfers.contains_key(&tid));
-                self.transfers
+                assert!(self.inbound_transfers.contains_key(&tid));
+                self.inbound_transfers
                     .get_mut(&tid)
                     .unwrap()
                     .transition(|old| match old {
-                        TransferState::Loading => TransferState::Loaded,
+                        InboundTransferState::Loading => InboundTransferState::Loaded,
                         _ => unreachable!(),
                     });
                 dispatcher.dispatch_now(Events::UCoreProcessDOps);
             }
-            Events::IscStarved => match self.condition {
-                UCoreCondition::WaitingTransferIn => {
-                    dispatcher.dispatch_now(Events::UCoreProcessDOps);
-                }
-                UCoreCondition::WaitingTransferOut { hid, tid } => {
+            // A notification goes out when the inner `SYNC` standing in for its `NOTIFY` retires.
+            Events::IscRetireDOp(ref dop) => {
+                if let Some((hid, tid)) = self.outbound_transfers.remove(&dop.id) {
                     dispatcher.dispatch_now(Events::UCoreTransferOutReady(hid, tid));
-                    dispatcher.dispatch_now(Events::UCoreProcessDOps);
                 }
-                UCoreCondition::Starved => {
+            }
+            Events::IscStarved => match self.condition {
+                // A board with notifications still in flight is not done: the peers waiting on
+                // them have not been signalled yet.
+                UCoreCondition::Starved if self.outbound_transfers.is_empty() => {
                     dispatcher.dispatch_now(Events::UCoreStarved);
                 }
-                _ => unreachable!(),
+                _ => {}
             },
             _ => {}
         }
