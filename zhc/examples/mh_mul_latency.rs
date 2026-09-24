@@ -2,26 +2,27 @@
 //!
 //! Run with `cargo run --release -p zhc --example mh_mul_latency`.
 
-use zhc::compat::mh_mul;
+use zhc::PipelineExt;
+use zhc::compat::Iop;
 use zhc_builder::CiphertextSpec;
 use zhc_config::multi_hpu::MultiHpuConfig;
 use zhc_langs::doplang::DopInstructionSet;
+use zhc_pipeline::Pipeline;
 
 fn main() {
     let spec = CiphertextSpec::new(64, 2, 2);
-    // `MultiHpuConfig::default()` uses 4 boards, so 8 has to be given explicitly.
-    let config = MultiHpuConfig {
-        n_hpus: 8,
-        ..Default::default()
-    };
-    let mut pl = mh_mul(spec, config);
+    let n_hpus = 8;
+    let mut pl = Pipeline::new()
+        .with_builder(Iop::MhMul { par_n: n_hpus }.to_builder(spec))
+        .with_multi_hpu_config(MultiHpuConfig {
+            n_hpus,
+            ..Default::default()
+        });
 
-    // Every accessor takes `&mut self`, so each borrow has to end before the next call.
     let per_board = pl
         .get_multi_doplang()
         .iter()
         .map(|ir| {
-            // A receiving board has only 63 transfer flags.
             let received = ir
                 .walk_ops_linear()
                 .filter(|op| matches!(op.get_instruction(), DopInstructionSet::WAIT { .. }))

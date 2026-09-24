@@ -1,3 +1,4 @@
+use zhc_utils::files::{Extension, FileHandle};
 use zhc_utils::units::{Cycle, MHz, Microseconds};
 
 use super::*;
@@ -145,9 +146,17 @@ where
                 if let Err(e) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     self.simulatable.handle(&mut self.dispatcher, trigger);
                 })) {
-                    self.dump_trace("simulation_panicked.json");
-                    eprintln!("Panic caught during simulatable.handle(): {:?}", e);
-                    panic!();
+                    let message = e
+                        .downcast_ref::<&str>()
+                        .map(|s| s.to_string())
+                        .or_else(|| e.downcast_ref::<String>().cloned())
+                        .unwrap_or_else(|| "<non-string payload>".into());
+                    let file = self.dump_trace_to_random_file();
+                    panic!(
+                        "Panic caught during simulatable.handle(): {}\nSimulation trace dumped to {}",
+                        message,
+                        file.as_ref().display()
+                    );
                 }
             } else {
                 self.simulatable.handle(&mut self.dispatcher, trigger);
@@ -178,12 +187,7 @@ where
             match self.step_cond(event_eq) {
                 SimulationState::MayContinue => {}
                 SimulationState::CondEncountered => return,
-                SimulationState::SimulationOver => {
-                    if DUMP_TRACE_ON_PANIC {
-                        self.dump_trace("test.json");
-                    }
-                    panic!("Simulation finished while waiting for an event.")
-                }
+                SimulationState::SimulationOver => self.panic_finished_while_waiting(),
             }
         }
     }
@@ -206,14 +210,26 @@ where
             match self.step_cond(event_cond) {
                 SimulationState::MayContinue => {}
                 SimulationState::CondEncountered => return,
-                SimulationState::SimulationOver => {
-                    if DUMP_TRACE_ON_PANIC {
-                        self.dump_trace("test.json");
-                    }
-                    panic!("Simulation finished while waiting for an event.")
-                }
+                SimulationState::SimulationOver => self.panic_finished_while_waiting(),
             }
         }
+    }
+
+    fn panic_finished_while_waiting(&self) -> ! {
+        if DUMP_TRACE_ON_PANIC {
+            let file = self.dump_trace_to_random_file();
+            panic!(
+                "Simulation finished while waiting for an event.\nSimulation trace dumped to {}",
+                file.as_ref().display()
+            )
+        }
+        panic!("Simulation finished while waiting for an event.")
+    }
+
+    fn dump_trace_to_random_file(&self) -> FileHandle {
+        let file = FileHandle::random(Extension::Json);
+        self.dump_trace(&file);
+        file
     }
 
     /// Writes simulation trace data to the specified file `path`.

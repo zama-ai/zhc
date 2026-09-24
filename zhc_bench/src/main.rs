@@ -1,10 +1,16 @@
+use std::cell::RefCell;
+use std::cmp::Reverse;
 use std::collections::BTreeMap;
 use std::fs;
+use std::io::{self, IsTerminal, Write};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Mutex;
-use std::time::Instant;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::mpsc::{self, RecvTimeoutError};
+use std::thread;
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use zhc::{
@@ -12,8 +18,13 @@ use zhc::{
     prelude::{Pipeline, PipelineExt},
 };
 use zhc_builder::{Builder, CiphertextSpec};
-use zhc_config::hpu::HpuConfig;
-use zhc_utils::{data_visulization::DynamicTable, units::Microseconds};
+use zhc_config::{hpu::HpuConfig, multi_hpu::MultiHpuConfig};
+use zhc_utils::{
+    Dumpable,
+    data_visulization::DynamicTable,
+    files::{Extension, FileHandle},
+    units::Microseconds,
+};
 
 const ALL_BITS: &[u16] = &[8, 16, 32, 64, 128];
 const RESULTS_DIR: &str = "zhc_bench/results";
@@ -28,6 +39,11 @@ const RESET: &str = "\x1b[0m";
 /// Panic reports buffered by the hook, printed at the end so they don't mangle the tables.
 static PANIC_REPORTS: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
+thread_local! {
+    static PANIC_CONTEXT: RefCell<Option<String>> = const { RefCell::new(None) };
+    static LAST_PANIC: RefCell<Option<String>> = const { RefCell::new(None) };
+}
+
 /// Replaces the default panic hook (which prints at panic time) with one buffering reports
 /// into PANIC_REPORTS. Backtraces are kept when RUST_BACKTRACE is set.
 fn install_panic_hook() {
@@ -36,27 +52,202 @@ fn install_panic_hook() {
         if std::env::var("RUST_BACKTRACE").is_ok_and(|v| v != "0") {
             report = format!("{}\n{}", report, std::backtrace::Backtrace::force_capture());
         }
-        PANIC_REPORTS.lock().unwrap().push(report);
+        match PANIC_CONTEXT.with_borrow(|c| c.clone()) {
+            Some(context) => LAST_PANIC.set(Some(format!("[{}] {}", context, report))),
+            None => PANIC_REPORTS.lock().unwrap().push(report),
+        }
     }));
 }
 
 /// Runs `f`, catching a panic so the remaining runs still execute. Returns None on panic,
 /// tagging the buffered report with `context` to identify the run.
 fn catch_panic<T>(context: &str, f: impl FnOnce() -> T) -> Option<T> {
+    PANIC_CONTEXT.set(Some(context.to_string()));
     let result = catch_unwind(AssertUnwindSafe(f)).ok();
-    if result.is_none()
-        && let Some(report) = PANIC_REPORTS.lock().unwrap().last_mut()
+    PANIC_CONTEXT.set(None);
+    if let Some(report) = LAST_PANIC.take()
+        && result.is_none()
     {
-        *report = format!("[{}] {}", context, report);
+        PANIC_REPORTS.lock().unwrap().push(report);
     }
     result
+}
+
+const SPINNER: &[char] = &['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+
+fn run_parallel<J: Sync, R: Send>(
+    label: &str,
+    jobs: &[J],
+    n_threads: usize,
+    f: impl Fn(&J) -> R + Sync,
+) -> Vec<R> {
+    let show_progress = io::stderr().is_terminal();
+    let next = AtomicUsize::new(0);
+    let (sender, receiver) = mpsc::channel();
+    let mut results: Vec<Option<R>> = (0..jobs.len()).map(|_| None).collect();
+
+    thread::scope(|scope| {
+        for _ in 0..n_threads.clamp(1, jobs.len().max(1)) {
+            let sender = sender.clone();
+            let (next, f) = (&next, &f);
+            scope.spawn(move || {
+                loop {
+                    let index = next.fetch_add(1, Ordering::Relaxed);
+                    let Some(job) = jobs.get(index) else { break };
+                    sender.send((index, f(job))).unwrap();
+                }
+            });
+        }
+        drop(sender);
+
+        let mut done = 0;
+        let mut frame = 0;
+        loop {
+            if show_progress {
+                eprint!(
+                    "\r\x1b[K{} {}: {}/{} done",
+                    SPINNER[frame % SPINNER.len()],
+                    label,
+                    done,
+                    jobs.len()
+                );
+                io::stderr().flush().unwrap();
+                frame += 1;
+            }
+            match receiver.recv_timeout(Duration::from_millis(100)) {
+                Ok((index, result)) => {
+                    results[index] = Some(result);
+                    done += 1;
+                }
+                Err(RecvTimeoutError::Timeout) => {}
+                Err(RecvTimeoutError::Disconnected) => break,
+            }
+        }
+        if show_progress {
+            eprint!("\r\x1b[K");
+            io::stderr().flush().unwrap();
+        }
+    });
+
+    results.into_iter().map(|r| r.unwrap()).collect()
+}
+
+fn cost_rank(iop: &Iop) -> u8 {
+    match iop {
+        Iop::Div | Iop::Divs | Iop::Mod | Iop::Mods => 0,
+        Iop::Mul | Iop::Muls | Iop::OvfMul | Iop::OvfMuls => 1,
+        _ => 2,
+    }
+}
+
+fn bench_target(
+    target: Target,
+    iops: &[Iop],
+    bits: &[u16],
+    n_threads: usize,
+    measure: impl Fn(&Iop, Target, u16) -> Option<Microseconds> + Sync,
+) -> IopResults {
+    let mut jobs: Vec<(Iop, u16)> = iops
+        .iter()
+        .flat_map(|iop| bits.iter().map(move |&b| (iop.clone(), b)))
+        .collect();
+    jobs.sort_by_key(|(iop, b)| (cost_rank(iop), Reverse(*b)));
+
+    let measured = run_parallel(&target.name(), &jobs, n_threads, |(iop, b)| {
+        measure(iop, target, *b)
+    });
+
+    let mut results = IopResults::new();
+    for ((iop, b), latency) in jobs.iter().zip(measured) {
+        let entry = results.entry(format!("{:?}", iop)).or_default();
+        if let Some(latency) = latency {
+            entry.insert(*b, latency);
+        }
+    }
+    results
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Target {
+    Hpu,
+    MultiHpu(u8),
+}
+
+impl Target {
+    const ALL: &[Target] = &[
+        Target::Hpu,
+        Target::MultiHpu(2),
+        Target::MultiHpu(4),
+        Target::MultiHpu(8),
+    ];
+
+    fn name(&self) -> String {
+        match self {
+            Target::Hpu => "hpu".into(),
+            Target::MultiHpu(n) => format!("mhpu{}", n),
+        }
+    }
+
+    fn parse(name: &str) -> Option<Target> {
+        match name {
+            "hpu" => Some(Target::Hpu),
+            _ => name
+                .strip_prefix("mhpu")
+                .and_then(|n| n.parse::<u8>().ok())
+                .filter(|&n| n > 0)
+                .map(Target::MultiHpu),
+        }
+    }
+
+    fn pipeline(&self, iop: &Iop, spec: CiphertextSpec) -> Pipeline {
+        match self {
+            Target::Hpu => iop_pipeline(iop, &HpuConfig::default(), spec),
+            Target::MultiHpu(n_hpus) => Pipeline::new()
+                .with_builder(iop.to_builder(spec))
+                .with_multi_hpu_config(MultiHpuConfig {
+                    n_hpus: *n_hpus,
+                    ..Default::default()
+                }),
+        }
+    }
+
+    fn latency(&self, iop: &Iop, spec: CiphertextSpec) -> Microseconds {
+        let mut pipeline = self.pipeline(iop, spec);
+        match self {
+            Target::Hpu => pipeline.get_hpu_metrics().latency,
+            Target::MultiHpu(_) => pipeline.get_multi_hpu_metrics().latency,
+        }
+    }
+
+    fn compile(&self, pipeline: &mut Pipeline) {
+        match self {
+            Target::Hpu => {
+                pipeline.get_hpu_stream();
+            }
+            Target::MultiHpu(_) => {
+                pipeline.get_multi_hpu_stream();
+            }
+        }
+    }
 }
 
 /// Parsed filter options from CLI arguments.
 struct Filters {
     iops: Vec<Iop>,
     bits: Vec<u16>,
+    targets: Vec<Target>,
     reps: usize,
+    jobs: Option<usize>,
+}
+
+impl Filters {
+    fn threads_or(&self, default: usize) -> usize {
+        self.jobs.unwrap_or(default).max(1)
+    }
+}
+
+fn all_cores() -> usize {
+    thread::available_parallelism().map_or(1, |n| n.get())
 }
 
 impl Filters {
@@ -64,7 +255,9 @@ impl Filters {
     fn parse(args: &[String]) -> (Self, Vec<String>) {
         let mut iop_patterns: Vec<String> = vec![];
         let mut bit_values: Vec<u16> = vec![];
+        let mut target_names: Vec<String> = vec![];
         let mut reps = DEFAULT_REPS;
+        let mut jobs = None;
         let mut remaining = vec![];
         let mut iter = args.iter().peekable();
 
@@ -81,12 +274,24 @@ impl Filters {
                 }
             } else if let Some(val) = arg.strip_prefix("--bits=") {
                 bit_values.extend(val.split(',').filter_map(|s| s.trim().parse::<u16>().ok()));
+            } else if arg == "-t" || arg == "--targets" {
+                if let Some(val) = iter.next() {
+                    target_names.extend(val.split(',').map(|s| s.trim().to_lowercase()));
+                }
+            } else if let Some(val) = arg.strip_prefix("--targets=") {
+                target_names.extend(val.split(',').map(|s| s.trim().to_lowercase()));
             } else if arg == "-r" || arg == "--reps" {
                 if let Some(val) = iter.next() {
                     reps = val.trim().parse().unwrap_or(DEFAULT_REPS);
                 }
             } else if let Some(val) = arg.strip_prefix("--reps=") {
                 reps = val.trim().parse().unwrap_or(DEFAULT_REPS);
+            } else if arg == "-j" || arg == "--jobs" {
+                if let Some(val) = iter.next() {
+                    jobs = val.trim().parse().ok();
+                }
+            } else if let Some(val) = arg.strip_prefix("--jobs=") {
+                jobs = val.trim().parse().ok();
             } else {
                 remaining.push(arg.clone());
             }
@@ -117,22 +322,95 @@ impl Filters {
                 .collect()
         };
 
+        let targets: Vec<Target> = if target_names.is_empty() {
+            Target::ALL.to_vec()
+        } else {
+            target_names
+                .iter()
+                .map(|name| {
+                    Target::parse(name).unwrap_or_else(|| {
+                        eprintln!("Error: unknown target '{}' (use hpu or mhpuN)", name);
+                        std::process::exit(1);
+                    })
+                })
+                .collect()
+        };
+
         (
             Self {
                 iops,
                 bits,
+                targets,
                 reps: reps.max(1),
+                jobs,
             },
             remaining,
         )
     }
 }
 
+type IopResults = BTreeMap<String, BTreeMap<u16, Microseconds>>;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct BenchResult {
     commit: String,
     timestamp: String,
-    results: BTreeMap<String, BTreeMap<u16, Microseconds>>,
+    results: BTreeMap<String, IopResults>,
+}
+
+impl BenchResult {
+    fn get(&self, target: Target, iop: &str, bits: u16) -> Option<Microseconds> {
+        self.results
+            .get(&target.name())
+            .and_then(|iops| iops.get(iop))
+            .and_then(|m| m.get(&bits))
+            .copied()
+    }
+}
+
+#[derive(Deserialize)]
+struct LegacyBenchResult {
+    commit: String,
+    timestamp: String,
+    results: IopResults,
+}
+
+fn parse_result(content: &str) -> BenchResult {
+    if let Ok(result) = serde_json::from_str::<BenchResult>(content) {
+        return result;
+    }
+    let legacy: LegacyBenchResult = serde_json::from_str(content).expect("failed to parse");
+    BenchResult {
+        commit: legacy.commit,
+        timestamp: legacy.timestamp,
+        results: BTreeMap::from([(Target::Hpu.name(), legacy.results)]),
+    }
+}
+
+fn run_target_tables(
+    filters: &Filters,
+    n_threads: usize,
+    measure: impl Fn(&Iop, Target, u16) -> Option<Microseconds> + Sync,
+    cell: impl Fn(Target, &str, u16, Option<Microseconds>) -> String,
+) {
+    for (i, &target) in filters.targets.iter().enumerate() {
+        let results = bench_target(target, &filters.iops, &filters.bits, n_threads, &measure);
+        if i > 0 {
+            println!();
+        }
+        println!("{}", target.name());
+        let columns = filters.bits.iter().map(|b| format!("{}b", b));
+        let rows = filters.iops.iter().map(|iop| format!("{:?}", iop));
+        let mut table = DynamicTable::new(columns, rows);
+        for (row, iop) in filters.iops.iter().enumerate() {
+            let iop_name = format!("{:?}", iop);
+            for (col, &bits) in filters.bits.iter().enumerate() {
+                let value = results.get(&iop_name).and_then(|m| m.get(&bits)).copied();
+                table.set(row, col, cell(target, &iop_name, bits, value));
+            }
+        }
+        table.finish();
+    }
 }
 
 fn get_commit_hash() -> String {
@@ -179,16 +457,10 @@ fn check_git_clean() {
     }
 }
 
-fn bench_iop(iop: &Iop, config: &HpuConfig, bits_filter: &[u16]) -> BTreeMap<u16, Microseconds> {
-    let mut bits_results = BTreeMap::new();
-    for &bits in bits_filter {
-        let spec = CiphertextSpec::new(bits, 2, 2);
-        let context = format!("{:?} {}b latency", iop, bits);
-        if let Some(latency) = catch_panic(&context, || iop.compute_latency(&config, spec)) {
-            bits_results.insert(bits, latency);
-        }
-    }
-    bits_results
+fn measure_latency(iop: &Iop, target: Target, bits: u16) -> Option<Microseconds> {
+    let spec = CiphertextSpec::new(bits, 2, 2);
+    let context = format!("{:?} {}b {} latency", iop, bits, target.name());
+    catch_panic(&context, || target.latency(iop, spec))
 }
 
 fn median(samples: &mut [f64]) -> f64 {
@@ -216,47 +488,38 @@ fn iop_pipeline(iop: &Iop, config: &HpuConfig, spec: CiphertextSpec) -> Pipeline
     }
 }
 
-/// Measures compile times for one iop: median wall-clock over `reps` compilations per bit width.
-fn bench_compile_iop(
-    iop: &Iop,
-    config: &HpuConfig,
-    bits_filter: &[u16],
-    reps: usize,
-) -> BTreeMap<u16, Microseconds> {
-    let mut bits_results = BTreeMap::new();
-    for &bits in bits_filter {
-        let spec = CiphertextSpec::new(bits, 2, 2);
-        // A pipeline caches its steps, so each repetition compiles on a fresh one.
-        let context = format!("{:?} {}b compile", iop, bits);
-        let samples: Option<Vec<f64>> = catch_panic(&context, || {
-            (0..reps)
-                .map(|_| {
-                    let mut pipeline = iop_pipeline(iop, config, spec);
-                    let tic = Instant::now();
-                    pipeline.get_hpu_stream();
-                    tic.elapsed().as_secs_f64() * 1e6
-                })
-                .collect()
-        });
-        if let Some(mut samples) = samples {
-            bits_results.insert(bits, Microseconds(median(&mut samples)));
-        }
-    }
-    bits_results
+/// Measures the compile time of one iop: median wall-clock over `reps` compilations.
+fn measure_compile(iop: &Iop, target: Target, bits: u16, reps: usize) -> Option<Microseconds> {
+    let spec = CiphertextSpec::new(bits, 2, 2);
+    // A pipeline caches its steps, so each repetition compiles on a fresh one.
+    let context = format!("{:?} {}b {} compile", iop, bits, target.name());
+    let mut samples: Vec<f64> = catch_panic(&context, || {
+        (0..reps)
+            .map(|_| {
+                let mut pipeline = target.pipeline(iop, spec);
+                let tic = Instant::now();
+                target.compile(&mut pipeline);
+                tic.elapsed().as_secs_f64() * 1e6
+            })
+            .collect()
+    })?;
+    Some(Microseconds(median(&mut samples)))
 }
 
-fn run_benchmarks() -> BenchResult {
-    let config = HpuConfig::default();
-    let mut results: BTreeMap<String, BTreeMap<u16, Microseconds>> = BTreeMap::new();
+fn run_benchmarks(n_threads: usize) -> BenchResult {
+    let mut results: BTreeMap<String, IopResults> = BTreeMap::new();
 
-    for iop in Iop::TEST_ITER {
-        let iop_name = format!("{:?}", iop);
-        println!("Benchmarking {}", iop_name);
-        let bits_results = bench_iop(iop, &config, ALL_BITS);
-        for (&bits, &latency) in &bits_results {
-            println!("  {}b: {}", bits, latency);
-        }
-        results.insert(iop_name, bits_results);
+    for &target in Target::ALL {
+        let iop_results =
+            bench_target(target, Iop::TEST_ITER, ALL_BITS, n_threads, measure_latency);
+        let n_measured: usize = iop_results.values().map(|m| m.len()).sum();
+        println!(
+            "Benchmarked {}: {}/{} runs",
+            target.name(),
+            n_measured,
+            Iop::TEST_ITER.len() * ALL_BITS.len()
+        );
+        results.insert(target.name(), iop_results);
     }
 
     BenchResult {
@@ -290,8 +553,7 @@ fn load_all_results() -> Vec<BenchResult> {
         let path = entry.path();
         if path.extension().is_some_and(|e| e == "json") {
             let content = fs::read_to_string(&path).expect("failed to read file");
-            let result: BenchResult = serde_json::from_str(&content).expect("failed to parse");
-            results.push(result);
+            results.push(parse_result(&content));
         }
     }
 
@@ -306,7 +568,7 @@ fn load_result_by_rev(rev: &str) -> Option<BenchResult> {
         return None;
     }
     let content = fs::read_to_string(&path).expect("failed to read file");
-    Some(serde_json::from_str(&content).expect("failed to parse"))
+    Some(parse_result(&content))
 }
 
 fn find_latest_baseline() -> Option<BenchResult> {
@@ -376,74 +638,41 @@ fn run_diff_incremental(baseline: &BenchResult, use_color: bool, filters: &Filte
     let baseline_date = &baseline.timestamp[..10.min(baseline.timestamp.len())];
     println!("vs {} ({})\n", baseline_short, baseline_date);
 
-    let columns = filters.bits.iter().map(|b| format!("{}b", b));
-    let rows = filters.iops.iter().map(|iop| format!("{:?}", iop));
-    let mut table = DynamicTable::new(columns, rows);
-
-    let config = HpuConfig::default();
-
-    for (row, iop) in filters.iops.iter().enumerate() {
-        let iop_name = format!("{:?}", iop);
-        let bits_results = bench_iop(iop, &config, &filters.bits);
-
-        for (col, bits) in filters.bits.iter().enumerate() {
-            let cell = match (
-                bits_results.get(bits),
-                baseline.results.get(&iop_name).and_then(|m| m.get(bits)),
-            ) {
-                (Some(&curr), Some(&base)) => format_diff(curr.0, base.0, use_color),
-                (None, _) => "panic!".into(),
-                _ => "-".into(),
-            };
-            table.set(row, col, cell);
-        }
-    }
-
-    table.finish();
+    run_target_tables(
+        filters,
+        filters.threads_or(all_cores()),
+        measure_latency,
+        |target, iop_name, bits, value| match (value, baseline.get(target, iop_name, bits)) {
+            (Some(curr), Some(base)) => format_diff(curr.0, base.0, use_color),
+            (None, _) => "panic!".into(),
+            _ => "-".into(),
+        },
+    );
 }
 
 fn run_latency_table(filters: &Filters) {
-    let columns = filters.bits.iter().map(|b| format!("{}b", b));
-    let rows = filters.iops.iter().map(|iop| format!("{:?}", iop));
-    let mut table = DynamicTable::new(columns, rows);
-
-    let config = HpuConfig::default();
-
-    for (row, iop) in filters.iops.iter().enumerate() {
-        let bits_results = bench_iop(iop, &config, &filters.bits);
-
-        for (col, bits) in filters.bits.iter().enumerate() {
-            let cell = match bits_results.get(bits) {
-                Some(&us) => format_latency(us.0),
-                None => "panic!".into(),
-            };
-            table.set(row, col, cell);
-        }
-    }
-
-    table.finish();
+    run_target_tables(
+        filters,
+        filters.threads_or(all_cores()),
+        measure_latency,
+        |_, _, _, value| match value {
+            Some(us) => format_latency(us.0),
+            None => "panic!".into(),
+        },
+    );
 }
 
 /// Prints compile times as an iops x bits table.
 fn run_compile_table(filters: &Filters) {
-    let columns = filters.bits.iter().map(|b| format!("{}b", b));
-    let rows = filters.iops.iter().map(|iop| format!("{:?}", iop));
-    let mut table = DynamicTable::new(columns, rows);
-
-    let config = HpuConfig::default();
-
-    for (row, iop) in filters.iops.iter().enumerate() {
-        let bits_results = bench_compile_iop(iop, &config, &filters.bits, filters.reps);
-        for (col, bits) in filters.bits.iter().enumerate() {
-            let cell = match bits_results.get(bits) {
-                Some(&us) => format_compile_time(us.0),
-                None => "panic!".into(),
-            };
-            table.set(row, col, cell);
-        }
-    }
-
-    table.finish();
+    run_target_tables(
+        filters,
+        filters.threads_or(1),
+        |iop, target, bits| measure_compile(iop, target, bits, filters.reps),
+        |_, _, _, value| match value {
+            Some(us) => format_compile_time(us.0),
+            None => "panic!".into(),
+        },
+    );
 }
 
 /// Customize this function during development to analyze the IR.
@@ -505,21 +734,23 @@ fn generate_html(results: &[BenchResult]) {
         const BITS = [8, 16, 32, 64, 128];
         const COLORS = ['#ff6384', '#36a2eb', '#ffce56', '#4bc0c0', '#9966ff'];
 
-        // Get all IOPs from the latest result
-        const iops = DATA.length > 0 ? Object.keys(DATA[DATA.length - 1].results) : [];
+        const latestResults = DATA.length > 0 ? DATA[DATA.length - 1].results : {{}};
+        const targets = Object.keys(latestResults);
+        const series = targets.flatMap(target =>
+            Object.keys(latestResults[target]).map(iop => ({{ target, iop }})));
+        const label = (s) => targets.length > 1 ? `${{s.iop}} [${{s.target}}]` : s.iop;
 
-        // Create a chart for each IOP
         const chartsDiv = document.getElementById('charts');
-        iops.forEach(iop => {{
+        series.forEach((s, idx) => {{
             const container = document.createElement('div');
             container.className = 'chart-container';
-            container.innerHTML = `<canvas id="chart-${{iop}}"></canvas>`;
+            container.innerHTML = `<canvas id="chart-${{idx}}"></canvas>`;
             chartsDiv.appendChild(container);
 
-            const ctx = document.getElementById(`chart-${{iop}}`).getContext('2d');
+            const ctx = document.getElementById(`chart-${{idx}}`).getContext('2d');
             const datasets = BITS.map((bits, i) => ({{
                 label: `${{bits}}b`,
-                data: DATA.map(r => r.results[iop]?.[bits] ?? null),
+                data: DATA.map(r => r.results[s.target]?.[s.iop]?.[bits] ?? null),
                 borderColor: COLORS[i],
                 tension: 0.1,
                 fill: false,
@@ -534,7 +765,7 @@ fn generate_html(results: &[BenchResult]) {
                 options: {{
                     responsive: true,
                     plugins: {{
-                        title: {{ display: true, text: iop, color: '#00d4ff' }},
+                        title: {{ display: true, text: label(s), color: '#00d4ff' }},
                         legend: {{ labels: {{ color: '#eee' }} }},
                     }},
                     scales: {{
@@ -558,22 +789,22 @@ fn generate_html(results: &[BenchResult]) {
         }}
 
         // Generate table with latest results
-        if (DATA.length > 0) {{
-            const latest = DATA[DATA.length - 1];
-            let html = '<table><tr><th>Operation</th>';
+        let html = '';
+        targets.forEach(target => {{
+            html += `<h3>${{target}}</h3><table><tr><th>Operation</th>`;
             BITS.forEach(b => html += `<th>${{b}}b</th>`);
             html += '</tr>';
-            iops.forEach(iop => {{
+            Object.keys(latestResults[target]).forEach(iop => {{
                 html += `<tr><td style="text-align:left">${{iop}}</td>`;
                 BITS.forEach(b => {{
-                    const val = latest.results[iop]?.[b];
+                    const val = latestResults[target][iop]?.[b];
                     html += `<td>${{val ? fmt(val) : '-'}}</td>`;
                 }});
                 html += '</tr>';
             }});
             html += '</table>';
-            document.getElementById('table').innerHTML = html;
-        }}
+        }});
+        document.getElementById('table').innerHTML = html;
     </script>
 </body>
 </html>
@@ -640,7 +871,7 @@ fn main() {
         }
         "export" => {
             check_git_clean();
-            let result = run_benchmarks();
+            let result = run_benchmarks(filters.threads_or(all_cores()));
             save_result(&result);
             let all = load_all_results();
             generate_html(&all);
@@ -673,23 +904,30 @@ fn main() {
             );
             eprintln!("  -b, --bits=VALUES       - Comma-separated bit widths (8,16,32,64,128)");
             eprintln!(
+                "  -t, --targets=NAMES     - Comma-separated targets: hpu, mhpuN (default: hpu,mhpu2,mhpu4,mhpu8)"
+            );
+            eprintln!(
                 "  -r, --reps=N            - Compile-time repetitions, median kept (default: {})",
                 DEFAULT_REPS
+            );
+            eprintln!(
+                "  -j, --jobs=N            - Worker threads (default: all cores, 1 for compile)"
             );
             eprintln!();
             eprintln!("Examples:");
             eprintln!("  zhc_bench run -i mul,div -b 8,16");
             eprintln!("  zhc_bench diff --iops=cmp --bits=64");
             eprintln!("  zhc_bench compile -i mul -b 8,16");
+            eprintln!("  zhc_bench run -i add -t hpu,mhpu2,mhpu4");
         }
     }
 
     let reports = PANIC_REPORTS.lock().unwrap();
     if !reports.is_empty() {
-        for report in reports.iter() {
-            eprintln!("\n{}", report);
-        }
+        let file = FileHandle::random(Extension::Txt);
+        reports.join("\n\n").dump_to_file(&file);
         eprintln!("\nError: {} run(s) panicked.", reports.len());
+        eprintln!("Panic traces dumped to {}", file.as_ref().display());
         std::process::exit(1);
     }
 }
