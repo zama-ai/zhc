@@ -1,6 +1,6 @@
 use zhc_crypto::integer_semantics::PlaintextBlockSpec;
 use zhc_ir::{AnnIR, AnnOpRef, IR};
-use zhc_utils::{Dumpable, existential_enum, iter::CollectInSmallVec, svec};
+use zhc_utils::{Dumpable, existential_enum, iter::CollectInVec, svec};
 
 use super::{IopInstructionSet, IopLang};
 
@@ -102,7 +102,7 @@ pub fn check_noise(ir: &IR<IopLang>, spec: &PlaintextBlockSpec) {
     let overshoots = ann
         .walk_vals_linear()
         .filter(|v| v.get_annotation().overshoots())
-        .cosvec();
+        .covec();
     if !overshoots.is_empty() {
         panic!(
             "Noise overshoot for values:\n{}",
@@ -119,7 +119,7 @@ pub fn check_noise(ir: &IR<IopLang>, spec: &PlaintextBlockSpec) {
         })
         .map(|op| op.get_args_iter().next().unwrap())
         .filter(|v| v.get_annotation().0 > Noise::FRESH)
-        .cosvec();
+        .covec();
     if !dirty_outputs.is_empty() {
         panic!(
             "Dirty outputs in circuit: \n{}",
