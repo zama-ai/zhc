@@ -1594,7 +1594,8 @@ impl Pipeline {
         self.eval
             .pull_val(&mut self.context, VALIDS().unchecked_ioplang);
         self.eventually_report_failure();
-        self.eval
+        *self
+            .eval
             .into_val(VALIDS().unchecked_ioplang)
             .unwrap()
             .unwrap_unchecked_iop_lang()
@@ -1610,7 +1611,8 @@ impl Pipeline {
     pub fn into_prototype(mut self) -> Signature<Type> {
         self.eval.pull_val(&mut self.context, VALIDS().prototype);
         self.eventually_report_failure();
-        self.eval
+        *self
+            .eval
             .into_val(VALIDS().prototype)
             .unwrap()
             .unwrap_prototype()
@@ -1644,7 +1646,8 @@ impl Pipeline {
     pub fn into_hpu_config(mut self) -> HpuConfig {
         self.eval.pull_val(&mut self.context, VALIDS().hpu_config);
         self.eventually_report_failure();
-        self.eval
+        *self
+            .eval
             .into_val(VALIDS().hpu_config)
             .unwrap()
             .unwrap_hpu_config()
@@ -1674,7 +1677,8 @@ impl Pipeline {
     pub fn into_ioplang(mut self) -> IR<IopLang> {
         self.eval.pull_val(&mut self.context, VALIDS().ioplang);
         self.eventually_report_failure();
-        self.eval
+        *self
+            .eval
             .into_val(VALIDS().ioplang)
             .unwrap()
             .unwrap_iop_lang()
@@ -1707,7 +1711,8 @@ impl Pipeline {
         self.eval
             .pull_val(&mut self.context, VALIDS().hpulang_translated);
         self.eventually_report_failure();
-        self.eval
+        *self
+            .eval
             .into_val(VALIDS().hpulang_translated)
             .unwrap()
             .unwrap_hpu_lang_translated()
@@ -1724,7 +1729,8 @@ impl Pipeline {
         self.eval
             .pull_val(&mut self.context, VALIDS().hpulang_scheduled);
         self.eventually_report_failure();
-        self.eval
+        *self
+            .eval
             .into_val(VALIDS().hpulang_scheduled)
             .unwrap()
             .unwrap_hpu_lang_scheduled()
@@ -1740,7 +1746,8 @@ impl Pipeline {
     pub fn into_doplang(mut self) -> IR<DopLang> {
         self.eval.pull_val(&mut self.context, VALIDS().doplang);
         self.eventually_report_failure();
-        self.eval
+        *self
+            .eval
             .into_val(VALIDS().doplang)
             .unwrap()
             .unwrap_dop_lang()
@@ -1788,7 +1795,8 @@ impl Pipeline {
     pub fn into_pbs_metrics(mut self) -> PbsMetrics {
         self.eval.pull_val(&mut self.context, VALIDS().pbs_metrics);
         self.eventually_report_failure();
-        self.eval
+        *self
+            .eval
             .into_val(VALIDS().pbs_metrics)
             .unwrap()
             .unwrap_pbs_metrics()
@@ -1820,7 +1828,8 @@ impl Pipeline {
     pub fn into_hpu_metrics(mut self) -> HpuMetrics {
         self.eval.pull_val(&mut self.context, VALIDS().hpu_metrics);
         self.eventually_report_failure();
-        self.eval
+        *self
+            .eval
             .into_val(VALIDS().hpu_metrics)
             .unwrap()
             .unwrap_hpu_metrics()
@@ -1902,7 +1911,8 @@ impl Pipeline {
         self.eval
             .pull_val(&mut self.context, VALIDS().multi_hpu_config);
         self.eventually_report_failure();
-        self.eval
+        *self
+            .eval
             .into_val(VALIDS().multi_hpu_config)
             .unwrap()
             .unwrap_multi_hpu_config()
@@ -1935,7 +1945,8 @@ impl Pipeline {
         self.eval
             .pull_val(&mut self.context, VALIDS().multi_hpulang_translated);
         self.eventually_report_failure();
-        self.eval
+        *self
+            .eval
             .into_val(VALIDS().multi_hpulang_translated)
             .unwrap()
             .unwrap_multi_hpu_lang_translated()
@@ -2071,7 +2082,8 @@ impl Pipeline {
     pub fn into_vm_config(mut self) -> VmConfig {
         self.eval.pull_val(&mut self.context, VALIDS().vm_config);
         self.eventually_report_failure();
-        self.eval
+        *self
+            .eval
             .into_val(VALIDS().vm_config)
             .unwrap()
             .unwrap_vm_config()
@@ -2088,7 +2100,8 @@ impl Pipeline {
     pub fn into_vmlang(mut self) -> IR<VmLang> {
         self.eval.pull_val(&mut self.context, VALIDS().vmlang);
         self.eventually_report_failure();
-        self.eval
+        *self
+            .eval
             .into_val(VALIDS().vmlang)
             .unwrap()
             .unwrap_vm_lang()
@@ -2105,7 +2118,8 @@ impl Pipeline {
         self.eval
             .pull_val(&mut self.context, VALIDS().vm_execution_plan);
         self.eventually_report_failure();
-        self.eval
+        *self
+            .eval
             .into_val(VALIDS().vm_execution_plan)
             .unwrap()
             .unwrap_vm_execution_plan()

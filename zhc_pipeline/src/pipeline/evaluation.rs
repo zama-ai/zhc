@@ -75,7 +75,7 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
             PipelineInstructionSet::InputHpuConfig => {
                 interval_begin(c"InputHpuConfig", 0);
                 let config = context.hpu_config.clone().unwrap();
-                let result = svec![PipelineArtifact::HpuConfig(config)];
+                let result = svec![PipelineArtifact::HpuConfig(Box::new(config))];
                 interval_end(c"InputHpuConfig", 0);
                 result
             }
@@ -85,7 +85,7 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                     .unchecked_ioplang
                     .clone()
                     .expect("Missing pipeline input: unchecked_ioplang");
-                let result = svec![PipelineArtifact::UncheckedIopLang(unchecked)];
+                let result = svec![PipelineArtifact::UncheckedIopLang(Box::new(unchecked))];
                 interval_end(c"InputUncheckedIopLang", 0);
                 result
             }
@@ -123,7 +123,7 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                     .prototype
                     .clone()
                     .expect("Missing pipeline input: prototype");
-                let result = svec![PipelineArtifact::Prototype(prototype)];
+                let result = svec![PipelineArtifact::Prototype(Box::new(prototype))];
                 interval_end(c"InputPrototype", 0);
                 result
             }
@@ -141,7 +141,9 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                 interval_begin(c"IopLangToHpuLang", 0);
                 let ioplang = arguments[0].unwrap_iop_lang_ref();
                 let hpulang = hpu::lowering::lower_iop_to_hpu(ioplang);
-                let result = svec![PipelineArtifact::HpuLangTranslated(hpulang.output)];
+                let result = svec![PipelineArtifact::HpuLangTranslated(Box::new(
+                    hpulang.output
+                ))];
                 interval_end(c"IopLangToHpuLang", 0);
                 result
             }
@@ -163,7 +165,7 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                         SchedPolicy::AsLateAsPossible,
                     )
                 };
-                let result = svec![PipelineArtifact::HpuLangScheduled(scheduled)];
+                let result = svec![PipelineArtifact::HpuLangScheduled(Box::new(scheduled))];
                 interval_end(c"ScheduleHpuLang", 0);
                 result
             }
@@ -173,7 +175,7 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                 let config = arguments[1].unwrap_hpu_config_ref();
                 let lut_registry = arguments[2].unwrap_lut_registry_ref();
                 let allocated = hpu::allocator::allocate_registers(scheduled, config, lut_registry);
-                let result = svec![PipelineArtifact::DopLang(allocated)];
+                let result = svec![PipelineArtifact::DopLang(Box::new(allocated))];
                 interval_end(c"AllocateDopLang", 0);
                 result
             }
@@ -193,7 +195,7 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                 interval_begin(c"ComputePbsMetrics", 0);
                 let ioplang = arguments[0].unwrap_unchecked_iop_lang_ref();
                 let metrics = misc::compute_pbs_metrics(ioplang);
-                let result = svec![PipelineArtifact::PbsMetrics(metrics)];
+                let result = svec![PipelineArtifact::PbsMetrics(Box::new(metrics))];
                 interval_end(c"ComputePbsMetrics", 0);
                 result
             }
@@ -202,7 +204,7 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                 let doplang = arguments[0].unwrap_dop_lang_ref();
                 let hpulang = arguments[1].unwrap_hpu_lang_scheduled_ref();
                 let metrics = hpu::metrics::compute_hpu_metrics(doplang, hpulang);
-                let result = svec![PipelineArtifact::HpuMetrics(metrics)];
+                let result = svec![PipelineArtifact::HpuMetrics(Box::new(metrics))];
                 interval_end(c"ComputeHpuMetrics", 0);
                 result
             }
@@ -240,7 +242,7 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
             PipelineInstructionSet::InputMultiHpuConfig => {
                 interval_begin(c"InputMultiHpuConfig", 0);
                 let config = context.multi_hpu_config.clone().unwrap();
-                let result = svec![PipelineArtifact::MultiHpuConfig(config)];
+                let result = svec![PipelineArtifact::MultiHpuConfig(Box::new(config))];
                 interval_end(c"InputMultiHpuConfig", 0);
                 result
             }
@@ -251,7 +253,7 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                 let (hpulang, localities) =
                     multi_hpu::translation::lower_iop_to_multi_hpu(ioplang, partitions);
                 let result = svec![
-                    PipelineArtifact::MultiHpuLangTranslated(hpulang),
+                    PipelineArtifact::MultiHpuLangTranslated(Box::new(hpulang)),
                     PipelineArtifact::MultiHpuLocalities(localities)
                 ];
                 interval_end(c"IopLangToMultiHpu", 0);
@@ -352,14 +354,14 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
             PipelineInstructionSet::InputVmConfig => {
                 interval_begin(c"InputVmConfig", 0);
                 let config = context.vm_config.clone().unwrap();
-                let result = svec![PipelineArtifact::VmConfig(config)];
+                let result = svec![PipelineArtifact::VmConfig(Box::new(config))];
                 interval_end(c"InputVmConfig", 0);
                 result
             }
             PipelineInstructionSet::InputTopology => {
                 interval_begin(c"InputTopology", 0);
                 let topology = context.topology.clone();
-                let result = svec![PipelineArtifact::Topology(topology)];
+                let result = svec![PipelineArtifact::Topology(Box::new(topology))];
                 interval_end(c"InputTopology", 0);
                 result
             }
@@ -367,7 +369,7 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                 interval_begin(c"IopLangToVmLang", 0);
                 let ioplang = arguments[0].unwrap_iop_lang_ref();
                 let vmlang = vm::lowering::lower_iop_to_vm(ioplang);
-                let result = svec![PipelineArtifact::VmLang(vmlang)];
+                let result = svec![PipelineArtifact::VmLang(Box::new(vmlang))];
                 interval_end(c"IopLangToVmLang", 0);
                 result
             }
@@ -384,7 +386,7 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                     topology,
                     SchedPolicy::AsSoonAsPossible,
                 );
-                let result = svec![PipelineArtifact::VmExecutionPlan(exec)];
+                let result = svec![PipelineArtifact::VmExecutionPlan(Box::new(exec))];
                 interval_end(c"GenerateVmExecutionPlan", 0);
                 result
             }

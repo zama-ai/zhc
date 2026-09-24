@@ -27,29 +27,29 @@ use zhc_utils::{existential_enum, topology::Topology};
 #[existential_enum]
 pub enum PipelineArtifact {
     // Commons
-    UncheckedIopLang(IR<IopLang>),
-    IopLang(IR<IopLang>),
+    UncheckedIopLang(Box<IR<IopLang>>),
+    IopLang(Box<IR<IopLang>>),
     Fingerprint(Fingerprint),
-    PbsMetrics(PbsMetrics),
+    PbsMetrics(Box<PbsMetrics>),
     SlackDrawing(FileHandle),
     Partitions(OpMap<PartitionId>),
-    Prototype(Signature<Type>),
+    Prototype(Box<Signature<Type>>),
     CiphertextBlockSpec(CiphertextBlockSpec),
     LutRegistry(LutRegistry),
     // Hpu
     HpuLutRelocation(Option<Vec<LutId>>),
-    HpuConfig(HpuConfig),
-    HpuLangTranslated(IR<HpuLang>),
-    HpuLangScheduled(IR<HpuLang>),
-    DopLang(IR<DopLang>),
+    HpuConfig(Box<HpuConfig>),
+    HpuLangTranslated(Box<IR<HpuLang>>),
+    HpuLangScheduled(Box<IR<HpuLang>>),
+    DopLang(Box<IR<DopLang>>),
     HpuStream(Vec<DOpRepr>),
-    HpuMetrics(HpuMetrics),
+    HpuMetrics(Box<HpuMetrics>),
     HpuTrace(PerfettoTrace),
     HpuAssembly(FileHandle),
     // MultiHpu
     MultiHpuLutRelocation(Option<Vec<LutId>>),
-    MultiHpuConfig(MultiHpuConfig),
-    MultiHpuLangTranslated(IR<HpuLang>),
+    MultiHpuConfig(Box<MultiHpuConfig>),
+    MultiHpuLangTranslated(Box<IR<HpuLang>>),
     MultiHpuLocalities(OpMap<HpuLocality>),
     MultiHpuLangScheduled(Vec<IR<HpuLang>>),
     MultiDopLang(Vec<IR<DopLang>>),
@@ -58,10 +58,10 @@ pub enum PipelineArtifact {
     MultiHpuStream(Vec<Vec<DOpRepr>>),
     MultiHpuAssembly(Vec<FileHandle>),
     // Vm
-    VmConfig(VmConfig),
-    Topology(Topology),
-    VmLang(IR<VmLang>),
-    VmExecutionPlan(VmExecutionPlan),
+    VmConfig(Box<VmConfig>),
+    Topology(Box<Topology>),
+    VmLang(Box<IR<VmLang>>),
+    VmExecutionPlan(Box<VmExecutionPlan>),
 }
 
 impl From<LutRegistry> for PipelineArtifact {
