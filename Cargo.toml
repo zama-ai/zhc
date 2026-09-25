@@ -39,29 +39,29 @@ default-members = [
 resolver = "3"
 
 [workspace.package]
-version = "0.10.0"
+version = "0.10.1"
 edition = "2024"
 license = "BSD-3-Clause-Clear"
 repository = "https://github.com/zama-ai/zhc"
 readme = "README.md"
 
 [workspace.dependencies]
-zhc = { path = "zhc", version = "0.10.0" }
-zhc_ir = { path = "zhc_ir", version = "0.10.0" }
-zhc_config = { path = "zhc_config", version = "0.10.0" }
-zhc_langs = { path = "zhc_langs", version = "0.10.0" }
-zhc_langs_macro = { path = "zhc_langs_macro", version = "0.10.0" }
-zhc_pipeline = { path = "zhc_pipeline", version = "0.10.0" }
-zhc_sim = { path = "zhc_sim", version = "0.10.0" }
-zhc_utils = { path = "zhc_utils", version = "0.10.0" }
-zhc_utils_macro = { path = "zhc_utils_macro", version = "0.10.0" }
-zhc_builder = { path = "zhc_builder", version = "0.10.0" }
-zhc_crypto = { path = "zhc_crypto", version = "0.10.0" }
-zhc_bench = {path = "zhc_bench", version = "0.10.0" }
-zhc_vm = {path = "zhc_vm", version = "0.10.0" }
-zhc_profiling = {path = "zhc_profiling", version = "0.10.0" }
-zhc_pipeline_correctness = { path = "zhc_pipeline_correctness", version = "0.10.0" }
-zhc_pipeline_correctness_macro = { path = "zhc_pipeline_correctness_macro", version = "0.10.0" }
+zhc = { path = "zhc", version = "0.10.1" }
+zhc_ir = { path = "zhc_ir", version = "0.10.1" }
+zhc_config = { path = "zhc_config", version = "0.10.1" }
+zhc_langs = { path = "zhc_langs", version = "0.10.1" }
+zhc_langs_macro = { path = "zhc_langs_macro", version = "0.10.1" }
+zhc_pipeline = { path = "zhc_pipeline", version = "0.10.1" }
+zhc_sim = { path = "zhc_sim", version = "0.10.1" }
+zhc_utils = { path = "zhc_utils", version = "0.10.1" }
+zhc_utils_macro = { path = "zhc_utils_macro", version = "0.10.1" }
+zhc_builder = { path = "zhc_builder", version = "0.10.1" }
+zhc_crypto = { path = "zhc_crypto", version = "0.10.1" }
+zhc_bench = {path = "zhc_bench", version = "0.10.1" }
+zhc_vm = {path = "zhc_vm", version = "0.10.1" }
+zhc_profiling = {path = "zhc_profiling", version = "0.10.1" }
+zhc_pipeline_correctness = { path = "zhc_pipeline_correctness", version = "0.10.1" }
+zhc_pipeline_correctness_macro = { path = "zhc_pipeline_correctness_macro", version = "0.10.1" }
 zhc_cli = { path = "zhc_cli", version = "0.10.0" }
 
 serde = { version = "1.0", features = ["derive"] }

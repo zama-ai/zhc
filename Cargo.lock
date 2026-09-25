@@ -1474,7 +1474,7 @@ dependencies = [
 
 [[package]]
 name = "zhc"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "zhc_builder",
  "zhc_config",
@@ -1488,7 +1488,7 @@ dependencies = [
 
 [[package]]
 name = "zhc_bench"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -1504,7 +1504,7 @@ dependencies = [
 
 [[package]]
 name = "zhc_builder"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "rand",
  "zhc_crypto",
@@ -1515,7 +1515,7 @@ dependencies = [
 
 [[package]]
 name = "zhc_cli"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "zhc",
  "zhc_config",
@@ -1529,7 +1529,7 @@ dependencies = [
 
 [[package]]
 name = "zhc_config"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -1539,7 +1539,7 @@ dependencies = [
 
 [[package]]
 name = "zhc_crypto"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "paste",
  "rand",
@@ -1549,7 +1549,7 @@ dependencies = [
 
 [[package]]
 name = "zhc_ir"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "serde",
  "zhc_utils",
@@ -1558,7 +1558,7 @@ dependencies = [
 
 [[package]]
 name = "zhc_langs"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "serde",
  "zhc_crypto",
@@ -1569,7 +1569,7 @@ dependencies = [
 
 [[package]]
 name = "zhc_langs_macro"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1578,7 +1578,7 @@ dependencies = [
 
 [[package]]
 name = "zhc_pipeline"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "bitfield-struct",
  "rand",
@@ -1594,7 +1594,7 @@ dependencies = [
 
 [[package]]
 name = "zhc_pipeline_correctness"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "zhc",
  "zhc_builder",
@@ -1609,7 +1609,7 @@ dependencies = [
 
 [[package]]
 name = "zhc_pipeline_correctness_macro"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1618,14 +1618,14 @@ dependencies = [
 
 [[package]]
 name = "zhc_profiling"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "tracy-client",
 ]
 
 [[package]]
 name = "zhc_sim"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -1637,7 +1637,7 @@ dependencies = [
 
 [[package]]
 name = "zhc_utils"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "libc",
  "paste",
@@ -1650,7 +1650,7 @@ dependencies = [
 
 [[package]]
 name = "zhc_utils_macro"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1659,7 +1659,7 @@ dependencies = [
 
 [[package]]
 name = "zhc_vm"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "criterion",
  "libc",
