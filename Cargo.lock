@@ -1479,6 +1479,7 @@ dependencies = [
  "zhc_builder",
  "zhc_config",
  "zhc_crypto",
+ "zhc_iops",
  "zhc_ir",
  "zhc_langs",
  "zhc_pipeline",
@@ -1555,6 +1556,16 @@ dependencies = [
  "rand",
  "serde",
  "zhc_utils",
+]
+
+[[package]]
+name = "zhc_iops"
+version = "0.10.1"
+dependencies = [
+ "cc",
+ "zhc_builder",
+ "zhc_c_api",
+ "zhc_langs",
 ]
 
 [[package]]

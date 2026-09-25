@@ -1,7 +1,7 @@
-import Zhc.IopAlgebra.Traced.Instance
-import Zhc.IopAlgebra.Model.Instance
+import Zhc.BlockAlgebra.Tracer.Instance
+import Zhc.BlockAlgebra.Model.Instance
 
-namespace Zhc.IopAlgebra.Traced
+namespace Zhc.BlockAlgebra.Tracer
 
 open Zhc.Model
 
@@ -12,21 +12,21 @@ export HasModel (model)
 
 instance {H β : Type} : HasModel (Traced H β) β := ⟨Traced.model⟩
 
-instance {sb : SpecBlock} : HasModel (IopAlgebra.CtBlock sb TraceM) (CiphertextBlock sb) :=
+instance {sb : SpecBlock} : HasModel (BlockAlgebra.CtBlock sb TraceM) (CiphertextBlock sb) :=
   ⟨Traced.model⟩
 
-instance {sb : SpecBlock} : HasModel (IopAlgebra.PtBlock sb TraceM) (PlaintextBlock sb) :=
+instance {sb : SpecBlock} : HasModel (BlockAlgebra.PtBlock sb TraceM) (PlaintextBlock sb) :=
   ⟨Traced.model⟩
 
-instance {sb : SpecBlock} : HasModel (IopAlgebra.CtBool sb TraceM) (CiphertextBool sb) :=
-  ⟨Traced.model⟩
-
-instance {sb : SpecBlock} {si : SpecInteger sb} :
-    HasModel (IopAlgebra.CtInteger TraceM si) (CiphertextInteger si) :=
+instance {sb : SpecBlock} : HasModel (BlockAlgebra.CtBool sb TraceM) (CiphertextBool sb) :=
   ⟨Traced.model⟩
 
 instance {sb : SpecBlock} {si : SpecInteger sb} :
-    HasModel (IopAlgebra.PtInteger TraceM si) (PlaintextInteger si) :=
+    HasModel (BlockAlgebra.CtInteger TraceM si) (CiphertextInteger si) :=
+  ⟨Traced.model⟩
+
+instance {sb : SpecBlock} {si : SpecInteger sb} :
+    HasModel (BlockAlgebra.PtInteger TraceM si) (PlaintextInteger si) :=
   ⟨Traced.model⟩
 
 instance {α α' β β' : Type} [HasModel α α'] [HasModel β β'] : HasModel (α × β) (α' × β') :=
@@ -186,92 +186,92 @@ macro_rules
 variable {sb : SpecBlock} {si : SpecInteger sb}
 
 theorem Projects.declareInteger (si : SpecInteger sb) :
-  Projects (IopAlgebra.declareInteger (M := TraceM) si) model (IopAlgebra.declareInteger (M := Id) si)
+  Projects (BlockAlgebra.declareInteger (M := TraceM) si) model (BlockAlgebra.declareInteger (M := Id) si)
 := by projects_op
 
 theorem Projects.letPtBlock (v : Nat) :
-  Projects (IopAlgebra.letPtBlock (sb := sb) (M := TraceM) v) model
-    (IopAlgebra.letPtBlock (sb := sb) (M := Id) v)
+  Projects (BlockAlgebra.letPtBlock (sb := sb) (M := TraceM) v) model
+    (BlockAlgebra.letPtBlock (sb := sb) (M := Id) v)
 := by projects_op
 
 theorem Projects.letCtBlock (v : Nat) :
-  Projects (IopAlgebra.letCtBlock (sb := sb) (M := TraceM) v) model
-    (IopAlgebra.letCtBlock (sb := sb) (M := Id) v)
+  Projects (BlockAlgebra.letCtBlock (sb := sb) (M := TraceM) v) model
+    (BlockAlgebra.letCtBlock (sb := sb) (M := Id) v)
 := by projects_op
 
 theorem Projects.addCt (a b : TrCtBlock sb) :
-  Projects (IopAlgebra.addCt (M := TraceM) a b) model (IopAlgebra.addCt (M := Id) a.model b.model)
+  Projects (BlockAlgebra.addCt (M := TraceM) a b) model (BlockAlgebra.addCt (M := Id) a.model b.model)
 := by projects_op
 
 theorem Projects.subCt (a b : TrCtBlock sb) :
-  Projects (IopAlgebra.subCt (M := TraceM) a b) model (IopAlgebra.subCt (M := Id) a.model b.model)
+  Projects (BlockAlgebra.subCt (M := TraceM) a b) model (BlockAlgebra.subCt (M := Id) a.model b.model)
 := by projects_op
 
 theorem Projects.shlCt (a : TrCtBlock sb) (amount : Nat) :
-  Projects (IopAlgebra.shlCt (M := TraceM) a amount) model
-    (IopAlgebra.shlCt (M := Id) a.model amount)
+  Projects (BlockAlgebra.shlCt (M := TraceM) a amount) model
+    (BlockAlgebra.shlCt (M := Id) a.model amount)
 := by projects_op
 
 theorem Projects.packCt (a : TrCtBlock sb) (mul : Nat) (b : TrCtBlock sb) :
-  Projects (IopAlgebra.packCt (M := TraceM) a mul b) model
-    (IopAlgebra.packCt (M := Id) a.model mul b.model)
+  Projects (BlockAlgebra.packCt (M := TraceM) a mul b) model
+    (BlockAlgebra.packCt (M := Id) a.model mul b.model)
 := by projects_op
 
 theorem Projects.addPt (a : TrCtBlock sb) (b : TrPtBlock sb) :
-  Projects (IopAlgebra.addPt (M := TraceM) a b) model (IopAlgebra.addPt (M := Id) a.model b.model)
+  Projects (BlockAlgebra.addPt (M := TraceM) a b) model (BlockAlgebra.addPt (M := Id) a.model b.model)
 := by projects_op
 
 theorem Projects.subPt (a : TrCtBlock sb) (b : TrPtBlock sb) :
-  Projects (IopAlgebra.subPt (M := TraceM) a b) model (IopAlgebra.subPt (M := Id) a.model b.model)
+  Projects (BlockAlgebra.subPt (M := TraceM) a b) model (BlockAlgebra.subPt (M := Id) a.model b.model)
 := by projects_op
 
 theorem Projects.ptSub (a : TrPtBlock sb) (b : TrCtBlock sb) :
-  Projects (IopAlgebra.ptSub (M := TraceM) a b) model (IopAlgebra.ptSub (M := Id) a.model b.model)
+  Projects (BlockAlgebra.ptSub (M := TraceM) a b) model (BlockAlgebra.ptSub (M := Id) a.model b.model)
 := by projects_op
 
 theorem Projects.mulPt (a : TrCtBlock sb) (b : TrPtBlock sb) :
-  Projects (IopAlgebra.mulPt (M := TraceM) a b) model (IopAlgebra.mulPt (M := Id) a.model b.model)
+  Projects (BlockAlgebra.mulPt (M := TraceM) a b) model (BlockAlgebra.mulPt (M := Id) a.model b.model)
 := by projects_op
 
 theorem Projects.extractCtBlock (x : TrCtInteger si) (i : Fin si.blockCount) :
-  Projects (IopAlgebra.extractCtBlock (M := TraceM) x i) model
-    (IopAlgebra.extractCtBlock (M := Id) x.model i)
+  Projects (BlockAlgebra.extractCtBlock (M := TraceM) x i) model
+    (BlockAlgebra.extractCtBlock (M := Id) x.model i)
 := by projects_op
 
 theorem Projects.extractPtBlock (x : TrPtInteger si) (i : Fin si.blockCount) :
-  Projects (IopAlgebra.extractPtBlock (M := TraceM) x i) model
-    (IopAlgebra.extractPtBlock (M := Id) x.model i)
+  Projects (BlockAlgebra.extractPtBlock (M := TraceM) x i) model
+    (BlockAlgebra.extractPtBlock (M := Id) x.model i)
 := by projects_op
 
 theorem Projects.storeCtBlock (x : TrCtInteger si) (i : Fin si.blockCount) (b : TrCtBlock sb) :
-  Projects (IopAlgebra.storeCtBlock (M := TraceM) x i b) model
-    (IopAlgebra.storeCtBlock (M := Id) x.model i b.model)
+  Projects (BlockAlgebra.storeCtBlock (M := TraceM) x i b) model
+    (BlockAlgebra.storeCtBlock (M := Id) x.model i b.model)
 := by projects_op
 
 theorem Projects.boolFromBlock (b : TrCtBlock sb) :
-  Projects (IopAlgebra.boolFromBlock (M := TraceM) b) model
-    (IopAlgebra.boolFromBlock (M := Id) b.model)
+  Projects (BlockAlgebra.boolFromBlock (M := TraceM) b) model
+    (BlockAlgebra.boolFromBlock (M := Id) b.model)
 := by projects_op
 
 theorem Projects.extractBoolBlock (b : TrCtBool sb) :
-  Projects (IopAlgebra.extractBoolBlock (M := TraceM) b) model
-    (IopAlgebra.extractBoolBlock (M := Id) b.model)
+  Projects (BlockAlgebra.extractBoolBlock (M := TraceM) b) model
+    (BlockAlgebra.extractBoolBlock (M := Id) b.model)
 := by projects_op
 
 theorem Projects.pbs (lut : Lut1 sb) (a : TrCtBlock sb) :
-  Projects (IopAlgebra.pbs (M := TraceM) lut a) model (IopAlgebra.pbs (M := Id) lut a.model)
+  Projects (BlockAlgebra.pbs (M := TraceM) lut a) model (BlockAlgebra.pbs (M := Id) lut a.model)
 := by projects_op
 
 theorem Projects.pbs2 (lut : Lut2 sb) (a : TrCtBlock sb) :
-  Projects (IopAlgebra.pbs2 (M := TraceM) lut a) model (IopAlgebra.pbs2 (M := Id) lut a.model)
+  Projects (BlockAlgebra.pbs2 (M := TraceM) lut a) model (BlockAlgebra.pbs2 (M := Id) lut a.model)
 := by projects_op
 
 theorem Projects.pbs4 (lut : Lut4 sb) (a : TrCtBlock sb) :
-  Projects (IopAlgebra.pbs4 (M := TraceM) lut a) model (IopAlgebra.pbs4 (M := Id) lut a.model)
+  Projects (BlockAlgebra.pbs4 (M := TraceM) lut a) model (BlockAlgebra.pbs4 (M := Id) lut a.model)
 := by projects_op
 
 theorem Projects.pbs8 (lut : Lut8 sb) (a : TrCtBlock sb) :
-  Projects (IopAlgebra.pbs8 (M := TraceM) lut a) model (IopAlgebra.pbs8 (M := Id) lut a.model)
+  Projects (BlockAlgebra.pbs8 (M := TraceM) lut a) model (BlockAlgebra.pbs8 (M := Id) lut a.model)
 := by projects_op
 
 syntax "projects_prog" : tactic
@@ -284,4 +284,4 @@ macro_rules
          projects_prog)
       | (refine Projects.bind (Projects.forIn fun _ _ => ?_) fun _ => ?_ <;> projects_prog))
 
-end Zhc.IopAlgebra.Traced
+end Zhc.BlockAlgebra.Tracer

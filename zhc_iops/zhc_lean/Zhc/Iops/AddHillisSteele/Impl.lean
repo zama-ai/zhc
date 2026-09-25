@@ -1,6 +1,6 @@
-import Zhc.IopAlgebra.Class
-import Zhc.IopAlgebra.Model.Instance
-import Zhc.IopAlgebra.Traced.Instance
+import Zhc.BlockAlgebra.Class
+import Zhc.BlockAlgebra.Model.Instance
+import Zhc.BlockAlgebra.Tracer.Instance
 import Zhc.Iops.AddRippleCarry.Impl
 
 namespace Zhc.Iops
@@ -52,7 +52,7 @@ def solvePropCarryLut : Model.Lut1 sb22 :=
 def msgOnlyLut : Model.Lut1 sb22 :=
   Model.Lut1.fromFn "MsgOnly" (·.doMaskMessage)
 
-variable {M : Type → Type} [Monad M] [A : IopAlgebra sb22 M]
+variable {M : Type → Type} [Monad M] [A : BlockAlgebra sb22 M]
 
 def rawSums (si : SpecInteger sb22) (x y : A.CtInteger si) : M (List A.CtBlock) := do
   let sums ← (List.finRange si.blockCount).mapM fun i => do
@@ -135,7 +135,7 @@ end HillisSteele
 
 open HillisSteele
 
-variable {M : Type → Type} [Monad M] [A : IopAlgebra sb22 M]
+variable {M : Type → Type} [Monad M] [A : BlockAlgebra sb22 M]
 
 def addHillisSteele (si : SpecInteger sb22) (x y : A.CtInteger si) : M (A.CtInteger si) := do
   let sums ← rawSums si x y
@@ -158,7 +158,7 @@ private def smokeHs (n : Nat) (x y : Nat) : Nat :=
 #guard smokeHs 32 (2 ^ 63 + 12345678901234) (2 ^ 62 + 98765432109876) ==
   (2 ^ 63 + 12345678901234 + 2 ^ 62 + 98765432109876) % 2 ^ 64
 
-open IopAlgebra.Traced in
+open BlockAlgebra.Tracer in
 
 def addHillisSteeleCircuit (si : SpecInteger sb22) : IO Ffi.Builder :=
   emit sb22 do

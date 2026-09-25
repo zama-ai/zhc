@@ -9,7 +9,7 @@ readme.workspace = true
 publish = false
 
 [lib]
-crate-type = ["staticlib", "cdylib"]
+crate-type = ["staticlib", "cdylib", "rlib"]
 
 [dependencies]
 zhc_builder.workspace = true

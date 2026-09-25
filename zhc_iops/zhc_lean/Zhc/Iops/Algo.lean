@@ -1,12 +1,12 @@
-import Zhc.IopAlgebra.Class
-import Zhc.IopAlgebra.Model.Instance
-import Zhc.IopAlgebra.Traced.Instance
-import Zhc.IopAlgebra.Traced.Theorems
+import Zhc.BlockAlgebra.Class
+import Zhc.BlockAlgebra.Model.Instance
+import Zhc.BlockAlgebra.Tracer.Instance
+import Zhc.BlockAlgebra.Tracer.Theorems
 
 namespace Zhc
 
 open Model (SpecBlock SpecInteger CiphertextInteger CiphertextBool PlaintextInteger)
-open IopAlgebra.Traced (TraceM Projects)
+open BlockAlgebra.Tracer (TraceM Projects)
 
 inductive Ty (sb : SpecBlock) where
   | ctInt (si : SpecInteger sb)
@@ -15,19 +15,19 @@ inductive Ty (sb : SpecBlock) where
 
 variable {sb : SpecBlock}
 
-def Ty.denote {M : Type → Type} [Monad M] (A : IopAlgebra sb M) : Ty sb → Type
+def Ty.denote {M : Type → Type} [Monad M] (A : BlockAlgebra sb M) : Ty sb → Type
   | .ctInt si => A.CtInteger si
   | .ptInt si => A.PtInteger si
   | .ctBool => A.CtBool
 
-def Args {M : Type → Type} [Monad M] (A : IopAlgebra sb M) : List (Ty sb) → Type
+def Args {M : Type → Type} [Monad M] (A : BlockAlgebra sb M) : List (Ty sb) → Type
   | [] => Unit
   | [t] => t.denote A
   | t :: ts => t.denote A × Args A ts
 
-abbrev IdA (sb : SpecBlock) := IopAlgebra.Model.instIopAlgebraId sb
+abbrev IdA (sb : SpecBlock) := BlockAlgebra.Model.instBlockAlgebraId sb
 
-abbrev TrA (sb : SpecBlock) := IopAlgebra.Traced.instIopAlgebraTraced sb
+abbrev TrA (sb : SpecBlock) := BlockAlgebra.Tracer.instBlockAlgebraTracer sb
 
 def Ty.Clean : (t : Ty sb) → t.denote (IdA sb) → Prop
   | .ctInt _, x => CiphertextInteger.IsClean x
@@ -50,7 +50,7 @@ def Args.model : (ts : List (Ty sb)) → Args (TrA sb) ts → Args (IdA sb) ts
   | t :: t' :: ts, (a, as) => (t.model a, Args.model (t' :: ts) as)
 
 def Ty.input : (t : Ty sb) → TraceM (t.denote (TrA sb))
-  | .ctInt si => IopAlgebra.Traced.inputCtInteger si
+  | .ctInt si => BlockAlgebra.Tracer.inputCtInteger si
   | .ptInt si => do
     let h ← (← read).integerPlaintextInput si.intSize.toUInt16
     pure ⟨h, PlaintextInteger.ofNat 0⟩
@@ -59,7 +59,7 @@ def Ty.input : (t : Ty sb) → TraceM (t.denote (TrA sb))
     pure ⟨h, CiphertextBool.ofBool false⟩
 
 def Ty.output : (t : Ty sb) → t.denote (TrA sb) → TraceM Unit
-  | .ctInt _, x => IopAlgebra.Traced.outputCtInteger x
+  | .ctInt _, x => BlockAlgebra.Tracer.outputCtInteger x
   | .ptInt _, _ => throw (IO.userError "plaintext integers cannot be circuit outputs")
   | .ctBool, b => do (← read).boolCiphertextOutput b.handle
 
@@ -82,14 +82,14 @@ structure Algo (sb : SpecBlock) where
   Param : Type
   ins : Param → List (Ty sb)
   outs : Param → List (Ty sb)
-  prog : ∀ {M : Type → Type} [Monad M] [A : IopAlgebra sb M] (p : Param), Args A (ins p) → M (Args A (outs p))
+  prog : ∀ {M : Type → Type} [Monad M] [A : BlockAlgebra sb M] (p : Param), Args A (ins p) → M (Args A (outs p))
   spec : (p : Param) → Args (IdA sb) (ins p) → Args (IdA sb) (outs p) → Prop
   correct : ∀ p xs, Args.Clean _ xs → spec p xs (prog (M := Id) p xs)
   clean : ∀ p xs, Args.Clean _ xs → Args.Clean _ (prog (M := Id) p xs)
   traced_projects : ∀ p xs, Projects (prog (M := TraceM) p xs) (Args.model _) (prog (M := Id) p (Args.model _ xs))
 
 def Algo.emit (a : Algo sb) (p : a.Param) : IO Ffi.Builder :=
-  IopAlgebra.Traced.emit sb do
+  BlockAlgebra.Tracer.emit sb do
     let xs ← Args.input (a.ins p)
     let ys ← a.prog (M := TraceM) p xs
     Args.output (a.outs p) ys

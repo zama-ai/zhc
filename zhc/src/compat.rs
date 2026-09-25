@@ -9,6 +9,7 @@ use zhc_builder::{
     shift_right, shifts_left, shifts_right, ssub, sub, subs, sum, trail0, trail1,
 };
 use zhc_config::{hpu::HpuConfig, multi_hpu::MultiHpuConfig};
+use zhc_iops::add_tree;
 use zhc_pipeline::Pipeline;
 use zhc_utils::units::Microseconds;
 
@@ -225,7 +226,7 @@ impl Iop {
             Iop::CmpNeq => cmp_neq(spec),
             Iop::IfThenElse => if_then_else(spec),
             Iop::IfThenZero => if_then_zero(spec),
-            Iop::Add => add(spec),
+            Iop::Add => add_tree(spec).unwrap(),
             Iop::AddSimd => add_simd(spec),
             Iop::Sub => sub(spec),
             Iop::Mul => mul(spec),

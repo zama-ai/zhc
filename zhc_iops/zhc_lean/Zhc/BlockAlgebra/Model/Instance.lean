@@ -1,4 +1,4 @@
-import Zhc.IopAlgebra.Class
+import Zhc.BlockAlgebra.Class
 import Zhc.Model.SpecBlock
 import Zhc.Model.SpecInteger
 import Zhc.Model.CiphertextBlock
@@ -9,11 +9,11 @@ import Zhc.Model.PlaintextInteger
 import Zhc.Model.Lookup
 import Zhc.Model.Operators
 
-namespace Zhc.IopAlgebra.Model
+namespace Zhc.BlockAlgebra.Model
 
 open Zhc.Model
 
-instance instIopAlgebraId (sb : SpecBlock) : IopAlgebra sb Id where
+instance instBlockAlgebraId (sb : SpecBlock) : BlockAlgebra sb Id where
   CtBlock := CiphertextBlock sb
   PtBlock := PlaintextBlock sb
   CtBool := CiphertextBool sb
@@ -47,10 +47,10 @@ instance instIopAlgebraId (sb : SpecBlock) : IopAlgebra sb Id where
     lut.output a 4, lut.output a 5, lut.output a 6, lut.output a 7)
 
 private def smoke : CiphertextBlock ⟨2, 2⟩ := Id.run do
-  let a ← IopAlgebra.letCtBlock (sb := ⟨2, 2⟩) (M := Id) 3
-  let b ← IopAlgebra.letCtBlock (sb := ⟨2, 2⟩) (M := Id) 2
-  IopAlgebra.addCt a b
+  let a ← BlockAlgebra.letCtBlock (sb := ⟨2, 2⟩) (M := Id) 3
+  let b ← BlockAlgebra.letCtBlock (sb := ⟨2, 2⟩) (M := Id) 2
+  BlockAlgebra.addCt a b
 
 example : smoke = CiphertextBlock.ofNat 5 := by decide
 
-end Zhc.IopAlgebra.Model
+end Zhc.BlockAlgebra.Model

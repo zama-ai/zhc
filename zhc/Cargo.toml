@@ -17,6 +17,7 @@ zhc_langs.workspace = true
 zhc_builder.workspace = true
 zhc_pipeline.workspace = true
 zhc_config.workspace = true
+zhc_iops.workspace = true
 
 [[example]]
 name = "profile_pipeline"

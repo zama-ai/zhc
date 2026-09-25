@@ -16,14 +16,16 @@ lean_exe zhc_smoke where
 /-! ## C API
 
 The Rust workspace root, holding `zhc_c_api`. -/
-def workspaceDir (pkg : Package) : FilePath := pkg.dir / ".."
+def workspaceDir (pkg : Package) : FilePath := pkg.dir / ".." / ".."
 
 /-- Builds the Rust static library with cargo. Cargo does its own change tracking. -/
 target zhc_c_api_lib pkg : FilePath := Job.async do
-  let libFile := workspaceDir pkg / "target" / "release" / "libzhc_c_api.a"
+  let targetDir := pkg.buildDir / "cargo"
+  let libFile := targetDir / "release" / "libzhc_c_api.a"
   proc {
     cmd := "cargo"
-    args := #["build", "-p", "zhc_c_api", "--lib", "--release"]
+    args := #["build", "-p", "zhc_c_api", "--lib", "--release",
+      "--target-dir", targetDir.toString]
     cwd := workspaceDir pkg
   }
   addTrace (← computeTrace libFile)

@@ -18,6 +18,7 @@ members = [
     "zhc_pipeline_correctness_macro",
     "zhc_cli",
     "zhc_c_api",
+    "zhc_iops",
 ]
 default-members = [
     "zhc",

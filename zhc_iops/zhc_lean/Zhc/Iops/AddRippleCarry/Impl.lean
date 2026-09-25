@@ -1,6 +1,6 @@
-import Zhc.IopAlgebra.Class
-import Zhc.IopAlgebra.Model.Instance
-import Zhc.IopAlgebra.Traced.Instance
+import Zhc.BlockAlgebra.Class
+import Zhc.BlockAlgebra.Model.Instance
+import Zhc.BlockAlgebra.Tracer.Instance
 import Zhc.Ffi.Pipeline
 
 namespace Zhc.Iops
@@ -12,7 +12,7 @@ abbrev sb22 : SpecBlock := ⟨2, 2⟩
 def carryMsgLut : Model.Lut2 sb22 :=
   Model.Lut2.fromFn "CarryMsg" (·.doMoveCarryToMessage) (·.doMaskMessage)
 
-variable {M : Type → Type} [Monad M] [A : IopAlgebra sb22 M]
+variable {M : Type → Type} [Monad M] [A : BlockAlgebra sb22 M]
 
 def addRippleCarry (si : SpecInteger sb22) (x y : A.CtInteger si) : M (A.CtInteger si) := do
   let mut acc ← A.declareInteger si
@@ -40,7 +40,7 @@ private def smoke16 : Model.CiphertextInteger (sb := sb22) ⟨8⟩ :=
 
 example : smoke16.toNat = 4464 := by decide
 
-open IopAlgebra.Traced in
+open BlockAlgebra.Tracer in
 
 def addRippleCarryCircuit (si : SpecInteger sb22) : IO Ffi.Builder :=
   emit sb22 do

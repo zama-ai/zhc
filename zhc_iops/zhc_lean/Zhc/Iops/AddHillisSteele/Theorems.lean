@@ -1,13 +1,13 @@
-import Zhc.IopAlgebra.Model.Theorems
-import Zhc.IopAlgebra.Traced.Theorems
+import Zhc.BlockAlgebra.Model.Theorems
+import Zhc.BlockAlgebra.Tracer.Theorems
 import Zhc.Iops.AddRippleCarry.Theorems
 import Zhc.Iops.AddHillisSteele.Impl
 
 namespace Zhc.Iops
 
 open Model
-open IopAlgebra.Model
-open IopAlgebra.Traced (TraceM TrCtInteger)
+open BlockAlgebra.Model
+open BlockAlgebra.Tracer (TraceM TrCtInteger)
 
 namespace HillisSteele
 
@@ -821,7 +821,7 @@ theorem joinBlocks_spec (si : SpecInteger sb22) (v : Nat) (blocks : List (Cipher
 
 section Traced
 
-open IopAlgebra.Traced
+open BlockAlgebra.Tracer
 
 syntax "projects_step" : tactic
 
@@ -899,7 +899,7 @@ theorem rawSums_traced_projects (si : SpecInteger sb22) (x y : TrCtInteger si) :
     rw [model_append, model_replicate]
     rfl
 
-theorem blockStates_traced_projects (sums : List (IopAlgebra.CtBlock sb22 TraceM)) :
+theorem blockStates_traced_projects (sums : List (BlockAlgebra.CtBlock sb22 TraceM)) :
   Projects (blockStates (M := TraceM) sums) model (blockStates (M := Id) (model sums))
 := by
   unfold blockStates
@@ -912,7 +912,7 @@ theorem blockStates_traced_projects (sums : List (IopAlgebra.CtBlock sb22 TraceM
     projects_step
   · by_cases h4 : i < 4 <;> simp only [hi, h4, ↓reduceIte] <;> projects_step
 
-theorem groupStates_traced_projects (states : List (IopAlgebra.CtBlock sb22 TraceM)) :
+theorem groupStates_traced_projects (states : List (BlockAlgebra.CtBlock sb22 TraceM)) :
   Projects (groupStates (M := TraceM) states) model (groupStates (M := Id) (model states))
 := by
   unfold groupStates
@@ -922,7 +922,7 @@ theorem groupStates_traced_projects (states : List (IopAlgebra.CtBlock sb22 Trac
   simp only [model_pair, model_nat]
   by_cases hg : g = 0 <;> simp only [hg, ↓reduceIte] <;> projects_step
 
-theorem hsStage_traced_projects (k : Nat) (carries : List (IopAlgebra.CtBlock sb22 TraceM)) :
+theorem hsStage_traced_projects (k : Nat) (carries : List (BlockAlgebra.CtBlock sb22 TraceM)) :
   Projects (hsStage (M := TraceM) k carries) model (hsStage (M := Id) k (model carries))
 := by
   unfold hsStage
@@ -934,15 +934,15 @@ theorem hsStage_traced_projects (k : Nat) (carries : List (IopAlgebra.CtBlock sb
   · rw [model_append, model_take]
     rfl
 
-theorem groupCarries_traced_projects (groups : List (IopAlgebra.CtBlock sb22 TraceM)) :
+theorem groupCarries_traced_projects (groups : List (BlockAlgebra.CtBlock sb22 TraceM)) :
   Projects (groupCarries (M := TraceM) groups) model (groupCarries (M := Id) (model groups))
 := by
-  have hinit : (chunk4 (α := IopAlgebra.CtBlock sb22 Id) (model groups)).map (·.2.2.2)
-      = (model ((chunk4 groups).map (·.2.2.2)) : List (IopAlgebra.CtBlock sb22 Id)) := by
+  have hinit : (chunk4 (α := BlockAlgebra.CtBlock sb22 Id) (model groups)).map (·.2.2.2)
+      = (model ((chunk4 groups).map (·.2.2.2)) : List (BlockAlgebra.CtBlock sb22 Id)) := by
     rw [← model_chunk4]
     simp only [model, List.map_map]
     rfl
-  have hlen : List.length (α := IopAlgebra.CtBlock sb22 Id) (model ((chunk4 groups).map (·.2.2.2)))
+  have hlen : List.length (α := BlockAlgebra.CtBlock sb22 Id) (model ((chunk4 groups).map (·.2.2.2)))
       = ((chunk4 groups).map (·.2.2.2)).length :=
     List.length_map ..
   unfold groupCarries
@@ -950,13 +950,13 @@ theorem groupCarries_traced_projects (groups : List (IopAlgebra.CtBlock sb22 Tra
   refine Projects.bind (Projects.forIn fun stage r => ?_) fun r => Projects.pure _ _
   exact Projects.bind (hsStage_traced_projects stage r) fun _ => Projects.pure _ _
 
-theorem finalResolution_traced_projects (groups carries : List (IopAlgebra.CtBlock sb22 TraceM)) :
+theorem finalResolution_traced_projects (groups carries : List (BlockAlgebra.CtBlock sb22 TraceM)) :
   Projects (finalResolution (M := TraceM) groups carries) model
     (finalResolution (M := Id) (model groups) (model carries))
 := by
   have hl : (((chunk4 (model groups)).zip (model carries)).zip
-        (none :: (model carries : List (IopAlgebra.CtBlock sb22 Id)).map some) :
-          List ((_ × IopAlgebra.CtBlock sb22 Id) × Option (IopAlgebra.CtBlock sb22 Id)))
+        (none :: (model carries : List (BlockAlgebra.CtBlock sb22 Id)).map some) :
+          List ((_ × BlockAlgebra.CtBlock sb22 Id) × Option (BlockAlgebra.CtBlock sb22 Id)))
       = model (((chunk4 groups).zip carries).zip (none :: carries.map some)) := by
     rw [model_zip, model_zip, model_chunk4, model_cons, model_none]
     simp only [model, List.map_map]
@@ -967,7 +967,7 @@ theorem finalResolution_traced_projects (groups carries : List (IopAlgebra.CtBlo
   obtain ⟨⟨⟨s0, s1, s2, s3⟩, c⟩, prev⟩ := q
   cases prev <;> simp only [model_pair, model_none, model_some] <;> projects_step
 
-theorem propagate_traced_projects (sums carries : List (IopAlgebra.CtBlock sb22 TraceM)) :
+theorem propagate_traced_projects (sums carries : List (BlockAlgebra.CtBlock sb22 TraceM)) :
   Projects (propagate (M := TraceM) sums carries) model (propagate (M := Id) (model sums) (model carries))
 := by
   cases sums with
@@ -981,10 +981,10 @@ theorem propagate_traced_projects (sums carries : List (IopAlgebra.CtBlock sb22 
       exact Projects.addCt s c
     · exact Projects.mapM (l := r.2 :: added) fun b => Projects.pbs msgOnlyLut b
 
-theorem joinBlocks_traced_projects (si : SpecInteger sb22) (blocks : List (IopAlgebra.CtBlock sb22 TraceM)) :
+theorem joinBlocks_traced_projects (si : SpecInteger sb22) (blocks : List (BlockAlgebra.CtBlock sb22 TraceM)) :
   Projects (joinBlocks (M := TraceM) si blocks) model (joinBlocks (M := Id) si (model blocks))
 := by
-  have hl : ((model blocks : List (IopAlgebra.CtBlock sb22 Id)).zip (List.finRange si.blockCount))
+  have hl : ((model blocks : List (BlockAlgebra.CtBlock sb22 Id)).zip (List.finRange si.blockCount))
       = model (blocks.zip (List.finRange si.blockCount)) := by
     rw [model_zip, model_finRange]
   unfold joinBlocks
@@ -1030,12 +1030,19 @@ theorem addHillisSteele_correct (si : SpecInteger sb22) (x y : CiphertextInteger
 :=
   (addHillisSteele_spec si x y hx hy).1
 
+
+theorem iop_add_correct (si : SpecInteger sb22) (x y : CiphertextInteger si)
+    (hx : x.IsClean) (hy : y.IsClean) :
+  (addHillisSteele (M := Id) si x y).toNat = (x.toNat + y.toNat) % 2 ^ si.intSize
+:=
+  (addHillisSteele_spec si x y hx hy).1
+
 theorem addHillisSteele_isClean (si : SpecInteger sb22) (x y : CiphertextInteger si)
     (hx : x.IsClean) (hy : y.IsClean) : (addHillisSteele (M := Id) si x y).IsClean
 :=
   (addHillisSteele_spec si x y hx hy).2
 
-open HillisSteele IopAlgebra.Traced in
+open HillisSteele BlockAlgebra.Tracer in
 
 theorem addHillisSteele_traced_projects (si : SpecInteger sb22) (x y : TrCtInteger si) :
   (addHillisSteele (M := TraceM) si x y).ModelIs (addHillisSteele (M := Id) si x.model y.model)

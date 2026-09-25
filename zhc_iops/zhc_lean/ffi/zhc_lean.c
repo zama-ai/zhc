@@ -557,7 +557,7 @@ LEAN_EXPORT lean_obj_res zhc_lean_perfetto_trace_open(b_lean_obj_arg t, lean_obj
 
 LEAN_EXPORT lean_obj_res zhc_lean_lut1_new(b_lean_obj_arg name, b_lean_obj_arg spec, b_lean_obj_arg t1, lean_obj_arg w) {
     (void)w;
-    static uint16_t b1[TABLE_CAP];
+    static _Thread_local uint16_t b1[TABLE_CAP];
     size_t len = table_of(t1, b1, TABLE_CAP);
     zhc_lut1 *out = NULL;
     zhc_status s = zhc_lut1_new(lean_string_cstr(name), spec_of(spec), b1, len, &out);
@@ -566,7 +566,7 @@ LEAN_EXPORT lean_obj_res zhc_lean_lut1_new(b_lean_obj_arg name, b_lean_obj_arg s
 
 LEAN_EXPORT lean_obj_res zhc_lean_lut2_new(b_lean_obj_arg name, b_lean_obj_arg spec, b_lean_obj_arg t1, b_lean_obj_arg t2, lean_obj_arg w) {
     (void)w;
-    static uint16_t b1[TABLE_CAP], b2[TABLE_CAP];
+    static _Thread_local uint16_t b1[TABLE_CAP], b2[TABLE_CAP];
     size_t len = table_of(t1, b1, TABLE_CAP);
     if (table_of(t2, b2, TABLE_CAP) != len) return fail("zhc_lut2_new", ZHC_ERR_INVALID_ARGUMENT);
     zhc_lut2 *out = NULL;
@@ -576,7 +576,7 @@ LEAN_EXPORT lean_obj_res zhc_lean_lut2_new(b_lean_obj_arg name, b_lean_obj_arg s
 
 LEAN_EXPORT lean_obj_res zhc_lean_lut4_new(b_lean_obj_arg name, b_lean_obj_arg spec, b_lean_obj_arg t1, b_lean_obj_arg t2, b_lean_obj_arg t3, b_lean_obj_arg t4, lean_obj_arg w) {
     (void)w;
-    static uint16_t b1[TABLE_CAP], b2[TABLE_CAP], b3[TABLE_CAP], b4[TABLE_CAP];
+    static _Thread_local uint16_t b1[TABLE_CAP], b2[TABLE_CAP], b3[TABLE_CAP], b4[TABLE_CAP];
     size_t len = table_of(t1, b1, TABLE_CAP);
     if (table_of(t2, b2, TABLE_CAP) != len || table_of(t3, b3, TABLE_CAP) != len || table_of(t4, b4, TABLE_CAP) != len)
         return fail("zhc_lut4_new", ZHC_ERR_INVALID_ARGUMENT);
@@ -587,7 +587,7 @@ LEAN_EXPORT lean_obj_res zhc_lean_lut4_new(b_lean_obj_arg name, b_lean_obj_arg s
 
 LEAN_EXPORT lean_obj_res zhc_lean_lut8_new(b_lean_obj_arg name, b_lean_obj_arg spec, b_lean_obj_arg t1, b_lean_obj_arg t2, b_lean_obj_arg t3, b_lean_obj_arg t4, b_lean_obj_arg t5, b_lean_obj_arg t6, b_lean_obj_arg t7, b_lean_obj_arg t8, lean_obj_arg w) {
     (void)w;
-    static uint16_t b1[TABLE_CAP], b2[TABLE_CAP], b3[TABLE_CAP], b4[TABLE_CAP], b5[TABLE_CAP], b6[TABLE_CAP], b7[TABLE_CAP], b8[TABLE_CAP];
+    static _Thread_local uint16_t b1[TABLE_CAP], b2[TABLE_CAP], b3[TABLE_CAP], b4[TABLE_CAP], b5[TABLE_CAP], b6[TABLE_CAP], b7[TABLE_CAP], b8[TABLE_CAP];
     size_t len = table_of(t1, b1, TABLE_CAP);
     if (table_of(t2, b2, TABLE_CAP) != len || table_of(t3, b3, TABLE_CAP) != len || table_of(t4, b4, TABLE_CAP) != len ||
         table_of(t5, b5, TABLE_CAP) != len || table_of(t6, b6, TABLE_CAP) != len || table_of(t7, b7, TABLE_CAP) != len ||

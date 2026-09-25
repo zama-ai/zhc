@@ -6,13 +6,17 @@ namespace Zhc
 
 open Model (SpecBlock SpecInteger)
 
-class IopAlgebra (sb : SpecBlock) (M : Type → Type) [Monad M] where
+-- An interface describing a DSL for blocks. The IopLang language in Lean
+class BlockAlgebra (sb : SpecBlock) (M : Type → Type) [Monad M] where
+
+  -- Allowed Types
   CtBlock : Type
   PtBlock : Type
   CtBool : Type
   CtInteger : SpecInteger sb → Type
   PtInteger : SpecInteger sb → Type
 
+  -- Operators Sigatures
   declareInteger : (si : SpecInteger sb) → M (CtInteger si)
   letPtBlock : Nat → M PtBlock
   letCtBlock : Nat → M CtBlock
@@ -33,4 +37,5 @@ class IopAlgebra (sb : SpecBlock) (M : Type → Type) [Monad M] where
   pbs2 : Model.Lut2 sb → CtBlock → M (CtBlock × CtBlock)
   pbs4 : Model.Lut4 sb → CtBlock → M (CtBlock × CtBlock × CtBlock × CtBlock)
   pbs8 : Model.Lut8 sb → CtBlock → M (CtBlock × CtBlock × CtBlock × CtBlock × CtBlock × CtBlock × CtBlock × CtBlock)
+
 end Zhc

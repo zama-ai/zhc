@@ -8,11 +8,11 @@ import Zhc.Model.PlaintextBlock
 import Zhc.Model.PlaintextInteger
 import Zhc.Model.Lookup
 import Zhc.Model.Operators
-import Zhc.IopAlgebra.Class
-import Zhc.IopAlgebra.Model.Instance
-import Zhc.IopAlgebra.Model.Theorems
-import Zhc.IopAlgebra.Traced.Instance
-import Zhc.IopAlgebra.Traced.Theorems
+import Zhc.BlockAlgebra.Class
+import Zhc.BlockAlgebra.Model.Instance
+import Zhc.BlockAlgebra.Model.Theorems
+import Zhc.BlockAlgebra.Tracer.Instance
+import Zhc.BlockAlgebra.Tracer.Theorems
 import Zhc.Iops.Algo
 import Zhc.Iops.Check
 import Zhc.Iops.AddRippleCarry.Impl
@@ -25,5 +25,6 @@ import Zhc.Ffi.Types
 import Zhc.Ffi.Lut
 import Zhc.Ffi.Builder
 import Zhc.Ffi.Pipeline
+import Zhc.Export
 
 #check_all_algos

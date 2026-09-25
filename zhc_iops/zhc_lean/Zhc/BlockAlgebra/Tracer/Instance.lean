@@ -1,4 +1,4 @@
-import Zhc.IopAlgebra.Class
+import Zhc.BlockAlgebra.Class
 import Zhc.Model.CiphertextBlock
 import Zhc.Model.CiphertextInteger
 import Zhc.Model.CiphertextBool
@@ -10,7 +10,7 @@ import Zhc.Ffi.Types
 import Zhc.Ffi.Builder
 import Zhc.Ffi.Lut
 
-namespace Zhc.IopAlgebra.Traced
+namespace Zhc.BlockAlgebra.Tracer
 
 open Zhc.Model
 
@@ -134,7 +134,7 @@ def pbs8 (lut : Lut8 sb) (a : TrCtBlock sb) :
     ⟨h.2.2.2.2.1, lut.output a.model 4⟩, ⟨h.2.2.2.2.2.1, lut.output a.model 5⟩,
     ⟨h.2.2.2.2.2.2.1, lut.output a.model 6⟩, ⟨h.2.2.2.2.2.2.2, lut.output a.model 7⟩)
 
-instance instIopAlgebraTraced (sb : SpecBlock) : IopAlgebra sb TraceM where
+instance instBlockAlgebraTracer (sb : SpecBlock) : BlockAlgebra sb TraceM where
   CtBlock := TrCtBlock sb
   PtBlock := TrPtBlock sb
   CtBool := TrCtBool sb
@@ -174,4 +174,4 @@ def emit (sb : SpecBlock) (prog : TraceM Unit) : IO Ffi.Builder := do
   prog.run builder
   return builder
 
-end Zhc.IopAlgebra.Traced
+end Zhc.BlockAlgebra.Tracer

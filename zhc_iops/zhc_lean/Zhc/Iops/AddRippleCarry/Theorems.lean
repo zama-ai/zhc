@@ -1,12 +1,12 @@
-import Zhc.IopAlgebra.Model.Theorems
-import Zhc.IopAlgebra.Traced.Theorems
+import Zhc.BlockAlgebra.Model.Theorems
+import Zhc.BlockAlgebra.Tracer.Theorems
 import Zhc.Iops.AddRippleCarry.Impl
 
 namespace Zhc.Iops
 
 open Model
-open IopAlgebra.Model
-open IopAlgebra.Traced (TraceM TrCtInteger)
+open BlockAlgebra.Model
+open BlockAlgebra.Tracer (TraceM TrCtInteger)
 
 theorem carryMsgLut_entry (s : Nat) :
   s < 8 →

@@ -1,0 +1,20 @@
+[package]
+name = "zhc_iops"
+description = "ZHC: Proven integer operations, written in Lean"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+publish = false
+links = "zhc_lean"
+
+[dependencies]
+zhc_builder.workspace = true
+zhc_c_api.workspace = true
+
+[dev-dependencies]
+zhc_langs.workspace = true
+
+[build-dependencies]
+cc = "1.4"
