@@ -26,16 +26,21 @@ pub struct Heap {
     quarantined: BinaryHeap<Reverse<(usize, HeapSlot)>>,
     quarantine: u16,
     heap_size: usize,
+    n_hpus: usize,
+    n_flags: usize,
 }
 
 impl Heap {
-    /// Creates a new empty heap.
-    pub fn new(quarantine: u16, heap_size: usize) -> Self {
+    /// Creates a new heap that holds only the `n_hpus * n_flags` reserved exclusive slots.
+    pub fn new(quarantine: u16, heap_size: usize, n_hpus: usize, n_flags: usize) -> Self {
+        assert!(n_hpus > 0);
         Heap {
-            slots: Store::empty(),
+            slots: Store::with_value(SlotState::Exclusive, n_hpus * n_flags),
             quarantined: BinaryHeap::new(),
             quarantine,
             heap_size,
+            n_flags,
+            n_hpus,
         }
     }
 
@@ -63,9 +68,11 @@ impl Heap {
         }
     }
 
-    /// Returns a fresh heap slot reserved for the whole program.
-    pub fn alloc_exclusive(&mut self) -> HeapSlot {
-        self.grow(SlotState::Exclusive)
+    /// Returns the reserved slot `hpu * n_flags + flag`, the same slot on each call.
+    pub fn alloc_exclusive(&mut self, hpu: usize, flag: usize) -> HeapSlot {
+        assert!(hpu < self.n_hpus);
+        assert!(flag < self.n_flags);
+        HeapSlot::from_usize(hpu * self.n_flags + flag)
     }
 
     fn grow(&mut self, state: SlotState) -> HeapSlot {
@@ -120,7 +127,7 @@ mod test {
 
     #[test]
     fn slot_is_reused_after_quarantine() {
-        let mut heap = Heap::new(64, 1024);
+        let mut heap = Heap::new(64, 1024, 1, 0);
         let s0 = heap.alloc(0);
         heap.release(s0, 10);
         assert_eq!(heap.alloc(75), s0);
@@ -129,7 +136,7 @@ mod test {
 
     #[test]
     fn slot_is_not_reused_during_quarantine() {
-        let mut heap = Heap::new(64, 1024);
+        let mut heap = Heap::new(64, 1024, 1, 0);
         let s0 = heap.alloc(0);
         heap.release(s0, 10);
         assert_ne!(heap.alloc(74), s0);
@@ -138,7 +145,7 @@ mod test {
 
     #[test]
     fn earliest_released_slot_is_reused_first() {
-        let mut heap = Heap::new(64, 1024);
+        let mut heap = Heap::new(64, 1024, 1, 0);
         let s0 = heap.alloc(0);
         let s1 = heap.alloc(0);
         heap.release(s1, 5);
@@ -149,7 +156,7 @@ mod test {
 
     #[test]
     fn heap_stays_bounded_under_steady_churn() {
-        let mut heap = Heap::new(64, 1024);
+        let mut heap = Heap::new(64, 1024, 1, 0);
         for now in 0..10_000usize {
             let s = heap.alloc(now);
             heap.release(s, now);
@@ -159,10 +166,10 @@ mod test {
 
     #[test]
     fn exclusive_slot_is_fresh_and_never_reused() {
-        let mut heap = Heap::new(64, 1024);
+        let mut heap = Heap::new(64, 1024, 1, 10);
         let s0 = heap.alloc(0);
         heap.release(s0, 0);
-        let x = heap.alloc_exclusive();
+        let x = heap.alloc_exclusive(0, 1);
         assert_ne!(x, s0);
         for now in 65..200usize {
             assert_ne!(heap.alloc(now), x);
@@ -172,15 +179,15 @@ mod test {
     #[test]
     #[should_panic(expected = "can not be released")]
     fn releasing_exclusive_slot_panics() {
-        let mut heap = Heap::new(64, 1024);
-        let x = heap.alloc_exclusive();
+        let mut heap = Heap::new(64, 1024, 1, 10);
+        let x = heap.alloc_exclusive(0, 1);
         heap.release(x, 0);
     }
 
     #[test]
     #[should_panic(expected = "released twice")]
     fn releasing_slot_twice_panics() {
-        let mut heap = Heap::new(64, 1024);
+        let mut heap = Heap::new(64, 1024, 1, 0);
         let s = heap.alloc(0);
         heap.release(s, 0);
         heap.release(s, 1);
@@ -189,9 +196,9 @@ mod test {
     #[test]
     #[should_panic(expected = "Heap overflow")]
     fn growing_past_heap_size_panics() {
-        let mut heap = Heap::new(64, 2);
+        let mut heap = Heap::new(64, 2, 1, 10);
         heap.alloc(0);
-        heap.alloc_exclusive();
+        heap.alloc_exclusive(0, 1);
         heap.alloc(0);
     }
 }

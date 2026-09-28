@@ -22,12 +22,16 @@ pub fn allocate_registers(
     ir: &IR<HpuLang>,
     config: &HpuConfig,
     lut_reg: &LutRegistry,
+    n_hpus: usize,
+    n_flags: usize,
 ) -> IR<DopLang> {
     let allocator = allocator::Allocator::init(
         ir,
         config.regf_size,
         config.isc_depth.sas(),
         config.heap_size,
+        n_hpus,
+        n_flags,
     );
     let allocation = allocator.allocate_registers();
     let annir = AnnIR::new(ir, allocation, ir.filled_valmap(()));

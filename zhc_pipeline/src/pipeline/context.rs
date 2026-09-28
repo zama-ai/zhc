@@ -4,6 +4,8 @@ use zhc_ir::{IR, OpMap, Signature, partitioning::PartitionAnnotation};
 use zhc_langs::ioplang::IopLang;
 use zhc_utils::topology::Topology;
 
+use crate::SchedPolicy;
+
 #[derive(Debug)]
 pub struct PipelineContext {
     pub unchecked_ioplang: Option<IR<IopLang>>,
@@ -17,6 +19,7 @@ pub struct PipelineContext {
     pub legacy_hpu_scheduler: bool,
     pub hpu_trace_events: bool,
     pub hpu_lut_relocation: Option<Vec<LutId>>,
+    pub schedule_policy: Option<SchedPolicy>,
 }
 
 impl PipelineContext {
@@ -33,6 +36,7 @@ impl PipelineContext {
             legacy_hpu_scheduler: false,
             hpu_trace_events: false,
             hpu_lut_relocation: None,
+            schedule_policy: None,
         }
     }
 }

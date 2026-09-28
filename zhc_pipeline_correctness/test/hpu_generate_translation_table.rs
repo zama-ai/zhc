@@ -22,7 +22,7 @@ fn pipeline(ir: &IR<IopLang>) -> Vec<u32> {
         SchedPolicy::AsLateAsPossible,
         SchedPolicy::AsLateAsPossible,
     );
-    let allocated = hpu_allocate_registers(&scheduled, &config, &lut_reg);
+    let allocated = hpu_allocate_registers(&scheduled, &config, &lut_reg, 1, 0);
     hpu_generate_translation_table(&allocated, None)
 }
 

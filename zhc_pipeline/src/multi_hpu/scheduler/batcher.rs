@@ -1,24 +1,23 @@
 use zhc_ir::{
-    IR, OpId,
+    IR, OpMap,
     translation::{Order, translate},
 };
-use zhc_langs::hpulang::{HpuId, HpuLang, TransferId};
+use zhc_langs::hpulang::{HpuId, HpuLang};
 use zhc_utils::{
     iter::{CollectInSmallVec, CollectInVec, MultiZip, ReconcilerOf2},
-    small::SmallMap,
     svec,
 };
 
 use crate::{
     hpu::scheduler::utils::{Batch, Batches},
-    multi_hpu::scheduler::SchedElm,
+    multi_hpu::scheduler::{SchedElm, TransferSpec},
 };
 
 pub fn batch(
     ir: &IR<HpuLang>,
     hid: HpuId,
     sched: Vec<SchedElm>,
-    transfer_map: &SmallMap<OpId, TransferId>,
+    transfer_map: &OpMap<TransferSpec>,
 ) -> IR<HpuLang> {
     // We get the batches back
     let mut batches = Batches::new();
@@ -47,8 +46,8 @@ pub fn batch(
     translate(ir, Order::Custom(flat_sched), move |opref, engine| {
         use zhc_langs::hpulang::HpuInstructionSet::*;
         match opref.get_instruction() {
-            Transfer { from, to } => {
-                let id = transfer_map.get(&opref.get_id()).unwrap().clone();
+            Transfer { src: from, dst: to } => {
+                let tkind = transfer_map.get(&opref).unwrap();
                 if hid == *from {
                     let new_args = opref
                         .get_arg_valids()
@@ -57,18 +56,20 @@ pub fn batch(
                         .cosvec();
                     engine.add_op(
                         TransferOut {
-                            from: *from,
-                            to: *to,
-                            id,
+                            src: *from,
+                            dst: *to,
+                            slot: tkind.slot,
+                            waits: tkind.waits.clone(),
                         },
                         new_args,
                     );
                 } else if hid == *to {
                     let new_rets = engine.add_op(
                         TransferIn {
-                            from: *from,
-                            to: *to,
-                            id,
+                            src: *from,
+                            dst: *to,
+                            slot: tkind.slot,
+                            notifies: tkind.notifies.clone(),
                         },
                         svec![],
                     );

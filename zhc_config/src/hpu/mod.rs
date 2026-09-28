@@ -168,6 +168,8 @@ const CT_MEM_SLOTS: usize = 32768;
 const USER_REGION_SLOTS: usize = 12288;
 /// Slots reserved for the b2b transfer pool.
 const B2B_POOL_SLOTS: usize = 4096;
+/// Size of heap
+const HEAP_SIZE: usize = CT_MEM_SLOTS - USER_REGION_SLOTS - B2B_POOL_SLOTS;
 
 impl From<PhysicalConfig> for HpuConfig {
     fn from(phy: PhysicalConfig) -> HpuConfig {
@@ -207,7 +209,7 @@ impl From<PhysicalConfig> for HpuConfig {
             pbs_processing_latency_b: kspbs_cnst_cost,
             pbs_processing_latency_m: phy.ntt_params.min_pbs_nb,
             regf_size: phy.regf_params.reg_nb,
-            heap_size: CT_MEM_SLOTS - USER_REGION_SLOTS - B2B_POOL_SLOTS,
+            heap_size: HEAP_SIZE,
         }
     }
 }

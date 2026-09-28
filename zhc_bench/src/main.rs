@@ -17,8 +17,10 @@ use zhc::{
     compat::Iop,
     prelude::{Pipeline, PipelineExt},
 };
-use zhc_builder::{Builder, CiphertextSpec};
+use zhc_builder::CiphertextSpec;
 use zhc_config::{hpu::HpuConfig, multi_hpu::MultiHpuConfig};
+use zhc_ir::IR;
+use zhc_langs::doplang::{CtMem, DopInstructionSet, DopLang};
 use zhc_utils::{
     Dumpable,
     data_visulization::DynamicTable,
@@ -675,28 +677,73 @@ fn run_compile_table(filters: &Filters) {
     );
 }
 
+fn heap_usage(ir: &IR<DopLang>) -> usize {
+    ir.walk_ops_linear()
+        .filter_map(|op| match op.get_instruction() {
+            DopInstructionSet::LD { src: slot, .. }
+            | DopInstructionSet::ST { dst: slot, .. }
+            | DopInstructionSet::WAIT {
+                slot: Some(slot), ..
+            }
+            | DopInstructionSet::NOTIFY { slot, .. }
+            | DopInstructionSet::LD_B2B { slot, .. } => match slot {
+                CtMem::Heap(heap) => Some(heap.addr as usize + 1),
+                _ => None,
+            },
+            _ => None,
+        })
+        .max()
+        .unwrap_or(0)
+}
+
 /// Customize this function during development to analyze the IR.
-fn analyze_ir(builder: &Builder) -> String {
-    let ir = builder.optimize_ir();
-    format!("{} ops", ir.n_ops())
+fn analyze_ir(iop: &Iop, target: Target, spec: CiphertextSpec) -> String {
+    let n_ops = iop.to_builder(spec).optimize_ir().n_ops();
+    let mut pipeline = target.pipeline(iop, spec);
+    let heap = match target {
+        Target::Hpu => heap_usage(pipeline.get_doplang()),
+        Target::MultiHpu(_) => pipeline
+            .get_multi_doplang()
+            .iter()
+            .map(heap_usage)
+            .max()
+            .unwrap_or(0),
+    };
+    format!("{} ops, {} heap", n_ops, heap)
 }
 
 fn run_analyze(filters: &Filters) {
-    let columns = filters.bits.iter().map(|b| format!("{}b", b));
-    let rows = filters.iops.iter().map(|iop| format!("{:?}", iop));
-    let mut table = DynamicTable::new(columns, rows);
+    for (i, &target) in filters.targets.iter().enumerate() {
+        let jobs: Vec<(Iop, u16)> = filters
+            .iops
+            .iter()
+            .flat_map(|iop| filters.bits.iter().map(move |&b| (iop.clone(), b)))
+            .collect();
+        let cells = run_parallel(
+            &target.name(),
+            &jobs,
+            filters.threads_or(all_cores()),
+            |(iop, bits)| {
+                let spec = CiphertextSpec::new(*bits, 2, 2);
+                let context = format!("{:?} {}b {} analyze", iop, bits, target.name());
+                catch_panic(&context, || analyze_ir(iop, target, spec))
+                    .unwrap_or_else(|| "panic!".into())
+            },
+        );
 
-    for (row, iop) in filters.iops.iter().enumerate() {
-        for (col, bits) in filters.bits.iter().enumerate() {
-            let spec = CiphertextSpec::new(*bits, 2, 2);
-            let context = format!("{:?} {}b analyze", iop, bits);
-            let cell = catch_panic(&context, || analyze_ir(&iop.to_builder(spec)))
-                .unwrap_or_else(|| "panic!".into());
-            table.set(row, col, cell);
+        if i > 0 {
+            println!();
         }
+        println!("{}", target.name());
+        let columns = filters.bits.iter().map(|b| format!("{}b", b));
+        let rows = filters.iops.iter().map(|iop| format!("{:?}", iop));
+        let mut table = DynamicTable::new(columns, rows);
+        let n_bits = filters.bits.len();
+        for (index, cell) in cells.into_iter().enumerate() {
+            table.set(index / n_bits, index % n_bits, cell);
+        }
+        table.finish();
     }
-
-    table.finish();
 }
 
 fn generate_html(results: &[BenchResult]) {

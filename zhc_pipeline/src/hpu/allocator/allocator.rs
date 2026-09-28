@@ -54,6 +54,8 @@ impl<'ir> Allocator<'ir> {
         nregs: usize,
         heap_quarantine: u16,
         heap_size: usize,
+        n_hpus: usize,
+        n_flags: usize,
     ) -> Allocator<'_> {
         let live_ranges = LiveRangeMap::from_scheduled_ir(ir);
         let register_file = RegFile::empty(nregs);
@@ -61,7 +63,7 @@ impl<'ir> Allocator<'ir> {
         let input = ir;
         let current_point = 0;
         let end_point = ir.n_ops();
-        let heap = Heap::new(heap_quarantine, heap_size);
+        let heap = Heap::new(heap_quarantine, heap_size, n_hpus, n_flags);
         Allocator {
             input,
             live_ranges,
@@ -148,8 +150,11 @@ impl<'ir> Allocator<'ir> {
     fn acquire_heap_slots(&mut self, op: OpRef<'ir, HpuLang>) -> SmallVec<HeapSlot> {
         use HpuInstructionSet::*;
         match op.get_instruction() {
-            TransferIn { .. } | TransferOut { .. } => {
-                svec![self.heap.alloc_exclusive()]
+            TransferIn { dst, slot, .. } => {
+                svec![self.heap.alloc_exclusive(dst.0 as usize, slot.1.0 as usize)]
+            }
+            TransferOut { src, slot, .. } => {
+                svec![self.heap.alloc_exclusive(src.0 as usize, slot.1.0 as usize)]
             }
             _ => svec![],
         }

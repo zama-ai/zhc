@@ -1,6 +1,7 @@
 use zhc_ir::evaluation::{EvalOutcome, Evaluable, EvaluatesTo};
 use zhc_langs::{
     doplang::{emit_assembly, emit_preamble},
+    hpulang::N_TRANSFER_FLAGS,
     ioplang::check_noise,
     pipelinelang::{PipelineInstructionSet, PipelineTypeSystem},
 };
@@ -17,6 +18,7 @@ use crate::{
     Fingerprint, PartitionSpec, PartitionerConfig, SchedPolicy, SpreadPolicy, TiePolicy, hpu,
     iop::{self, extract_lut_registry},
     multi_hpu, partition_and_materialize,
+    passes::lower_iop_to_multi_hpu,
     pipeline::context::PipelineContext,
     vm,
 };
@@ -149,13 +151,17 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                         translated,
                         config,
                         SchedPolicy::AsLateAsPossible,
-                        SchedPolicy::AsSoonAsPossible,
+                        context
+                            .schedule_policy
+                            .unwrap_or(SchedPolicy::AsSoonAsPossible),
                     )
                 } else {
                     hpu::scheduler::regular::schedule(
                         translated,
                         config,
-                        SchedPolicy::AsLateAsPossible,
+                        context
+                            .schedule_policy
+                            .unwrap_or(SchedPolicy::AsLateAsPossible),
                     )
                 };
                 let result = svec![PipelineArtifact::HpuLangScheduled(Box::new(scheduled))];
@@ -167,7 +173,8 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                 let scheduled = arguments[0].unwrap_hpu_lang_scheduled_ref();
                 let config = arguments[1].unwrap_hpu_config_ref();
                 let lut_registry = arguments[2].unwrap_lut_registry_ref();
-                let allocated = hpu::allocator::allocate_registers(scheduled, config, lut_registry);
+                let allocated =
+                    hpu::allocator::allocate_registers(scheduled, config, lut_registry, 1, 0);
                 let result = svec![PipelineArtifact::DopLang(Box::new(allocated))];
                 interval_end(c"AllocateDopLang", 0);
                 result
@@ -243,8 +250,7 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                 interval_begin(c"IopLangToMultiHpu", 0);
                 let remat_ioplang = arguments[0].unwrap_remat_iop_lang_ref();
                 let partitions = arguments[1].unwrap_partitions_ref();
-                let (hpulang, localities) = todo!();
-                // multi_hpu::translation::lower_iop_to_multi_hpu(ioplang, partitions);
+                let (hpulang, localities) = lower_iop_to_multi_hpu(remat_ioplang, partitions);
                 let result = svec![
                     PipelineArtifact::MultiHpuLangTranslated(Box::new(hpulang)),
                     PipelineArtifact::MultiHpuLocalities(localities)
@@ -261,11 +267,9 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                     hpulang,
                     localities,
                     config,
-                    // A micro-core stops reading at a `WAIT`, so anything behind one waits with
-                    // it whether it needs the transfer or not. Scheduling as late as possible
-                    // puts a sub-product's partial products behind the `WAIT` its accumulation
-                    // needs, though a partial product depends on the input digits alone.
-                    SchedPolicy::AsSoonAsPossible,
+                    context
+                        .schedule_policy
+                        .unwrap_or(SchedPolicy::AsSoonAsPossible),
                 );
                 let result = svec![PipelineArtifact::MultiHpuLangScheduled(scheduled)];
                 interval_end(c"ScheduleMultiHpuLang", 0);
@@ -278,7 +282,15 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                 let lut_reg = arguments[2].unwrap_lut_registry_ref();
                 let allocated = scheduled
                     .iter()
-                    .map(|ir| hpu::allocator::allocate_registers(ir, &config.hpu_config, &lut_reg))
+                    .map(|ir| {
+                        hpu::allocator::allocate_registers(
+                            ir,
+                            &config.hpu_config,
+                            &lut_reg,
+                            config.n_hpus as usize,
+                            N_TRANSFER_FLAGS as usize,
+                        )
+                    })
                     .collect();
                 let result = svec![PipelineArtifact::MultiDopLang(allocated)];
                 interval_end(c"AllocateMultiDopLang", 0);
@@ -377,7 +389,9 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                     lut_reg,
                     config,
                     topology,
-                    SchedPolicy::AsSoonAsPossible,
+                    context
+                        .schedule_policy
+                        .unwrap_or(SchedPolicy::AsSoonAsPossible),
                 );
                 let result = svec![PipelineArtifact::VmExecutionPlan(Box::new(exec))];
                 interval_end(c"GenerateVmExecutionPlan", 0);

@@ -106,7 +106,7 @@
 use zhc_config::{hpu::HpuConfig, multi_hpu::MultiHpuConfig, vm::VmConfig};
 use zhc_crypto::integer_semantics::lut::{LutId, LutRegistry};
 use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
-use zhc_ir::partitioning::PartitionAnnotation;
+use zhc_ir::partitioning::{PartitionAnnotation, PartitionId};
 use zhc_ir::{IR, OpMap, Signature, evaluation::LazyEvaluator, visualization::Hierarchy};
 use zhc_langs::{
     doplang::DopLang,
@@ -121,7 +121,7 @@ use zhc_utils::{
 };
 
 use crate::{
-    Fingerprint, PbsMetrics,
+    Fingerprint, PbsMetrics, SchedPolicy,
     hpu::{metrics::HpuMetrics, translation_table::DOpRepr},
     multi_hpu::metrics::MultiHpuMetrics,
     vm::scheduler::VmExecutionPlan,
@@ -415,6 +415,42 @@ impl Pipeline {
         // `legacy_hpu_scheduler` has no `Input*` op of its own: `ScheduleHpuLang` reads it
         // directly from the context, so its own result (`hpulang_scheduled`) is the seed.
         self.eval.invalidate_from_val(VALIDS().hpulang_scheduled);
+        self
+    }
+
+    /// Sets the policy the schedulers use to order the operations of the circuit.
+    ///
+    /// The `policy` argument tells in which direction a scheduler walks the circuit.
+    /// [`SchedPolicy::AsSoonAsPossible`] walks it from the inputs to the outputs, and starts each
+    /// operation as early as its operands allow. [`SchedPolicy::AsLateAsPossible`] walks it from
+    /// the outputs back to the inputs, and starts each operation as late as its users allow. The
+    /// two policies give different execution orders for the same circuit, and with them different
+    /// register pressure and latency.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_pipeline::{Pipeline, SchedPolicy};
+    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
+    /// # use zhc_config::hpu::HpuConfig;
+    /// # let ir = zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty();
+    /// let mut pipeline = Pipeline::new()
+    ///     .with_unchecked_ioplang(ir)
+    /// #     .with_prototype(zhc_ir::Signature::empty())
+    /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
+    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
+    ///     .with_hpu_config(HpuConfig::default())
+    ///     .with_schedule_policy(SchedPolicy::AsSoonAsPossible);
+    ///
+    /// // The single-HPU flow now schedules as soon as possible instead of as late as possible.
+    /// println!("{}", pipeline.get_hpu_metrics().latency);
+    /// ```
+    pub fn with_schedule_policy(mut self, policy: SchedPolicy) -> Self {
+        self.context.schedule_policy = Some(policy);
+        self.eval.invalidate_from_val(VALIDS().hpulang_scheduled);
+        self.eval
+            .invalidate_from_val(VALIDS().multi_hpulang_scheduled);
+        self.eval.invalidate_from_val(VALIDS().vm_execution_plan);
         self
     }
 

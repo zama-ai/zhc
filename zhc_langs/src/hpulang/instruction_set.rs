@@ -4,7 +4,7 @@ use zhc_crypto::integer_semantics::lut::{Lut1, Lut2, Lut4, Lut8};
 use zhc_ir::{DialectInstructionSet, Format, FormatContext, IR, Signature, sig};
 use zhc_utils::iter::CollectInSmallVec;
 
-use crate::hpulang::{HpuId, TransferId};
+use crate::hpulang::{HpuId, Slot, SyncNotify, SyncWait};
 
 use super::{HpuLang, type_system::HpuTypeSystem};
 
@@ -182,20 +182,23 @@ pub enum HpuInstructionSet {
     BatchRet { pos: u8, ty: HpuTypeSystem },
     /// Uncut transfer from one HPU to another.
     /// (CtRegister) -> (CtRegister)
-    Transfer { from: HpuId, to: HpuId },
-    /// Cut transfer in from one HPU to another.
+    Transfer { src: HpuId, dst: HpuId },
+    /// Cut transfer in from one HPU to another. After it receives the
+    /// block, it sends one notification for each entry of `notifies`.
     /// () -> (CtRegister)
     TransferIn {
-        from: HpuId,
-        to: HpuId,
-        id: TransferId,
+        src: HpuId,
+        dst: HpuId,
+        slot: Slot,
+        notifies: Vec<SyncNotify>,
     },
     /// Cut transfer out from one HPU to another.
     /// (CtRegister) -> ()
     TransferOut {
-        from: HpuId,
-        to: HpuId,
-        id: TransferId,
+        src: HpuId,
+        dst: HpuId,
+        slot: Slot,
+        waits: Vec<SyncWait>,
     },
 }
 
@@ -227,17 +230,6 @@ impl HpuInstructionSet {
     pub fn is_transfer(&self) -> bool {
         matches!(self, HpuInstructionSet::Transfer { .. })
     }
-
-    // /// Returns whether this instruction may be replicated across HPUs.
-    // ///
-    // /// Replicable instructions produce a ciphertext or immediate with no
-    // /// ciphertext input (`CstCt`, `ImmLd`, `SrcLd`), so a value they define
-    // /// can be re-materialized on each HPU that uses it instead of being
-    // /// transferred across the partition boundary.
-    // pub fn is_replicable(&self) -> bool {
-    //     use HpuInstructionSet::*;
-    //     matches!(self, CstCt { .. } | ImmLd { .. } | SrcLd { .. })
-    // }
 }
 
 impl Format for HpuInstructionSet {
@@ -275,9 +267,11 @@ impl Format for HpuInstructionSet {
             }
             HpuInstructionSet::BatchArg { pos, ty } => write!(f, "batch_arg<{pos}, {ty}>"),
             HpuInstructionSet::BatchRet { pos, ty } => write!(f, "batch_ret<{pos}, {ty}>"),
-            HpuInstructionSet::Transfer { from, to } => write!(f, "transfer<{from}, {to}>"),
-            HpuInstructionSet::TransferIn { id, .. } => write!(f, "transfer_in<{id}>"),
-            HpuInstructionSet::TransferOut { id, .. } => write!(f, "transfer_out<{id}>"),
+            HpuInstructionSet::Transfer { src: from, dst: to } => {
+                write!(f, "transfer<{from}, {to}>")
+            }
+            HpuInstructionSet::TransferIn { slot: id, .. } => write!(f, "transfer_in<{id}>"),
+            HpuInstructionSet::TransferOut { slot: id, .. } => write!(f, "transfer_out<{id}>"),
         }
     }
 }

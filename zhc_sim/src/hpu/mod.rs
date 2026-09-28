@@ -189,7 +189,10 @@ impl Hpu {
                 ),
             ),
             pe_ctl: PeCtl,
-            ucore: UCore::new(ConstantLatency::new(config.freq.n_cycles(MHDMA_LATENCY))),
+            ucore: UCore::new(
+                id,
+                ConstantLatency::new(config.freq.n_cycles(MHDMA_LATENCY)),
+            ),
             statistics: Statistics::default(),
             config: config.clone(),
             id,

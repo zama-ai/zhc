@@ -1,5 +1,3 @@
-use crate::PipelineExt;
-
 use zhc_builder::{
     Builder, CiphertextSpec, SIMD_N, add, add_simd, adds, bitwise_and, bitwise_inv, bitwise_or,
     bitwise_xor, cast, cmp_eq, cmp_gt, cmp_gte, cmp_lt, cmp_lte, cmp_neq, count_0, count_1, div,
@@ -9,9 +7,7 @@ use zhc_builder::{
     rots_right, shift_left, shift_right, shifts_left, shifts_right, ssub, sub, subs, sum, trail0,
     trail1,
 };
-use zhc_config::{hpu::HpuConfig, multi_hpu::MultiHpuConfig};
-use zhc_pipeline::Pipeline;
-use zhc_utils::{SafeAs, units::Microseconds};
+use zhc_utils::SafeAs;
 
 /// Iops supported by the pipeline.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]

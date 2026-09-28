@@ -24,7 +24,7 @@ fn pipeline(ir: &IR<IopLang>) -> (IR<DopLang>, LutRegistry) {
         SchedPolicy::AsSoonAsPossible,
     );
     (
-        hpu_allocate_registers(&scheduled, &config, &lut_reg),
+        hpu_allocate_registers(&scheduled, &config, &lut_reg, 1, 0),
         lut_reg,
     )
 }

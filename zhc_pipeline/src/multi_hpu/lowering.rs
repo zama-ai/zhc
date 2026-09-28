@@ -39,7 +39,7 @@ pub fn lower_iop_to_multi_hpu<'a>(
                 .get(opref.get_predecessors_iter().next().unwrap())
                 .unwrap();
             let to = *hid_map.get(opref).unwrap();
-            HpuInstructionSet::Transfer { from, to }
+            HpuInstructionSet::Transfer { src: from, dst: to }
         }
         i => i.clone(),
     });
@@ -47,9 +47,9 @@ pub fn lower_iop_to_multi_hpu<'a>(
     let localities = ir.totally_mapped_opmap(|opref| {
         use HpuInstructionSet::*;
         match opref.get_instruction() {
-            Transfer { from, to } => HpuLocality::Transfer {
-                from: *from,
-                to: *to,
+            Transfer { src: from, dst: to } => HpuLocality::Transfer {
+                src: *from,
+                dst: *to,
             },
             _ => HpuLocality::OnHpu(*hid_map.get(opref).unwrap()),
         }

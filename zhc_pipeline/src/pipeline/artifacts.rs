@@ -1,5 +1,5 @@
 use crate::{
-    Fingerprint, PbsMetrics,
+    Fingerprint, PartitionerConfig, PbsMetrics,
     hpu::{metrics::HpuMetrics, translation_table::DOpRepr},
     multi_hpu::metrics::MultiHpuMetrics,
     vm::scheduler::VmExecutionPlan,
@@ -10,7 +10,7 @@ use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
 use zhc_ir::{
     IR, OpMap, Signature,
     evaluation::Evaluation,
-    partitioning::PartitionAnnotation,
+    partitioning::PartitionId,
     visualization::{DynamicElement, VisualAnnotation},
 };
 use zhc_langs::{

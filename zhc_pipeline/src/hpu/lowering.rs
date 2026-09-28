@@ -119,8 +119,8 @@ pub fn lower_iop_to_hpu(ir: &IR<IopLang>) -> Translation<HpuLang> {
                 translator.direct_translation(
                     &op,
                     HpuInstructionSet::Transfer {
-                        from: HpuId(0),
-                        to: HpuId(0),
+                        src: HpuId(0),
+                        dst: HpuId(0),
                     },
                 );
             }

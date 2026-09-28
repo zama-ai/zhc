@@ -3,6 +3,7 @@ use serde::Serialize;
 use std::fmt::{Debug, Display};
 use zhc_crypto::integer_semantics::lut::{LutDecoder, LutId};
 use zhc_ir::{DialectInstructionSet, Format, FormatContext, Signature, sig};
+use zhc_utils::{SafeAs, StoreIndex};
 
 /// Register address mask that compares all bits (single-output PBS or
 /// plain register).
@@ -51,7 +52,9 @@ impl Display for PtConst {
 }
 
 /// A ciphertext block located on the heap.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, PartialOrd, Ord,
+)]
 pub struct CtHeap {
     pub addr: u16,
 }
@@ -73,7 +76,9 @@ impl Display for CtHeap {
 }
 
 /// A ciphertext block located in I/O memory.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, PartialOrd, Ord,
+)]
 pub struct CtIo {
     pub addr: u16,
 }
@@ -96,7 +101,9 @@ impl Display for CtIo {
 
 /// A symbolic ciphertext source variable, patched to a physical address by
 /// the microcontroller.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, PartialOrd, Ord,
+)]
 pub struct CtSrcVar {
     pub id: u8,
     pub block: u8,
@@ -120,7 +127,9 @@ impl Display for CtSrcVar {
 
 /// A symbolic ciphertext destination variable, patched to a physical address
 /// by the microcontroller.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, PartialOrd, Ord,
+)]
 pub struct CtDstVar {
     pub id: u8,
     pub block: u8,
@@ -269,10 +278,40 @@ impl Display for LutRef {
 
 /// A user event flag: a hash/UUID for matching Ucore instructions together.
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, Default, serde::Serialize, serde::Deserialize,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    Default,
+    serde::Serialize,
+    serde::Deserialize,
+    PartialOrd,
+    Ord,
 )]
 pub struct UserFlag {
     pub flag: u8,
+}
+
+impl StoreIndex for UserFlag {
+    type Raw = u8;
+
+    fn as_raw(&self) -> Self::Raw {
+        self.flag
+    }
+
+    fn as_usize(&self) -> usize {
+        self.flag as usize
+    }
+
+    fn raw_from_usize(val: usize) -> Self::Raw {
+        val.sas()
+    }
+
+    fn from_usize(val: usize) -> Self {
+        UserFlag { flag: val.sas() }
+    }
 }
 
 impl UserFlag {
@@ -366,7 +405,9 @@ impl Display for PtArg {
 
 /// A ciphertext memory location: one of the four addressing modes a `LD`/`ST`/multi-HPU slot
 /// operand may name.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, PartialOrd, Ord,
+)]
 pub enum CtMem {
     Heap(CtHeap),
     Io(CtIo),

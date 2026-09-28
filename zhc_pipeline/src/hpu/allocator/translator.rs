@@ -1,8 +1,8 @@
 use zhc_crypto::integer_semantics::lut::LutRegistry;
 use zhc_ir::{AnnIR, IR, ValId};
 use zhc_langs::{
-    doplang::{CtMem, CtReg, DopInstructionSet, DopLang, LutRef, PtArg, UserFlag, VirtId},
-    hpulang::{HpuInstructionSet, HpuLang, MAX_TRANSFER_ID},
+    doplang::{CtMem, CtReg, DopInstructionSet, DopLang, LutRef, PtArg, VirtId},
+    hpulang::{HpuInstructionSet, HpuLang},
 };
 use zhc_utils::{SafeAs, iter::MultiZip, small::SmallMap, svec};
 
@@ -31,25 +31,6 @@ pub fn translate<'ir>(ir: &AnnIR<'ir, HpuLang, Alloc, ()>, lut_reg: &LutRegistry
         let (_, rets) = output.add_op(dop, svec![ctx]);
         ctx = rets[0];
     };
-
-    for op in ir.walk_ops_linear() {
-        let Alloc { slots, .. } = op.get_annotation();
-
-        match op.get_instruction() {
-            TransferIn { id, .. } => {
-                assert!(
-                    id.0 < MAX_TRANSFER_ID,
-                    "Encountered a transfer with tid too large {:?}",
-                    op
-                );
-                add_op(DopInstructionSet::LD_B2B {
-                    flag: UserFlag { flag: id.0.sas() },
-                    slot: CtMem::heap(slots[0].0),
-                });
-            }
-            _ => {}
-        }
-    }
 
     for op in ir.walk_ops_linear() {
         let Alloc {
@@ -84,26 +65,45 @@ pub fn translate<'ir>(ir: &AnnIR<'ir, HpuLang, Alloc, ()>, lut_reg: &LutRegistry
                     ),
                 });
             }
-            TransferOut { to, id, .. } => {
+            TransferOut {
+                dst, slot, waits, ..
+            } => {
+                for wait in waits.iter() {
+                    add_op(DopInstructionSet::WAIT {
+                        flag: wait.slot.to_user_flag(),
+                        slot: None,
+                    });
+                }
                 add_op(DopInstructionSet::ST {
                     dst: CtMem::heap(slots[0].0 as u16),
                     src: CtReg::new(srcs[0].0 as u8),
                 });
                 add_op(DopInstructionSet::NOTIFY {
-                    virt_id: VirtId { id: to.0 },
-                    flag: UserFlag { flag: id.0.sas() },
+                    virt_id: VirtId { id: dst.0 },
+                    flag: slot.to_user_flag(),
                     slot: CtMem::heap(slots[0].0 as u16),
                 });
             }
-            TransferIn { id, .. } => {
+            TransferIn { slot, notifies, .. } => {
+                add_op(DopInstructionSet::LD_B2B {
+                    flag: slot.to_user_flag(),
+                    slot: CtMem::heap(slots[0].0),
+                });
                 add_op(DopInstructionSet::WAIT {
-                    flag: UserFlag { flag: id.0.sas() },
+                    flag: slot.to_user_flag(),
                     slot: Some(CtMem::heap(slots[0].0 as u16)),
                 });
                 add_op(DopInstructionSet::LD {
                     dst: CtReg::new(dsts[0].0 as u8),
                     src: CtMem::heap(slots[0].0 as u16),
-                })
+                });
+                for notif in notifies.iter() {
+                    add_op(DopInstructionSet::NOTIFY {
+                        virt_id: VirtId { id: notif.dst.0 },
+                        flag: notif.slot.to_user_flag(),
+                        slot: CtMem::heap(0),
+                    });
+                }
             }
             DstSt { to } => {
                 add_op(DopInstructionSet::ST {
