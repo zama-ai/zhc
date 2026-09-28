@@ -1,8 +1,8 @@
-use std::fmt::Display;
+use std::{collections::VecDeque, fmt::Display};
 
 use serde::Serialize;
 use zhc_config::multi_hpu::MultiHpuConfig;
-use zhc_ir::AnnIR;
+use zhc_ir::{AnnIR, OpId};
 use zhc_langs::hpulang::{HpuId, HpuLang};
 use zhc_sim::{Dispatch, Event, MapDispatch, Simulatable, Tracer, TracingLevel, Trigger};
 use zhc_utils::units::Cycle;
@@ -30,6 +30,8 @@ impl Event for MultiHpuEvents {}
 #[derive(Serialize)]
 pub struct LightMultiHpu<'a, 'b> {
     pub hpus: Vec<LightHpu<'a, 'b>>,
+    pub transfer_schedule: VecDeque<OpId>,
+    policy: SchedPolicy,
 }
 
 impl<'a, 'b> LightMultiHpu<'a, 'b> {
@@ -41,7 +43,12 @@ impl<'a, 'b> LightMultiHpu<'a, 'b> {
         let hpus = (0..config.n_hpus)
             .map(|i| LightHpu::new(ir, &config.hpu_config, policy, HpuId(i)))
             .collect();
-        LightMultiHpu { hpus }
+        let transfer_schedule = VecDeque::new();
+        LightMultiHpu {
+            hpus,
+            transfer_schedule,
+            policy
+        }
     }
 }
 
@@ -56,6 +63,10 @@ impl<'a, 'b> Simulatable for LightMultiHpu<'a, 'b> {
         match trigger.event {
             MultiHpuEvents::Hpu(_, HpuEvents::TransferOut(id, opid)) => {
                 dispatcher.dispatch_now(MultiHpuEvents::Hpu(id, HpuEvents::TransferIn(opid)));
+                match self.policy {
+                    SchedPolicy::AsSoonAsPossible => self.transfer_schedule.push_back(opid),
+                    SchedPolicy::AsLateAsPossible => self.transfer_schedule.push_front(opid),
+                }
             }
             MultiHpuEvents::Hpu(hpu_id, hpu_event) => {
                 self.hpus[hpu_id.0 as usize].handle(

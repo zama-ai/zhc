@@ -2,10 +2,10 @@ use std::fmt::Display;
 
 use serde::Serialize;
 use zhc_ir::visualization::VisualAnnotation;
-use zhc_utils::Dumpable;
+use zhc_utils::{Dumpable, StoreIndex};
 
 /// Identifies a single HPU board within a partitioned multi-HPU program.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Copy, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Copy, Hash, StoreIndex)]
 pub struct HpuId(pub u8);
 
 impl Display for HpuId {

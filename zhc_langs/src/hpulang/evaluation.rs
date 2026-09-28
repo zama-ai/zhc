@@ -133,7 +133,7 @@ impl Evaluable<HpuValue> for super::HpuInstructionSet {
         use super::HpuInstructionSet::*;
         let results = match self {
             // ── Inter-HPU transfers ──────────────────────────────────
-            TransferOut { from, to, id } => {
+            TransferOut { from, to, id, .. } => {
                 let key = (*from, *to, *id);
                 assert!(
                     !context.transfers.contains_key(&key),
@@ -144,7 +144,7 @@ impl Evaluable<HpuValue> for super::HpuInstructionSet {
                     .insert(key, arguments[0].clone().unwrap_ct_register());
                 svec![]
             }
-            TransferIn { from, to, id } => {
+            TransferIn { from, to, id, .. } => {
                 let Some(ct) = context.transfers.remove(&(*from, *to, *id)) else {
                     return EvalOutcome::Blocked;
                 };

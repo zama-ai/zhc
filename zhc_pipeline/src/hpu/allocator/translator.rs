@@ -84,7 +84,13 @@ pub fn translate<'ir>(ir: &AnnIR<'ir, HpuLang, Alloc, ()>, lut_reg: &LutRegistry
                     ),
                 });
             }
-            TransferOut { to, id, .. } => {
+            TransferOut { to, id, wait, .. } => {
+                if let Some(hid) = wait {
+                    add_op(DopInstructionSet::WAIT {
+                        flag: UserFlag { flag: hid.0 + 1 },
+                        slot: None
+                    });
+                }
                 add_op(DopInstructionSet::ST {
                     dst: CtMem::heap(slots[0].0 as u16),
                     src: CtReg::new(srcs[0].0 as u8),
@@ -95,7 +101,7 @@ pub fn translate<'ir>(ir: &AnnIR<'ir, HpuLang, Alloc, ()>, lut_reg: &LutRegistry
                     slot: CtMem::heap(slots[0].0 as u16),
                 });
             }
-            TransferIn { id, .. } => {
+            TransferIn { id, locks, to, .. } => {
                 add_op(DopInstructionSet::WAIT {
                     flag: UserFlag { flag: id.0.sas() },
                     slot: Some(CtMem::heap(slots[0].0 as u16)),
@@ -103,7 +109,16 @@ pub fn translate<'ir>(ir: &AnnIR<'ir, HpuLang, Alloc, ()>, lut_reg: &LutRegistry
                 add_op(DopInstructionSet::LD {
                     dst: CtReg::new(dsts[0].0 as u8),
                     src: CtMem::heap(slots[0].0 as u16),
-                })
+                });
+                if let Some(locks) = locks {
+                    for lock in locks.iter() {
+                        add_op(DopInstructionSet::NOTIFY {
+                            virt_id: VirtId { id: lock.0 },
+                            flag: UserFlag { flag: to.0 + 1 },
+                            slot: CtMem::heap(0)
+                        });
+                    }
+                }
             }
             DstSt { to } => {
                 add_op(DopInstructionSet::ST {

@@ -241,12 +241,8 @@ impl<'a, 'b> LightHpu<'a, 'b> {
     }
 
     fn pop_transfer(&mut self) -> AnnOpRef<'a, 'b, HpuLang, Stats, ()> {
-        self.pe_transfer_ready
-            .make_contiguous()
-            .sort_by_key(|op| match self.policy {
-                SchedPolicy::AsSoonAsPossible => op.get_annotation().height,
-                SchedPolicy::AsLateAsPossible => op.get_annotation().depth,
-            });
+        // The order of transfer_ins must be respected to prevent deadlocks in tids recycling.
+        // For this reason we don't do priority sorting on the transfers_ins.
         self.pe_transfer_ready.pop_back().unwrap()
     }
 

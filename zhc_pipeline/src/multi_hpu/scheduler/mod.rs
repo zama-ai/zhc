@@ -1,18 +1,20 @@
 use zhc_config::multi_hpu::MultiHpuConfig;
-use zhc_ir::{IR, OpId, OpMap};
-use zhc_langs::hpulang::{HpuId, HpuInstructionSet, HpuLang, HpuLocality, TransferId};
+use zhc_ir::{IR, OpMap};
+use zhc_langs::hpulang::{HpuLang, HpuLocality};
 use zhc_sim::Simulator;
 
 mod affinity;
 mod analyze;
 mod batcher;
+mod transfer;
 mod sim;
 
 pub use affinity::*;
 pub use analyze::*;
 pub use batcher::*;
+pub use transfer::*;
 pub use sim::*;
-use zhc_utils::{SafeAs, small::SmallMap, units::MHz};
+use zhc_utils::units::MHz;
 
 use crate::SchedPolicy;
 
@@ -30,21 +32,9 @@ pub fn schedule<'a>(
         zhc_sim::TracingLevel::None,
     );
     sim.play();
-    let mut transfers_counter: SmallMap<HpuId, u16> =
-        (0..config.n_hpus).map(|i| (HpuId(i), 1)).collect();
-    let transfer_map: SmallMap<OpId, TransferId> = ir
-        .walk_ops_linear()
-        .filter(|a| a.get_instruction().is_transfer())
-        .map(|op| {
-            let HpuInstructionSet::Transfer { to, .. } = op.get_instruction() else {
-                unreachable!()
-            };
-            let i = *transfers_counter.get(&to).unwrap();
-            *transfers_counter.get_mut(&to).unwrap() = i.strict_add(1);
-            (op.get_id(), TransferId(i.sas()))
-        })
-        .collect();
-    sim.into_simulatable()
+    let simulatable = sim.into_simulatable();
+    let transfer_map = build_transfer_map(ir, simulatable.transfer_schedule.iter().copied(), config);
+    simulatable
         .hpus
         .into_iter()
         .map(|hpu| batch(ir, hpu.id, hpu.schedule.into(), &transfer_map))

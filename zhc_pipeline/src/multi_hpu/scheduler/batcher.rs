@@ -1,24 +1,22 @@
 use zhc_ir::{
-    IR, OpId,
-    translation::{Order, translate},
+    IR, OpMap, translation::{Order, translate}
 };
-use zhc_langs::hpulang::{HpuId, HpuLang, TransferId};
+use zhc_langs::hpulang::{HpuId, HpuLang};
 use zhc_utils::{
     iter::{CollectInSmallVec, CollectInVec, MultiZip, ReconcilerOf2},
-    small::SmallMap,
     svec,
 };
 
 use crate::{
     hpu::scheduler::utils::{Batch, Batches},
-    multi_hpu::scheduler::SchedElm,
+    multi_hpu::scheduler::{SchedElm, transfer::TransferKind},
 };
 
 pub fn batch(
     ir: &IR<HpuLang>,
     hid: HpuId,
     sched: Vec<SchedElm>,
-    transfer_map: &SmallMap<OpId, TransferId>,
+    transfer_map: &OpMap<TransferKind>,
 ) -> IR<HpuLang> {
     // We get the batches back
     let mut batches = Batches::new();
@@ -48,7 +46,7 @@ pub fn batch(
         use zhc_langs::hpulang::HpuInstructionSet::*;
         match opref.get_instruction() {
             Transfer { from, to } => {
-                let id = transfer_map.get(&opref.get_id()).unwrap().clone();
+                let tkind = transfer_map.get(&opref).unwrap();
                 if hid == *from {
                     let new_args = opref
                         .get_arg_valids()
@@ -59,7 +57,8 @@ pub fn batch(
                         TransferOut {
                             from: *from,
                             to: *to,
-                            id,
+                            id: tkind.get_tid(),
+                            wait: tkind.get_wait(),
                         },
                         new_args,
                     );
@@ -68,7 +67,8 @@ pub fn batch(
                         TransferIn {
                             from: *from,
                             to: *to,
-                            id,
+                            id: tkind.get_tid(),
+                            locks: tkind.get_locks(),
                         },
                         svec![],
                     );

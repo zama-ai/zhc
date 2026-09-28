@@ -189,6 +189,7 @@ pub enum HpuInstructionSet {
         from: HpuId,
         to: HpuId,
         id: TransferId,
+        locks: Option<Vec<HpuId>>
     },
     /// Cut transfer out from one HPU to another.
     /// (CtRegister) -> ()
@@ -196,6 +197,7 @@ pub enum HpuInstructionSet {
         from: HpuId,
         to: HpuId,
         id: TransferId,
+        wait: Option<HpuId>
     },
 }
 
