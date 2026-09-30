@@ -52,7 +52,7 @@ To design a new FHE algorithm, add ZHC to a Rust project and follow the [tour](#
 cargo add zhc
 ```
 
-To work on the compiler itself, clone the repository and make sure you have Rust 2024 edition:
+To work on the compiler itself, clone the repository and make sure you have Rust 1.85 or later (2024 edition):
 
 ```shell
 git clone https://github.com/zama-ai/zhc
@@ -69,12 +69,12 @@ The CPU target depends on tfhe-rs and is built and tested separately:
 make vm-test
 ```
 
-To get up to speed quickly, start looking into :
+To get up to speed quickly, start looking into:
 + [`Pipeline`](https://docs.rs/zhc_pipeline/latest/zhc_pipeline/struct.Pipeline.html) first,
 + then [`Builder`](https://docs.rs/zhc_builder/latest/zhc_builder/struct.Builder.html), 
 + then [`IR`](https://docs.rs/zhc_ir/latest/zhc_ir/struct.IR.html). 
 
-If more context is needed, a module-level documentation describing its design is included with every crate.
+If more context is needed, module-level documentation describing its design is included with every crate.
 
 # A tour of ZHC
 
@@ -101,14 +101,14 @@ let sh =   bd.block_lookup(
                 )
            );
 
-bd.draw().open();
+bd.draw(IrKind::Original).open().unwrap();
 ```
 
 <br clear="right">
 
 The [`draw`](https://docs.rs/zhc_builder/latest/zhc_builder/struct.Builder.html#method.draw) method renders the underlying intermediate representation to an interactive graph suitable for visual inspection. This graph can optionally be annotated with various information such as emulation values, noise level, etc.
 
-The API exposed by the `Builder` object offers a semantic tailored to the TFHE cryptosystem. Operations are available in [different flavors](https://docs.rs/zhc_crypto/latest/zhc_crypto/integer_semantics/index.html) depending on how they treat the __padding bit__. To simplify the debugging without having to go through encryption/decryption cycles, the builder object exposes an emulation layer which performs an abstract interpretation of the program and annotates the intermediate values: 
+The API exposed by the `Builder` object offers semantics tailored to the TFHE cryptosystem. Operations are available in [different flavors](https://docs.rs/zhc_crypto/latest/zhc_crypto/integer_semantics/index.html) depending on how they treat the __padding bit__. To simplify the debugging without having to go through encryption/decryption cycles, the builder object exposes an emulation layer which performs an abstract interpretation of the program and annotates the intermediate values: 
 
 ```rust
 bd.interpret()
@@ -133,9 +133,9 @@ bd.interpret()
 
 The invariants of the semantics are checked during this abstract interpretation. Combined with [`Builder::test_random`](https://docs.rs/zhc_builder/latest/zhc_builder/struct.Builder.html#method.test_random), which runs the circuit on random inputs against a plaintext oracle, the users can check their implementation at the algorithm level.
 
-Noise management is a big part of implementing FHE algorithms; it must always stay within some bounds to ensure the data are not corrupted. The [`Builder::dump_noise_budget`](https://docs.rs/zhc_builder/latest/zhc_builder/struct.Builder.html#method.dump_noise_budget) method performs a noise analysis and displays it in a suitable format:
+Noise management is a big part of implementing FHE algorithms; it must always stay within some bounds to ensure the data are not corrupted. The [`Builder::dump_noise`](https://docs.rs/zhc_builder/latest/zhc_builder/struct.Builder.html#method.dump_noise) method performs a noise analysis and displays it in a suitable format:
 ```rust
-bd.dump_noise_budget();
+bd.dump_noise();
 // On stdout:
 // ╔════════════════════════════════════════════
 // ║ Noise Analysis
@@ -235,7 +235,7 @@ Not every circuit designer has an HPU board/cluster handy. To simplify the devel
 
 <br clear="right">
 
-For faster feedback loops, simpler aggregate metrics can be accessed with [`Pipeline::get_hpu_metrics`](https://docs.rs/zhc_pipeline/latest/zhc_pipeline/struct.Pipeline.html#method.get_hpu_metrics). They simulator latency is decomposed into several components: the time an ideal schedule would spend bootstrapping, the time lost to under-filled batches, and the time the pbs execution unit spends waiting:
+For faster feedback loops, simpler aggregate metrics can be accessed with [`Pipeline::get_hpu_metrics`](https://docs.rs/zhc_pipeline/latest/zhc_pipeline/struct.Pipeline.html#method.get_hpu_metrics). The simulated latency is decomposed into key components: the time an ideal schedule would spend bootstrapping, the time lost to under-filled batches, and the time the PBS execution unit spends waiting:
 
 ```rust
 pl.get_hpu_metrics().dump();
@@ -267,7 +267,7 @@ The simulator is a discrete-event model of the HPU at the cycle level. It models
 
 ### HPU cluster
 
-HPUs can be interconnected into a cluster, allowing fast transfers of ciphertexts within the pool. This allows large computations to be spread over more processing elements, lowering the execution latency. Thanks to an automatic partitioning mechanism, ZHC is able to balance the workload over the boards without any interventions.
+HPUs can be interconnected into a cluster, allowing fast transfers of ciphertexts between boards. Large computations can then be spread over more processing elements, lowering the execution latency. Thanks to an automatic partitioning mechanism, ZHC balances the workload over the boards without manual intervention.
 
 Same as for a single board, the whole system can be simulated together, so [`Pipeline::get_multi_hpu_trace`](https://docs.rs/zhc_pipeline/latest/zhc_pipeline/struct.Pipeline.html#method.get_multi_hpu_trace) shows every board and every transfer on a single perfetto timeline.
 
@@ -283,15 +283,15 @@ pl.get_multi_hpu_trace().open().unwrap();
 <summary>Automatic circuit partitioning</summary>
 <br>
 
-To balance computation inside an HPU cluster, ZHC relies on a task-level parallelism framework. The [`IopLang`] circuit is turned to a [`TaskLang`] circuit representing the network of PBSes of the circuit. This dag of tasks is then mapped on the cluster accounting for both the dependencies, the locality of the data and the prefered concentration of work. This mapping is further materialized back into a new [`IopLang`] IR with explicit transfers, and potentially replication of work if better.
+To balance computation inside an HPU cluster, ZHC relies on a task-level parallelism framework. The [`IopLang`](https://docs.rs/zhc_langs/latest/zhc_langs/ioplang/index.html) circuit is coarsened into a task graph, one task per PBS. This DAG of tasks is then mapped onto the cluster, accounting for the dependencies, the locality of the data and the preferred concentration of work. The mapping is materialized back into the IR with explicit transfers between boards, and with replication of cheap work where it makes sense.
 
 </details>
 
 ### CPU
 
-CPU can be targetted by ZHC via the `zhc_vm` crate, which contains a topology-aware multi-threaded Virtual Machine for a custom FHE bytecode. Requiring no other dependencies than `tfhe-rs` for the cryptographic operators, `zhc_vm` is a small, self-contained runtime built for maximum performance.
+The CPU can be targeted by ZHC via the `zhc_vm` crate, which contains a topology-aware multi-threaded virtual machine for a custom FHE bytecode. Requiring no other dependency than `tfhe-rs` for the cryptographic operators, `zhc_vm` is a small, self-contained runtime built for maximum performance.
 
-ZHC leverages the same generic task parallelism framework used to accelerate HPU-clusters, to derive an [`ExecutionPlan`] from the same input algorithm. This plan contains a static schedule of the bytecode to be executed by every threads of the machine, and a lock table ensuring the safety of the execution. This unlocks performances not achievable by dynamic work-stealing schedulers commonly used. 
+ZHC leverages the same task parallelism framework used for HPU clusters to derive a [`VmExecutionPlan`](https://docs.rs/zhc_pipeline/latest/zhc_pipeline/struct.VmExecutionPlan.html) from the same input algorithm: a static schedule of the bytecode executed by every thread of the machine, plus a lock table ensuring the safety of the execution. Nothing is decided at runtime, which removes the overhead of the dynamic work-stealing schedulers commonly used.
 
 ```rust
 let plan = Pipeline::new()
@@ -303,3 +303,35 @@ let mut vm = Vm::new(&config, None);
 vm.set_server_key(server_key);
 vm.execute(&plan, &inputs, &mut outputs);
 ```
+
+# Repository layout
+
+| Crate | Role |
+|---|---|
+| [`zhc`](zhc) | Facade crate. Re-exports everything and connects the builder to the pipeline. |
+| [`zhc_ir`](zhc_ir) | Dialect-generic IR, analyses, passes, evaluation, translation, visualization. |
+| [`zhc_langs`](zhc_langs) | The dialects: `ioplang`, `hpulang`, `doplang`, `vmlang`, `pipelinelang`. |
+| [`zhc_langs_macro`](zhc_langs_macro) | Macro generating the pipeline dialect from a function body. |
+| [`zhc_builder`](zhc_builder) | Circuit builder, integer operation library, interpreter, randomized tests. |
+| [`zhc_crypto`](zhc_crypto) | Emulated TFHE integer semantics and lookup tables. |
+| [`zhc_pipeline`](zhc_pipeline) | The lazy compilation pipeline: lowering, scheduling, allocation, code generation, metrics. |
+| [`zhc_sim`](zhc_sim) | Discrete-event simulator, HPU model, multi-HPU model, tracing. |
+| [`zhc_config`](zhc_config) | HPU, multi-HPU and VM configurations, with physical parameter presets. |
+| [`zhc_vm`](zhc_vm) | Multi-threaded CPU runtime executing VM plans with tfhe-rs. |
+| [`zhc_profiling`](zhc_profiling) | Host-side profiling spans with pluggable backends. |
+| [`zhc_pipeline_correctness`](zhc_pipeline_correctness) | Snapshot and differential tests for every pass. |
+| [`zhc_pipeline_correctness_macro`](zhc_pipeline_correctness_macro) | Test matrix macro over operations and bit widths. |
+| [`zhc_bench`](zhc_bench) | Latency benchmarks across operations and commits. |
+| [`zhc_cli`](zhc_cli) | Command-line tools. `dop_fmt` converts, checks, interprets and profiles device programs. |
+| [`zhc_utils`](zhc_utils) | Stores, small vectors, iterators, topology detection, trace and file helpers. |
+| [`zhc_utils_macro`](zhc_utils_macro) | Derive and attribute macros used across the workspace. |
+
+# Contributing
+
+Contributions are welcome. Open an issue or a pull request on GitHub. Before submitting, run `make fmt`, `make check` and `make test`.
+
+Security issues should be reported privately to security@zama.ai, see [SECURITY.md](SECURITY.md).
+
+# License
+
+ZHC is released under the BSD-3-Clause-Clear license. See [LICENSE](LICENSE).

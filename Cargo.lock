@@ -1476,6 +1476,7 @@ dependencies = [
 name = "zhc"
 version = "0.10.1"
 dependencies = [
+ "serde_json",
  "zhc_builder",
  "zhc_config",
  "zhc_crypto",
