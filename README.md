@@ -164,17 +164,17 @@ Note that ZHC also checks the noise during compilation to ensure that no noise-i
 
 <img align="left" width="160" src="docs/assets/restricted_pipeline.png" alt="Pipeline">
 
-The compiler itself is managed via the [`Pipeline`](https://docs.rs/zhc_pipeline/latest/zhc_pipeline/struct.Pipeline.html) object, providing a lazy, query-based compilation of all artifacts. Itself based on a [ZHC-IR definition](zhc_langs/src/pipelinelang/mod.rs), it ensures a single source of truth for every artifact derivation. The pipeline, restricted to the HPU is represented on the left. 
+The compiler itself is managed via the [`Pipeline`](https://docs.rs/zhc_pipeline/latest/zhc_pipeline/struct.Pipeline.html) object. It provides a lazy, query-based compilation of all the artifacts, and is itself based on a [ZHC-IR definition](zhc_langs/src/pipelinelang/mod.rs). This mechanism ensures a single source of truth ever exist for every artifact derivation. The pipeline, restricted to the HPU backend is represented on the left. 
 
-Every intermediate artifact is cached in the pipeline, and can be pulled for inspection. Modifying an input of the pipeline has the effect of invalidating every transitively dependent artifact. Artifacts can be pulled from the pipeline with `get_*` methods. 
+Every intermediate artifacts is cached inside the pipeline, and can be pulled for inspection with `get_*` methods. This makes for a faster debugging experience, and prevents artifacts to be recompiled when not strictly necessary. On the other hand, modifying a pipeline input has the immediate effect of invalidating every transitively dependent artifacts, for a predictable user experience. 
+
+Here is an example of pulling the text assembly listing for HPU via [`Pipeline::get_hpu_assembly`](https://docs.rs/zhc_pipeline/latest/zhc_pipeline/struct.Pipeline.html#method.get_hpu_assembly) when compiling the 16-bit addition circuit:
 ```rust
 let mut pl = Pipeline::new()
     .with_builder(bd)
     .with_hpu_config(Default::default());
 pl.get_hpu_assembly().open().unwrap();
 ```
-
-For example, here is the text assembly listing retrieved via [`Pipeline::get_hpu_assembly`](https://docs.rs/zhc_pipeline/latest/zhc_pipeline/struct.Pipeline.html#method.get_hpu_assembly) when compiling the 16-bit addition:
 
 <br clear="left">
 
