@@ -106,21 +106,21 @@ The [`draw`](https://docs.rs/zhc_builder/latest/zhc_builder/struct.Builder.html#
 The API exposed by the `Builder` object offers semantics tailored to the TFHE cryptosystem. For maximum expressivity and safety, operations are available in [different flavors](https://docs.rs/zhc_crypto/latest/zhc_crypto/integer_semantics/index.html) depending on how they treat the __padding bit__. To simplify the debugging without having to go through encryption/decryption cycles, the builder object exposes an emulation layer which performs an abstract interpretation of the program and annotates the intermediate values: 
 
 ```rust
-bd.interpret()                           // On stdout:
-    .with_inputs([pti.make_value(3)])    // ╔═══════════════════════════════════
-    .dump();                             // ║ Interpretation for : [3_pt]
-                                         // ║───────────────────────────────────
-                                         // ║ %0 = input_plaintext<0, 2>();
-                                         // ║     %0 -> 11_pt
-                                         // ║ %1 = extract_pt_block<0>(%0);
-                                         // ║     %1 -> 11_ptblock
-                                         // ║ %2 = let_ct_block<0>();
-                                         // ║     %2 -> 0_00_00_ctblock
-                                         // ║ %3 = add_pt(%2, %1);
-                                         // ║     %3 -> 0_00_11_ctblock
-                                         // ║ %4 = pbs<Protect, Lut1("sh")>(%3);
-                                         // ║     %4 -> 0_00_01_ctblock
-                                         // ╚═══════════════════════════════════
+bd.interpret()                               // On stdout:
+    .with_inputs([pti.make_value(3)])        // ╔═══════════════════════════════════
+    .dump();                                 // ║ Interpretation for : [3_pt]
+                                             // ║───────────────────────────────────
+                                             // ║ %0 = input_plaintext<0, 2>();
+                                             // ║     %0 -> 11_pt
+                                             // ║ %1 = extract_pt_block<0>(%0);
+                                             // ║     %1 -> 11_ptblock
+                                             // ║ %2 = let_ct_block<0>();
+                                             // ║     %2 -> 0_00_00_ctblock
+                                             // ║ %3 = add_pt(%2, %1);
+                                             // ║     %3 -> 0_00_11_ctblock
+                                             // ║ %4 = pbs<Protect, Lut1("sh")>(%3);
+                                             // ║     %4 -> 0_00_01_ctblock
+                                             // ╚═══════════════════════════════════
 ```
 
 <details>
@@ -137,22 +137,21 @@ The invariants of the semantics are checked during this abstract interpretation.
 
 Noise management is a big part of implementing TFHE algorithms. It grows through operator application, but must always stay within some bounds to ensure the data are not corrupted with a large enough probability. The [`Builder::dump_noise`](https://docs.rs/zhc_builder/latest/zhc_builder/struct.Builder.html#method.dump_noise) method performs a noise analysis and displays it in a suitable format:
 ```rust
-bd.dump_noise();
-// On stdout:
-// ╔════════════════════════════════════════════
-// ║ Noise Analysis
-// ║────────────────────────────────────────────
-// ║ @0   |  %0 = input_plaintext<0, 2>();
-// ║      |      %0 -> ░░░░░░░░░░░░   0%
-// ║ @1   |  %1 = extract_pt_block<0>(%0);
-// ║      |      %1 -> ░░░░░░░░░░░░   0%
-// ║ @2   |  %2 = let_ct_block<0>();
-// ║      |      %2 -> ░░░░░░░░░░░░   0%
-// ║ @3   |  %3 = add_pt(%2, %1);
-// ║      |      %3 -> ░░░░░░░░░░░░   0%
-// ║ @4   |  %4 = pbs<Protect, Lut1("sh")>(%3);
-// ║      |      %4 -> ▓░░░░░░░░░░░   8% (fresh)
-// ╚════════════════════════════════════════════
+bd.dump_noise();                        // On stdout:
+                                        // ╔════════════════════════════════════════════
+                                        // ║ Noise Analysis
+                                        // ║────────────────────────────────────────────
+                                        // ║ @0   |  %0 = input_plaintext<0, 2>();
+                                        // ║      |      %0 -> ░░░░░░░░░░░░   0%
+                                        // ║ @1   |  %1 = extract_pt_block<0>(%0);
+                                        // ║      |      %1 -> ░░░░░░░░░░░░   0%
+                                        // ║ @2   |  %2 = let_ct_block<0>();
+                                        // ║      |      %2 -> ░░░░░░░░░░░░   0%
+                                        // ║ @3   |  %3 = add_pt(%2, %1);
+                                        // ║      |      %3 -> ░░░░░░░░░░░░   0%
+                                        // ║ @4   |  %4 = pbs<Protect, Lut1("sh")>(%3);
+                                        // ║      |      %4 -> ▓░░░░░░░░░░░   8% (fresh)
+                                        // ╚════════════════════════════════════════════
 ```
 
 Note that ZHC also checks the noise during compilation to ensure that no noise-incorrect circuits can ever reach the end of the pipeline and produce executable artifacts.
@@ -171,6 +170,8 @@ let mut pl = Pipeline::new()
 pl.get_hpu_assembly().open().unwrap();
 ```
 Every intermediate artifact is cached in the pipeline, and can be pulled for inspection. Modifying an input of the pipeline has the effect of invalidating every transitively dependent artifact.
+
+<br clear="left">
 
 For example, here is the text assembly listing retrieved via [`Pipeline::get_hpu_assembly`](https://docs.rs/zhc_pipeline/latest/zhc_pipeline/struct.Pipeline.html#method.get_hpu_assembly) when compiling the 16-bit addition:
 
@@ -192,7 +193,6 @@ PBS_ML2 R6 R1 PbsManyCarryMsg
 PBS R5 R2 PbsExtractPropGroup1
 ```
 
-<br clear="left">
 
 <details>
 <summary>More on verification</summary>
