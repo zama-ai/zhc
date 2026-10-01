@@ -19,30 +19,32 @@
 
 # What is ZHC?
 
-ZHC is an open-source compiler toolchain for [FHE](https://en.wikipedia.org/wiki/Homomorphic_encryption) computation: it compiles integer arithmetic circuits into optimized instruction streams for hardware that computes directly on encrypted data. From arithmetic to silicon, ZHC optimizes FHE programs above the cryptography and ensures peak performance is reached on every target. The `IopLang` Intermediate Representation makes plugging in new frontends and backends easy:
+ZHC is an open-source compiler toolchain for [FHE](https://en.wikipedia.org/wiki/Homomorphic_encryption) computation: it turns integer circuits into optimized instruction streams for hardware that computes directly on encrypted data. From arithmetic to silicon, ZHC optimizes FHE programs operating above the cryptography level, and ensures peak performance is reached on every target. 
+
+Built on top of a dialect-generic SSA-IR implemented from scratch, it relies on a central `BlockLang` dialect to simplify the most demanding tasks in compiler development: frontends addition, hardware-agnostic optimizations, and target-specific backend development:
 
 <div align="center">
   <pre><sub>
       ╭───────────╮                                          ╭───────────────╮
       │   Rust    │                                     ┌───▶│      HPU      │
-      │  Builder  │────┐                                │    ╰───────────────╯
-      ╰───────────╯    │                                │                     
-                       │           ╭─────────╮          │    ╭───────────────╮
-                       ├──────────▶│ IopLang │──────────┼───▶│  HPU Cluster  │
-      ╭───────────╮    │           ╰─────────╯          │    ╰───────────────╯
-      │  TFHE-rs  │    │                                │                     
-      │  Circuit  │────┘                                │    ╭───────────────╮
-      ╰───────────╯                                     └───▶│      CPU      │
+      │  Builder  │────┐              ┌─────────┐       │    ╰───────────────╯
+      ╰───────────╯    │              │         │       │                     
+                       │         ╭───────────╮  │       │    ╭───────────────╮
+                       ├────────▶│ BlockLang │──────────┼───▶│  HPU Cluster  │
+      ╭───────────╮    │         ╰───────────╯  │       │    ╰───────────────╯
+      │  TFHE-rs  │    │              ▲         │       │                     
+      │  Circuit  │────┘              └─────────┘       │    ╭───────────────╮
+      ╰───────────╯                       opt           └───▶│      CPU      │
                                                              ╰───────────────╯
 </sub></pre>
 </div>
 
-Today, [tfhe-rs](https://github.com/zama-ai/tfhe-rs) uses it for its [HPU](https://github.com/zama-ai/hpu_fpga) backend and experimental Circuit-API. ZHC is built atop a custom, dialect-generic SSA-IR implemented from scratch, enabling speed at every step:
+This flexible architecture, enables speed at every step:
 + [Design](#circuit-design): Circuit definition, visualization and evaluation on emulated semantics. A programmatic frontend that makes sense for circuit design.
 + [Compilation](#compilation): Progressive lowering from high-level representation down to specialized hardware ISA. Target-agnostic optimizations, then hardware-aware scheduling and register allocation. All fast enough to support JIT scenarios.
 + [Execution](#execution): Optimized instruction streams for HPU, HPU clusters, and CPU targets. HPU and Multi-HPU streams can be evaluated against an accurate hardware simulator, delivering a streamlined development experience.
 
-ZHC focuses on the [TFHE](https://eprint.iacr.org/2021/1402.pdf) cryptosystem.
+It underlies [tfhe-rs](https://github.com/zama-ai/tfhe-rs)s backend for the [(Multi)HPU](https://github.com/zama-ai/hpu_fpga) platform, as well as its experimental Circuit-API. It currently focuses on the [TFHE](https://eprint.iacr.org/2021/1402.pdf) cryptosystem.
 
 # Get started
 
@@ -135,7 +137,7 @@ The invariants of the semantics are checked during this abstract interpretation.
 <summary>More on noise</summary>
 <br>
 
-Noise management is a big part of implementing TFHE algorithms. It grows through operator application, but must always stay within some bounds to ensure the data are not corrupted with a large enough probability. The [`Builder::dump_noise`](https://docs.rs/zhc_builder/latest/zhc_builder/struct.Builder.html#method.dump_noise) method performs a noise analysis and displays it in a suitable format:
+Noise management is a big part of implementing FHE algorithms. It grows through operator application, but must always stay within some bounds to ensure the data are not corrupted with a large enough probability. The [`Builder::dump_noise`](https://docs.rs/zhc_builder/latest/zhc_builder/struct.Builder.html#method.dump_noise) method performs a noise analysis and displays it in a suitable format:
 ```rust
 bd.dump_noise();                        // On stdout:
                                         // ╔════════════════════════════════════════════
