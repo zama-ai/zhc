@@ -164,18 +164,19 @@ Note that ZHC also checks the noise during compilation to ensure that no noise-i
 
 <img align="left" width="160" src="docs/assets/restricted_pipeline.png" alt="Pipeline">
 
-The compiler itself is managed via the [`Pipeline`](https://docs.rs/zhc_pipeline/latest/zhc_pipeline/struct.Pipeline.html) object, providing a lazy, query-based compilation of all artifacts. Itself based on a [ZHC-IR definition](zhc_langs/src/pipelinelang/mod.rs), it ensures a single source of truth for every artifact derivation. The pipeline, restricted to the HPU is represented on the left. Artifacts are pulled from the pipeline with `get_*` methods. 
+The compiler itself is managed via the [`Pipeline`](https://docs.rs/zhc_pipeline/latest/zhc_pipeline/struct.Pipeline.html) object, providing a lazy, query-based compilation of all artifacts. Itself based on a [ZHC-IR definition](zhc_langs/src/pipelinelang/mod.rs), it ensures a single source of truth for every artifact derivation. The pipeline, restricted to the HPU is represented on the left. 
+
+Every intermediate artifact is cached in the pipeline, and can be pulled for inspection. Modifying an input of the pipeline has the effect of invalidating every transitively dependent artifact. Artifacts can be pulled from the pipeline with `get_*` methods. 
 ```rust
 let mut pl = Pipeline::new()
     .with_builder(bd)
     .with_hpu_config(Default::default());
 pl.get_hpu_assembly().open().unwrap();
 ```
-Every intermediate artifact is cached in the pipeline, and can be pulled for inspection. Modifying an input of the pipeline has the effect of invalidating every transitively dependent artifact.
-
-<br clear="left">
 
 For example, here is the text assembly listing retrieved via [`Pipeline::get_hpu_assembly`](https://docs.rs/zhc_pipeline/latest/zhc_pipeline/struct.Pipeline.html#method.get_hpu_assembly) when compiling the 16-bit addition:
+
+<br clear="left">
 
 ```text
 ; !preamble {
