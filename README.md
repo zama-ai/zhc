@@ -106,24 +106,21 @@ The [`draw`](https://docs.rs/zhc_builder/latest/zhc_builder/struct.Builder.html#
 The API exposed by the `Builder` object offers semantics tailored to the TFHE cryptosystem. For maximum expressivity and safety, operations are available in [different flavors](https://docs.rs/zhc_crypto/latest/zhc_crypto/integer_semantics/index.html) depending on how they treat the __padding bit__. To simplify the debugging without having to go through encryption/decryption cycles, the builder object exposes an emulation layer which performs an abstract interpretation of the program and annotates the intermediate values: 
 
 ```rust
-bd.interpret()
-    .with_inputs([pti.make_value(3)])
-    .dump();
-// On stdout:
-// ╔═══════════════════════════════════
-// ║ Interpretation for : [3_pt]
-// ║───────────────────────────────────
-// ║ %0 = input_plaintext<0, 2>();
-// ║     %0 -> 11_pt
-// ║ %1 = extract_pt_block<0>(%0);
-// ║     %1 -> 11_ptblock
-// ║ %2 = let_ct_block<0>();
-// ║     %2 -> 0_00_00_ctblock
-// ║ %3 = add_pt(%2, %1);
-// ║     %3 -> 0_00_11_ctblock
-// ║ %4 = pbs<Protect, Lut1("sh")>(%3);
-// ║     %4 -> 0_00_01_ctblock
-// ╚═══════════════════════════════════
+bd.interpret()                           // On stdout:
+    .with_inputs([pti.make_value(3)])    // ╔═══════════════════════════════════
+    .dump();                             // ║ Interpretation for : [3_pt]
+                                         // ║───────────────────────────────────
+                                         // ║ %0 = input_plaintext<0, 2>();
+                                         // ║     %0 -> 11_pt
+                                         // ║ %1 = extract_pt_block<0>(%0);
+                                         // ║     %1 -> 11_ptblock
+                                         // ║ %2 = let_ct_block<0>();
+                                         // ║     %2 -> 0_00_00_ctblock
+                                         // ║ %3 = add_pt(%2, %1);
+                                         // ║     %3 -> 0_00_11_ctblock
+                                         // ║ %4 = pbs<Protect, Lut1("sh")>(%3);
+                                         // ║     %4 -> 0_00_01_ctblock
+                                         // ╚═══════════════════════════════════
 ```
 
 <details>
