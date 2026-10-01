@@ -21,7 +21,7 @@
 
 ZHC is an open-source compiler toolchain for [FHE](https://en.wikipedia.org/wiki/Homomorphic_encryption) computation: it turns integer circuits into optimized instruction streams for hardware that computes directly on encrypted data. From arithmetic to silicon, ZHC optimizes FHE programs operating above the cryptography level, and ensures peak performance is reached on every target. 
 
-Built on top of a dialect-generic SSA-IR implemented from scratch, it relies on a central `BlockLang` dialect to simplify the most demanding tasks in compiler development: frontends addition, hardware-agnostic optimizations, and target-specific backend development:
+Built on top of a custom dialect-generic SSA-IR, it relies on a central `BlockLang` dialect to simplify the most demanding tasks in compiler development: frontends addition, hardware-agnostic optimizations, and target-specific backend development:
 
 <div align="center">
   <pre><sub>
@@ -44,7 +44,7 @@ This flexible architecture, enables speed at every step:
 + [Compilation](#compilation): Progressive lowering from high-level representation down to specialized hardware ISA. Target-agnostic optimizations, then hardware-aware scheduling and register allocation. All fast enough to support JIT scenarios.
 + [Execution](#execution): Optimized instruction streams for HPU, HPU clusters, and CPU targets. HPU and Multi-HPU streams can be evaluated against an accurate hardware simulator, delivering a streamlined development experience.
 
-It underlies [tfhe-rs](https://github.com/zama-ai/tfhe-rs)s backend for the [(Multi)HPU](https://github.com/zama-ai/hpu_fpga) platform, as well as its experimental Circuit-API. It currently focuses on the [TFHE](https://eprint.iacr.org/2021/1402.pdf) cryptosystem.
+It underlies [tfhe-rs](https://github.com/zama-ai/tfhe-rs)s backend for the [(Multi)HPU](https://github.com/zama-ai/hpu_fpga) platform, as well as the experimental Circuit-API. It focuses on the [TFHE](https://eprint.iacr.org/2021/1402.pdf) cryptosystem. It depends on nothing more than [a few foundational crates](https://github.com/zama-ai/zhc/Cargo.toml#L67-L77), allowing whole toolchain audit.
 
 # Get started
 
@@ -164,7 +164,7 @@ Note that ZHC also checks the noise during compilation to ensure that no noise-i
 
 <img align="left" width="160" src="docs/assets/restricted_pipeline.png" alt="Pipeline">
 
-The compiler itself is managed via the [`Pipeline`](https://docs.rs/zhc_pipeline/latest/zhc_pipeline/struct.Pipeline.html) object. It provides a lazy, query-based compilation of all the artifacts, and is itself based on a [ZHC-IR definition](zhc_langs/src/pipelinelang/mod.rs). This mechanism ensures a single source of truth ever exist for every artifact derivation. The pipeline, restricted to the HPU backend is represented on the left. 
+The compiler itself is managed via the [`Pipeline`](https://docs.rs/zhc_pipeline/latest/zhc_pipeline/struct.Pipeline.html) object. It provides a lazy, query-based compilation of all the artifacts, and is itself based on a [ZHC Dialect](zhc_langs/src/pipelinelang/mod.rs). This mechanism ensures a single source of truth ever exist for every artifact derivation. The pipeline, restricted to the HPU backend is represented on the left. 
 
 Every intermediate artifacts is cached inside the pipeline, and can be pulled for inspection with `get_*` methods. This makes for a faster debugging experience, and prevents artifacts to be recompiled when not strictly necessary. On the other hand, modifying a pipeline input has the immediate effect of invalidating every transitively dependent artifacts, for a predictable user experience. 
 
@@ -209,7 +209,7 @@ Every pass of the pipeline (including scheduling and register allocation) is ver
 <summary>More on compilation time</summary>
 <br>
     
-Compilation time is on the order of a few microseconds per instruction (well below the time the HPU takes to execute them) so compilation can be pipelined with execution, staying off the critical path. This makes Just-In-Time compilation of FHE programs scenarios possible: operation graphs produced at runtime can be compiled as whole programs on-the-fly, and the scheduling and batching gains largely repay the compile time.
+Compilation time is on the order of a few microseconds per instruction (well below the time to execute them on any platform) so compilation can be pipelined with execution, staying off the critical path. This makes Just-In-Time compilation of FHE programs possible: operation graphs produced at runtime can be compiled as whole programs on-the-fly, and the scheduling and batching gains largely repay the compile time.
 
 </details>
 
@@ -217,7 +217,7 @@ Compilation time is on the order of a few microseconds per instruction (well bel
 
 FHE is special for its large imbalance in operation latency: the ratio of __pbs__ to __linear__ operations runtimes (the two broad categories) can be in the hundred to the thousand. Approaches assuming homogeneous latencies are either unsuitable in this regime, or plainly inapplicable depending on the target.
 
-ZHC current targets (HPUs, HPU clusters, and experimentally CPUs) all bring a different solution to the above mentioned problem. All with a different set of constraints and challenges. To ensure peak performance can be reached for every platform, each one is the target of a separate branch of the backend.
+The various targetted platforms (HPUs, HPU clusters, and experimentally CPUs) all bring a different solution to the above mentioned problem. All with a different set of constraints and challenges. To ensure peak performance can be reached for every platform, each one is the target of a separate branch of the backend.
 
 ### HPU
 
