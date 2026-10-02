@@ -8,9 +8,9 @@ use zhc_crypto::integer_semantics::{
 use zhc_ir::evaluation::{EvalOutcome, Evaluable, EvaluatesTo, Evaluation};
 use zhc_utils::iter::CollectInSmallVec;
 use zhc_utils::small::SmallVec;
-use zhc_utils::{FastMap, SafeAs, svec};
+use zhc_utils::{FastMap, SafeAs, Store, fsm, svec};
 
-use crate::hpulang::{HpuId, HpuTypeSystem, TDstId, TImmId, TSrcId, TransferId};
+use crate::hpulang::{HpuId, HpuTypeSystem, NextTransferId, TDstId, TImmId, TSrcId, TransferId};
 
 /// Interpretation domain for HPU programs.
 ///
@@ -69,6 +69,13 @@ impl EvaluatesTo<HpuValue> for HpuTypeSystem {
     }
 }
 
+#[fsm]
+#[derive(Debug, Clone)]
+enum TransferState {
+    WaitingFor(TransferId),
+    Holding(TransferId, EmulatedCiphertextBlock),
+}
+
 /// Execution context for HPU program interpretation.
 ///
 /// Holds cryptographic parameters (`spec`), block-level I/O maps, and
@@ -97,8 +104,8 @@ pub struct HpuInterpreterContext {
     pub lut1_table: FastMap<LutId, Lut1>,
     /// Reverse LUT table: LutId → Lut2 (for Pbs2/Pbs2F).
     pub lut2_table: FastMap<LutId, Lut2>,
-    /// Blocks in flight between HPUs, keyed by `(from, to, id)`.
-    pub transfers: FastMap<(HpuId, HpuId, TransferId), EmulatedCiphertextBlock>,
+    /// Transfer state for each receiving HPU.
+    transfers: Store<HpuId, TransferState>,
     /// Batch argument state for nested `Batch` interpretation.
     batch_args: FastMap<u8, HpuValue>,
     /// Batch return state for nested `Batch` interpretation.
@@ -115,10 +122,16 @@ impl HpuInterpreterContext {
             immediates: FastMap::default(),
             lut1_table: FastMap::default(),
             lut2_table: FastMap::default(),
-            transfers: FastMap::default(),
+            transfers: Store::with_value(TransferState::WaitingFor(TransferId::FIRST), 8),
             batch_args: FastMap::default(),
             batch_rets: FastMap::default(),
         }
+    }
+
+    pub fn has_pending_transfers(&self) -> bool {
+        self.transfers
+            .iter()
+            .any(|transfer| matches!(transfer, TransferState::Holding(..)))
     }
 }
 
@@ -133,19 +146,30 @@ impl Evaluable<HpuValue> for super::HpuInstructionSet {
         use super::HpuInstructionSet::*;
         let results = match self {
             // ── Inter-HPU transfers ──────────────────────────────────
-            TransferOut { from, to, id, .. } => {
-                let key = (*from, *to, *id);
-                assert!(
-                    !context.transfers.contains_key(&key),
-                    "Transfer {id} from {from} to {to} already posted"
-                );
-                context
-                    .transfers
-                    .insert(key, arguments[0].clone().unwrap_ct_register());
+            TransferOut { to, id, .. } => {
+                let ct = arguments[0].clone().unwrap_ct_register();
+                let accepted = context.transfers[to].transition_with(|old| match old {
+                    TransferState::WaitingFor(expected) if expected == *id => {
+                        (TransferState::Holding(*id, ct), true)
+                    }
+                    transfer => (transfer, false),
+                });
+                if !accepted {
+                    return EvalOutcome::Blocked;
+                }
                 svec![]
             }
-            TransferIn { from, to, id, .. } => {
-                let Some(ct) = context.transfers.remove(&(*from, *to, *id)) else {
+            TransferIn { to, id, .. } => {
+                let ct = context.transfers[to].transition_with(|transfer| match transfer {
+                    TransferState::Holding(held_id, ct) if held_id == *id => {
+                        let next = match id.inc() {
+                            NextTransferId::NewGen(next) | NextTransferId::SameGen(next) => next,
+                        };
+                        (TransferState::WaitingFor(next), Some(ct))
+                    }
+                    transfer => (transfer, None),
+                });
+                let Some(ct) = ct else {
                     return EvalOutcome::Blocked;
                 };
                 svec![HpuValue::CtRegister(ct)]

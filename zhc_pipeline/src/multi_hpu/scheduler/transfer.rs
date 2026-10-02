@@ -1,59 +1,39 @@
 use serde::Serialize;
 use zhc_config::multi_hpu::MultiHpuConfig;
 use zhc_ir::{AsOpId, IR, OpId, OpMap, OpRef};
-use zhc_langs::hpulang::{HpuId, HpuInstructionSet, HpuLang, TransferId};
+use zhc_langs::hpulang::{HpuId, HpuInstructionSet, HpuLang, NextTransferId, TransferId};
 use zhc_utils::{Store, small::SmallSet};
-
-#[allow(unused)]
-pub static PREFETCH_TID: TransferId = TransferId(0);
-#[allow(unused)]
-pub static RECYCLING_TIDS: [TransferId; 8] = [
-    TransferId(1),
-    TransferId(2),
-    TransferId(3),
-    TransferId(4),
-    TransferId(5),
-    TransferId(6),
-    TransferId(7),
-    TransferId(8),
-];
-pub static FIRST_TID: TransferId = TransferId(9);
-pub static LAST_TID: TransferId = TransferId(63);
-pub static ALL_HIDS: [HpuId; 8] = [
-    HpuId(0),
-    HpuId(1),
-    HpuId(2),
-    HpuId(3),
-    HpuId(4),
-    HpuId(5),
-    HpuId(6),
-    HpuId(7),
-];
 
 #[derive(Debug, Clone, Serialize)]
 struct HpuState {
     next_tid: TransferId,
     recycling: Option<OpId>,
     locked: SmallSet<HpuId>,
+    n_hpus: u8
 }
 
 impl HpuState {
-    pub fn new() -> Self {
+    pub fn new(n_hpus: u8) -> Self {
         HpuState {
-            next_tid: FIRST_TID,
+            next_tid: TransferId::FIRST,
             recycling: None,
-            locked: SmallSet::new()
+            locked: SmallSet::new(),
+            n_hpus
         }
     }
 
     pub fn get_tid(&mut self, opid: OpId) -> TransferId {
         let oup = self.next_tid;
-        self.next_tid.0 += 1;
-        if self.next_tid > LAST_TID {
-            self.recycling = Some(opid);
-            self.locked = ALL_HIDS.iter().copied().collect();
-            self.next_tid = FIRST_TID;
-        }
+        self.next_tid = match self.next_tid.inc() {
+            NextTransferId::NewGen(tid) => {
+                self.recycling = Some(opid);
+                self.locked = (0..self.n_hpus).map(HpuId).collect();
+                tid
+            },
+            NextTransferId::SameGen(tid) => {
+                tid
+            },
+        };
         oup
     }
 
@@ -124,7 +104,7 @@ impl TransferMapper {
         map: OpMap<TransferKind>,
         config: &MultiHpuConfig,
     ) -> Self {
-        TransferMapper { transfer_kinds: map, hpu_states: Store::with_value(HpuState::new(), config.n_hpus as usize) }
+        TransferMapper { transfer_kinds: map, hpu_states: Store::with_value(HpuState::new(config.n_hpus), config.n_hpus as usize) }
     }
 
     pub fn build<'a>(
@@ -143,7 +123,7 @@ impl TransferMapper {
                 None
             };
             let tid = self.hpu_states[to].get_tid(opid);
-            let tkind = if tid == LAST_TID {
+            let tkind = if tid.is_last_of_gen() {
                 if let Some(waits) = waits.copied() {
                     TransferKind::LockedLocking { tid, waits, locks: Vec::new() }
                 } else {

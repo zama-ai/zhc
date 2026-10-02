@@ -1,17 +1,11 @@
 use crate::{
-    Fingerprint, PbsMetrics,
-    hpu::{metrics::HpuMetrics, translation_table::DOpRepr},
-    multi_hpu::metrics::MultiHpuMetrics,
-    vm::scheduler::VmExecutionPlan,
+    Fingerprint, PartitionerConfig, PbsMetrics, hpu::{metrics::HpuMetrics, translation_table::DOpRepr}, multi_hpu::metrics::MultiHpuMetrics, vm::scheduler::VmExecutionPlan
 };
 use zhc_config::{hpu::HpuConfig, multi_hpu::MultiHpuConfig, vm::VmConfig};
 use zhc_crypto::integer_semantics::lut::{LutId, LutRegistry};
 use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
 use zhc_ir::{
-    IR, OpMap, Signature,
-    evaluation::Evaluation,
-    partitioning::PartitionAnnotation,
-    visualization::{DynamicElement, VisualAnnotation},
+    IR, OpMap, Signature, evaluation::Evaluation, partitioning::PartitionId, visualization::{DynamicElement, VisualAnnotation}
 };
 use zhc_langs::{
     doplang::DopLang,

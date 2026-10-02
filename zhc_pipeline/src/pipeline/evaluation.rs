@@ -14,11 +14,7 @@ use zhc_utils::{
 };
 
 use crate::{
-    Fingerprint, PartitionSpec, PartitionerConfig, SchedPolicy, SpreadPolicy, TiePolicy, hpu,
-    iop::{self, extract_lut_registry},
-    multi_hpu, partition_and_materialize,
-    pipeline::context::PipelineContext,
-    vm,
+    Fingerprint, PartitionSpec, PartitionerConfig, SchedPolicy, SpreadPolicy, TiePolicy, hpu, iop::{self, extract_lut_registry}, multi_hpu, partition_and_materialize, passes::lower_iop_to_multi_hpu, pipeline::context::PipelineContext, vm
 };
 
 use super::PipelineArtifact;
@@ -243,8 +239,7 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                 interval_begin(c"IopLangToMultiHpu", 0);
                 let remat_ioplang = arguments[0].unwrap_remat_iop_lang_ref();
                 let partitions = arguments[1].unwrap_partitions_ref();
-                let (hpulang, localities) = todo!();
-                // multi_hpu::translation::lower_iop_to_multi_hpu(ioplang, partitions);
+                let (hpulang, localities) = lower_iop_to_multi_hpu(remat_ioplang, partitions);
                 let result = svec![
                     PipelineArtifact::MultiHpuLangTranslated(Box::new(hpulang)),
                     PipelineArtifact::MultiHpuLocalities(localities)

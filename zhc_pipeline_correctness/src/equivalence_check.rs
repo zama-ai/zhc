@@ -102,9 +102,8 @@ pub fn check_iop_multi_hpu_equivalence(
             evaluator.into_eval_ir().dump_and_panic();
         }
         assert!(
-            ctx.transfers.is_empty(),
-            "Transfers posted but never taken: {:?}",
-            ctx.transfers.keys().collect::<Vec<_>>()
+            !ctx.has_pending_transfers(),
+            "Some transfers were posted but never taken"
         );
     });
 }

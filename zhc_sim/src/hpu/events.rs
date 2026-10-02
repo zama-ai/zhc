@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use serde::Serialize;
-use zhc_langs::hpulang::{HpuId, TransferId};
+use zhc_langs::{doplang::{CtMem, UserFlag}, hpulang::HpuId};
 
 use crate::Event;
 
@@ -79,11 +79,11 @@ pub enum Events {
     /// Micro-core drains its DOp queue until it stalls on a transfer or runs dry.
     UCoreProcessDOps,
     /// Source board signals that the identified inbound transfer may start loading.
-    UCoreTransferInNotified(TransferId),
+    UCoreNotified(UserFlag, HpuId, CtMem),
     /// Inbound DMA of the identified transfer completed, releasing the matching `WAIT`.
-    UCoreTransferInFinished(TransferId),
+    UCoreDmaCompleted(UserFlag),
     /// Identified outbound transfer is ready to be signalled to the destination HPU.
-    UCoreTransferOutReady(HpuId, TransferId),
+    UCoreNotify(HpuId, UserFlag, CtMem),
     /// The UCore has treated every DOp in its queue and the Isc has drained.
     UCoreStarved,
 }
@@ -92,7 +92,7 @@ impl Events {
     /// Returns whether this event is a `UCoreTransferInNotified`.
     #[must_use]
     pub fn is_ucore_notify(&self) -> bool {
-        matches!(self, Self::UCoreTransferInNotified(..))
+        matches!(self, Self::UCoreNotified(..))
     }
 }
 
@@ -128,11 +128,11 @@ impl Display for Events {
             Events::NotifyStartOnTimeout { .. } => write!(f, "NotifyStartOnTimeout"),
             Events::UCorePushDOps(_) => write!(f, "UCorePushDOps"),
             Events::UCoreProcessDOps => write!(f, "UCoreProcessDOps"),
-            Events::UCoreTransferInNotified(..) => write!(f, "UCoreTransferInNotified"),
-            Events::UCoreTransferInFinished(..) => write!(f, "UCoreTransferInFinished"),
+            Events::UCoreNotified(..) => write!(f, "UCoreNotified"),
+            Events::UCoreDmaCompleted(..) => write!(f, "UCoreDmaCompleted"),
             Events::UCoreStarved => write!(f, "UCoreStarved"),
             Events::IscStarved => write!(f, "IscStarved"),
-            Events::UCoreTransferOutReady(..) => write!(f, "UCoreTransferOutReady"),
+            Events::UCoreNotify(..) => write!(f, "UCoreNotify"),
         }
     }
 }

@@ -67,10 +67,10 @@ impl Simulatable for MultiHpu {
         trigger: Trigger<Self::Event>,
     ) {
         match trigger.event {
-            Events::Hpu(_, HpuEvents::UCoreTransferOutReady(hid, tid)) => {
+            Events::Hpu(src_hid, HpuEvents::UCoreNotify(dst_hid, flag, slot)) => {
                 dispatcher.dispatch_after(
                     Cycle(self.config.hpu_config.freq.n_cycles(NOTIFY_LATENCY)),
-                    Events::Hpu(hid, HpuEvents::UCoreTransferInNotified(tid)),
+                    Events::Hpu(dst_hid, HpuEvents::UCoreNotified(flag, src_hid, slot)),
                 );
             }
             Events::Hpu(_, HpuEvents::UCoreStarved) => {

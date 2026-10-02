@@ -59,7 +59,7 @@ fn simulate(irs: &[IR<DopLang>], config: &MultiHpuConfig) -> Microseconds {
     let mut simulator = Simulator::from_simulatable(
         config.hpu_config.freq,
         MultiHpu::new(config),
-        TracingLevel::None,
+        TracingLevel::Events,
     );
     simulator.dispatch(Events::PushDOps(streams));
     simulator.play_until_event(Events::ProcessOver);

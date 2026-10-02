@@ -29,7 +29,8 @@ check:
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked --no-deps
 
 bench:
-	cargo run --locked --release -p zhc_bench
+	cargo run --locked --release -p zhc_bench -- -t mhpu2 -i ovfmuls -b 32
+
 
 bench-export:
 	cargo run --locked --release -p zhc_bench -- export

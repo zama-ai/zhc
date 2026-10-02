@@ -106,7 +106,7 @@
 use zhc_config::{hpu::HpuConfig, multi_hpu::MultiHpuConfig, vm::VmConfig};
 use zhc_crypto::integer_semantics::lut::{LutId, LutRegistry};
 use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
-use zhc_ir::partitioning::PartitionAnnotation;
+use zhc_ir::partitioning::{PartitionAnnotation, PartitionId};
 use zhc_ir::{IR, OpMap, Signature, evaluation::LazyEvaluator, visualization::Hierarchy};
 use zhc_langs::{
     doplang::DopLang,
