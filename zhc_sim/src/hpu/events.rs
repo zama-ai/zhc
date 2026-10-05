@@ -11,7 +11,7 @@ use super::{DOp, DOpId, IscCommand};
 pub type BatchSize = usize;
 
 /// Simulation events representing state changes and operations within HPU components.
-#[derive(Debug, Clone, Serialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub enum Events {
     /// Instruction scheduler receives new operations to schedule.
     IscPushDOp(DOp),

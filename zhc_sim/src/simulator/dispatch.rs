@@ -7,22 +7,15 @@ use super::*;
 /// Event dispatcher managing scheduled events using a priority queue.
 pub struct Dispatcher<E: Event> {
     now: Cycle,
+    next_issue: u64,
     triggers: BinaryHeap<Reverse<Trigger<E>>>,
-}
-
-impl<E: Event> Dispatcher<E> {
-    pub fn from_raw_parts(now: Cycle, triggers: impl Iterator<Item = Trigger<E>>) -> Self {
-        Dispatcher {
-            now,
-            triggers: triggers.map(Reverse).collect(),
-        }
-    }
 }
 
 impl<E: Event> Default for Dispatcher<E> {
     fn default() -> Self {
         Self {
             now: Cycle::ZERO,
+            next_issue: 0,
             triggers: BinaryHeap::new(),
         }
     }
@@ -31,29 +24,21 @@ impl<E: Event> Default for Dispatcher<E> {
 impl<E: Event> Dispatch for Dispatcher<E> {
     type Event = E;
 
-    fn contains_event(&self, event: &Self::Event, filter: Option<Cycle>) -> bool {
-        if let Some(filter_at) = filter.as_ref() {
-            self.triggers
-                .iter()
-                .find(|Reverse(Trigger { at, event: e })| (e == event) && (at == filter_at))
-                .is_some()
-        } else {
-            self.triggers
-                .iter()
-                .map(|trigger| &trigger.0.event)
-                .find(|e| *e == event)
-                .is_some()
-        }
+    fn contains_event(&self, event: &Self::Event) -> bool {
+        self.triggers
+            .iter()
+            .map(|trigger| &trigger.0.event)
+            .find(|e| *e == event)
+            .is_some()
     }
     fn dispatch(&mut self, event: Self::Event, delay: Option<Cycle>) {
         let dispatch_cycle = self.now + delay.unwrap_or(Cycle::ZERO);
-        // NB: Discard event dispach in the current cycle if already present
-        if !self.contains_event(&event, Some(dispatch_cycle)) {
-            self.triggers.push(Reverse(Trigger {
-                at: dispatch_cycle,
-                event,
-            }));
-        }
+        self.triggers.push(Reverse(Trigger {
+            at: dispatch_cycle,
+            issue: self.next_issue,
+            event,
+        }));
+        self.next_issue += 1;
     }
 }
 
@@ -105,9 +90,8 @@ pub struct MappedDispatcher<'a, D: Dispatch, E: Event, F: Fn(E) -> D::Event> {
 impl<'a, D: Dispatch, E: Event, F: Fn(E) -> D::Event> Dispatch for MappedDispatcher<'a, D, E, F> {
     type Event = E;
 
-    fn contains_event(&self, event: &Self::Event, filter: Option<Cycle>) -> bool {
-        self.inner
-            .contains_event(&(self.map)(event.to_owned()), filter)
+    fn contains_event(&self, event: &Self::Event) -> bool {
+        self.inner.contains_event(&(self.map)(event.to_owned()))
     }
 
     fn dispatch(&mut self, event: Self::Event, delay: Option<Cycle>) {

@@ -7,10 +7,7 @@ use zhc_utils::type_name_of_val;
 use super::*;
 
 /// Represents simulation events that can be dispatched and handled.
-///
-/// The total order is used to break ties between events scheduled for the same
-/// cycle, giving a deterministic dispatch order among them.
-pub trait Event: Display + Clone + Serialize + PartialEq + PartialOrd + Ord {}
+pub trait Event: Display + Clone + Serialize + PartialEq {}
 
 /// Manages event scheduling and delivery within the simulation.
 pub trait Dispatch {
@@ -18,7 +15,7 @@ pub trait Dispatch {
 
     /// Checks if the given `event` is already scheduled for dispatch.
     /// Could filtered on a given cycle
-    fn contains_event(&self, event: &Self::Event, filter: Option<Cycle>) -> bool;
+    fn contains_event(&self, event: &Self::Event) -> bool;
 
     /// Schedules an `event` for dispatch after the specified `delay` in cycles.
     ///
@@ -42,7 +39,7 @@ pub trait Dispatch {
 
     /// Schedules an `event` for dispatch after `after_n_cycles` cycles if not already scheduled.
     fn dispatch_after_if_no_there(&mut self, after_n_cycles: Cycle, event: Self::Event) {
-        if !self.contains_event(&event, None) {
+        if !self.contains_event(&event) {
             self.dispatch_after(after_n_cycles, event);
         }
     }

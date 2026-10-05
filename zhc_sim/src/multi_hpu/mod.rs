@@ -84,6 +84,7 @@ impl Simulatable for MultiHpu {
                     &mut dispatcher.map(|e| Events::Hpu(hpu_id, e)),
                     Trigger {
                         at: trigger.at,
+                        issue: trigger.issue,
                         event: hpu_event,
                     },
                 );

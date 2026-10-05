@@ -13,7 +13,7 @@ struct Counter {
     target: usize,
 }
 
-#[derive(Debug, Clone, Copy, Default, Serialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, Default, Serialize, PartialEq, Eq)]
 enum CounterEvent {
     #[default]
     Increment,
@@ -63,7 +63,7 @@ struct PingPong {
     max_rounds: usize,
 }
 
-#[derive(Debug, Clone, Copy, Default, Serialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, Default, Serialize, PartialEq, Eq)]
 enum PingPongEvent {
     #[default]
     Ping,
@@ -127,7 +127,7 @@ struct Timer {
     interval: Cycle,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 enum TimerEvent {
     Tick,
     Tock,
@@ -187,7 +187,7 @@ struct Pipeline {
     items_started: usize,
 }
 
-#[derive(Debug, Clone, Copy, Default, Serialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, Default, Serialize, PartialEq, Eq)]
 enum PipelineEvent {
     #[default]
     StartItem,
@@ -336,7 +336,6 @@ fn test_simultaneous_events() {
 
     // Submit multiple events at same time
     sim.dispatch_later(Cycle(1), TimerEvent::Tick);
-    sim.dispatch_later(Cycle(1), TimerEvent::Tick);
     sim.dispatch_later(Cycle(1), TimerEvent::Tock);
     sim.dispatch_later(Cycle(3), TimerEvent::Tock);
 
@@ -381,7 +380,7 @@ fn test_power_up_scheduling() {
         ticks: usize,
     }
 
-    #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq, PartialOrd, Ord)]
+    #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
     enum AutoStartEvent {
         Boot,
         Tick,
@@ -441,7 +440,7 @@ fn test_power_up_scheduling() {
 #[test]
 fn test_tuple_composition() {
     // Two counters with shared event type
-    #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq, PartialOrd, Ord)]
+    #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
     enum SharedEvent {
         CountA,
         CountB,
@@ -523,7 +522,7 @@ fn test_tuple_composition() {
 
 #[test]
 fn test_tuple_power_up() {
-    #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq, PartialOrd, Ord)]
+    #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
     enum StartEvent {
         InitEarly,
         InitLate,
@@ -605,7 +604,7 @@ fn test_tuple_power_up() {
 
 #[test]
 fn test_triple_tuple_composition() {
-    #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq, PartialOrd, Ord)]
+    #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
     enum TripleEvent {
         Ping,
     }

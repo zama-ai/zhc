@@ -12,7 +12,7 @@ use crate::{
     multi_hpu::scheduler::{HpuEvents, LightHpu, Stats},
 };
 
-#[derive(Debug, Serialize, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Serialize, Clone, PartialEq, Eq)]
 pub enum MultiHpuEvents {
     Hpu(HpuId, HpuEvents),
 }
@@ -62,6 +62,7 @@ impl<'a, 'b> Simulatable for LightMultiHpu<'a, 'b> {
                     &mut dispatcher.map(|e| MultiHpuEvents::Hpu(hpu_id, e)),
                     Trigger {
                         at: trigger.at,
+                        issue: trigger.issue,
                         event: hpu_event,
                     },
                 );

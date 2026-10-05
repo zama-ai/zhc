@@ -64,7 +64,7 @@ impl Dumpable for ValState {
     }
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub enum HpuEvents {
     Start,
     LandPea,

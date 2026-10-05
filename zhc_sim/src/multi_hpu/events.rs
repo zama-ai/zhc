@@ -11,7 +11,7 @@ use super::super::hpu::Events as HpuEvents;
 ///
 /// Board-level events travel wrapped in `Hpu`, tagged with the [`HpuId`] of the board they
 /// concern, whereas `PushDOps` and `ProcessOver` are system-wide and belong to no single board.
-#[derive(Debug, Clone, Serialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub enum Events {
     /// Board-level event concerning the identified HPU.
     Hpu(HpuId, HpuEvents),
