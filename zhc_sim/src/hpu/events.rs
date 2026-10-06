@@ -84,6 +84,8 @@ pub enum Events {
     UCoreDmaCompleted(UserFlag),
     /// Identified outbound transfer is ready to be signalled to the destination HPU.
     UCoreNotify(HpuId, UserFlag, CtMem),
+    /// Incoming Transfer ids are exhausted, and recycling is notified to sender.
+    UCoreFlagRecycling(HpuId),
     /// The UCore has treated every DOp in its queue and the Isc has drained.
     UCoreStarved,
 }
@@ -133,6 +135,7 @@ impl Display for Events {
             Events::UCoreStarved => write!(f, "UCoreStarved"),
             Events::IscStarved => write!(f, "IscStarved"),
             Events::UCoreNotify(..) => write!(f, "UCoreNotify"),
+            Events::UCoreFlagRecycling(..) => write!(f, "UCoreFlagRecycling"),
         }
     }
 }

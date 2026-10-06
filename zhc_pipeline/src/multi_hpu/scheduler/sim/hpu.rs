@@ -72,8 +72,6 @@ pub enum HpuEvents {
     LandPem,
     LandCtl,
     LandTransfer,
-    UnavailableForTransfers,
-    AvailableForTransfers,
     TransferOut(HpuId, OpId),
     TransferIn(OpId),
 }

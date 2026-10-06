@@ -1,5 +1,6 @@
 use super::type_system::DopTypeSystem;
 use serde::Serialize;
+use zhc_utils::{SafeAs, StoreIndex};
 use std::fmt::{Debug, Display};
 use zhc_crypto::integer_semantics::lut::{LutDecoder, LutId};
 use zhc_ir::{DialectInstructionSet, Format, FormatContext, Signature, sig};
@@ -273,6 +274,26 @@ impl Display for LutRef {
 )]
 pub struct UserFlag {
     pub flag: u8,
+}
+
+impl StoreIndex for UserFlag {
+    type Raw = u8;
+
+    fn as_raw(&self) -> Self::Raw {
+        self.flag
+    }
+
+    fn as_usize(&self) -> usize {
+        self.flag as usize
+    }
+
+    fn raw_from_usize(val: usize) -> Self::Raw {
+        val.sas()
+    }
+
+    fn from_usize(val: usize) -> Self {
+        UserFlag { flag: val.sas() }
+    }
 }
 
 impl UserFlag {

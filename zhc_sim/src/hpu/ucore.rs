@@ -2,37 +2,38 @@ use std::collections::VecDeque;
 
 use zhc_langs::{
     doplang::{CtMem, DopInstructionSet, UserFlag, VirtId},
-    hpulang::{FIRST_FLAG, N_FLAGS},
+    hpulang::{N_FLAGS, N_RESERVED_FLAGS},
 };
-use zhc_utils::{FastMap, fsm};
+use zhc_utils::{FastMap, SafeAs, Store, existential_enum, fsm};
 
 use crate::Dispatch;
 
 use super::*;
 
-/// Lifecycle of wait/transfer tracked by a [`UCore`].
-#[fsm]
+#[existential_enum]
 #[derive(Debug, Clone, Serialize)]
-pub enum WaitState {
-    Forbidden,
-    None, // Unseen
-    Received(HpuId, CtMem),          // Notify arrivé, de qui et a quelle adresse chez la source.
-    ReadPending(CtMem),              // Notify pas recu, Mais LD_B2B a déja souscrit. Et l'adresse est locale.
-    DmaPending(HpuId, CtMem, CtMem), // Received + ReadPending
-    Resolved(CtMem),
+pub enum FlagState {
+    Forbidden(()),
+    Sync(SyncState),
+    Transfer(TransferState)
 }
 
-/// Scheduling condition of a [`UCore`].
-///
-/// `Starved` has no pending work; `Incuring` is actively draining its DOP queue
-/// to the instruction scheduler; and `WaitingTransferIn` is blocked until an inbound
-/// transfer finishes loading.
 #[fsm]
-#[derive(Debug, Serialize)]
-pub enum UCoreCondition {
-    Starved,
-    Incuring,
+#[derive(Debug, Clone, Serialize)]
+pub enum SyncState {
+    Fresh,
     Waiting,
+    Notified,
+}
+
+#[fsm]
+#[derive(Debug, Clone, Serialize)]
+pub enum TransferState {
+    Fresh,
+    SrcReady{src: HpuId, src_slot: CtMem},
+    DstReady{dst_slot: CtMem},
+    Transfering{src: HpuId, src_slot: CtMem, dst_slot: CtMem},
+    Transfered{dst_slot: CtMem},
 }
 
 /// Micro-core that sequences an HPU's DOP stream and mediates inter-HPU
@@ -50,23 +51,27 @@ pub enum UCoreCondition {
 #[derive(Debug, Serialize)]
 pub struct UCore {
     dops: VecDeque<DOp>,
-    waits_table: Vec<WaitState>,
+    flags_table: Store<UserFlag, FlagState>,
     notify_table: FastMap<DOpId, (HpuId, UserFlag, CtMem)>,
     mhdma_latency: ConstantLatency,
+    id: HpuId
 }
 
 impl UCore {
     /// Creates an idle micro-core whose inbound transfers each take
     /// `mhdma_latency` to load.
-    pub fn new(mhdma_latency: ConstantLatency) -> Self {
+    pub fn new(id: HpuId, mhdma_latency: ConstantLatency) -> Self {
+        let flags_table = std::iter::once(FlagState::Forbidden(()))
+            .chain(std::iter::repeat_n(FlagState::Sync(SyncState::Fresh), (N_RESERVED_FLAGS-1).sas()))
+            .chain(std::iter::repeat(FlagState::Transfer(TransferState::Fresh)))
+            .take(N_FLAGS as usize)
+            .collect();
         UCore {
             dops: VecDeque::new(),
-            waits_table: std::iter::once(WaitState::Forbidden)
-                .chain(std::iter::repeat(WaitState::None))
-                .take(N_FLAGS as usize)
-                .collect(),
+            flags_table,
             notify_table: FastMap::default(),
             mhdma_latency,
+            id
         }
     }
 }
@@ -92,42 +97,56 @@ impl Simulatable for UCore {
                         }
                         Some(LD_B2B { .. }) => {
                             let LD_B2B {
-                                flag: UserFlag { flag },
+                                flag,
                                 slot
                             } = self.dops.pop_front().unwrap().raw
                             else {
                                 unreachable!()
                             };
-                            self.waits_table[flag as usize].transition(|old| match old {
-                                WaitState::None | WaitState::Resolved(_) => {
-                                    WaitState::ReadPending(slot)
+                            assert!(self.flags_table[flag].is_transfer(), "LD_B2B on non-transfer flag...");
+                            self.flags_table[flag].unwrap_transfer_mut().transition(|old| match old {
+                                TransferState::Fresh => {
+                                    TransferState::DstReady{dst_slot: slot}
                                 }
-                                WaitState::Received(hid, src) => {
+                                TransferState::SrcReady{src, src_slot} => {
                                     dispatcher.dispatch_after(
                                         self.mhdma_latency.compute_latency(),
-                                        Events::UCoreDmaCompleted(UserFlag{flag})
+                                        Events::UCoreDmaCompleted(flag)
                                     );
-                                    WaitState::DmaPending(hid, src, slot)
+                                    TransferState::Transfering{src, src_slot, dst_slot: slot}
                                 }
-                                w => panic!("1: Encountered unexpected wait state {w:?}"),
+                                s => panic!("Encountered unexpected flag state {s:?} while handling LD_B2B"),
                             });
                         }
-                        Some(WAIT { flag: UserFlag { flag }, slot }) => {
-                            let should_resume = match self.waits_table[*flag as usize] {
-                                WaitState::None => {
-                                    // Sync
-                                    false
-                                }
-                                WaitState::ReadPending(_) => {
-                                    false
-                                }
-                                WaitState::Received(_, _) | WaitState::DmaPending(_, _, _) => {
-                                    slot.is_none()
-                                }
-                                WaitState::Resolved(_) => {
-                                    true
-                                }
-                                ref w => panic!("2: Encountered unexpected wait state {w:?}"),
+                        Some(WAIT { flag, slot }) => {
+                            let should_resume = match &mut self.flags_table[flag] {
+                                FlagState::Forbidden(_) => panic!("Encountered WAIT on forbidden flag."),
+                                FlagState::Transfer(transfer_state) => {
+                                    transfer_state.transition_with(|old| match old {
+                                        TransferState::DstReady { dst_slot } => {
+                                            assert_eq!(dst_slot, *slot.as_ref().unwrap());
+                                            (TransferState::DstReady { dst_slot }, false)
+                                        }
+                                        TransferState::Transfering { src, src_slot, dst_slot } => {
+                                            (TransferState::Transfering { src, src_slot, dst_slot }, false)
+                                        },
+                                        TransferState::Transfered { .. } => {
+                                            (TransferState::Fresh, true)
+                                        },
+                                        s => panic!("Encountered unexpected flag state {s:?} while handling WAIT on transfer flag"),
+                                    })
+                                },
+                                FlagState::Sync(sync_state) => {
+                                    sync_state.transition_with(|old| match old {
+                                        SyncState::Fresh => {
+                                            (SyncState::Waiting, false)
+                                        },
+                                        SyncState::Notified => {
+                                            (SyncState::Fresh, true)
+                                        },
+                                        s => panic!("Encountered unexpected flag state {s:?} while handling WAIT on sync flag"),
+                                    })
+                                },
                             };
                             if should_resume {
                                 self.dops.pop_front().unwrap();
@@ -147,8 +166,9 @@ impl Simulatable for UCore {
                                 id,
                             } = self.dops.pop_front().unwrap()
                             else {
-                                unreachable!("5")
+                                unreachable!()
                             };
+
                             self.notify_table.insert(id, (HpuId(hid), flag, slot));
                             dispatcher.dispatch_now(Events::IscPushDOp(DOp {
                                 raw: SYNC {
@@ -168,49 +188,53 @@ impl Simulatable for UCore {
                     }
                 }
             }
-            Events::UCoreNotified(flag, hid, src) => {
-                self.waits_table[flag.flag as usize]
-                    .transition(|old| match old {
-                        WaitState::None => {
-                            // Fresh sync or transfer.
-                            dispatcher.dispatch_now(Events::UCoreProcessDOps);
-                            WaitState::Received(hid, src)
-                        },
-                        WaitState::Received(_, _) => {
-                            // Recycling a past sync
-                            assert!(flag.flag < FIRST_FLAG);
-                            dispatcher.dispatch_now(Events::UCoreProcessDOps);
-                            WaitState::Received(hid, src)
-                        },
-                        WaitState::Resolved(_) => {
-                            // Recylcing a past transfer
-                            assert!(FIRST_FLAG <= flag.flag );
-                            dispatcher.dispatch_now(Events::UCoreProcessDOps);
-                            WaitState::Received(hid, src)
-                        },
-                        WaitState::ReadPending(dst) => {
-                            // Usual path for transfer
-                            dispatcher.dispatch_after(
-                                self.mhdma_latency.compute_latency(),
-                                Events::UCoreDmaCompleted(flag)
-                            );
-                            WaitState::DmaPending(hid, src, dst)
-                        },
-                        _ => unreachable!()
-                    });
+            Events::UCoreNotified(flag, hid, slot) => {
+                match &mut self.flags_table[flag] {
+                    FlagState::Forbidden(_) => panic!("Notified on forbidden flag..."),
+                    FlagState::Sync(sync_state) => {
+                        sync_state.transition(|old| match old {
+                            SyncState::Fresh => {
+                                SyncState::Notified
+                            },
+                            SyncState::Waiting => {
+                                dispatcher.dispatch_now(Events::UCoreProcessDOps);
+                                SyncState::Notified
+                            } ,
+                            s => panic!("Encountered unexpected flag state {s:?} while handling notify on sync flag"),
+                        });
+                    },
+                    FlagState::Transfer(transfer_state) => {
+                        transfer_state.transition(|old| match old {
+                            TransferState::Fresh => {
+                                TransferState::SrcReady { src: hid, src_slot: slot }
+                            },
+                            TransferState::DstReady { dst_slot } => {
+                                dispatcher.dispatch_after(
+                                    self.mhdma_latency.compute_latency(),
+                                    Events::UCoreDmaCompleted(flag)
+                                );
+                                TransferState::Transfering{src: hid, src_slot: slot, dst_slot}
+                            },
+                            s => panic!("Encountered unexpected flag state {s:?} while handling notify on transfer flag"),
+                        });
+                    },
+                }
             }
             Events::UCoreDmaCompleted(flag) => {
-                self.waits_table[flag.flag as usize]
+                self.flags_table[flag].unwrap_transfer_mut()
                     .transition(|old| match old {
-                        WaitState::DmaPending(_, _, dst) => WaitState::Resolved(dst),
+                        TransferState::Transfering { dst_slot, .. } => TransferState::Transfered{ dst_slot },
                         _ => unreachable!(),
                     });
                 dispatcher.dispatch_now(Events::UCoreProcessDOps);
             }
             Events::IscRetireDOp(ref dop) => {
                 // A notification goes out when the inner `SYNC` standing in for its `NOTIFY` retires.
-                if let Some((hid, tid, slot)) = self.notify_table.remove(&dop.id) {
-                    dispatcher.dispatch_now(Events::UCoreNotify(hid, tid, slot));
+                if let Some((hid, flag, slot)) = self.notify_table.remove(&dop.id) {
+                    if flag.flag == self.id.0 + 1 {
+                        dispatcher.dispatch_now(Events::UCoreFlagRecycling(self.id));
+                    }
+                    dispatcher.dispatch_now(Events::UCoreNotify(hid, flag, slot));
                 }
             }
             Events::IscStarved => {
