@@ -15,6 +15,15 @@ pub enum NextTransferId {
     SameGen(TransferId),
 }
 
+impl NextTransferId {
+    pub fn unwrap(self) -> TransferId {
+        match self {
+            NextTransferId::NewGen(transfer_id) => transfer_id,
+            NextTransferId::SameGen(transfer_id) => transfer_id,
+        }
+    }
+}
+
 /// Identifies a inter-HPU transfer.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq, PartialOrd, Ord, Copy, Hash)]
 pub struct TransferId(u8, u8);
@@ -39,17 +48,26 @@ impl TransferId {
         })
     }
 
+    pub fn is_first_gen(&self) -> bool {
+        self.0 == 0
+    }
+
+    pub fn of_previous_gen(&self) -> Self {
+        TransferId(self.0.checked_sub(1).unwrap(), self.1)
+    }
+
     pub fn flag(&self) -> u8 {
         self.1
     }
 
-    pub fn is_first_of_gen(&self) -> bool {
+    pub fn is_first_of_its_gen(&self) -> bool {
         self.1 == FIRST_FLAG
     }
 
-    pub fn is_last_of_gen(&self) -> bool {
+    pub fn is_last_of_its_gen(&self) -> bool {
         self.1 == LAST_FLAG
     }
+
 }
 
 impl Display for TransferId {

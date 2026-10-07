@@ -95,14 +95,12 @@ pub fn translate<'ir>(ir: &AnnIR<'ir, HpuLang, Alloc, ()>, lut_reg: &LutRegistry
                     dst: CtReg::new(dsts[0].0 as u8),
                     src: CtMem::heap(slots[0].0 as u16),
                 });
-                if let Some(locks) = locks {
-                    for lock in locks.iter() {
-                        add_op(DopInstructionSet::NOTIFY {
-                            virt_id: VirtId { id: lock.0 },
-                            flag: UserFlag { flag: to.0 + 1 },
-                            slot: CtMem::heap(0)
-                        });
-                    }
+                for lock in locks.iter() {
+                    add_op(DopInstructionSet::NOTIFY {
+                        virt_id: VirtId { id: lock.0 },
+                        flag: UserFlag { flag: to.0 + 1 },
+                        slot: CtMem::heap(0)
+                    });
                 }
             }
             DstSt { to } => {

@@ -6,13 +6,11 @@ use zhc_sim::Simulator;
 mod affinity;
 mod analyze;
 mod batcher;
-mod transfer;
 mod sim;
 
 pub use affinity::*;
 pub use analyze::*;
 pub use batcher::*;
-pub use transfer::*;
 pub use sim::*;
 use zhc_utils::units::MHz;
 
@@ -33,9 +31,9 @@ pub fn schedule<'a>(
     );
     sim.play();
     let simulatable = sim.into_simulatable();
-    let transfer_map = build_transfer_map(ir, simulatable.transfer_schedule.iter().copied(), config);
-    simulatable
-        .hpus
+    let transfer_map = simulatable.transfers_map;
+    let hpus = simulatable.hpus;
+    hpus
         .into_iter()
         .map(|hpu| batch(ir, hpu.id, hpu.schedule.into(), &transfer_map))
         .collect()

@@ -189,7 +189,7 @@ pub enum HpuInstructionSet {
         from: HpuId,
         to: HpuId,
         id: TransferId,
-        locks: Option<Vec<HpuId>>
+        locks: Vec<HpuId>
     },
     /// Cut transfer out from one HPU to another.
     /// (CtRegister) -> ()
@@ -229,17 +229,6 @@ impl HpuInstructionSet {
     pub fn is_transfer(&self) -> bool {
         matches!(self, HpuInstructionSet::Transfer { .. })
     }
-
-    // /// Returns whether this instruction may be replicated across HPUs.
-    // ///
-    // /// Replicable instructions produce a ciphertext or immediate with no
-    // /// ciphertext input (`CstCt`, `ImmLd`, `SrcLd`), so a value they define
-    // /// can be re-materialized on each HPU that uses it instead of being
-    // /// transferred across the partition boundary.
-    // pub fn is_replicable(&self) -> bool {
-    //     use HpuInstructionSet::*;
-    //     matches!(self, CstCt { .. } | ImmLd { .. } | SrcLd { .. })
-    // }
 }
 
 impl Format for HpuInstructionSet {

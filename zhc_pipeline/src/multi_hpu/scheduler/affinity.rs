@@ -8,7 +8,7 @@ pub enum Affinity {
     Pem,
     Pep,
     Ctl,
-    Transfer,
+    Transfer
 }
 
 impl Affinity {
