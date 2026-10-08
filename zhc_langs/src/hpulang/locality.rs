@@ -5,7 +5,7 @@ use zhc_ir::visualization::VisualAnnotation;
 use zhc_utils::{Dumpable, StoreIndex, existential_enum};
 
 pub const N_FLAGS: u8 = 64;
-pub const N_RESERVED_FLAGS: u8 = 9;
+pub const N_RESERVED_FLAGS: u8 = 1;
 pub const N_TRANSFER_FLAGS: u8 = N_FLAGS - N_RESERVED_FLAGS;
 pub const FIRST_FLAG: u8 = N_RESERVED_FLAGS;
 pub const LAST_FLAG: u8 = N_FLAGS - 1;

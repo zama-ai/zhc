@@ -2,9 +2,9 @@ use std::collections::VecDeque;
 
 use zhc_langs::{
     doplang::{CtMem, DopInstructionSet, UserFlag, VirtId},
-    hpulang::{N_FLAGS, N_RESERVED_FLAGS},
+    hpulang::N_FLAGS,
 };
-use zhc_utils::{FastMap, SafeAs, Store, existential_enum, fsm};
+use zhc_utils::{FastMap, Store, existential_enum, fsm};
 
 use crate::Dispatch;
 
@@ -14,24 +14,16 @@ use super::*;
 #[derive(Debug, Clone, Serialize)]
 pub enum FlagState {
     Forbidden(()),
-    Sync(SyncState),
     Transfer(TransferState)
-}
-
-#[fsm]
-#[derive(Debug, Clone, Serialize)]
-pub enum SyncState {
-    Fresh,
-    Waiting,
-    Notified,
 }
 
 #[fsm]
 #[derive(Debug, Clone, Serialize)]
 pub enum TransferState {
     Fresh,
-    SrcReady{src: HpuId, src_slot: CtMem},
-    DstReady{dst_slot: CtMem},
+    Notified{src: HpuId, src_slot: CtMem},
+    SyncWaiting,
+    TransferDstReady{dst_slot: CtMem},
     Transfering{src: HpuId, src_slot: CtMem, dst_slot: CtMem},
     Transfered{dst_slot: CtMem},
 }
@@ -62,7 +54,6 @@ impl UCore {
     /// `mhdma_latency` to load.
     pub fn new(id: HpuId, mhdma_latency: ConstantLatency) -> Self {
         let flags_table = std::iter::once(FlagState::Forbidden(()))
-            .chain(std::iter::repeat_n(FlagState::Sync(SyncState::Fresh), (N_RESERVED_FLAGS-1).sas()))
             .chain(std::iter::repeat(FlagState::Transfer(TransferState::Fresh)))
             .take(N_FLAGS as usize)
             .collect();
@@ -106,9 +97,9 @@ impl Simulatable for UCore {
                             assert!(self.flags_table[flag].is_transfer(), "LD_B2B on non-transfer flag...");
                             self.flags_table[flag].unwrap_transfer_mut().transition(|old| match old {
                                 TransferState::Fresh => {
-                                    TransferState::DstReady{dst_slot: slot}
+                                    TransferState::TransferDstReady{dst_slot: slot}
                                 }
-                                TransferState::SrcReady{src, src_slot} => {
+                                TransferState::Notified{src, src_slot} => {
                                     dispatcher.dispatch_after(
                                         self.mhdma_latency.compute_latency(),
                                         Events::UCoreDmaCompleted(flag)
@@ -123,28 +114,36 @@ impl Simulatable for UCore {
                                 FlagState::Forbidden(_) => panic!("Encountered WAIT on forbidden flag."),
                                 FlagState::Transfer(transfer_state) => {
                                     transfer_state.transition_with(|old| match old {
-                                        TransferState::DstReady { dst_slot } => {
+                                        TransferState::Fresh => {
+                                            // Transition only occurs when no LD_B2B exist. Meaning it's a sync.
+                                            // And it's waiting.
+                                            assert!(slot.is_none());
+                                            (TransferState::SyncWaiting, false)
+                                        }
+                                        TransferState::SyncWaiting => {
+                                            assert!(slot.is_none());
+                                            (TransferState::SyncWaiting, false)
+                                        }
+                                        TransferState::Notified { .. } => {
+                                            // Transition only occurs when no LD_B2B exist. Meaning it's a sync.
+                                            // And it's complete.
+                                            assert!(slot.is_none());
+                                            (TransferState::Fresh, true)
+                                        }
+                                        TransferState::TransferDstReady { dst_slot } => {
+                                            assert!(slot.is_some());
                                             assert_eq!(dst_slot, *slot.as_ref().unwrap());
-                                            (TransferState::DstReady { dst_slot }, false)
+                                            (TransferState::TransferDstReady { dst_slot }, false)
                                         }
                                         TransferState::Transfering { src, src_slot, dst_slot } => {
+                                            assert!(slot.is_some());
                                             (TransferState::Transfering { src, src_slot, dst_slot }, false)
                                         },
                                         TransferState::Transfered { .. } => {
+                                            assert!(slot.is_some());
                                             (TransferState::Fresh, true)
                                         },
                                         s => panic!("Encountered unexpected flag state {s:?} while handling WAIT on transfer flag"),
-                                    })
-                                },
-                                FlagState::Sync(sync_state) => {
-                                    sync_state.transition_with(|old| match old {
-                                        SyncState::Fresh => {
-                                            (SyncState::Waiting, false)
-                                        },
-                                        SyncState::Notified => {
-                                            (SyncState::Fresh, true)
-                                        },
-                                        s => panic!("Encountered unexpected flag state {s:?} while handling WAIT on sync flag"),
                                     })
                                 },
                             };
@@ -191,24 +190,16 @@ impl Simulatable for UCore {
             Events::UCoreNotified(flag, hid, slot) => {
                 match &mut self.flags_table[flag] {
                     FlagState::Forbidden(_) => panic!("Notified on forbidden flag..."),
-                    FlagState::Sync(sync_state) => {
-                        sync_state.transition(|old| match old {
-                            SyncState::Fresh => {
-                                SyncState::Notified
-                            },
-                            SyncState::Waiting => {
-                                dispatcher.dispatch_now(Events::UCoreProcessDOps);
-                                SyncState::Notified
-                            } ,
-                            s => panic!("Encountered unexpected flag state {s:?} while handling notify on sync flag"),
-                        });
-                    },
                     FlagState::Transfer(transfer_state) => {
                         transfer_state.transition(|old| match old {
                             TransferState::Fresh => {
-                                TransferState::SrcReady { src: hid, src_slot: slot }
+                                TransferState::Notified { src: hid, src_slot: slot }
                             },
-                            TransferState::DstReady { dst_slot } => {
+                            TransferState::SyncWaiting => {
+                                dispatcher.dispatch_now(Events::UCoreProcessDOps);
+                                TransferState::Notified { src: hid, src_slot: slot }
+                            }
+                            TransferState::TransferDstReady { dst_slot } => {
                                 dispatcher.dispatch_after(
                                     self.mhdma_latency.compute_latency(),
                                     Events::UCoreDmaCompleted(flag)
@@ -231,9 +222,6 @@ impl Simulatable for UCore {
             Events::IscRetireDOp(ref dop) => {
                 // A notification goes out when the inner `SYNC` standing in for its `NOTIFY` retires.
                 if let Some((hid, flag, slot)) = self.notify_table.remove(&dop.id) {
-                    if flag.flag == self.id.0 + 1 {
-                        dispatcher.dispatch_now(Events::UCoreFlagRecycling(self.id));
-                    }
                     dispatcher.dispatch_now(Events::UCoreNotify(hid, flag, slot));
                 }
             }

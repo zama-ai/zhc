@@ -1,6 +1,6 @@
 use super::*;
-use std::fmt::Display;
 use serde::Serialize;
+use std::fmt::Display;
 use zhc_config::multi_hpu::MultiHpuConfig;
 use zhc_ir::{AnnIR, OpMap};
 use zhc_langs::hpulang::{HpuId, HpuLang, N_RESERVED_FLAGS, N_TRANSFER_FLAGS, TransferId};
@@ -22,7 +22,7 @@ impl Display for MultiHpuEvents {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             MultiHpuEvents::Hpu(id, event) => write!(f, "Hpu({id}, {event})"),
-            MultiHpuEvents::ScheduleComplete => write!(f, "ScheduleComplete")
+            MultiHpuEvents::ScheduleComplete => write!(f, "ScheduleComplete"),
         }
     }
 }
@@ -43,7 +43,7 @@ pub struct LightMultiHpu<'a, 'b> {
     pub transfers_map: OpMap<TransferSpec>,
     policy: SchedPolicy,
     pending: Vec<TransferQuery>,
-    expected_lands: usize
+    expected_lands: usize,
 }
 
 impl<'a, 'b> Serialize for LightMultiHpu<'a, 'b> {
@@ -65,18 +65,34 @@ impl<'a, 'b> LightMultiHpu<'a, 'b> {
             .map(|i| LightHpu::new(ir, &config, policy, HpuId(i)))
             .collect();
         let slots = (0..config.n_hpus)
-            .map(|_| Store::with_value(SlotState::Available { next_gen: SlotGen(0) }, N_TRANSFER_FLAGS as usize))
+            .map(|_| {
+                Store::with_value(
+                    SlotState::Available {
+                        next_gen: SlotGen(0),
+                    },
+                    N_TRANSFER_FLAGS as usize,
+                )
+            })
             .collect();
         let transfers_map = ir.empty_opmap();
         let pending = Vec::new();
-        let expected_lands = ir.walk_ops_linear().map(|op| if op.get_instruction().is_transfer() {2} else {1}).sum();
+        let expected_lands = ir
+            .walk_ops_linear()
+            .map(|op| {
+                if op.get_instruction().is_transfer() {
+                    2
+                } else {
+                    1
+                }
+            })
+            .sum();
         LightMultiHpu {
             hpus,
             slots,
             transfers_map,
             pending,
             expected_lands,
-            policy
+            policy,
         }
     }
 }
@@ -89,7 +105,6 @@ impl<'a, 'b> Simulatable for LightMultiHpu<'a, 'b> {
         dispatcher: &mut impl Dispatch<Event = Self::Event>,
         trigger: Trigger<Self::Event>,
     ) {
-
         match &trigger.event {
             MultiHpuEvents::Hpu(dst_hid, HpuEvents::LandTransferIn(transfer)) => {
                 let flags_on = match self.policy {
@@ -97,8 +112,10 @@ impl<'a, 'b> Simulatable for LightMultiHpu<'a, 'b> {
                     SchedPolicy::AsLateAsPossible => transfer.firer,
                 };
                 self.slots[flags_on][transfer.sid].transition(|old| match old {
-                    SlotState::Busy { on_gen } => SlotState::Available { next_gen: on_gen.next() },
-                    _ => unreachable!()
+                    SlotState::Busy { on_gen } => SlotState::Available {
+                        next_gen: on_gen.next(),
+                    },
+                    _ => unreachable!(),
                 });
                 self.hpus[dst_hid].handle(
                     &mut dispatcher.map(|e| MultiHpuEvents::Hpu(*dst_hid, e)),
@@ -115,7 +132,10 @@ impl<'a, 'b> Simulatable for LightMultiHpu<'a, 'b> {
                 self.process_pending_transfers(dispatcher);
             }
             MultiHpuEvents::Hpu(_, HpuEvents::TransferOut(transfer)) => {
-                dispatcher.dispatch_now(MultiHpuEvents::Hpu(transfer.lander, HpuEvents::TransferIn(transfer.clone())));
+                dispatcher.dispatch_now(MultiHpuEvents::Hpu(
+                    transfer.lander,
+                    HpuEvents::TransferIn(transfer.clone()),
+                ));
             }
             MultiHpuEvents::Hpu(hpu_id, hpu_event) => {
                 self.hpus[hpu_id].handle(
@@ -184,19 +204,31 @@ impl<'a, 'b> LightMultiHpu<'a, 'b> {
             for (sid, slot) in self.slots[flags_on].enumerate_iter_mut() {
                 let do_break = slot.transition_with(|old| match old {
                     SlotState::Available { next_gen } => {
-                        if next_gen.is_first_gen() || src_k.do_knows(&flags_on, &sid, &next_gen.previous()) {
-                            dispatcher.dispatch_now(MultiHpuEvents::Hpu(query.firer, HpuEvents::TransferGranted(query.clone(), sid, next_gen)));
-                            self.transfers_map.insert(query.opid, TransferSpec { tid: TransferId(next_gen.0, sid.0+N_RESERVED_FLAGS), notifies: vec![], waits: false});
+                        if next_gen.is_first_gen()
+                            || src_k.do_knows(&flags_on, &sid, &next_gen.previous())
+                        {
+                            dispatcher.dispatch_now(MultiHpuEvents::Hpu(
+                                query.firer,
+                                HpuEvents::TransferGranted(query.clone(), sid, next_gen),
+                            ));
+                            self.transfers_map.insert(
+                                query.opid,
+                                TransferSpec {
+                                    tid: TransferId(next_gen.0, sid.0 + N_RESERVED_FLAGS),
+                                    notifies: vec![],
+                                    waits: false,
+                                },
+                            );
                             (SlotState::Busy { on_gen: next_gen }, true)
                         } else {
                             (SlotState::Available { next_gen }, false)
                         }
-                    },
+                    }
                     SlotState::Busy { on_gen } => (SlotState::Busy { on_gen }, false),
                     _ => unreachable!(),
                 });
                 if do_break {
-                    return false
+                    return false;
                 }
             }
             true
