@@ -66,8 +66,8 @@ pub enum SlotState {
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct Transfer {
-    pub src: HpuId,
-    pub dst: HpuId,
+    pub firer: HpuId,
+    pub lander: HpuId,
     pub opid: OpId,
     pub sid: SlotId,
     pub sgen: SlotGen,
@@ -76,13 +76,13 @@ pub struct Transfer {
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct TransferQuery {
-    pub src: HpuId,
-    pub dst: HpuId,
+    pub firer: HpuId,
+    pub lander: HpuId,
     pub opid: OpId,
 }
 
 impl TransferQuery {
     pub fn make_transfer(self, sid: SlotId, sgen: SlotGen, knowledge: Knowledge) -> Transfer {
-        Transfer { src: self.src, dst: self.dst, opid: self.opid, sid, sgen, knowledge }
+        Transfer { firer: self.firer, lander: self.lander, opid: self.opid, sid, sgen, knowledge }
     }
 }

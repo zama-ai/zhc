@@ -41,6 +41,7 @@ pub struct LightMultiHpu<'a, 'b> {
     pub hpus: Store<HpuId, LightHpu<'a, 'b>>,
     pub slots: Store<HpuId, Store<SlotId, SlotState>>,
     pub transfers_map: OpMap<TransferSpec>,
+    policy: SchedPolicy,
     pending: Vec<TransferQuery>,
     expected_lands: usize
 }
@@ -74,7 +75,8 @@ impl<'a, 'b> LightMultiHpu<'a, 'b> {
             slots,
             transfers_map,
             pending,
-            expected_lands
+            expected_lands,
+            policy
         }
     }
 }
@@ -90,7 +92,11 @@ impl<'a, 'b> Simulatable for LightMultiHpu<'a, 'b> {
 
         match &trigger.event {
             MultiHpuEvents::Hpu(dst_hid, HpuEvents::LandTransferIn(transfer)) => {
-                self.slots[dst_hid][transfer.sid].transition(|old| match old {
+                let flags_on = match self.policy {
+                    SchedPolicy::AsSoonAsPossible => transfer.lander,
+                    SchedPolicy::AsLateAsPossible => transfer.firer,
+                };
+                self.slots[flags_on][transfer.sid].transition(|old| match old {
                     SlotState::Busy { on_gen } => SlotState::Available { next_gen: on_gen.next() },
                     _ => unreachable!()
                 });
@@ -109,7 +115,7 @@ impl<'a, 'b> Simulatable for LightMultiHpu<'a, 'b> {
                 self.process_pending_transfers(dispatcher);
             }
             MultiHpuEvents::Hpu(_, HpuEvents::TransferOut(transfer)) => {
-                dispatcher.dispatch_now(MultiHpuEvents::Hpu(transfer.dst, HpuEvents::TransferIn(transfer.clone())));
+                dispatcher.dispatch_now(MultiHpuEvents::Hpu(transfer.lander, HpuEvents::TransferIn(transfer.clone())));
             }
             MultiHpuEvents::Hpu(hpu_id, hpu_event) => {
                 self.hpus[hpu_id].handle(
@@ -158,7 +164,7 @@ impl<'a, 'b> LightMultiHpu<'a, 'b> {
         for query in self.pending.iter() {
             report.push_str(&format!(
                 "  {} -> {}: {:?}\n",
-                query.src, query.dst, query.opid
+                query.firer, query.lander, query.opid
             ));
         }
         report
@@ -168,13 +174,18 @@ impl<'a, 'b> LightMultiHpu<'a, 'b> {
         &mut self,
         dispatcher: &mut impl Dispatch<Event = MultiHpuEvents>,
     ) {
+        let policy = self.policy;
         self.pending.retain(|query| {
-            let src_k = &self.hpus[query.src].knowledge;
-            for (sid, slot) in self.slots[query.dst].enumerate_iter_mut() {
+            let flags_on = match policy {
+                SchedPolicy::AsSoonAsPossible => query.lander,
+                SchedPolicy::AsLateAsPossible => query.firer,
+            };
+            let src_k = &self.hpus[query.firer].knowledge;
+            for (sid, slot) in self.slots[flags_on].enumerate_iter_mut() {
                 let do_break = slot.transition_with(|old| match old {
                     SlotState::Available { next_gen } => {
-                        if next_gen.is_first_gen() || src_k.do_knows(&query.dst, &sid, &next_gen.previous()) {
-                            dispatcher.dispatch_now(MultiHpuEvents::Hpu(query.src, HpuEvents::TransferGranted(query.clone(), sid, next_gen)));
+                        if next_gen.is_first_gen() || src_k.do_knows(&flags_on, &sid, &next_gen.previous()) {
+                            dispatcher.dispatch_now(MultiHpuEvents::Hpu(query.firer, HpuEvents::TransferGranted(query.clone(), sid, next_gen)));
                             self.transfers_map.insert(query.opid, TransferSpec { tid: TransferId(next_gen.0, sid.0+N_RESERVED_FLAGS), notifies: vec![], waits: false});
                             (SlotState::Busy { on_gen: next_gen }, true)
                         } else {

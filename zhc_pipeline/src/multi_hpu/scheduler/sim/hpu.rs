@@ -386,7 +386,7 @@ impl<'a, 'b> LightHpu<'a, 'b> {
                                     SchedPolicy::AsSoonAsPossible => (*src, *dst),
                                     SchedPolicy::AsLateAsPossible => (*dst, *src),
                                 };
-                                dispatcher.dispatch_now(HpuEvents::TransferQuery(TransferQuery{ src, dst, opid: user.get_id() }));
+                                dispatcher.dispatch_now(HpuEvents::TransferQuery(TransferQuery{ firer: src, lander: dst, opid: user.get_id() }));
                                 OpState::AwaitingTransferOut
                             }
                         },
@@ -516,7 +516,11 @@ impl<'a, 'b> zhc_sim::Simulatable for LightHpu<'a, 'b> {
                     _ => unreachable!(),
                 });
                 self.land_ops(dispatcher, std::iter::once(op));
-                self.knowledge.record(&self.id, &transfer.sid, &transfer.sgen);
+                let flags_on = match self.policy {
+                    SchedPolicy::AsSoonAsPossible => transfer.lander,
+                    SchedPolicy::AsLateAsPossible => transfer.firer,
+                };
+                self.knowledge.record(&flags_on, &transfer.sid, &transfer.sgen);
                 self.knowledge.merge_with(&transfer.knowledge);
             }
             HpuEvents::LandTransferOut(query, sid, sgen) => {
