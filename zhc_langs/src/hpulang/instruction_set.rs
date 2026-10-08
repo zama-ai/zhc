@@ -182,20 +182,20 @@ pub enum HpuInstructionSet {
     BatchRet { pos: u8, ty: HpuTypeSystem },
     /// Uncut transfer from one HPU to another.
     /// (CtRegister) -> (CtRegister)
-    Transfer { from: HpuId, to: HpuId },
+    Transfer { src: HpuId, dst: HpuId },
     /// Cut transfer in from one HPU to another.
     /// () -> (CtRegister)
     TransferIn {
-        from: HpuId,
-        to: HpuId,
+        src: HpuId,
+        dst: HpuId,
         id: TransferId,
         locks: Vec<HpuId>
     },
     /// Cut transfer out from one HPU to another.
     /// (CtRegister) -> ()
     TransferOut {
-        from: HpuId,
-        to: HpuId,
+        src: HpuId,
+        dst: HpuId,
         id: TransferId,
         wait: Option<HpuId>
     },
@@ -266,7 +266,7 @@ impl Format for HpuInstructionSet {
             }
             HpuInstructionSet::BatchArg { pos, ty } => write!(f, "batch_arg<{pos}, {ty}>"),
             HpuInstructionSet::BatchRet { pos, ty } => write!(f, "batch_ret<{pos}, {ty}>"),
-            HpuInstructionSet::Transfer { from, to } => write!(f, "transfer<{from}, {to}>"),
+            HpuInstructionSet::Transfer { src: from, dst: to } => write!(f, "transfer<{from}, {to}>"),
             HpuInstructionSet::TransferIn { id, .. } => write!(f, "transfer_in<{id}>"),
             HpuInstructionSet::TransferOut { id, .. } => write!(f, "transfer_out<{id}>"),
         }

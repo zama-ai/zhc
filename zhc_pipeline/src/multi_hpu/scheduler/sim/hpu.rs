@@ -1,8 +1,7 @@
 use super::*;
 use serde::Serialize;
 use std::{collections::VecDeque, fmt::Display};
-use zhc_config::hpu::HpuConfig;
-use zhc_ir::{AnnIR, AnnOpRef, AsOpId, OpId, OpMap, visualization::VisualAnnotation};
+use zhc_ir::{AnnIR, AnnOpRef, OpId, OpMap, visualization::VisualAnnotation};
 use zhc_langs::hpulang::{HpuId, HpuInstructionSet, HpuLang};
 use zhc_sim::{
     Tracer, TracingLevel,
@@ -81,12 +80,25 @@ pub enum HpuEvents {
     LandPep,
     LandPem,
     LandCtl,
-    LandTransferIn(OpId),
-    LandTransferOut,
-    TransferQuery(OpId),
-    TransferGranted(OpId),
-    TransferOut(HpuId, OpId),
-    TransferIn(OpId),
+
+    LandTransferIn(Transfer),
+    LandTransferOut(TransferQuery, SlotId, SlotGen),
+
+    TransferQuery(TransferQuery),
+    TransferGranted(TransferQuery, SlotId, SlotGen),
+
+    TransferOut(Transfer),
+    TransferIn(Transfer),
+}
+
+impl HpuEvents {
+    pub fn is_land(&self) -> bool {
+        use HpuEvents::*;
+        match self {
+            LandPea | LandPep | LandPem | LandCtl | LandTransferIn(..) | LandTransferOut(..) => true,
+            _ => false
+        }
+    }
 }
 
 impl Display for HpuEvents {
@@ -113,9 +125,12 @@ impl Dumpable for SchedElm {
 pub struct LightHpu<'a, 'b> {
     pub schedule: VecDeque<SchedElm>,
     pub id: HpuId,
+    pub knowledge: Knowledge,
+    pub landed: usize,
+
     ir: &'b AnnIR<'a, HpuLang, Stats, ()>,
     op_states: OpMap<OpState>,
-    config: HpuConfig,
+    config: MultiHpuConfig,
     policy: SchedPolicy,
 
     pe_mem_readies: VecDeque<StatOpRef<'a, 'b>>,
@@ -134,11 +149,11 @@ pub struct LightHpu<'a, 'b> {
     pe_ctl_state: ProcessingElementState<'a, 'b>,
     pe_ctl_cost: ConstantLatency,
 
-    pe_transfer_in_readies: VecDeque<StatOpRef<'a, 'b>>,
+    pe_transfer_in_readies: VecDeque<(StatOpRef<'a, 'b>, Transfer)>,
     pe_transfer_in_state: ProcessingElementState<'a, 'b>,
     pe_transfer_in_cost: ConstantLatency,
 
-    pe_transfer_out_readies: VecDeque<StatOpRef<'a, 'b>>,
+    pe_transfer_out_readies: VecDeque<(StatOpRef<'a, 'b>, TransferQuery, SlotId, SlotGen)>,
     pe_transfer_out_state: ProcessingElementState<'a, 'b>,
     pe_transfer_out_cost: ConstantLatency,
 }
@@ -155,7 +170,7 @@ impl<'a, 'b> Serialize for LightHpu<'a, 'b> {
 impl<'a, 'b> LightHpu<'a, 'b> {
     pub fn new(
         ir: &'b AnnIR<'a, HpuLang, Stats, ()>,
-        config: &HpuConfig,
+        config: &MultiHpuConfig,
         policy: SchedPolicy,
         id: HpuId,
     ) -> Self {
@@ -164,7 +179,7 @@ impl<'a, 'b> LightHpu<'a, 'b> {
                 if !ir.get_op(&op).get_annotation().locality.is_on(&id) {
                     OpState::NotConcerned
                 } else {
-                    if let HpuInstructionSet::Transfer { from, to, .. } = op.get_instruction() {
+                    if let HpuInstructionSet::Transfer { src: from, dst: to, .. } = op.get_instruction() {
                         if id == *from {
                             OpState::Waiting(1)
                         } else if id == *to {
@@ -188,7 +203,7 @@ impl<'a, 'b> LightHpu<'a, 'b> {
                 if !ir.get_op(&op).get_annotation().locality.is_on(&id) {
                     OpState::NotConcerned
                 } else {
-                    if let HpuInstructionSet::Transfer { from, to } = op.get_instruction() {
+                    if let HpuInstructionSet::Transfer { src: from, dst: to } = op.get_instruction() {
                         if id == *to {
                             OpState::Waiting(op.get_users_iter().count())
                         } else if id == *from {
@@ -213,16 +228,16 @@ impl<'a, 'b> LightHpu<'a, 'b> {
         LightHpu {
             pe_mem_readies: VecDeque::new(),
             pe_mem_state: ProcessingElementState::Idle,
-            pe_mem_cost: ConstantLatency::new(config.mem_write_latency),
+            pe_mem_cost: ConstantLatency::new(config.hpu_config.mem_write_latency),
             pe_alu_readies: VecDeque::new(),
             pe_alu_state: ProcessingElementState::Idle,
-            pe_alu_cost: ConstantLatency::new(config.alu_write_latency),
+            pe_alu_cost: ConstantLatency::new(config.hpu_config.alu_write_latency),
             pe_pbs_readies: VecDeque::new(),
             pe_pbs_state: MultiProcessingElementState::Idle,
             pe_pbs_cost: FlatLinLatency::new(
-                config.pbs_processing_latency_a,
-                config.pbs_processing_latency_b,
-                config.pbs_processing_latency_m,
+                config.hpu_config.pbs_processing_latency_a,
+                config.hpu_config.pbs_processing_latency_b,
+                config.hpu_config.pbs_processing_latency_m,
             ),
             pe_ctl_readies: VecDeque::new(),
             pe_ctl_state: ProcessingElementState::Idle,
@@ -235,10 +250,12 @@ impl<'a, 'b> LightHpu<'a, 'b> {
             pe_transfer_out_cost: ConstantLatency::new(1),
             op_states,
             schedule: VecDeque::new(),
+            knowledge: Knowledge::new(config.n_hpus as usize),
             ir,
             config: config.to_owned(),
             policy,
             id,
+            landed: 0
         }
     }
 
@@ -265,11 +282,11 @@ impl<'a, 'b> LightHpu<'a, 'b> {
         self.pe_ctl_readies.pop_back().unwrap()
     }
 
-    fn pop_transfer_in(&mut self) -> AnnOpRef<'a, 'b, HpuLang, Stats, ()> {
+    fn pop_transfer_in(&mut self) -> (AnnOpRef<'a, 'b, HpuLang, Stats, ()>, Transfer) {
         self.pe_transfer_in_readies.pop_back().unwrap()
     }
 
-    fn pop_transfer_out(&mut self) -> AnnOpRef<'a, 'b, HpuLang, Stats, ()> {
+    fn pop_transfer_out(&mut self) -> (AnnOpRef<'a, 'b, HpuLang, Stats, ()>, TransferQuery, SlotId, SlotGen) {
         self.pe_transfer_out_readies.pop_back().unwrap()
     }
 
@@ -307,7 +324,7 @@ impl<'a, 'b> LightHpu<'a, 'b> {
     }
 
     fn pop_pbs(&mut self) -> Vec<AnnOpRef<'a, 'b, HpuLang, Stats, ()>> {
-        if self.pe_pbs_readies.len() <= self.config.pbs_max_batch_size {
+        if self.pe_pbs_readies.len() <= self.config.hpu_config.pbs_max_batch_size {
             return self.pe_pbs_readies.drain(..).covec();
         }
         let mslice = self.pe_pbs_readies.make_contiguous();
@@ -320,12 +337,13 @@ impl<'a, 'b> LightHpu<'a, 'b> {
         });
         mslice.reverse();
         self.pe_pbs_readies
-            .drain(..self.config.pbs_max_batch_size)
+            .drain(..self.config.hpu_config.pbs_max_batch_size)
             .covec()
     }
 
     fn land_ops(&mut self, dispatcher: &mut impl zhc_sim::Dispatch<Event = HpuEvents>, ops_to_land: impl Iterator<Item = StatOpRef<'a, 'b>>) {
         for op in ops_to_land.into_iter() {
+            self.landed += 1;
             self.op_states
                 .get_mut(&op)
                 .unwrap()
@@ -363,7 +381,12 @@ impl<'a, 'b> LightHpu<'a, 'b> {
                                 OpState::Ready
                             }
                             Affinity::Transfer => {
-                                dispatcher.dispatch_now(HpuEvents::TransferQuery(user.op_id()));
+                                let HpuInstructionSet::Transfer { src, dst } = user.get_instruction() else {unreachable!()};
+                                let (src, dst) = match self.policy {
+                                    SchedPolicy::AsSoonAsPossible => (*src, *dst),
+                                    SchedPolicy::AsLateAsPossible => (*dst, *src),
+                                };
+                                dispatcher.dispatch_now(HpuEvents::TransferQuery(TransferQuery{ src, dst, opid: user.get_id() }));
                                 OpState::AwaitingTransferOut
                             }
                         },
@@ -450,17 +473,6 @@ impl<'a, 'b> zhc_sim::Simulatable for LightHpu<'a, 'b> {
                 .covec()
                 .into_iter(),
         );
-        self.pe_transfer_in_readies.extend(
-            self.op_states
-                .iter()
-                .filter(|(opid, state)| {
-                    **state == OpState::Ready
-                        && Affinity::extract(&self.ir.get_op(*opid)) == Affinity::Transfer
-                })
-                .map(|(opid, _)| self.ir.get_op(opid).into())
-                .covec()
-                .into_iter(),
-        );
         dispatch.dispatch_after(Cycle(1), HpuEvents::Start);
     }
 
@@ -498,42 +510,48 @@ impl<'a, 'b> zhc_sim::Simulatable for LightHpu<'a, 'b> {
                 });
                 self.land_ops(dispatcher, std::iter::once(op));
             }
-            HpuEvents::LandTransferIn(_) => {
+            HpuEvents::LandTransferIn(transfer) => {
                 let op = self.pe_transfer_in_state.transition_with(|old| match old {
                     ProcessingElementState::Running(op) => (ProcessingElementState::Idle, op),
                     _ => unreachable!(),
                 });
                 self.land_ops(dispatcher, std::iter::once(op));
+                self.knowledge.record(&self.id, &transfer.sid, &transfer.sgen);
+                self.knowledge.merge_with(&transfer.knowledge);
             }
-            HpuEvents::LandTransferOut => {
+            HpuEvents::LandTransferOut(query, sid, sgen) => {
                 let op = self.pe_transfer_out_state.transition_with(|old| match old {
                     ProcessingElementState::Running(op) => (ProcessingElementState::Idle, op),
                     _ => unreachable!(),
                 });
                 self.land_ops(dispatcher, std::iter::once(op));
+                dispatcher.dispatch_after(
+                    self.pe_transfer_out_cost.compute_latency(),
+                    HpuEvents::TransferOut(query.make_transfer(sid, sgen, self.knowledge.clone())),
+                );
             }
-            HpuEvents::TransferIn(opid) => {
-                let transfer = self.ir.get_op(opid);
+            HpuEvents::TransferIn(transfer) => {
+                let op = self.ir.get_op(transfer.opid);
                 self.op_states
-                    .get_mut(&transfer)
+                    .get_mut(&op)
                     .unwrap()
                     .transition(|old| match old {
                         OpState::AwaitingTransferIn => {
-                            self.pe_transfer_in_readies.push_front(transfer.into());
+                            self.pe_transfer_in_readies.push_front((op, transfer));
                             OpState::Ready
                         },
                         state => {
-                            unreachable!("Found unexpected state when receiving transfer_in on {}: op {} is {state:?}.", self.id, transfer.format())
+                            unreachable!("Found unexpected state when receiving transfer_in on {}: op {} is {state:?}.", self.id, op.format())
                         }
                     });
             }
-            HpuEvents::TransferGranted(opid) => {
-                let transfer = self.ir.get_op(opid);
+            HpuEvents::TransferGranted(query, sid, sgen) => {
+                let transfer = self.ir.get_op(query.opid);
                 self.op_states.get_mut(&transfer).unwrap().transition(|old| match old {
                     OpState::AwaitingTransferOut => OpState::Ready,
                     _ => unreachable!()
                 });
-                self.pe_transfer_out_readies.push_front(transfer);
+                self.pe_transfer_out_readies.push_front((transfer, query, sid, sgen));
             }
             _ => {}
         }
@@ -555,7 +573,7 @@ impl<'a, 'b> zhc_sim::Simulatable for LightHpu<'a, 'b> {
             dispatcher.dispatch_after(self.pe_ctl_cost.compute_latency(), HpuEvents::LandCtl);
         }
         if self.should_fire_transfer_in() {
-            let op = self.pop_transfer_in();
+            let (op, trans) = self.pop_transfer_in();
             self.sched(SchedElm::Op(op.get_id()));
             self.op_states
                 .get_mut(&op)
@@ -570,11 +588,11 @@ impl<'a, 'b> zhc_sim::Simulatable for LightHpu<'a, 'b> {
             });
             dispatcher.dispatch_after(
                 self.pe_transfer_in_cost.compute_latency(),
-                HpuEvents::LandTransferIn(op.get_id()),
+                HpuEvents::LandTransferIn(trans),
             );
         }
         if self.should_fire_transfer_out() {
-            let op = self.pop_transfer_out();
+            let (op, query, sid, sgen) = self.pop_transfer_out();
             self.sched(SchedElm::Op(op.get_id()));
             self.op_states
                 .get_mut(&op)
@@ -589,19 +607,7 @@ impl<'a, 'b> zhc_sim::Simulatable for LightHpu<'a, 'b> {
             });
             dispatcher.dispatch_after(
                 self.pe_transfer_out_cost.compute_latency(),
-                HpuEvents::LandTransferOut,
-            );
-            // In addition to scheduling locally, we emit transfer out.
-            let HpuInstructionSet::Transfer { from, to } = op.get_instruction() else {
-                unreachable!()
-            };
-            let target_hid = match self.policy {
-                SchedPolicy::AsSoonAsPossible => to,
-                SchedPolicy::AsLateAsPossible => from,
-            };
-            dispatcher.dispatch_after(
-                self.pe_transfer_out_cost.compute_latency(),
-                HpuEvents::TransferOut(*target_hid, op.get_id()),
+                HpuEvents::LandTransferOut(query, sid, sgen),
             );
         }
         if self.should_fire_pea() {

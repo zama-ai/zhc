@@ -1,7 +1,7 @@
 use zhc_config::multi_hpu::MultiHpuConfig;
 use zhc_ir::{IR, OpMap};
 use zhc_langs::hpulang::{HpuLang, HpuLocality};
-use zhc_sim::Simulator;
+use zhc_sim::{SimulationState, Simulator};
 
 mod affinity;
 mod analyze;
@@ -29,8 +29,11 @@ pub fn schedule<'a>(
         LightMultiHpu::new(&ann_ir, config, policy),
         zhc_sim::TracingLevel::None,
     );
-    sim.play();
+    let state = sim.play_until_event_or_over(MultiHpuEvents::ScheduleComplete);
     let simulatable = sim.into_simulatable();
+    if matches!(state, SimulationState::SimulationOver) {
+        panic!("{}", simulatable.stall_report());
+    }
     let transfer_map = simulatable.transfers_map;
     let hpus = simulatable.hpus;
     hpus

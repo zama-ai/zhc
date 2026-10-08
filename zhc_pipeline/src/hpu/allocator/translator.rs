@@ -65,7 +65,7 @@ pub fn translate<'ir>(ir: &AnnIR<'ir, HpuLang, Alloc, ()>, lut_reg: &LutRegistry
                     ),
                 });
             }
-            TransferOut { to, id, wait, .. } => {
+            TransferOut { dst: to, id, wait, .. } => {
                 if let Some(hid) = wait {
                     add_op(DopInstructionSet::WAIT {
                         flag: UserFlag { flag: hid.0 + 1 },
@@ -82,7 +82,7 @@ pub fn translate<'ir>(ir: &AnnIR<'ir, HpuLang, Alloc, ()>, lut_reg: &LutRegistry
                     slot: CtMem::heap(slots[0].0 as u16),
                 });
             }
-            TransferIn { id, locks, to, .. } => {
+            TransferIn { id, locks, dst: to, .. } => {
                 add_op(DopInstructionSet::LD_B2B {
                     flag: UserFlag { flag: id.flag() },
                     slot: CtMem::heap(slots[0].0),

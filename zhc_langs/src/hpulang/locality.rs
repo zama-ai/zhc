@@ -6,6 +6,7 @@ use zhc_utils::{Dumpable, StoreIndex, existential_enum};
 
 pub const N_FLAGS: u8 = 64;
 pub const N_RESERVED_FLAGS: u8 = 9;
+pub const N_TRANSFER_FLAGS: u8 = N_FLAGS - N_RESERVED_FLAGS;
 pub const FIRST_FLAG: u8 = N_RESERVED_FLAGS;
 pub const LAST_FLAG: u8 = N_FLAGS - 1;
 
@@ -26,12 +27,12 @@ impl NextTransferId {
 
 /// Identifies a inter-HPU transfer.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq, PartialOrd, Ord, Copy, Hash)]
-pub struct TransferId(u8, u8);
+pub struct TransferId(pub u16, pub u8);
 
 impl TransferId {
     pub const FIRST: Self = Self::first_of_gen(0);
 
-    pub const fn first_of_gen(g: u8) -> Self {
+    pub const fn first_of_gen(g: u16) -> Self {
         TransferId(g, FIRST_FLAG)
     }
 
@@ -93,7 +94,7 @@ impl Display for HpuId {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HpuLocality {
     OnHpu(HpuId),
-    Transfer { from: HpuId, to: HpuId },
+    Transfer { src: HpuId, dst: HpuId },
 }
 
 impl HpuLocality {
@@ -104,7 +105,7 @@ impl HpuLocality {
     pub fn is_on(&self, hid: &HpuId) -> bool {
         match self {
             HpuLocality::OnHpu(hpu_id) => hpu_id == hid,
-            HpuLocality::Transfer { from, to } => from == hid || to == hid,
+            HpuLocality::Transfer { src, dst } => src == hid || dst == hid,
         }
     }
 }

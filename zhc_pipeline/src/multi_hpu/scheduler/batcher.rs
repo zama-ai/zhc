@@ -9,14 +9,14 @@ use zhc_utils::{
 
 use crate::{
     hpu::scheduler::utils::{Batch, Batches},
-    multi_hpu::scheduler::{SchedElm, Transfer},
+    multi_hpu::scheduler::{SchedElm, TransferSpec},
 };
 
 pub fn batch(
     ir: &IR<HpuLang>,
     hid: HpuId,
     sched: Vec<SchedElm>,
-    transfer_map: &OpMap<Transfer>,
+    transfer_map: &OpMap<TransferSpec>,
 ) -> IR<HpuLang> {
     // We get the batches back
     let mut batches = Batches::new();
@@ -45,7 +45,7 @@ pub fn batch(
     translate(ir, Order::Custom(flat_sched), move |opref, engine| {
         use zhc_langs::hpulang::HpuInstructionSet::*;
         match opref.get_instruction() {
-            Transfer { from, to } => {
+            Transfer { src: from, dst: to } => {
                 let tkind = transfer_map.get(&opref).unwrap();
                 if hid == *from {
                     let new_args = opref
@@ -55,8 +55,8 @@ pub fn batch(
                         .cosvec();
                     engine.add_op(
                         TransferOut {
-                            from: *from,
-                            to: *to,
+                            src: *from,
+                            dst: *to,
                             id: tkind.tid,
                             wait: tkind.waits.then_some(*to),
                         },
@@ -65,8 +65,8 @@ pub fn batch(
                 } else if hid == *to {
                     let new_rets = engine.add_op(
                         TransferIn {
-                            from: *from,
-                            to: *to,
+                            src: *from,
+                            dst: *to,
                             id: tkind.tid,
                             locks: tkind.notifies.clone(),
                         },

@@ -8,9 +8,9 @@ use zhc_crypto::integer_semantics::{
 use zhc_ir::evaluation::{EvalOutcome, Evaluable, EvaluatesTo, Evaluation};
 use zhc_utils::iter::CollectInSmallVec;
 use zhc_utils::small::SmallVec;
-use zhc_utils::{FastMap, SafeAs, Store, fsm, svec};
+use zhc_utils::{FastMap, SafeAs, Store, svec};
 
-use crate::hpulang::{HpuId, HpuTypeSystem, NextTransferId, TDstId, TImmId, TSrcId, TransferId};
+use crate::hpulang::{HpuId, HpuTypeSystem, TDstId, TImmId, TSrcId, TransferId};
 
 /// Interpretation domain for HPU programs.
 ///
@@ -69,13 +69,6 @@ impl EvaluatesTo<HpuValue> for HpuTypeSystem {
     }
 }
 
-#[fsm]
-#[derive(Debug, Clone)]
-enum TransferState {
-    WaitingFor(TransferId),
-    Holding(TransferId, EmulatedCiphertextBlock),
-}
-
 /// Execution context for HPU program interpretation.
 ///
 /// Holds cryptographic parameters (`spec`), block-level I/O maps, and
@@ -87,10 +80,10 @@ enum TransferState {
 /// during recursive `Batch` interpretation.
 ///
 /// `transfers` is the mailbox between HPUs of a multi-HPU program:
-/// `TransferOut` posts a block under its `(from, to, id)` key and the
-/// matching `TransferIn` takes it, reporting itself as blocked until the
-/// block is there. Interpreting such a program therefore requires a driver
-/// that revisits blocked operations.
+/// `TransferOut` posts a block under its `(to, id)` key and the matching
+/// `TransferIn` takes it, reporting itself as blocked until the block is
+/// there. Interpreting such a program therefore requires a driver that
+/// revisits blocked operations.
 #[derive(Debug)]
 pub struct HpuInterpreterContext {
     pub spec: CiphertextBlockSpec,
@@ -104,8 +97,8 @@ pub struct HpuInterpreterContext {
     pub lut1_table: FastMap<LutId, Lut1>,
     /// Reverse LUT table: LutId → Lut2 (for Pbs2/Pbs2F).
     pub lut2_table: FastMap<LutId, Lut2>,
-    /// Transfer state for each receiving HPU.
-    transfers: Store<HpuId, TransferState>,
+    /// Posted blocks of each receiving HPU, keyed by transfer id.
+    transfers: Store<HpuId, FastMap<TransferId, EmulatedCiphertextBlock>>,
     /// Batch argument state for nested `Batch` interpretation.
     batch_args: FastMap<u8, HpuValue>,
     /// Batch return state for nested `Batch` interpretation.
@@ -122,7 +115,7 @@ impl HpuInterpreterContext {
             immediates: FastMap::default(),
             lut1_table: FastMap::default(),
             lut2_table: FastMap::default(),
-            transfers: Store::with_value(TransferState::WaitingFor(TransferId::FIRST), 8),
+            transfers: Store::with_value(FastMap::default(), 8),
             batch_args: FastMap::default(),
             batch_rets: FastMap::default(),
         }
@@ -131,7 +124,7 @@ impl HpuInterpreterContext {
     pub fn has_pending_transfers(&self) -> bool {
         self.transfers
             .iter()
-            .any(|transfer| matches!(transfer, TransferState::Holding(..)))
+            .any(|posted| !posted.is_empty())
     }
 }
 
@@ -146,30 +139,17 @@ impl Evaluable<HpuValue> for super::HpuInstructionSet {
         use super::HpuInstructionSet::*;
         let results = match self {
             // ── Inter-HPU transfers ──────────────────────────────────
-            TransferOut { to, id, .. } => {
+            TransferOut { dst, id, .. } => {
                 let ct = arguments[0].clone().unwrap_ct_register();
-                let accepted = context.transfers[to].transition_with(|old| match old {
-                    TransferState::WaitingFor(expected) if expected == *id => {
-                        (TransferState::Holding(*id, ct), true)
-                    }
-                    transfer => (transfer, false),
-                });
-                if !accepted {
-                    return EvalOutcome::Blocked;
-                }
+                let replaced = context.transfers[dst].insert(*id, ct);
+                assert!(
+                    replaced.is_none(),
+                    "Transfer {id} to {dst} posted twice"
+                );
                 svec![]
             }
-            TransferIn { to, id, .. } => {
-                let ct = context.transfers[to].transition_with(|transfer| match transfer {
-                    TransferState::Holding(held_id, ct) if held_id == *id => {
-                        let next = match id.inc() {
-                            NextTransferId::NewGen(next) | NextTransferId::SameGen(next) => next,
-                        };
-                        (TransferState::WaitingFor(next), Some(ct))
-                    }
-                    transfer => (transfer, None),
-                });
-                let Some(ct) = ct else {
+            TransferIn { dst, id, .. } => {
+                let Some(ct) = context.transfers[dst].remove(id) else {
                     return EvalOutcome::Blocked;
                 };
                 svec![HpuValue::CtRegister(ct)]
