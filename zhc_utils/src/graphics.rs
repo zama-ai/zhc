@@ -18,7 +18,6 @@
 
 use std::{
     cmp::max,
-    f64::EPSILON,
     ops::{Add, Div, Mul, Neg, Sub},
 };
 
@@ -1525,7 +1524,7 @@ impl<const N: usize> ColorScale<N> {
             "Scale member must be between 0 and 1."
         );
         if val == 1. {
-            val -= EPSILON;
+            val -= f64::EPSILON;
         }
         let n_ranges = self.0.len() - 1;
         let range_length = 1. / (n_ranges as f64);

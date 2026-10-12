@@ -49,9 +49,13 @@ pub enum TransferState {
 ///
 /// Forwards ordinary compute operations to the instruction scheduler while
 /// intercepting the `LD_B2B`, `WAIT`, and `NOTIFY` virtual operations to run the
-/// cross-board transfer handshake, stalling the stream on outstanding inbound
-/// transfers as tracked by its [`UCoreCondition`] and per-transfer
-/// [`InboundTransferState`].
+/// cross-board handshake, stalling the stream on outstanding inbound
+/// transfers and syncs as tracked by its per-flag [`FlagState`] and per-flag
+/// [`TransferState`]. Flag 0 is [`FlagState::Forbidden`].
+///
+/// A `WAIT` with no `LD_B2B` before it is a sync: it goes through `Fresh`, `SyncWaiting` and
+/// `Notified` without a DMA. For a transfer, the notification can arrive before or after the
+/// `LD_B2B`; the DMA starts when both are seen.
 ///
 /// A `NOTIFY` does not stall it. The micro-core replaces it with an inner `SYNC` pushed to the
 /// scheduler and reads on, and the destination board is signalled when that `SYNC` retires. Only a

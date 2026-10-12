@@ -489,10 +489,10 @@ impl Builder {
 
     /// Merges two partitions into one and re-tags every affected operation.
     ///
-    /// Fuses `part_a` and `part_b` following [`PartitionId::fuse`] — the result keeps the lower
-    /// identity and a combined label — then rewrites every operation belonging to either source
-    /// partition so that it points at the fused one. The fused [`PartitionId`] is returned. Use
-    /// this to coalesce two units of computation into a single coarser task.
+    /// Fuses `part_a` and `part_b` following [`PartitionAnnotation::merge`] — the result keeps the
+    /// lower identity and a combined label — then rewrites every operation belonging to either
+    /// source partition so that it points at the fused one. The fused [`PartitionAnnotation`]
+    /// is returned. Use this to coalesce two units of computation into a single coarser task.
     ///
     /// # Examples
     ///

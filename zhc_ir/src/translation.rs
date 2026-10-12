@@ -40,10 +40,10 @@ pub enum Order {
 
 /// Maps operations and registered values in a [`Translation`]'s output IR back to their source.
 ///
-/// Indexing with an output-IR operation ID yields the [`Provenance`] recording which source
-/// operation produced it. Use [`project_opmap`](Self::project_opmap) to re-key an [`OpMap`]
-/// indexed by source operations into one indexed by the corresponding output operations. Value
-/// provenance is exposed through [`Translation::annotated_output`].
+/// [`operations`](Self::operations) maps each output operation to the source operation that
+/// produced it, and [`values`](Self::values) maps each registered output value to its source
+/// value. Use [`project_opmap`](Self::project_opmap) to re-key an [`OpMap`] indexed by source
+/// operations into one indexed by the corresponding output operations.
 pub struct ProvenanceMap {
     operations: OpMap<OpId>,
     values: ValMap<ValId>,

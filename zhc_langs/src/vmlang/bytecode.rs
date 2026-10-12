@@ -1,5 +1,5 @@
 use serde::Serialize;
-use std::{fmt::Debug, u8};
+use std::fmt::Debug;
 use zhc_ir::OpIdRaw;
 use zhc_utils::Dumpable;
 

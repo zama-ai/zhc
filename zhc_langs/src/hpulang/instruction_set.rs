@@ -96,7 +96,7 @@ impl Display for TImmId {
 /// **Inter-HPU transfer.** `Transfer` moves a ciphertext register from
 /// one HPU to another within a partitioned multi-HPU program; it is
 /// later split by the pipeline into a matched `TransferOut`/`TransferIn`
-/// pair, identified by a shared [`TransferId`], that respectively export
+/// pair, identified by a shared [`Slot`], that respectively export
 /// and import the register on the two boards.
 ///
 /// All signatures are available via the [`DialectInstructionSet`] impl.

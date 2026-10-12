@@ -1,6 +1,6 @@
 use std::fmt::{Debug, Display};
+use std::hash::Hash;
 use std::ops::{Deref, DerefMut};
-use std::{hash::Hash, usize};
 
 use crate::Dumpable;
 use crate::iter::CollectInVec;

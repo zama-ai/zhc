@@ -23,9 +23,11 @@
 //!
 //! For multi-HPU execution the dialect also models placement. [`HpuId`]
 //! names a board, [`HpuLocality`] describes where a value resides across
-//! boards, and [`insert_transfers`] splices
-//! [`Transfer`](HpuInstructionSet::Transfer) operations — identified by a
-//! [`TransferId`] — wherever a value crosses a partition boundary.
+//! boards. A value that crosses boards goes through a
+//! [`TransferOut`](HpuInstructionSet::TransferOut) on the source board and a
+//! [`TransferIn`](HpuInstructionSet::TransferIn) on the destination board,
+//! which share a [`Slot`]. Transfers also carry [`SyncNotify`] and
+//! [`SyncWait`] entries that order the operations of two boards.
 
 mod batch_statistics;
 mod dialect;

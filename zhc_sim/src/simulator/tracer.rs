@@ -1,6 +1,6 @@
 use serde::Serialize;
 use serde_json::{Value, json};
-use std::{f64, fs::File, io::Write, path::Path};
+use std::{fs::File, io::Write, path::Path};
 
 use super::*;
 use zhc_utils::{
