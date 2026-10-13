@@ -7,7 +7,6 @@ use zhc_builder::{
     rots_right, shift_left, shift_right, shifts_left, shifts_right, ssub, sub, subs, sum, trail0,
     trail1,
 };
-use zhc_utils::SafeAs;
 
 /// Iops supported by the pipeline.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
@@ -280,7 +279,36 @@ impl Iop {
             Iop::Cast { to_size } => cast(spec, *to_size),
             Iop::Flip => flip(spec),
             Iop::Sum { n } => sum(spec, *n as usize),
-            Iop::MhMul { par_n } => mh_mul(spec, std::cmp::max(2, par_n / 2).sas()),
+            Iop::MhMul { par_n } => {
+                let schoolbook_depth = std::cmp::max(2, par_n / 2) as usize;
+                let builder = mh_mul(spec, schoolbook_depth);
+                match par_n {
+                    2 => {
+                        builder.group_partitions_id(&[1, 2, 0, 9]);
+                        builder.group_partitions_id(&[3, 4, 6, 7]);
+                    }
+                    4 => {
+                        builder.group_partitions_id(&[4, 6, 7, 0, 9]);
+                        builder.group_partitions_id(&[2]);
+                        builder.group_partitions_id(&[3]);
+                        builder.group_partitions_id(&[1]);
+                    }
+                    8 => {
+                        builder.group_partitions_id(&[1, 8, 24, 0, 36]);
+                        builder.group_partitions_id(&[2, 3, 23]);
+                        builder.group_partitions_id(&[4, 5, 25, 27, 28]);
+                        builder.group_partitions_id(&[6, 7, 29]);
+                        builder.group_partitions_id(&[9, 10, 26]);
+                        builder.group_partitions_id(&[11, 12, 30, 32, 34]);
+                        builder.group_partitions_id(&[14, 19]);
+                        builder.group_partitions_id(&[15, 16, 31, 33]);
+                    }
+                    _ => {
+                        panic!();
+                    }
+                }
+                builder
+            }
         }
     }
 }

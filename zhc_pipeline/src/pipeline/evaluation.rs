@@ -16,6 +16,7 @@ use zhc_utils::{
 
 use crate::{
     Fingerprint, PartitionSpec, PartitionerConfig, SchedPolicy, SpreadPolicy, TiePolicy, hpu,
+    iop::materialize_builder_partitioning,
     iop::{self, extract_lut_registry},
     multi_hpu, partition_and_materialize,
     passes::lower_iop_to_multi_hpu,
@@ -451,7 +452,19 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                 interval_begin(c"PartitionIoplang", 0);
                 let ioplang = arguments[0].unwrap_iop_lang_ref();
                 let partitioner_config = arguments[1].unwrap_partitioner_config_ref();
-                let (remat, partitions) = partition_and_materialize(ioplang, partitioner_config);
+                let (remat, partitions) = if context.use_builder_partitions {
+                    let builder_partitions = context
+                        .partitions
+                        .as_ref()
+                        .expect("Missing pipeline input: partitions");
+                    materialize_builder_partitioning(
+                        ioplang,
+                        builder_partitions,
+                        partitioner_config,
+                    )
+                } else {
+                    partition_and_materialize(ioplang, partitioner_config)
+                };
                 let result = svec![
                     PipelineArtifact::RematIopLang(Box::new(remat)),
                     PipelineArtifact::Partitions(partitions)

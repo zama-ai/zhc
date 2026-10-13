@@ -10,6 +10,7 @@ use crate::SchedPolicy;
 pub struct PipelineContext {
     pub unchecked_ioplang: Option<IR<IopLang>>,
     pub partitions: Option<OpMap<PartitionAnnotation>>,
+    pub use_builder_partitions: bool,
     pub prototype: Option<Signature<Type>>,
     pub ciphertext_block_spec: Option<CiphertextBlockSpec>,
     pub hpu_config: Option<HpuConfig>,
@@ -27,6 +28,7 @@ impl PipelineContext {
         PipelineContext {
             unchecked_ioplang: None,
             partitions: None,
+            use_builder_partitions: false,
             prototype: None,
             ciphertext_block_spec: None,
             hpu_config: None,

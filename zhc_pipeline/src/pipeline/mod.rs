@@ -284,6 +284,45 @@ impl Pipeline {
         self
     }
 
+    /// Selects whether the multi-HPU flow uses the partitions declared while building the circuit.
+    ///
+    /// By default, the multi-HPU flow partitions the circuit automatically: it spreads the
+    /// bootstraps of the circuit over the HPUs of the system, and places the remaining operations
+    /// next to them. Passing `true` as `enabled` replaces this automatic partitioning with the
+    /// partitions supplied through [`with_partitions`](Self::with_partitions), which lets the
+    /// caller steer by hand which HPU runs what. Passing `false` restores the default. The choice
+    /// changes everything derived from [`get_partitions`](Self::get_partitions), and has no effect
+    /// on the single-HPU and software VM flows.
+    ///
+    /// The supplied partitions do not need to cover every operation: operations that carry an
+    /// irrelevant placement are placed by the compiler, next to the operations they exchange data
+    /// with. Each partition id is then used as the id of the HPU that runs it.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_pipeline::Pipeline;
+    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
+    /// # use zhc_config::multi_hpu::MultiHpuConfig;
+    /// # let ir = zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty();
+    /// # let partitions = ir.totally_mapped_opmap(|_| unreachable!());
+    /// let mut pipeline = Pipeline::new()
+    ///     .with_unchecked_ioplang(ir)
+    /// #     .with_prototype(zhc_ir::Signature::empty())
+    ///     .with_partitions(partitions)
+    ///     .with_builder_partitions(true)
+    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
+    ///     .with_multi_hpu_config(MultiHpuConfig::default());
+    ///
+    /// // The placement now follows the partitions declared while building the circuit.
+    /// println!("{}", pipeline.get_multi_hpu_metrics().latency);
+    /// ```
+    pub fn with_builder_partitions(mut self, enabled: bool) -> Self {
+        self.context.use_builder_partitions = enabled;
+        self.eval.invalidate_from_val(VALIDS().partitions);
+        self
+    }
+
     /// Supplies the circuit's input and output signature.
     ///
     /// The signature must match the supplied IR. It is only required when requesting the prototype.

@@ -49,7 +49,7 @@ use crate::{SchedPolicy, iop::partitioning::materialize::materialize_partitionin
 use zhc_ir::{
     AnnIR, AnnOpRef, IR, OpId, OpMap, ValMap,
     height_depth::{HeightDepth, analyze_height_depth},
-    partitioning::{PartitionId, PartitionPlacement},
+    partitioning::{PartitionAnnotation, PartitionId, PartitionPlacement},
     translation::Translation,
 };
 use zhc_langs::{
@@ -115,6 +115,59 @@ pub fn partition_and_materialize(
     config: &PartitionerConfig,
 ) -> (IR<IopLang>, OpMap<PartitionId>) {
     materialize_partitioning(ir, &partition(ir, config))
+}
+
+/// Completes the partitions declared while building a circuit, and rewrites the circuit with them.
+///
+/// The `ir` argument is the integer-level circuit, and `partitions` gives the partition
+/// annotation of each of its operations, as declared while building it. Only the placement of each
+/// annotation is read. An operation with an exclusive placement stays in its partition. An
+/// operation with an irrelevant placement is placed by the
+/// [`spread_policy`](PartitionerConfig::spread_policy) of `config`, next to the operations it
+/// exchanges data with. The other fields of `config` are not used.
+///
+/// The returned pair holds the materialized circuit and the partition of each of its operations,
+/// as for [`partition_and_materialize`]: the materialized circuit computes the same outputs as
+/// `ir`, an operation placed in several partitions appears once per partition, and a copy
+/// operation is added for each value that a partition reads from another partition.
+///
+/// # Panics
+///
+/// Panics if no operation of `ir` has a relevant placement in `partitions`, or if an operation
+/// has a shared placement.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # use zhc_pipeline::{
+/// #     PartitionSpec, PartitionerConfig, SchedPolicy, SpreadPolicy, TiePolicy,
+/// #     materialize_builder_partitioning,
+/// # };
+/// # use zhc_ir::{OpMap, partitioning::PartitionAnnotation};
+/// # let ir = zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty();
+/// # let partitions: OpMap<PartitionAnnotation> = unimplemented!();
+/// # let config = PartitionerConfig {
+/// #     specs: std::iter::empty::<PartitionSpec>().collect(),
+/// #     sched_policy: SchedPolicy::AsSoonAsPossible,
+/// #     tie_policy: TiePolicy::Concentrate,
+/// #     spread_policy: SpreadPolicy::FavorLatency,
+/// # };
+/// // `partitions` holds the partitions declared while building `ir`.
+/// let (materialized, placement) = materialize_builder_partitioning(&ir, &partitions, &config);
+/// println!("{} operations after materialization", materialized.n_ops());
+/// ```
+pub fn materialize_builder_partitioning(
+    ir: &IR<IopLang>,
+    partitions: &OpMap<PartitionAnnotation>,
+    config: &PartitionerConfig,
+) -> (IR<IopLang>, OpMap<PartitionId>) {
+    let placement = partitions.clone().map(|annotation| annotation.placement);
+    assert!(
+        placement.iter().any(|(_, p)| p.is_relevant()),
+        "Builder partitioning has no relevant partition"
+    );
+    let placement = spread::spread(ir, placement, config.spread_policy);
+    materialize_partitioning(ir, &placement)
 }
 
 fn partition(ir: &IR<IopLang>, config: &PartitionerConfig) -> OpMap<PartitionPlacement> {
