@@ -43,7 +43,6 @@ version = "0.10.1"
 edition = "2024"
 license = "BSD-3-Clause-Clear"
 repository = "https://github.com/zama-ai/zhc"
-readme = "README.md"
 
 [workspace.dependencies]
 zhc = { path = "zhc", version = "0.10.1" }
