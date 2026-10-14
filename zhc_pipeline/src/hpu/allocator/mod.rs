@@ -18,6 +18,8 @@ mod value_state;
 /// Takes a scheduled intermediate representation `ir` containing HPU operations
 /// and the hardware configuration `config` to produce a new IR in the device
 /// operation language with physical register assignments for all values.
+/// `n_hpus` and `n_flags` set the size of the reserved transfer slots on the
+/// heap, `n_hpus * n_flags`. The single-HPU flow passes `1` and `0`.
 pub fn allocate_registers(
     ir: &IR<HpuLang>,
     config: &HpuConfig,

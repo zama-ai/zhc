@@ -22,6 +22,14 @@ pub enum FlagState {
     Transfer(TransferState),
 }
 
+/// Lifecycle of a usable flag in a [`UCore`], for a cross-board transfer or a sync.
+///
+/// A flag starts `Fresh`. For a transfer, the `LD_B2B` moves it to `TransferDstReady` and the
+/// source notification moves it to `Notified`, in either order; when both are seen it becomes
+/// `Transfering` and the DMA starts, then `Transfered` when the DMA completes. For a sync, a
+/// `WAIT` with no `LD_B2B` moves a `Fresh` flag to `SyncWaiting` until the notification arrives.
+/// The `WAIT` is released by `Transfered`, or by `Notified` for a sync, and the flag goes back to
+/// `Fresh`, so it can be used again. Any other transition panics.
 #[fsm]
 #[derive(Debug, Clone, Serialize)]
 pub enum TransferState {
@@ -45,7 +53,7 @@ pub enum TransferState {
 }
 
 /// Micro-core that sequences an HPU's DOP stream and mediates inter-HPU
-/// transfers.
+/// transfers and syncs.
 ///
 /// Forwards ordinary compute operations to the instruction scheduler while
 /// intercepting the `LD_B2B`, `WAIT`, and `NOTIFY` virtual operations to run the

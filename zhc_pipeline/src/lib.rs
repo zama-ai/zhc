@@ -2,8 +2,14 @@
 //!
 //! This crate provides the core compilation pipeline that transforms high-level
 //! integer operations into executable device operations for HPU hardware. The
-//! pipeline consists of translation from IOP language to HPU language,
-//! operation scheduling, register allocation, and final code generation.
+//! pipeline consists of partitioning of the IOP program over HPUs (multi-HPU flow
+//! only), translation from IOP language to HPU language, operation scheduling,
+//! register allocation, and final code generation.
+//!
+//! Passes that work on the IOP program itself, independent of any target, live in
+//! the `iop` module and are re-exported at the crate root: partitioning
+//! ([`partition_and_materialize`], [`materialize_builder_partitioning`]), LUT
+//! registry extraction, bootstrap metrics, and slack drawing.
 
 mod commons;
 mod hpu;

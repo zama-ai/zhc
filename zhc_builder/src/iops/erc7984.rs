@@ -20,7 +20,7 @@ pub fn erc7984(spec: CiphertextSpec) -> Builder {
 
 /// Creates an IR for batched (SIMD) homomorphic fund transfers (ERC-7984).
 ///
-/// Declares `SIMD_N` independent transfer triplets as inputs and output pairs.
+/// Declares `n` independent transfer triplets as inputs and output pairs.
 /// Each transfer uses [`Builder::iop_erc_7984_ripple`] — optimized for throughput.
 /// For single-transfer latency see [`erc7984`].
 ///

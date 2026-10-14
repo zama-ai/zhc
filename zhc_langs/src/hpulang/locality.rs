@@ -114,8 +114,8 @@ impl Display for HpuId {
 
 /// Placement of a value across the HPUs of a partitioned program.
 ///
-/// An operation either lives on a single board (`OnHpu`), on two boards when it
-/// is a transfer (`Transfer`), is replicated on a set of boards (`Shared`).
+/// An operation either lives on a single board (`OnHpu`), or on two boards when it
+/// is a transfer (`Transfer`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HpuLocality {
     OnHpu(HpuId),
@@ -125,8 +125,7 @@ pub enum HpuLocality {
 impl HpuLocality {
     /// Returns whether this locality places the value on the HPU `hid`.
     ///
-    /// True when the value lives on, is being transferred to or from, or is
-    /// shared with `hid`.
+    /// True when the value lives on, or is being transferred to or from, `hid`.
     pub fn is_on(&self, hid: &HpuId) -> bool {
         match self {
             HpuLocality::OnHpu(hpu_id) => hpu_id == hid,

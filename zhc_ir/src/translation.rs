@@ -255,9 +255,10 @@ impl<ID: Dialect, OD: Dialect> Translator<ID, OD> {
 ///
 /// The `driver` is invoked once per operation. It receives an [`OpRef`] into the source IR and a
 /// mutable [`Translator`] handle, and must emit corresponding output operations and register all
-/// value translations. Returns a [`Translation`] pairing the output IR with an
+/// value translations. Returns a [`Translation`] pairing the output IR with a
 /// [`ProvenanceMap`] tracing each output operation back to the source operation that produced
-/// it.
+/// it, and each registered output value back to its source value. Operations the driver adds
+/// directly to [`Translator::output`] get no operation provenance.
 pub fn translate<'a, ID: Dialect, OD: Dialect>(
     ir: &'a IR<ID>,
     order: Order,
@@ -301,8 +302,9 @@ pub fn translate<'a, ID: Dialect, OD: Dialect>(
 ///
 /// Annotation-aware variant of [`translate`]. The `driver` receives [`AnnOpRef`]s carrying
 /// per-operation and per-value annotations. Returns a [`Translation`] pairing the output IR with
-/// an [`ProvenanceMap`] tracing each output operation back to the source operation that
-/// produced it.
+/// a [`ProvenanceMap`] tracing each output operation back to the source operation that
+/// produced it, and each registered output value back to its source value. Operations the
+/// driver adds directly to [`Translator::output`] get no operation provenance.
 pub fn translate_ann<'a, 'b, ID: Dialect, OpAnn: Annotation, ValAnn: Annotation, OD: Dialect>(
     ir: AnnIRView<'a, 'b, ID, OpAnn, ValAnn>,
     order: Order,

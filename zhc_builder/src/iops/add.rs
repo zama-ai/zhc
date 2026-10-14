@@ -23,9 +23,9 @@ pub fn add(spec: CiphertextSpec) -> Builder {
     builder
 }
 
-/// Creates an IR for batched (SIMD) addition of `SIMD_N` pairs of encrypted integers.
+/// Creates an IR for batched (SIMD) addition of `n` pairs of encrypted integers.
 ///
-/// Declares `SIMD_N * 2` inputs and `SIMD_N` outputs. Each pair is added independently
+/// Declares `n * 2` inputs and `n` outputs. Each pair is added independently
 /// using [`Builder::iop_add_ripple_carry`]. Optimized for throughput over latency.
 ///
 /// # Panics

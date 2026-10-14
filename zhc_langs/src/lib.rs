@@ -13,7 +13,8 @@
 //!   [`VmByteCode`](vmlang::VmByteCode)).
 //!
 //! [`pipelinelang`] is an auxiliary dialect used for compilation pipeline
-//! construction.
+//! construction. [`tasklang`] is an auxiliary dialect of coarse tasks, used
+//! to partition [`ioplang`] programs.
 
 pub mod doplang;
 pub mod hpulang;

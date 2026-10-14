@@ -38,7 +38,6 @@ const RED: &str = "\x1b[31m";
 const GREEN: &str = "\x1b[32m";
 const RESET: &str = "\x1b[0m";
 
-/// Panic reports buffered by the hook, printed at the end so they don't mangle the tables.
 static PANIC_REPORTS: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
 thread_local! {
@@ -475,7 +474,6 @@ fn median(samples: &mut [f64]) -> f64 {
     }
 }
 
-/// Returns the pipeline compiling this iop, with the same scheduler `compute_latency` picks.
 fn iop_pipeline(iop: &Iop, config: &HpuConfig, spec: CiphertextSpec) -> Pipeline {
     let pipeline = Pipeline::new()
         .with_builder(iop.to_builder(spec))
@@ -933,19 +931,25 @@ fn main() {
             eprintln!("Usage: zhc_bench [run|export|diff|compile|analyze] [OPTIONS]");
             eprintln!();
             eprintln!("Commands:");
-            eprintln!("  run                     - Run benchmarks and display latency table");
-            eprintln!("  analyze                 - Run custom IR analysis (edit analyze_ir fn)");
+            eprintln!(
+                "  run                     - Run benchmarks and display one latency table per target"
+            );
+            eprintln!(
+                "  analyze                 - Run custom IR analysis per target (edit analyze_ir fn)"
+            );
             eprintln!(
                 "  export                  - Run benchmarks, save results, and regenerate site"
             );
             eprintln!(
-                "  diff [REV] [--no-color] - Compare latencies against REV (default: latest baseline)"
+                "  diff [REV] [--no-color] - Compare latencies per target against REV (default: latest baseline)"
             );
             eprintln!(
-                "  compile                 - Measure compiler wall-clock times (local only, not stored)"
+                "  compile                 - Measure compiler wall-clock times per target (local only, not stored)"
             );
             eprintln!();
-            eprintln!("Filter options (for run, diff, and compile):");
+            eprintln!(
+                "Filter options (for run, diff, compile, and analyze; export uses only -j and ignores -i, -b, -t):"
+            );
             eprintln!(
                 "  -i, --iops=PATTERNS     - Comma-separated iop name patterns (case-insensitive substring match)"
             );

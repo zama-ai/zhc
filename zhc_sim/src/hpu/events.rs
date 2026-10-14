@@ -93,7 +93,7 @@ pub enum Events {
 }
 
 impl Events {
-    /// Returns whether this event is a `UCoreTransferInNotified`.
+    /// Returns whether this event is a `UCoreNotified`.
     #[must_use]
     pub fn is_ucore_notify(&self) -> bool {
         matches!(self, Self::UCoreNotified(..))

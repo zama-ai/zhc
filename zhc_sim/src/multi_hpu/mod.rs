@@ -6,10 +6,10 @@
 //! system-wide start and completion.
 //!
 //! Two board-level events are intercepted instead of forwarded, since a lone [`Hpu`] has no way
-//! to reach its peers. A `UCoreTransferOutReady` is re-addressed to its destination board as a
-//! `UCoreTransferInNotified` delayed by [`NOTIFY_LATENCY`], which closes the cross-board transfer
-//! handshake; a `UCoreStarved` instead counts toward termination, and `Events::ProcessOver` is
-//! emitted once every board has starved.
+//! to reach its peers. A `UCoreNotify` is re-addressed to its destination board as a
+//! `UCoreNotified` delayed by [`NOTIFY_LATENCY`], carrying the source [`HpuId`] and `CtMem` slot,
+//! which closes the cross-board transfer or sync handshake; a `UCoreStarved` instead counts toward
+//! termination, and `Events::ProcessOver` is emitted once every board has starved.
 //!
 //! Pushing a set of DOP streams whose length differs from the board count, or addressing an
 //! out-of-range [`HpuId`], panics.

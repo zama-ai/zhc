@@ -183,8 +183,9 @@ impl Pipeline {
     /// Nothing is compiled at this point: every step of the flow starts out pending. The inputs
     /// are supplied independently through the `with_*` methods. Checked IR requires the input
     /// IR and ciphertext block specification; target compilation additionally requires its
-    /// configuration, and multi-HPU compilation requires partitions. The prototype is only
-    /// needed when requesting the signature.
+    /// configuration. Multi-HPU compilation partitions the circuit automatically, and only
+    /// reads user partitions when [`with_builder_partitions`](Self::with_builder_partitions) is
+    /// enabled. The prototype is only needed when requesting the signature.
     ///
     /// # Examples
     ///
@@ -425,8 +426,9 @@ impl Pipeline {
 
     /// Selects the legacy scheduler for the single-HPU flow.
     ///
-    /// The default scheduler orders operations under a single as-late-as-possible step, whereas
-    /// the legacy one is two-step and more often than not gives worse results. The
+    /// The default scheduler orders operations in a single step, as late as possible unless
+    /// [`with_schedule_policy`](Self::with_schedule_policy) sets another policy, whereas the
+    /// legacy one is two-step and more often than not gives worse results. The
     /// choice changes the execution order picked for the circuit, and with it everything derived
     /// from [`get_scheduled_hpulang`](Self::get_scheduled_hpulang) — batching, register pressure,
     /// instruction stream, and measured latency. It has no effect on the multi-HPU flow.
@@ -1105,15 +1107,17 @@ impl Pipeline {
 
     /// Returns the partition each operation of the circuit belongs to.
     ///
-    /// A partition is a labelled cluster of neighbouring operations, declared while building the
-    /// circuit, that the compiler treats as a single unit of work; the returned map associates
-    /// every operation of the supplied integer-level IR with its own. The multi-HPU flow reads
-    /// this map to decide which HPU runs what, so partitioning a circuit is how its placement is
-    /// steered.
+    /// A partition is a labelled cluster of neighbouring operations that the compiler treats as a
+    /// single unit of work. The partitioner makes them, either automatically or from the
+    /// partitions declared while building the circuit when
+    /// [`with_builder_partitions`](Self::with_builder_partitions) is enabled; the returned map
+    /// associates every operation of the rematerialized integer-level IR with its own. The
+    /// multi-HPU flow reads this map to decide which HPU runs what.
     ///
     /// # Panics
     ///
-    /// Panics if a required input was not supplied, or if a step this
+    /// Panics if a required input was not supplied, if no configuration
+    /// was set with [`with_multi_hpu_config`](Self::with_multi_hpu_config), or if a step this
     /// artifact depends on panics, in which case the message names the failing step.
     ///
     /// # Examples
@@ -1121,11 +1125,13 @@ impl Pipeline {
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
     /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
+    /// # use zhc_config::multi_hpu::MultiHpuConfig;
     /// # let mut pipeline = Pipeline::new()
     /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
     /// #     .with_prototype(zhc_ir::Signature::empty())
     /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
-    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2));
+    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
+    /// #     .with_multi_hpu_config(MultiHpuConfig::default());
     /// let partitions = pipeline.get_partitions();
     /// println!("{} operations placed in partitions", partitions.iter().count());
     /// ```
@@ -1230,16 +1236,17 @@ impl Pipeline {
 
     /// Returns the block-level HPU IR of the whole system, before scheduling.
     ///
-    /// Lowers the integer-level IR the way the single-HPU flow does, then assigns every
-    /// operation to a HPU following the circuit's partitions, and inserts an explicit transfer
-    /// wherever an operation consumes a value that lives on another HPU. The result is one IR
-    /// covering the whole system: where each of its operations runs is told by
+    /// Lowers the rematerialized integer-level IR the way the single-HPU flow does, and assigns
+    /// every operation to the HPU of its partition. Each copy of a ciphertext block becomes an
+    /// explicit transfer, whose source and destination HPUs are read from the partition map. The
+    /// result is one IR covering the whole system: where each of its operations runs is told by
     /// [`get_multi_hpu_localities`](Self::get_multi_hpu_localities), and it is cut into per-HPU
     /// programs by [`get_scheduled_multi_hpulang`](Self::get_scheduled_multi_hpulang).
     ///
     /// # Panics
     ///
-    /// Panics if a required input was not supplied, or if a step this
+    /// Panics if a required input was not supplied, if no configuration
+    /// was set with [`with_multi_hpu_config`](Self::with_multi_hpu_config), or if a step this
     /// artifact depends on panics, in which case the message names the failing step.
     ///
     /// # Examples
@@ -1247,11 +1254,13 @@ impl Pipeline {
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
     /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
+    /// # use zhc_config::multi_hpu::MultiHpuConfig;
     /// # let mut pipeline = Pipeline::new()
     /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
     /// #     .with_prototype(zhc_ir::Signature::empty())
     /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
-    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2));
+    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
+    /// #     .with_multi_hpu_config(MultiHpuConfig::default());
     /// let ir = pipeline.get_translated_multi_hpulang();
     /// println!("{} block operations, transfers included", ir.n_ops());
     /// ```
@@ -1269,13 +1278,14 @@ impl Pipeline {
     ///
     /// Associates every operation of the IR returned by
     /// [`get_translated_multi_hpulang`](Self::get_translated_multi_hpulang) with the HPU it runs
-    /// on, with the pair of HPUs a transfer moves data between, or with the set of HPUs it is
-    /// replicated on. HPUs are numbered in the order the circuit's partitions are first met, so
-    /// this map is what to read to know where the compiler decided to put the work.
+    /// on, or with the pair of HPUs a transfer moves data between. Each HPU id is the id of the
+    /// partition it runs, so this map is what to read to know where the compiler decided to put
+    /// the work.
     ///
     /// # Panics
     ///
-    /// Panics if a required input was not supplied, or if a step this
+    /// Panics if a required input was not supplied, if no configuration
+    /// was set with [`with_multi_hpu_config`](Self::with_multi_hpu_config), or if a step this
     /// artifact depends on panics, in which case the message names the failing step.
     ///
     /// # Examples
@@ -1283,12 +1293,14 @@ impl Pipeline {
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
     /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
+    /// # use zhc_config::multi_hpu::MultiHpuConfig;
     /// # use zhc_langs::hpulang::HpuLocality;
     /// # let mut pipeline = Pipeline::new()
     /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
     /// #     .with_prototype(zhc_ir::Signature::empty())
     /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
-    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2));
+    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
+    /// #     .with_multi_hpu_config(MultiHpuConfig::default());
     /// let transfers = pipeline
     ///     .get_multi_hpu_localities()
     ///     .iter()

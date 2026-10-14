@@ -192,7 +192,8 @@ pub enum HpuInstructionSet {
         slot: Slot,
         notifies: Vec<SyncNotify>,
     },
-    /// Cut transfer out from one HPU to another.
+    /// Cut transfer out from one HPU to another. Before it sends the
+    /// block, it waits for the notification of each entry of `waits`.
     /// (CtRegister) -> ()
     TransferOut {
         src: HpuId,

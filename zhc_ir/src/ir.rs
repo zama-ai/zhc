@@ -977,6 +977,19 @@ impl<D: Dialect> IR<D> {
         }
     }
 
+    /// Evaluates every operation of this IR in the domain of `I`.
+    ///
+    /// Runs a [`PureEvaluator`] to completion against `context`. Returns `Ok` with every value
+    /// annotated by the value it evaluated to when all active values are evaluated. Returns `Err`
+    /// with the evaluation state of every operation and value otherwise, panic messages and poison
+    /// markers included.
+    ///
+    /// # Panics
+    ///
+    /// Panics if an operation reports [`Blocked`](crate::evaluation::EvalOutcome::Blocked), or if
+    /// an argument or a result does not inhabit the type the signature declares for it. Also
+    /// panics if an operation that declares no result panics in its evaluation while all values
+    /// are evaluated.
     pub fn evaluate<I: Evaluation>(
         &self,
         context: &mut <D::InstructionSet as Evaluable<I>>::Context,

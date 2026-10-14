@@ -100,7 +100,7 @@ impl Heap {
         });
     }
 
-    /// Number of distinct slots handed out so far.
+    /// Number of distinct slots handed out so far, reserved exclusive slots included.
     pub fn size(&self) -> u16 {
         self.slots.len()
     }

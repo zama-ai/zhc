@@ -421,12 +421,13 @@ impl Builder {
 
     /// Opens a new partition and makes it the current one.
     ///
-    /// Every operation emitted through a builder is tagged with its current partition. Calling
-    /// this allocates the next partition identity, labels it with `metadata` — anything
-    /// convertible into a shared string, such as a `&str` or `String` — and makes it current, so
-    /// that all subsequently emitted operations belong to it. The freshly opened
-    /// [`PartitionId`] is returned for later reference. Use this to mark the boundary between
-    /// successive units of computation while building a program.
+    /// Every operation emitted through a builder is tagged with its current partition. A new
+    /// builder starts with an irrelevant partition. Calling this allocates the next
+    /// [`PartitionId`] (`0` after the irrelevant partition, else the current one plus one), labels
+    /// it with `metadata` — anything that gives a `&str`, such as a `&str` or `String` — and makes
+    /// it current, so that all subsequently emitted operations belong to it. The freshly opened
+    /// [`PartitionAnnotation`] is returned for later reference. Use this to mark the boundary
+    /// between successive units of computation while building a program.
     ///
     /// # Examples
     ///
@@ -452,8 +453,8 @@ impl Builder {
     ///
     /// Scans the partitions currently attached to the IR's operations and returns the one whose
     /// identity equals `id`, or `None` when no operation belongs to a partition with that
-    /// identity. This recovers the full [`PartitionId`], including its label, from the bare
-    /// numeric identity.
+    /// identity. This recovers the full [`PartitionAnnotation`], including its label, from the
+    /// bare numeric [`PartitionId`] value.
     ///
     /// # Panics
     ///
@@ -467,7 +468,7 @@ impl Builder {
     /// # let builder = Builder::new(CiphertextBlockSpec(2, 2));
     /// let stage = builder.new_partition("Stage 1");
     /// let ct = builder.ciphertext_input(4);
-    /// assert_eq!(builder.get_partition_by_id(stage.id), Some(stage));
+    /// assert_eq!(builder.get_partition_by_id(0), Some(stage));
     /// ```
     pub fn get_partition_by_id(
         &self,
@@ -533,7 +534,7 @@ impl Builder {
     /// # let builder = Builder::new(CiphertextBlockSpec(2, 2));
     /// let a = builder.new_partition("Stage 1");
     /// let b = builder.new_partition("Stage 2");
-    /// let grouped = builder.group_partitions_id([a.id, b.id]);
+    /// let grouped = builder.group_partitions_id([0, 1]);
     /// ```
     pub fn group_partitions_id(
         &self,
@@ -547,7 +548,7 @@ impl Builder {
 
     /// Returns the partition assigned to every operation of the given IR.
     ///
-    /// Produces an [`OpMap`] associating each operation of `ir` with its [`PartitionId`],
+    /// Produces an [`OpMap`] associating each operation of `ir` with its [`PartitionAnnotation`],
     /// capturing the current partition assignment of the whole graph. This is the raw
     /// per-operation view; for a de-duplicated overview see
     /// [`partitions_table`](Self::partitions_table).

@@ -20,7 +20,9 @@
 //! elimination ([`cse`]), and an evaluation framework ([`evaluation`]).
 //! The [`scheduler`] module provides tools for rescheduling, [`translation`]
 //! helps for cross-dialects translation, and [`traversal`] offers walker verification
-//! utilities.
+//! utilities. The [`partitioning`] module describes the placement of operations in
+//! partitions, and [`height_depth`] scores the longest paths through operation
+//! dependencies.
 
 pub mod cse;
 pub mod dce;
