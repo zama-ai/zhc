@@ -637,6 +637,76 @@ fn protect_shl_carry_overflow_panics() {
 }
 
 #[test]
+fn protect_shr_basic() {
+    let spec = CiphertextBlockSpec(2, 3);
+    let block = EmulatedCiphertextBlock {
+        storage: 0b0_10_100,
+        spec,
+    };
+
+    let result = block.protect_shr(1);
+    assert_eq!(result.storage, 0b0_01_010);
+}
+
+#[test]
+fn protect_shr_moves_carry_into_message() {
+    let spec = CiphertextBlockSpec(2, 2);
+    let block = EmulatedCiphertextBlock {
+        storage: 0b0_11_00,
+        spec,
+    };
+
+    let result = block.protect_shr(2);
+    assert_eq!(result.storage, 0b0_00_11);
+}
+
+#[test]
+fn protect_shr_drops_low_bits() {
+    let spec = CiphertextBlockSpec(2, 3);
+    let block = EmulatedCiphertextBlock {
+        storage: 0b0_01_011,
+        spec,
+    };
+
+    let result = block.protect_shr(2);
+    assert_eq!(result.storage, 0b0_00_010);
+}
+
+#[test]
+fn protect_shr_by_zero_is_identity() {
+    let spec = CiphertextBlockSpec(2, 3);
+    let block = EmulatedCiphertextBlock {
+        storage: 0b0_10_101,
+        spec,
+    };
+
+    assert_eq!(block.protect_shr(0), block);
+}
+
+#[test]
+fn protect_shr_matches_plain_shift_on_data_space() {
+    let spec = CiphertextBlockSpec(2, 2);
+    for data in 0..(1 << 4) {
+        let block = spec.from_data(data);
+        for amount in 0..=4 {
+            assert_eq!(block.protect_shr(amount), spec.from_data(data >> amount));
+        }
+    }
+}
+
+#[test]
+#[should_panic(expected = "lhs has active padding bit")]
+fn protect_shr_padding_panics() {
+    let spec = CiphertextBlockSpec(2, 3);
+    let block = EmulatedCiphertextBlock {
+        storage: 0b1_01_010,
+        spec,
+    };
+
+    block.protect_shr(1);
+}
+
+#[test]
 fn wrapping_shl_basic() {
     let spec = CiphertextBlockSpec(2, 3);
     let block = EmulatedCiphertextBlock {
@@ -819,6 +889,7 @@ fn shift_operations_preserve_spec() {
     };
 
     assert_eq!(block.protect_shl(1).spec, spec);
+    assert_eq!(block.protect_shr(1).spec, spec);
     assert_eq!(block.wrapping_shl(1).spec, spec);
 }
 

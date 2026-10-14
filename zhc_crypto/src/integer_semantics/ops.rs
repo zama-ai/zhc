@@ -331,6 +331,17 @@ impl EmulatedCiphertextBlock {
         }
     }
 
+    pub fn protect_shr(&self, rhs: u8) -> Self {
+        assert!(
+            self.raw_padding_bits() == 0,
+            "Tried to protect-shr, but lhs has active padding bit."
+        );
+        Self {
+            storage: self.raw_complete_bits() >> rhs,
+            spec: self.spec,
+        }
+    }
+
     /// Shifts a ciphertext block left while preventing padding bit overflow.
     pub fn temper_shl(&self, rhs: u8) -> Self {
         let storage = self.raw_complete_bits().shl(rhs);
