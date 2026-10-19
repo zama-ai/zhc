@@ -7,7 +7,8 @@
 //! operate on large integers, TFHE decomposes encrypted values of arbitrary size in multiple LWE
 //! ciphertexts using a fixed radix decomposition. The elements of this decomposition are referred
 //! to as __blocks__, and are emulated by [EmulatedCiphertextBlock]. Those blocks are then assembled
-//! in an __integer__ emulated by [EmulatedCiphertext].
+//! in an __integer__ emulated by [EmulatedCiphertextInteger]. An encrypted Boolean, emulated by
+//! [EmulatedCiphertextBool], is a single clean block whose message is zero or one.
 //!
 //! A __block__ can be modelled by a fixed-precision integer separated in different
 //! contiguous regions `[ padding_bit | carry_bits | message_bits ]`:
@@ -25,8 +26,10 @@
 //! automatically propagate the carries: It is up to the users to propagates carries between blocks
 //! before aggregating the ciphertext.
 //!
-//! Operations with plaintext values can be emulated as well. The [EmulatedPlaintext] and
-//! [EmulatedPlaintextBlock] structures mirror the radix decomposition of ciphertexts.
+//! Operations with plaintext values can be emulated as well. The [EmulatedPlaintextInteger] and
+//! [EmulatedPlaintextBlock] structures mirror the radix decomposition of ciphertexts. Plaintext
+//! and ciphertext values share the same layout specifications: [SpecBlock] describes one block,
+//! and [SpecInteger] describes a multi-block integer.
 //!
 //! Operation flavors
 //! =================
@@ -58,8 +61,9 @@
 //! "many-LUT" operations. All are parameterized by a [`lut::LookupCheck`] policy that controls
 //! padding-bit assertions on input and output. When the input padding bit is set, the raw LUT
 //! output is two's-complement negated to reproduce the negacyclic table folding of a real TFHE
-//! bootstrap. Many-LUT tables reserve the topmost data bits of the input and only accept the
-//! `Protect` and `AllowOutputPadding` checks.
+//! bootstrap. Many-LUT tables reserve the topmost data bits of the input as the table index. When
+//! these index bits are set, the sub-tables are rotated, and the outputs that wrap around are
+//! negated.
 //!
 //! The legacy [`lut::lookup`] function is also available for ad-hoc lookups without precomputing
 //! a table.
@@ -74,20 +78,26 @@ thread_local! {
 
 pub mod lut;
 
-mod ciphertext;
 mod ciphertext_block;
+mod ciphertext_bool;
+mod ciphertext_integer;
 mod flavor;
 mod io_type;
 mod ops;
-mod plaintext;
 mod plaintext_block;
+mod plaintext_integer;
+mod spec_block;
+mod spec_integer;
 
-pub use ciphertext::*;
 pub use ciphertext_block::*;
+pub use ciphertext_bool::*;
+pub use ciphertext_integer::*;
 pub use flavor::*;
 pub use io_type::Type;
-pub use plaintext::*;
 pub use plaintext_block::*;
+pub use plaintext_integer::*;
+pub use spec_block::*;
+pub use spec_integer::*;
 
 #[cfg(test)]
 mod test;

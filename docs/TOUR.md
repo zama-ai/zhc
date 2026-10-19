@@ -10,15 +10,16 @@ ZHC's main frontend is the Rust [`Builder`](https://docs.rs/zhc_builder/latest/z
 use zhc::prelude::*;
 
 // 2 carry bits / 2 message bits
-let bd = Builder::new(CiphertextBlockSpec(2, 2));
-let pti =  bd.plaintext_input(2);
-let pt =   bd.plaintext_split(pti)[0];
+let bd = Builder::new(SpecBlock(2, 2));
+let pti =  bd.plaintext_integer_input(2);
+let pt =   bd.plaintext_integer_split(pti)[0];
 let ct =   bd.block_let_ciphertext(0);
 let trv =  bd.block_add_plaintext(ct, pt);
 let sh =   bd.block_lookup(
                 trv,
-                Lut1Def::custom(
-                    "sh", 
+                Lut1::from_fn(
+                    "sh",
+                    *bd.spec(),
                     |e| e.protect_shr(1)
                 )
            );
@@ -35,12 +36,12 @@ The API exposed by the `Builder` object offers semantics tailored to the TFHE cr
 ```rust
 bd.interpret()                               // On stdout:
     .with_inputs([pti.make_value(3)])        // ╔═══════════════════════════════════
-    .dump();                                 // ║ Interpretation for : [3_pt]
+    .dump();                                 // ║ Interpretation for : [3_ptint]
                                              // ║───────────────────────────────────
                                              // ║ %0 = input_plaintext<0, 2>();
-                                             // ║     %0 -> 11_pt
+                                             // ║     %0 -> 11_ptint
                                              // ║ %1 = extract_pt_block<0>(%0);
-                                             // ║     %1 -> 11_ptblock
+                                             // ║     %1 -> 0_00_11_ptblock
                                              // ║ %2 = let_ct_block<0>();
                                              // ║     %2 -> 0_00_00_ctblock
                                              // ║ %3 = add_pt(%2, %1);

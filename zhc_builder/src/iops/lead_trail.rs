@@ -1,9 +1,10 @@
-use zhc_crypto::integer_semantics::CiphertextSpec;
-use zhc_langs::ioplang::{Lut1Def, Lut2Def};
+use zhc_crypto::integer_semantics::SpecInteger;
+use zhc_langs::ioplang::{Lut1, Lut2};
 use zhc_utils::{SafeAs, n_bits_to_encode};
 
 use crate::{
-    BitType, Ciphertext, CiphertextBlock, NU, NU_BOOL, PropagationDirection, builder::Builder,
+    BitType, CiphertextBlock, CiphertextInteger, NU, NU_BOOL, PropagationDirection,
+    builder::Builder,
 };
 
 /// Creates an IR that counts leading zero bits in an encrypted integer.
@@ -14,16 +15,16 @@ use crate::{
 /// # Examples
 ///
 /// ```rust,no_run
-/// # use zhc_builder::{CiphertextSpec, lead0};
-/// # let spec = CiphertextSpec::new(16, 2, 2);
+/// # use zhc_builder::{SpecInteger, lead0};
+/// # let spec = SpecInteger::new(16, 2, 2);
 /// let builder = lead0(spec);
 /// let ir = builder.optimize_ir();
 /// ```
-pub fn lead0(spec: CiphertextSpec) -> Builder {
+pub fn lead0(spec: SpecInteger) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src_a = builder.ciphertext_input(spec.int_size());
+    let src_a = builder.ciphertext_integer_input(spec.int_size());
     let output = builder.iop_lead0(&src_a);
-    builder.ciphertext_output(output);
+    builder.ciphertext_integer_output(output);
     builder
 }
 
@@ -35,16 +36,16 @@ pub fn lead0(spec: CiphertextSpec) -> Builder {
 /// # Examples
 ///
 /// ```rust,no_run
-/// # use zhc_builder::{CiphertextSpec, lead1};
-/// # let spec = CiphertextSpec::new(16, 2, 2);
+/// # use zhc_builder::{SpecInteger, lead1};
+/// # let spec = SpecInteger::new(16, 2, 2);
 /// let builder = lead1(spec);
 /// let ir = builder.optimize_ir();
 /// ```
-pub fn lead1(spec: CiphertextSpec) -> Builder {
+pub fn lead1(spec: SpecInteger) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src_a = builder.ciphertext_input(spec.int_size());
+    let src_a = builder.ciphertext_integer_input(spec.int_size());
     let output = builder.iop_lead1(&src_a);
-    builder.ciphertext_output(output);
+    builder.ciphertext_integer_output(output);
     builder
 }
 
@@ -56,16 +57,16 @@ pub fn lead1(spec: CiphertextSpec) -> Builder {
 /// # Examples
 ///
 /// ```rust,no_run
-/// # use zhc_builder::{CiphertextSpec, trail0};
-/// # let spec = CiphertextSpec::new(16, 2, 2);
+/// # use zhc_builder::{SpecInteger, trail0};
+/// # let spec = SpecInteger::new(16, 2, 2);
 /// let builder = trail0(spec);
 /// let ir = builder.optimize_ir();
 /// ```
-pub fn trail0(spec: CiphertextSpec) -> Builder {
+pub fn trail0(spec: SpecInteger) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src_a = builder.ciphertext_input(spec.int_size());
+    let src_a = builder.ciphertext_integer_input(spec.int_size());
     let output = builder.iop_trail0(&src_a);
-    builder.ciphertext_output(output);
+    builder.ciphertext_integer_output(output);
     builder
 }
 
@@ -77,16 +78,16 @@ pub fn trail0(spec: CiphertextSpec) -> Builder {
 /// # Examples
 ///
 /// ```rust,no_run
-/// # use zhc_builder::{CiphertextSpec, trail1};
-/// # let spec = CiphertextSpec::new(16, 2, 2);
+/// # use zhc_builder::{SpecInteger, trail1};
+/// # let spec = SpecInteger::new(16, 2, 2);
 /// let builder = trail1(spec);
 /// let ir = builder.optimize_ir();
 /// ```
-pub fn trail1(spec: CiphertextSpec) -> Builder {
+pub fn trail1(spec: SpecInteger) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src_a = builder.ciphertext_input(spec.int_size());
+    let src_a = builder.ciphertext_integer_input(spec.int_size());
     let output = builder.iop_trail1(&src_a);
-    builder.ciphertext_output(output);
+    builder.ciphertext_integer_output(output);
     builder
 }
 
@@ -98,16 +99,16 @@ pub fn trail1(spec: CiphertextSpec) -> Builder {
 /// # Examples
 ///
 /// ```rust,no_run
-/// # use zhc_builder::{CiphertextSpec, ilog2};
-/// # let spec = CiphertextSpec::new(16, 2, 2);
+/// # use zhc_builder::{SpecInteger, ilog2};
+/// # let spec = SpecInteger::new(16, 2, 2);
 /// let builder = ilog2(spec);
 /// let ir = builder.optimize_ir();
 /// ```
-pub fn ilog2(spec: CiphertextSpec) -> Builder {
+pub fn ilog2(spec: SpecInteger) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src_a = builder.ciphertext_input(spec.int_size());
+    let src_a = builder.ciphertext_integer_input(spec.int_size());
     let output = builder.iop_ilog2(&src_a);
-    builder.ciphertext_output(output);
+    builder.ciphertext_integer_output(output);
     builder
 }
 
@@ -121,19 +122,19 @@ impl Builder {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use zhc_builder::{CiphertextSpec, Builder};
-    /// # let spec = CiphertextSpec::new(16, 2, 2);
+    /// # use zhc_builder::{SpecInteger, Builder};
+    /// # let spec = SpecInteger::new(16, 2, 2);
     /// # let builder = Builder::new(spec.block_spec());
-    /// # let a = builder.ciphertext_input(spec.int_size());
+    /// # let a = builder.ciphertext_integer_input(spec.int_size());
     /// let log = builder.iop_ilog2(&a);
     /// ```
-    pub fn iop_ilog2(&self, src: impl AsRef<Ciphertext>) -> Ciphertext {
+    pub fn iop_ilog2(&self, src: impl AsRef<CiphertextInteger>) -> CiphertextInteger {
         let src = src.as_ref();
         assert!(
             src.spec().int_size().is_multiple_of(2),
             "Non-multiple-of-two integer size not supported."
         );
-        let blocks = self.ciphertext_split(src);
+        let blocks = self.ciphertext_integer_split(src);
         let bits = self.propagate_bits(blocks, BitType::One, PropagationDirection::MsbToLsb);
         let output_blocks =
             self.count_from_bits(&bits[1..src.spec().int_size().sas()], BitType::One);
@@ -142,7 +143,7 @@ impl Builder {
             .div_ceil(src.spec().block_spec().message_size().sas())
             .sas();
         self.comment("output")
-            .ciphertext_join(&output_blocks[..n_blocks], Some(src.spec().int_size()))
+            .ciphertext_integer_join(&output_blocks[..n_blocks], Some(src.spec().int_size()))
     }
 
     /// Counts trailing zero bits in an encrypted integer.
@@ -154,19 +155,19 @@ impl Builder {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use zhc_builder::{CiphertextSpec, Builder};
-    /// # let spec = CiphertextSpec::new(16, 2, 2);
+    /// # use zhc_builder::{SpecInteger, Builder};
+    /// # let spec = SpecInteger::new(16, 2, 2);
     /// # let builder = Builder::new(spec.block_spec());
-    /// # let a = builder.ciphertext_input(spec.int_size());
+    /// # let a = builder.ciphertext_integer_input(spec.int_size());
     /// let tz = builder.iop_trail0(&a);
     /// ```
-    pub fn iop_trail0(&self, src: impl AsRef<Ciphertext>) -> Ciphertext {
+    pub fn iop_trail0(&self, src: impl AsRef<CiphertextInteger>) -> CiphertextInteger {
         let src = src.as_ref();
         assert!(
             src.spec().int_size().is_multiple_of(2),
             "Non-multiple-of-two integer size not supported."
         );
-        let blocks = self.ciphertext_split(src);
+        let blocks = self.ciphertext_integer_split(src);
         let bits = self.propagate_bits(blocks, BitType::One, PropagationDirection::LsbToMsb);
         let output_blocks =
             self.count_from_bits(&bits[0..src.spec().int_size().sas()], BitType::Zero);
@@ -175,7 +176,7 @@ impl Builder {
             .div_ceil(src.spec().block_spec().message_size().sas())
             .sas();
         self.comment("output")
-            .ciphertext_join(&output_blocks[..n_blocks], Some(src.spec().int_size()))
+            .ciphertext_integer_join(&output_blocks[..n_blocks], Some(src.spec().int_size()))
     }
 
     /// Counts trailing one bits in an encrypted integer.
@@ -187,19 +188,19 @@ impl Builder {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use zhc_builder::{CiphertextSpec, Builder};
-    /// # let spec = CiphertextSpec::new(16, 2, 2);
+    /// # use zhc_builder::{SpecInteger, Builder};
+    /// # let spec = SpecInteger::new(16, 2, 2);
     /// # let builder = Builder::new(spec.block_spec());
-    /// # let a = builder.ciphertext_input(spec.int_size());
+    /// # let a = builder.ciphertext_integer_input(spec.int_size());
     /// let to = builder.iop_trail1(&a);
     /// ```
-    pub fn iop_trail1(&self, src: impl AsRef<Ciphertext>) -> Ciphertext {
+    pub fn iop_trail1(&self, src: impl AsRef<CiphertextInteger>) -> CiphertextInteger {
         let src = src.as_ref();
         assert!(
             src.spec().int_size().is_multiple_of(2),
             "Non-multiple-of-two integer size not supported."
         );
-        let blocks = self.ciphertext_split(src);
+        let blocks = self.ciphertext_integer_split(src);
         let bits = self.propagate_bits(blocks, BitType::Zero, PropagationDirection::LsbToMsb);
         let output_blocks =
             self.count_from_bits(&bits[0..src.spec().int_size().sas()], BitType::One);
@@ -208,7 +209,7 @@ impl Builder {
             .div_ceil(src.spec().block_spec().message_size().sas())
             .sas();
         self.comment("output")
-            .ciphertext_join(&output_blocks[..n_blocks], Some(src.spec().int_size()))
+            .ciphertext_integer_join(&output_blocks[..n_blocks], Some(src.spec().int_size()))
     }
 
     /// Counts leading zero bits in an encrypted integer.
@@ -220,19 +221,19 @@ impl Builder {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use zhc_builder::{CiphertextSpec, Builder};
-    /// # let spec = CiphertextSpec::new(16, 2, 2);
+    /// # use zhc_builder::{SpecInteger, Builder};
+    /// # let spec = SpecInteger::new(16, 2, 2);
     /// # let builder = Builder::new(spec.block_spec());
-    /// # let a = builder.ciphertext_input(spec.int_size());
+    /// # let a = builder.ciphertext_integer_input(spec.int_size());
     /// let lz = builder.iop_lead0(&a);
     /// ```
-    pub fn iop_lead0(&self, src: impl AsRef<Ciphertext>) -> Ciphertext {
+    pub fn iop_lead0(&self, src: impl AsRef<CiphertextInteger>) -> CiphertextInteger {
         let src = src.as_ref();
         assert!(
             src.spec().int_size().is_multiple_of(2),
             "Non-multiple-of-two integer size not supported."
         );
-        let blocks = self.ciphertext_split(src);
+        let blocks = self.ciphertext_integer_split(src);
         let bits = self.propagate_bits(blocks, BitType::One, PropagationDirection::MsbToLsb);
         let output_blocks =
             self.count_from_bits(&bits[0..src.spec().int_size().sas()], BitType::Zero);
@@ -241,7 +242,7 @@ impl Builder {
             .div_ceil(src.spec().block_spec().message_size().sas())
             .sas();
         self.comment("output")
-            .ciphertext_join(&output_blocks[..n_blocks], Some(src.spec().int_size()))
+            .ciphertext_integer_join(&output_blocks[..n_blocks], Some(src.spec().int_size()))
     }
 
     /// Counts leading one bits in an encrypted integer.
@@ -253,19 +254,19 @@ impl Builder {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use zhc_builder::{CiphertextSpec, Builder};
-    /// # let spec = CiphertextSpec::new(16, 2, 2);
+    /// # use zhc_builder::{SpecInteger, Builder};
+    /// # let spec = SpecInteger::new(16, 2, 2);
     /// # let builder = Builder::new(spec.block_spec());
-    /// # let a = builder.ciphertext_input(spec.int_size());
+    /// # let a = builder.ciphertext_integer_input(spec.int_size());
     /// let lo = builder.iop_lead1(&a);
     /// ```
-    pub fn iop_lead1(&self, src: impl AsRef<Ciphertext>) -> Ciphertext {
+    pub fn iop_lead1(&self, src: impl AsRef<CiphertextInteger>) -> CiphertextInteger {
         let src = src.as_ref();
         assert!(
             src.spec().int_size().is_multiple_of(2),
             "Non-multiple-of-two integer size not supported."
         );
-        let blocks = self.ciphertext_split(src);
+        let blocks = self.ciphertext_integer_split(src);
         let bits = self.propagate_bits(blocks, BitType::Zero, PropagationDirection::MsbToLsb);
         let output_blocks =
             self.count_from_bits(&bits[0..src.spec().int_size().sas()], BitType::One);
@@ -274,7 +275,7 @@ impl Builder {
             .div_ceil(src.spec().block_spec().message_size().sas())
             .sas();
         self.comment("output")
-            .ciphertext_join(&output_blocks[..n_blocks], Some(src.spec().int_size()))
+            .ciphertext_integer_join(&output_blocks[..n_blocks], Some(src.spec().int_size()))
     }
 
     pub(crate) fn propagate_bits(
@@ -310,14 +311,14 @@ impl Builder {
             };
             let v = if bit_type == BitType::One {
                 if direction == PropagationDirection::LsbToMsb {
-                    self.block_lookup2(m, Lut2Def::Manyl2mPropBit1MsgSplit)
+                    self.block_lookup2(m, Lut2::manyl2m_prop_bit1_msg_split(*self.spec()))
                 } else {
-                    self.block_lookup2(m, Lut2Def::Manym2lPropBit1MsgSplit)
+                    self.block_lookup2(m, Lut2::manym2l_prop_bit1_msg_split(*self.spec()))
                 }
             } else if direction == PropagationDirection::LsbToMsb {
-                self.block_lookup2(m, Lut2Def::Manyl2mPropBit0MsgSplit)
+                self.block_lookup2(m, Lut2::manyl2m_prop_bit0_msg_split(*self.spec()))
             } else {
-                self.block_lookup2(m, Lut2Def::Manym2lPropBit0MsgSplit)
+                self.block_lookup2(m, Lut2::manym2l_prop_bit0_msg_split(*self.spec()))
             };
             res_v.push(v.0.clone());
             res_v.push(v.1.clone());
@@ -375,10 +376,10 @@ impl Builder {
                 let tmp;
                 if let Some(x) = acc {
                     tmp = self.block_add(x, elt);
-                    is_not_null = self.block_lookup(tmp, Lut1Def::NotNull);
+                    is_not_null = self.block_lookup(tmp, Lut1::not_null(*self.spec()));
                 } else {
                     tmp = elt.clone();
-                    is_not_null = self.block_lookup(elt, Lut1Def::NotNull);
+                    is_not_null = self.block_lookup(elt, Lut1::not_null(*self.spec()));
                 };
                 g_a.insert(c_id * proc_nb, is_not_null); // Reverse insertion per chunk
                 Some(tmp)
@@ -399,7 +400,7 @@ impl Builder {
                     .fold(None, |acc, sub_chk| {
                         if let Some(x) = acc {
                             let tmp = self.block_add(x, sub_chk[0]);
-                            sub_chk[0] = self.block_lookup(tmp, Lut1Def::NotNull);
+                            sub_chk[0] = self.block_lookup(tmp, Lut1::not_null(*self.spec()));
                             Some(tmp)
                         } else {
                             Some(sub_chk[0].clone())
@@ -446,9 +447,9 @@ impl Builder {
                     }
                     // Need to inverse it for 0 if needed
                     if inverse_output {
-                        *v = self.block_lookup(&v, Lut1Def::IsNull);
+                        *v = self.block_lookup(&v, Lut1::is_null(*self.spec()));
                     } else {
-                        *v = self.block_lookup(&v, Lut1Def::NotNull);
+                        *v = self.block_lookup(&v, Lut1::not_null(*self.spec()));
                     }
                 }
 
@@ -492,140 +493,140 @@ mod test {
     #[test]
     fn correctness_lead0() {
         fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::Ciphertext(inp)] = inp else {
+            let [IopValue::CiphertextInteger(inp)] = inp else {
                 unreachable!()
             };
             let res = inp.as_storage().leading_zeros()
                 - (u128::BITS - inp.spec().int_size().sas::<u32>());
-            Some(vec![IopValue::Ciphertext(
+            Some(vec![IopValue::CiphertextInteger(
                 inp.spec()
                     .block_spec()
-                    .ciphertext_spec(inp.spec().int_size())
+                    .integer_spec(inp.spec().int_size())
                     .from_int(res.sas()),
             )])
         }
 
         for size in (2..128).step_by(2) {
-            lead0(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+            lead0(SpecInteger::new(size, 2, 2)).test_random(100, semantic);
         }
     }
 
     #[test]
     fn correctness_lead1() {
         fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::Ciphertext(inp)] = inp else {
+            let [IopValue::CiphertextInteger(inp)] = inp else {
                 unreachable!()
             };
             let res = (inp.as_storage() << (u128::BITS - inp.spec().int_size().sas::<u32>()))
                 .leading_ones();
-            Some(vec![IopValue::Ciphertext(
+            Some(vec![IopValue::CiphertextInteger(
                 inp.spec()
                     .block_spec()
-                    .ciphertext_spec(inp.spec().int_size())
+                    .integer_spec(inp.spec().int_size())
                     .from_int(res.sas()),
             )])
         }
 
         for size in (2..128).step_by(2) {
-            lead1(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+            lead1(SpecInteger::new(size, 2, 2)).test_random(100, semantic);
         }
     }
 
     #[test]
     fn correctness_trail0() {
         fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::Ciphertext(inp)] = inp else {
+            let [IopValue::CiphertextInteger(inp)] = inp else {
                 unreachable!()
             };
             let res = inp
                 .as_storage()
                 .trailing_zeros()
                 .min(inp.spec().int_size().sas());
-            Some(vec![IopValue::Ciphertext(
+            Some(vec![IopValue::CiphertextInteger(
                 inp.spec()
                     .block_spec()
-                    .ciphertext_spec(inp.spec().int_size())
+                    .integer_spec(inp.spec().int_size())
                     .from_int(res.sas()),
             )])
         }
         for size in (2..128).step_by(2) {
-            trail0(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+            trail0(SpecInteger::new(size, 2, 2)).test_random(100, semantic);
         }
     }
 
     #[test]
     fn correctness_trail1() {
         fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::Ciphertext(inp)] = inp else {
+            let [IopValue::CiphertextInteger(inp)] = inp else {
                 unreachable!()
             };
             let res = inp.as_storage().trailing_ones();
-            Some(vec![IopValue::Ciphertext(
+            Some(vec![IopValue::CiphertextInteger(
                 inp.spec()
                     .block_spec()
-                    .ciphertext_spec(inp.spec().int_size())
+                    .integer_spec(inp.spec().int_size())
                     .from_int(res.sas()),
             )])
         }
 
         for size in (2..128).step_by(2) {
-            trail1(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+            trail1(SpecInteger::new(size, 2, 2)).test_random(100, semantic);
         }
     }
 
     #[test]
     fn correctness_ilog2() {
         fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::Ciphertext(inp)] = inp else {
+            let [IopValue::CiphertextInteger(inp)] = inp else {
                 unreachable!()
             };
             let res = inp.as_storage();
             let res = if res == 0 { 0 } else { res.ilog2() };
-            Some(vec![IopValue::Ciphertext(
+            Some(vec![IopValue::CiphertextInteger(
                 inp.spec()
                     .block_spec()
-                    .ciphertext_spec(inp.spec().int_size())
+                    .integer_spec(inp.spec().int_size())
                     .from_int(res.sas()),
             )])
         }
 
         for size in (2..128).step_by(2) {
-            ilog2(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+            ilog2(SpecInteger::new(size, 2, 2)).test_random(100, semantic);
         }
     }
 
     #[test]
     fn noise_lead0() {
         for size in (2..128).step_by(2) {
-            lead0(CiphertextSpec::new(size, 2, 2)).check_noise();
+            lead0(SpecInteger::new(size, 2, 2)).check_noise();
         }
     }
 
     #[test]
     fn noise_lead1() {
         for size in (2..128).step_by(2) {
-            lead1(CiphertextSpec::new(size, 2, 2)).check_noise();
+            lead1(SpecInteger::new(size, 2, 2)).check_noise();
         }
     }
 
     #[test]
     fn noise_trail0() {
         for size in (2..128).step_by(2) {
-            trail0(CiphertextSpec::new(size, 2, 2)).check_noise();
+            trail0(SpecInteger::new(size, 2, 2)).check_noise();
         }
     }
 
     #[test]
     fn noise_trail1() {
         for size in (2..128).step_by(2) {
-            trail1(CiphertextSpec::new(size, 2, 2)).check_noise();
+            trail1(SpecInteger::new(size, 2, 2)).check_noise();
         }
     }
 
     #[test]
     fn noise_ilog2() {
         for size in (2..128).step_by(2) {
-            ilog2(CiphertextSpec::new(size, 2, 2)).check_noise();
+            ilog2(SpecInteger::new(size, 2, 2)).check_noise();
         }
     }
 }

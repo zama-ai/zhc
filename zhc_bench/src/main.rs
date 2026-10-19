@@ -17,7 +17,7 @@ use zhc::{
     compat::Iop,
     prelude::{Pipeline, PipelineExt},
 };
-use zhc_builder::CiphertextSpec;
+use zhc_builder::SpecInteger;
 use zhc_config::{hpu::HpuConfig, multi_hpu::MultiHpuConfig};
 use zhc_ir::IR;
 use zhc_langs::doplang::{CtMem, DopInstructionSet, DopLang};
@@ -200,7 +200,7 @@ impl Target {
         }
     }
 
-    fn pipeline(&self, iop: &Iop, spec: CiphertextSpec) -> Pipeline {
+    fn pipeline(&self, iop: &Iop, spec: SpecInteger) -> Pipeline {
         match self {
             Target::Hpu => iop_pipeline(iop, &HpuConfig::default(), spec),
             Target::MultiHpu(n_hpus) => Pipeline::new()
@@ -212,7 +212,7 @@ impl Target {
         }
     }
 
-    fn latency(&self, iop: &Iop, spec: CiphertextSpec) -> Microseconds {
+    fn latency(&self, iop: &Iop, spec: SpecInteger) -> Microseconds {
         let mut pipeline = self.pipeline(iop, spec);
         match self {
             Target::Hpu => pipeline.get_hpu_metrics().latency,
@@ -459,7 +459,7 @@ fn check_git_clean() {
 }
 
 fn measure_latency(iop: &Iop, target: Target, bits: u16) -> Option<Microseconds> {
-    let spec = CiphertextSpec::new(bits, 2, 2);
+    let spec = SpecInteger::new(bits, 2, 2);
     let context = format!("{:?} {}b {} latency", iop, bits, target.name());
     catch_panic(&context, || target.latency(iop, spec))
 }
@@ -474,7 +474,7 @@ fn median(samples: &mut [f64]) -> f64 {
     }
 }
 
-fn iop_pipeline(iop: &Iop, config: &HpuConfig, spec: CiphertextSpec) -> Pipeline {
+fn iop_pipeline(iop: &Iop, config: &HpuConfig, spec: SpecInteger) -> Pipeline {
     let pipeline = Pipeline::new()
         .with_builder(iop.to_builder(spec))
         .with_hpu_config(config.clone());
@@ -490,7 +490,7 @@ fn iop_pipeline(iop: &Iop, config: &HpuConfig, spec: CiphertextSpec) -> Pipeline
 
 /// Measures the compile time of one iop: median wall-clock over `reps` compilations.
 fn measure_compile(iop: &Iop, target: Target, bits: u16, reps: usize) -> Option<Microseconds> {
-    let spec = CiphertextSpec::new(bits, 2, 2);
+    let spec = SpecInteger::new(bits, 2, 2);
     // A pipeline caches its steps, so each repetition compiles on a fresh one.
     let context = format!("{:?} {}b {} compile", iop, bits, target.name());
     let mut samples: Vec<f64> = catch_panic(&context, || {
@@ -695,7 +695,7 @@ fn heap_usage(ir: &IR<DopLang>) -> usize {
 }
 
 /// Customize this function during development to analyze the IR.
-fn analyze_ir(iop: &Iop, target: Target, spec: CiphertextSpec) -> String {
+fn analyze_ir(iop: &Iop, target: Target, spec: SpecInteger) -> String {
     let n_ops = iop.to_builder(spec).optimize_ir().n_ops();
     let mut pipeline = target.pipeline(iop, spec);
     let heap = match target {
@@ -722,7 +722,7 @@ fn run_analyze(filters: &Filters) {
             &jobs,
             filters.threads_or(all_cores()),
             |(iop, bits)| {
-                let spec = CiphertextSpec::new(*bits, 2, 2);
+                let spec = SpecInteger::new(*bits, 2, 2);
                 let context = format!("{:?} {}b {} analyze", iop, bits, target.name());
                 catch_panic(&context, || analyze_ir(iop, target, spec))
                     .unwrap_or_else(|| "panic!".into())

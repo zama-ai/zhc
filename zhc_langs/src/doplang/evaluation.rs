@@ -2,14 +2,19 @@ use std::fmt::Debug;
 
 use zhc_crypto::integer_semantics::lut::{LutId, LutRegistry};
 use zhc_crypto::integer_semantics::{
-    CiphertextBlockSpec, EmulatedCiphertextBlock, EmulatedPlaintextBlock,
-    EmulatedPlaintextBlockStorage, lut::LookupCheck,
+    EmulatedCiphertextBlock, EmulatedPlaintextBlock, EmulatedPlaintextBlockStorage, SpecBlock,
+    lut::LookupCheck,
 };
 use zhc_ir::evaluation::{EvalOutcome, Evaluable, EvaluatesTo, Evaluation};
 use zhc_utils::small::SmallVec;
 use zhc_utils::{FastMap, SafeAs, svec};
 
 use super::{CtMem, CtReg, DopTypeSystem, LutRef, PtArg};
+
+const MANY_LUT_CHECK: LookupCheck = LookupCheck {
+    allow_output_padding: true,
+    ..LookupCheck::Protect
+};
 
 /// Interpretation domain for DOP programs.
 ///
@@ -46,7 +51,7 @@ impl EvaluatesTo<DopValue> for DopTypeSystem {
 /// file starts empty and is populated by `LD` and ALU/PBS
 /// instructions.
 pub struct DopInterpreterContext {
-    pub spec: CiphertextBlockSpec,
+    pub spec: SpecBlock,
     /// Fixed-size register file. Slots start uninitialized; the
     /// execution order guarantees all reads follow a prior write.
     pub registers: SmallVec<Option<EmulatedCiphertextBlock>>,
@@ -78,7 +83,7 @@ impl Debug for DopInterpreterContext {
 impl DopInterpreterContext {
     /// Creates a new context with the given spec and a register file
     /// of `num_registers` uninitialized slots.
-    pub fn new(spec: CiphertextBlockSpec, num_registers: usize, lut_reg: &LutRegistry) -> Self {
+    pub fn new(spec: SpecBlock, num_registers: usize, lut_reg: &LutRegistry) -> Self {
         Self {
             spec,
             registers: svec![Some(spec.random()); num_registers],
@@ -152,10 +157,10 @@ impl DopInterpreterContext {
     /// Builds a plaintext block from an inline constant or symbolic template argument.
     fn read_pt(&self, arg: &PtArg) -> EmulatedPlaintextBlock {
         match arg {
-            PtArg::Const(inner) => self
-                .spec
-                .complete_plaintext_block_spec()
-                .from_message(inner.val.sas::<EmulatedPlaintextBlockStorage>()),
+            PtArg::Const(inner) => EmulatedPlaintextBlock::from_complete(
+                self.spec,
+                inner.val.sas::<EmulatedPlaintextBlockStorage>(),
+            ),
             PtArg::Var(inner) => self
                 .pt_sources
                 .get(&(inner.id as usize, inner.block as usize))
@@ -256,7 +261,7 @@ impl Evaluable<DopValue> for super::DopInstructionSet {
                 let ct = context.read_ct_reg(src);
                 let lut_id = DopInterpreterContext::resolve_lut(lut);
                 let lut_def = context.lut_reg.get_l1(&lut_id);
-                context.write_ct_reg(dst, lut_def.lookup(ct, LookupCheck::AllowBothPadding));
+                context.write_ct_reg(dst, lut_def.lookup(ct, LookupCheck::Permissive));
                 svec![DopValue::Ctx]
             }
 
@@ -265,7 +270,7 @@ impl Evaluable<DopValue> for super::DopInstructionSet {
                 let ct = context.read_ct_reg(src);
                 let lut_id = DopInterpreterContext::resolve_lut(lut);
                 let lut_def = context.lut_reg.get_l2(&lut_id);
-                let (ct0, ct1) = lut_def.lookup(ct, LookupCheck::AllowOutputPadding);
+                let (ct0, ct1) = lut_def.lookup(ct, MANY_LUT_CHECK);
                 // Write to consecutive registers from the aligned base.
                 let base = dst.addr & dst.mask;
                 context.registers[base as usize] = Some(ct0);

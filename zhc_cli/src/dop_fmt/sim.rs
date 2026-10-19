@@ -24,7 +24,9 @@
 use std::collections::{BTreeSet, HashSet};
 
 use zhc_crypto::integer_semantics::lut::LutRegistry;
-use zhc_crypto::integer_semantics::{CiphertextBlockSpec, EmulatedCiphertextBlock, Type};
+use zhc_crypto::integer_semantics::{
+    EmulatedCiphertextBlock, EmulatedPlaintextBlock, SpecBlock, Type,
+};
 use zhc_ir::evaluation::OpState;
 use zhc_ir::{IR, Signature};
 use zhc_langs::doplang::{
@@ -159,14 +161,15 @@ fn recompose(blocks: &[EmulatedCiphertextBlock], message_size: u8) -> usize {
     })
 }
 
-/// The declared block count for `Ciphertext` argument/return `id` of `signature`'s given side.
+/// The declared block count for ciphertext argument/return `id` of `signature`'s given side.
 fn num_blocks(types: &[Type], id: usize, side: &str) -> Result<usize, String> {
     match types.get(id) {
-        Some(Type::Ciphertext(spec)) => {
+        Some(Type::CiphertextInteger(spec)) => {
             Ok(spec.int_size() as usize / spec.block_spec().message_size() as usize)
         }
-        Some(Type::Plaintext(_)) => {
-            Err(format!("{side}[{id}] is a Plaintext, expected Ciphertext"))
+        Some(Type::CiphertextBool(_)) => Ok(1),
+        Some(Type::PlaintextInteger(_)) => {
+            Err(format!("{side}[{id}] is plaintext, expected ciphertext"))
         }
         None => Err(format!("{side}[{id}] has no matching entry in [signature]")),
     }
@@ -203,7 +206,7 @@ pub struct SimReport {
 /// happened *during* evaluation.
 pub fn simulate(
     ir: &IR<DopLang>,
-    block_spec: CiphertextBlockSpec,
+    block_spec: SpecBlock,
     lut_reg: &LutRegistry,
     signature: &Signature<Type>,
     inputs: &[usize],
@@ -249,11 +252,10 @@ pub fn simulate(
         used_inputs.push(recompose(&blocks, message_size));
     }
 
-    let pt_block_spec = block_spec.matching_plaintext_block_spec();
     for &(id, block) in &addrs.pt_src {
         context
             .pt_sources
-            .insert((id, block), pt_block_spec.random());
+            .insert((id, block), EmulatedPlaintextBlock::random(block_spec));
     }
 
     let outcome = match ir.evaluate::<DopValue>(&mut context) {

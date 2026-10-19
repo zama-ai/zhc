@@ -6,7 +6,7 @@ use crate::{
 };
 use zhc_config::{hpu::HpuConfig, multi_hpu::MultiHpuConfig, vm::VmConfig};
 use zhc_crypto::integer_semantics::lut::{LutId, LutRegistry};
-use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
+use zhc_crypto::integer_semantics::{SpecBlock, Type};
 use zhc_ir::{
     IR, OpMap, Signature,
     evaluation::Evaluation,
@@ -35,7 +35,7 @@ pub enum PipelineArtifact {
     SlackDrawing(FileHandle),
     Partitions(OpMap<PartitionId>),
     Prototype(Box<Signature<Type>>),
-    CiphertextBlockSpec(CiphertextBlockSpec),
+    CiphertextBlockSpec(SpecBlock),
     LutRegistry(LutRegistry),
     // Hpu
     HpuLutRelocation(Option<Vec<LutId>>),

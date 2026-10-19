@@ -21,7 +21,7 @@
 //! ; A description of what this program does goes here, before the preamble.
 //! # !preamble {
 //! # [signature]
-//! # (Ciphertext<8, 2, 2>, Ciphertext<8, 2, 2>) -> Ciphertext<8, 2, 2>
+//! # (CiphertextInteger<8, 2, 2>, CiphertextInteger<8, 2, 2>) -> CiphertextInteger<8, 2, 2>
 //! # [lut]
 //! # my_lut: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]
 //! # }
@@ -31,18 +31,19 @@
 //!
 //! * `[signature]` holds one line written in [`Signature<Type>`]'s own `Display` syntax (the same
 //!   `(arg, arg, ...) -> (ret, ret, ...)` form `{:?}` already renders, with each `Type` spelled
-//!   `Ciphertext<int_size, carry_size, message_size>` or `Plaintext<int_size, message_size>`, and
-//!   the surrounding parens dropped when a side has exactly one element). There's no separate "iop
-//!   assembly" grammar here — the section is a straight, round-trippable textual encoding of the
-//!   zhc [`Signature`] type itself. There's no separate `[ciphertext_spec]` section either: the
-//!   file's block spec (carry/message width) is derived from the `Ciphertext`/ `Plaintext` types
-//!   named here — every one of them must agree on carry/message width (their `int_size` may differ
-//!   freely, e.g. when a return packs more than one argument's worth of blocks), and at least one
-//!   `Ciphertext` type must be present so the block spec is derivable at all. A `dop.asm` program
-//!   is meant to be one part of a possibly multi-board operation (see `tfhe-rs`'s `custom_iop`
-//!   fixtures under `zhc_cli/dop_fmt/examples`, whose `_v0`/`_v1`/... siblings are different
-//!   boards' fragments of the *same* logical operation) — every sibling should declare the
-//!   operation's full signature, even where its own instruction stream only touches a subset of it.
+//!   `CiphertextInteger<int_size, carry_size, message_size>`, `CiphertextBool<carry_size,
+//!   message_size>`, or `PlaintextInteger<int_size, carry_size, message_size>`, and the surrounding
+//!   parens dropped when a side has exactly one element). There's no separate "iop assembly"
+//!   grammar here — the section is a straight, round-trippable textual encoding of the zhc
+//!   [`Signature`] type itself. There's no separate `[ciphertext_spec]` section either: the file's
+//!   block spec (carry/message width) is derived from the types named here — every one of them must
+//!   agree on carry/message width (their `int_size` may differ freely, e.g. when a return packs
+//!   more than one argument's worth of blocks), and at least one type must be present so the block
+//!   spec is derivable at all. A `dop.asm` program is meant to be one part of a possibly
+//!   multi-board operation (see `tfhe-rs`'s `custom_iop` fixtures under `zhc_cli/dop_fmt/examples`,
+//!   whose `_v0`/`_v1`/... siblings are different boards' fragments of the *same* logical
+//!   operation) — every sibling should declare the operation's full signature, even where its own
+//!   instruction stream only touches a subset of it.
 //! * `[lut]` holds zero or more `name: [v0, v1, ..., vN]` lines, one raw lookup table per line. The
 //!   table must have exactly `2^data_size` entries for the file's block spec; entries are indexed
 //!   by the input block's raw data bits (padding cleared) and are otherwise uninterpreted, matching
@@ -62,7 +63,7 @@
 use std::fmt;
 
 use zhc_crypto::integer_semantics::{
-    CiphertextBlockSpec, PlaintextSpec, Type,
+    SpecBlock, SpecInteger, Type,
     lut::{Lut1, LutRegistry},
 };
 use zhc_ir::{IR, Signature};
@@ -114,7 +115,7 @@ enum Section {
 /// The declarations gathered from a `dop.asm` file's mandatory `!preamble { ... }` block.
 #[derive(Debug, Clone)]
 pub struct Preamble {
-    pub block_spec: CiphertextBlockSpec,
+    pub block_spec: SpecBlock,
     pub signature: Signature<Type>,
     pub luts: LutRegistry,
 }
@@ -243,50 +244,33 @@ fn is_closing_brace(content: &str) -> bool {
         .is_some_and(|rest| rest.chars().all(|c| c == ' ' || c == '-'))
 }
 
-fn derive_block_spec(sig: &Signature<Type>) -> Result<CiphertextBlockSpec, String> {
-    let mut block_spec: Option<CiphertextBlockSpec> = None;
-    let mut message_size: Option<u8> = None;
+fn derive_block_spec(sig: &Signature<Type>) -> Result<SpecBlock, String> {
+    let mut block_spec: Option<SpecBlock> = None;
 
     for t in sig.get_args().iter().chain(sig.get_returns()) {
-        match t {
-            Type::Ciphertext(cs) => {
-                let s = cs.block_spec();
-                match block_spec {
-                    None => {
-                        message_size = Some(s.message_size());
-                        block_spec = Some(s);
-                    }
-                    Some(prev) if prev == s => {}
-                    Some(prev) => {
-                        return Err(format!(
-                            "a Ciphertext entry has carry/message width {}/{}, but an earlier \
-                             entry has {}/{} — every entry must agree",
-                            s.carry_size(),
-                            s.message_size(),
-                            prev.carry_size(),
-                            prev.message_size()
-                        ));
-                    }
-                }
-            }
-            Type::Plaintext(ps) => {
-                let m = ps.block_spec().message_size();
-                match message_size {
-                    None => message_size = Some(m),
-                    Some(prev) if prev == m => {}
-                    Some(prev) => {
-                        return Err(format!(
-                            "a Plaintext entry has message width {m}, but an earlier entry has \
-                             {prev} — every entry must agree"
-                        ));
-                    }
-                }
+        let (kind, s) = match t {
+            Type::CiphertextInteger(cs) => ("CiphertextInteger", cs.block_spec()),
+            Type::PlaintextInteger(ps) => ("PlaintextInteger", ps.block_spec()),
+            Type::CiphertextBool(s) => ("CiphertextBool", *s),
+        };
+        match block_spec {
+            None => block_spec = Some(s),
+            Some(prev) if prev == s => {}
+            Some(prev) => {
+                return Err(format!(
+                    "a {kind} entry has carry/message width {}/{}, but an earlier entry has \
+                     {}/{} — every entry must agree",
+                    s.carry_size(),
+                    s.message_size(),
+                    prev.carry_size(),
+                    prev.message_size()
+                ));
             }
         }
     }
 
     block_spec.ok_or_else(|| {
-        "no Ciphertext entry to derive the file's carry/message block width from — at least one \
+        "no signature entry to derive the file's carry/message block width from — at least one \
          is required, even if the instruction stream itself doesn't touch it"
             .to_string()
     })
@@ -294,7 +278,7 @@ fn derive_block_spec(sig: &Signature<Type>) -> Result<CiphertextBlockSpec, Strin
 
 fn parse_lut_section(
     lines: &[(usize, String)],
-    block_spec: CiphertextBlockSpec,
+    block_spec: SpecBlock,
 ) -> Result<LutRegistry, ParseError> {
     let expected_len = 1usize << block_spec.data_size();
     let mut registry = LutRegistry::empty();
@@ -370,7 +354,12 @@ fn split_top_level_commas(s: &str) -> Vec<&str> {
 
 fn parse_type(tok: &str) -> Result<Type, String> {
     let tok = tok.trim();
-    let invalid = || format!("`{tok}`: expected `Ciphertext<...>` or `Plaintext<...>`");
+    let invalid = || {
+        format!(
+            "`{tok}`: expected `CiphertextInteger<...>`, `CiphertextBool<...>`, or \
+             `PlaintextInteger<...>`"
+        )
+    };
 
     let parse_fields = |inner: &str| -> Result<Vec<u16>, String> {
         inner
@@ -380,31 +369,42 @@ fn parse_type(tok: &str) -> Result<Type, String> {
             .collect()
     };
 
-    if let Some(rest) = tok.strip_prefix("Ciphertext<") {
+    if let Some(rest) = tok.strip_prefix("CiphertextInteger<") {
         let inner = rest.strip_suffix('>').ok_or_else(invalid)?;
         let fields = parse_fields(inner)?;
         let [int_size, carry_size, message_size] = fields.as_slice() else {
             return Err(format!(
-                "`{tok}`: expected `Ciphertext<int_size, carry_size, message_size>`"
+                "`{tok}`: expected `CiphertextInteger<int_size, carry_size, message_size>`"
             ));
         };
-        Ok(Type::Ciphertext(
-            zhc_crypto::integer_semantics::CiphertextSpec::new(
-                *int_size,
-                *carry_size as u8,
-                *message_size as u8,
-            ),
-        ))
-    } else if let Some(rest) = tok.strip_prefix("Plaintext<") {
+        Ok(Type::CiphertextInteger(SpecInteger::new(
+            *int_size,
+            *carry_size as u8,
+            *message_size as u8,
+        )))
+    } else if let Some(rest) = tok.strip_prefix("CiphertextBool<") {
         let inner = rest.strip_suffix('>').ok_or_else(invalid)?;
         let fields = parse_fields(inner)?;
-        let [int_size, message_size] = fields.as_slice() else {
+        let [carry_size, message_size] = fields.as_slice() else {
             return Err(format!(
-                "`{tok}`: expected `Plaintext<int_size, message_size>`"
+                "`{tok}`: expected `CiphertextBool<carry_size, message_size>`"
             ));
         };
-        Ok(Type::Plaintext(PlaintextSpec::new(
+        Ok(Type::CiphertextBool(SpecBlock(
+            *carry_size as u8,
+            *message_size as u8,
+        )))
+    } else if let Some(rest) = tok.strip_prefix("PlaintextInteger<") {
+        let inner = rest.strip_suffix('>').ok_or_else(invalid)?;
+        let fields = parse_fields(inner)?;
+        let [int_size, carry_size, message_size] = fields.as_slice() else {
+            return Err(format!(
+                "`{tok}`: expected `PlaintextInteger<int_size, carry_size, message_size>`"
+            ));
+        };
+        Ok(Type::PlaintextInteger(SpecInteger::new(
             *int_size,
+            *carry_size as u8,
             *message_size as u8,
         )))
     } else {
@@ -971,17 +971,18 @@ impl<'a> Cursor<'a> {
 
 #[cfg(test)]
 mod tests {
+    use zhc_crypto::integer_semantics::SpecInteger;
+
     use super::*;
     use crate::doplang::emit_assembly;
-    use crate::ioplang::Lut1Def;
-    use zhc_crypto::integer_semantics::CiphertextSpec;
+    use crate::ioplang::Lut1;
 
     #[test]
     fn parses_full_preamble_and_body() {
         let src = "\
             # !preamble {\n\
             # [signature]\n\
-            # (Ciphertext<8, 2, 2>, Ciphertext<8, 2, 2>) -> Ciphertext<8, 2, 2>\n\
+            # (CiphertextInteger<8, 2, 2>, CiphertextInteger<8, 2, 2>) -> CiphertextInteger<8, 2, 2>\n\
             # [lut]\n\
             # my_lut: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]\n\
             # }\n\
@@ -991,13 +992,13 @@ mod tests {
 
         let (preamble, ir) = parse_assembly(src).expect("valid file must parse");
 
-        assert_eq!(preamble.block_spec, CiphertextBlockSpec(2, 2));
+        assert_eq!(preamble.block_spec, SpecBlock(2, 2));
 
         assert_eq!(preamble.signature, {
             let mut sig = Signature::empty();
-            sig.push_arg(Type::Ciphertext(CiphertextSpec::new(8, 2, 2)));
-            sig.push_arg(Type::Ciphertext(CiphertextSpec::new(8, 2, 2)));
-            sig.push_ret(Type::Ciphertext(CiphertextSpec::new(8, 2, 2)));
+            sig.push_arg(Type::CiphertextInteger(SpecInteger::new(8, 2, 2)));
+            sig.push_arg(Type::CiphertextInteger(SpecInteger::new(8, 2, 2)));
+            sig.push_ret(Type::CiphertextInteger(SpecInteger::new(8, 2, 2)));
             sig
         });
 
@@ -1015,10 +1016,11 @@ mod tests {
     #[test]
     fn signature_round_trips_through_its_own_display() {
         let mut sig = Signature::empty();
-        sig.push_arg(Type::Ciphertext(CiphertextSpec::new(8, 2, 2)));
-        sig.push_arg(Type::Plaintext(PlaintextSpec::new(8, 2)));
-        sig.push_ret(Type::Ciphertext(CiphertextSpec::new(16, 2, 2)));
-        sig.push_ret(Type::Ciphertext(CiphertextSpec::new(8, 2, 2)));
+        sig.push_arg(Type::CiphertextInteger(SpecInteger::new(8, 2, 2)));
+        sig.push_arg(Type::PlaintextInteger(SpecInteger::new(8, 2, 2)));
+        sig.push_arg(Type::CiphertextBool(SpecBlock(2, 2)));
+        sig.push_ret(Type::CiphertextInteger(SpecInteger::new(16, 2, 2)));
+        sig.push_ret(Type::CiphertextInteger(SpecInteger::new(8, 2, 2)));
 
         let displayed = format!("{sig}");
         let src = format!("# !preamble {{\n# [signature]\n# {displayed}\n# [lut]\n# }}\nSYNC\n");
@@ -1027,7 +1029,30 @@ mod tests {
         assert_eq!(preamble.signature, sig);
         // int_size may differ freely between entries (16 vs 8 above); only carry/message width
         // is required to agree.
-        assert_eq!(preamble.block_spec, CiphertextBlockSpec(2, 2));
+        assert_eq!(preamble.block_spec, SpecBlock(2, 2));
+    }
+
+    #[test]
+    fn derives_block_spec_from_ciphertext_bool() {
+        let src =
+            "# !preamble {\n# [signature]\n# CiphertextBool<2, 2> -> ()\n# [lut]\n# }\nSYNC\n";
+
+        let (preamble, _) = parse_assembly(src).expect("valid file must parse");
+
+        assert_eq!(preamble.block_spec, SpecBlock(2, 2));
+    }
+
+    #[test]
+    fn rejects_ciphertext_bool_with_mismatched_block_width() {
+        let src = "# !preamble {\n# [signature]\n# (CiphertextInteger<8, 2, 2>, CiphertextBool<1, 3>) -> ()\n# [lut]\n# }\nSYNC\n";
+
+        let err = parse_assembly(src).unwrap_err();
+
+        assert!(
+            err.message.contains("every entry must agree"),
+            "{}",
+            err.message
+        );
     }
 
     #[test]
@@ -1044,13 +1069,13 @@ mod tests {
             ; Some description of what this program does.\n\
             ; !preamble {\n\
             ; [signature]\n\
-            ; Ciphertext<8, 2, 2> -> Ciphertext<8, 2, 2>\n\
+            ; CiphertextInteger<8, 2, 2> -> CiphertextInteger<8, 2, 2>\n\
             ; [lut]\n\
             ; }\n\
             SYNC\n\
         ";
         let (preamble, ir) = parse_assembly(src).expect("valid file must parse");
-        assert_eq!(preamble.block_spec, CiphertextBlockSpec(2, 2));
+        assert_eq!(preamble.block_spec, SpecBlock(2, 2));
         // 1 real instruction + synthesized _START/_END.
         assert_eq!(ir.walk_ops_linear().count(), 3);
     }
@@ -1062,13 +1087,13 @@ mod tests {
             ; -----\n\
             ; !preamble {\n\
             ; [signature]\n\
-            ; Ciphertext<8, 2, 2> -> Ciphertext<8, 2, 2>\n\
+            ; CiphertextInteger<8, 2, 2> -> CiphertextInteger<8, 2, 2>\n\
             ; [lut]\n\
             ; } -----\n\
             SYNC\n\
         ";
         let (preamble, _) = parse_assembly(src).expect("valid file must parse");
-        assert_eq!(preamble.block_spec, CiphertextBlockSpec(2, 2));
+        assert_eq!(preamble.block_spec, SpecBlock(2, 2));
     }
 
     #[test]
@@ -1083,10 +1108,35 @@ mod tests {
         let src = "# !preamble {\n# [signature]\n# () -> ()\n# [lut]\n# }\nSYNC\n";
         let err = parse_assembly(src).unwrap_err();
         assert!(
-            err.message.contains("no Ciphertext entry"),
+            err.message.contains("no signature entry"),
             "{}",
             err.message
         );
+    }
+
+    #[test]
+    fn rejects_legacy_ciphertext_type_names() {
+        for type_name in [
+            "Ciphertext<8, 2, 2>",
+            "IntegerCiphertext<8, 2, 2>",
+            "BooleanCiphertext<2, 2>",
+            "IntegerPlaintext<8, 2>",
+        ] {
+            let src = format!(
+                "# !preamble {{\n# [signature]\n# {type_name} -> ()\n# [lut]\n# }}\nSYNC\n"
+            );
+
+            let err = parse_assembly(&src).unwrap_err();
+
+            assert!(
+                err.message.contains(
+                    "expected `CiphertextInteger<...>`, \
+                                      `CiphertextBool<...>`"
+                ),
+                "{type_name}: {}",
+                err.message
+            );
+        }
     }
 
     #[test]
@@ -1094,7 +1144,7 @@ mod tests {
         let src = "\
             # !preamble {\n\
             # [signature]\n\
-            # (Ciphertext<8, 2, 2>, Ciphertext<8, 1, 3>) -> ()\n\
+            # (CiphertextInteger<8, 2, 2>, CiphertextInteger<9, 1, 3>) -> ()\n\
             # [lut]\n\
             # }\n\
             SYNC\n\
@@ -1112,7 +1162,7 @@ mod tests {
         let src = "\
             # !preamble {\n\
             # [signature]\n\
-            # (Ciphertext<8, 2, 2>, Ciphertext<8, 2, 2>) -> Ciphertext<8, 2, 2>\n\
+            # (CiphertextInteger<8, 2, 2>, CiphertextInteger<8, 2, 2>) -> CiphertextInteger<8, 2, 2>\n\
             # [lut]\n\
             # too_short: [0, 1, 2]\n\
             # }\n\
@@ -1124,16 +1174,16 @@ mod tests {
 
     #[test]
     fn rejects_unterminated_preamble() {
-        let src = "# !preamble {\n# [signature]\n# Ciphertext<16, 2, 2> -> ()\n";
+        let src = "# !preamble {\n# [signature]\n# CiphertextInteger<16, 2, 2> -> ()\n";
         let err = parse_assembly(src).unwrap_err();
         assert!(err.message.to_lowercase().contains("unterminated"));
     }
 
     fn registry() -> LutRegistry {
-        let spec = CiphertextBlockSpec(2, 2);
+        let spec = SpecBlock(2, 2);
         let mut lreg = LutRegistry::empty();
-        lreg.register_l1(&Lut1Def::None.into_lut(spec));
-        lreg.register_l1(&Lut1Def::CarryInMsg.into_lut(spec));
+        lreg.register_l1(&Lut1::none(spec));
+        lreg.register_l1(&Lut1::carry_in_msg(spec));
         lreg
     }
 

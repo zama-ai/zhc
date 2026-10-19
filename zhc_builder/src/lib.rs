@@ -5,7 +5,7 @@
 //! integer inputs, applies arithmetic operations and programmable bootstrapping (PBS) lookups
 //! on individual blocks, and produces encrypted outputs.
 //!
-//! The four value types — [`Ciphertext`], [`CiphertextBlock`], [`Plaintext`], and
+//! The four value types — [`CiphertextInteger`], [`CiphertextBlock`], [`PlaintextInteger`], and
 //! [`PlaintextBlock`] — are opaque handles into the IR graph. They cannot be inspected
 //! directly; instead, they are passed to [`Builder`] methods that emit the corresponding IR
 //! instructions.
@@ -31,13 +31,13 @@
 //!   MSB                          LSB
 //! ```
 //!
-//! The [`CiphertextBlockSpec`] captures the `(carry_size, message_size)` pair and is shared
+//! The [`SpecBlock`] captures the `(carry_size, message_size)` pair and is shared
 //! by every block in a circuit. Plaintext blocks follow the same radix but have no carry or
 //! padding bits — only the `message_size` message bits.
 //!
 //! All block-level operations (`block_*` methods) work on individual blocks, while
-//! multi-block integers must first be [`split`](Builder::ciphertext_split) into their radix
-//! digits and later [`join`](Builder::ciphertext_join)ed back.
+//! multi-block integers must first be [`split`](Builder::ciphertext_integer_split) into their radix
+//! digits and later [`join`](Builder::ciphertext_integer_join)ed back.
 //!
 //! # Operation Flavors
 //!
@@ -75,51 +75,64 @@
 //!
 //! A programmable bootstrapping evaluates a lookup table on the data bits of a block. Because
 //! TFHE tables are negacyclic, an input with its padding bit set reads the negated second half
-//! of the table. The [`LookupCheck`] policy attached to every PBS states which padding bits
-//! the interpreter asserts clear:
+//! of the table. The [`LookupCheck`] policy attached to every PBS states which conditions the
+//! interpreter asserts. It has three independent flags:
 //!
-//! - [`Protect`](LookupCheck::Protect) — input and output padding bits must be clear. This is the
-//!   default of [`block_lookup`](Builder::block_lookup) and its many-LUT siblings.
-//! - [`AllowOutputPadding`](LookupCheck::AllowOutputPadding) — the table may write the padding bit.
-//!   Used by [`block_padding_lookup`](Builder::block_padding_lookup).
-//! - [`AllowInputPadding`](LookupCheck::AllowInputPadding) — the input may have its padding bit
-//!   set, triggering negacyclic negation, but the output must be clean.
-//! - [`AllowBothPadding`](LookupCheck::AllowBothPadding) — no assertion at all. Used by
-//!   [`block_wrapping_lookup`](Builder::block_wrapping_lookup).
+//! - [`allow_input_padding`](LookupCheck::allow_input_padding) — the input may have its padding bit
+//!   set, which negates the outputs.
+//! - [`allow_index_bits`](LookupCheck::allow_index_bits) — the input of a many-LUT may have its
+//!   index bits set, which rotates the sub-tables (see below). Single-output lookups have no index
+//!   bits, so this flag has no effect on them.
+//! - [`allow_output_padding`](LookupCheck::allow_output_padding) — the outputs may have their
+//!   padding bit set.
+//!
+//! Two constants cover the common cases, and the builder offers a shortcut for each policy it uses:
+//!
+//! - [`Protect`](LookupCheck::Protect) — all three flags are false, so every padding bit and index
+//!   bit must be clear. This is the policy of [`block_lookup`](Builder::block_lookup) and its
+//!   many-LUT siblings.
+//! - `LookupCheck { allow_output_padding: true, ..LookupCheck::Protect }` — only the outputs may
+//!   have their padding bit set. This is the policy of
+//!   [`block_padding_lookup`](Builder::block_padding_lookup).
+//! - [`Permissive`](LookupCheck::Permissive) — all three flags are true, so nothing is asserted.
+//!   This is the policy of [`block_wrapping_lookup`](Builder::block_wrapping_lookup).
 //!
 //! The `*_with` lookup methods ([`block_lookup_with`](Builder::block_lookup_with), ...) take the
-//! policy as an argument.
+//! policy as an argument, so any combination of flags can be used.
 //!
 //! PBS lookups come in four widths. [`block_lookup`](Builder::block_lookup) produces one output
 //! block; [`block_lookup2`](Builder::block_lookup2), [`block_lookup4`](Builder::block_lookup4)
 //! and [`block_lookup8`](Builder::block_lookup8) are *many-LUT* bootstrappings producing 2, 4
 //! or 8 blocks from a single input. A many-LUT of `2^k` outputs reserves the `k` topmost data
-//! bits of its input for the table index, so the input must be small enough, and only the
-//! `Protect` and `AllowOutputPadding` checks are meaningful. Tables are named by the
-//! [`Lut1Def`], [`Lut2Def`], [`Lut4Def`] and [`Lut8Def`] enums, which also accept custom
-//! functions through their `custom` constructor.
+//! bits of its input for the table index. When these index bits are clear, output `j` reads
+//! sub-table `j`. When they hold a value `q`, the sub-tables are rotated by `q`, and the outputs
+//! that wrap around are negated. Most circuits keep the index bits clear. The builder accepts
+//! precomputed
+//! [`Lut1`], [`Lut2`], [`Lut4`] and [`Lut8`] tables. Use named builtin constructors such as
+//! [`Lut1::msg_only`], or `from_fn` to build custom tables from closures, passing the builder's
+//! block specification in either case.
 //!
 //! # Typical Workflow
 //!
 //! ```rust,no_run
 //! # use zhc_builder::*;
 //! // 1. Create a builder for a given block spec.
-//! let builder = Builder::new(CiphertextBlockSpec(2, 2));
+//! let builder = Builder::new(SpecBlock(2, 2));
 //!
 //! // 2. Declare circuit inputs.
-//! let a = builder.ciphertext_input(8);
-//! let b = builder.ciphertext_input(8);
+//! let a = builder.ciphertext_integer_input(8);
+//! let b = builder.ciphertext_integer_input(8);
 //!
 //! // 3. Decompose into blocks and operate.
-//! let a_blocks = builder.ciphertext_split(&a);
-//! let b_blocks = builder.ciphertext_split(&b);
+//! let a_blocks = builder.ciphertext_integer_split(&a);
+//! let b_blocks = builder.ciphertext_integer_split(&b);
 //! let sum_blocks: Vec<_> = a_blocks.iter().zip(b_blocks.iter())
 //!     .map(|(ab, bb)| builder.block_add(ab, bb))
 //!     .collect();
 //!
 //! // 4. Reassemble and declare the output.
-//! let result = builder.ciphertext_join(&sum_blocks, None);
-//! builder.ciphertext_output(&result);
+//! let result = builder.ciphertext_integer_join(&sum_blocks, None);
+//! builder.ciphertext_integer_output(&result);
 //!
 //! // 5. Finalize — this runs dead-code elimination and CSE.
 //! let ir = builder.optimize_ir();

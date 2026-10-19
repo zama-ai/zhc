@@ -17,7 +17,7 @@
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
-use zhc_crypto::integer_semantics::CiphertextBlockSpec;
+use zhc_crypto::integer_semantics::SpecBlock;
 use zhc_crypto::integer_semantics::Type;
 use zhc_crypto::integer_semantics::lut::LutRegistry;
 use zhc_ir::{IR, Signature};
@@ -28,7 +28,7 @@ use zhc_pipeline::passes::{hpu_decode_translation_table, hpu_generate_translatio
 /// passes or a simulation over it, or to re-render it in either file format.
 pub struct Loaded {
     pub ir: IR<DopLang>,
-    pub block_spec: CiphertextBlockSpec,
+    pub block_spec: SpecBlock,
     pub signature: Signature<Type>,
     pub luts: LutRegistry,
 }

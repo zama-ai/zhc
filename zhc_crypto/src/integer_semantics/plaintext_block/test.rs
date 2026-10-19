@@ -1,45 +1,29 @@
-use super::{EmulatedPlaintextBlock, PlaintextBlockSpec};
+use super::super::SpecBlock;
+use super::EmulatedPlaintextBlock;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 #[test]
-fn spec_creation() {
-    let spec = PlaintextBlockSpec(4);
-    assert_eq!(spec.message_size(), 4);
-}
-
-#[test]
-fn spec_message_mask() {
-    let spec = PlaintextBlockSpec(3);
-    assert_eq!(spec.message_mask(), 0b111);
-
-    let spec = PlaintextBlockSpec(1);
-    assert_eq!(spec.message_mask(), 0b1);
-
-    let spec = PlaintextBlockSpec(8);
-    assert_eq!(spec.message_mask(), 0b1111_1111);
-}
-
-#[test]
-fn spec_overflow_checks() {
-    let spec = PlaintextBlockSpec(3);
-
-    assert!(!spec.overflows_message(0b111));
-    assert!(spec.overflows_message(0b1_000));
-    assert!(!spec.overflows_message(0));
-}
-
-#[test]
 fn from_message() {
-    let spec = PlaintextBlockSpec(4);
-    let block = spec.from_message(0b1010);
+    let spec = SpecBlock(2, 4);
+    let block = EmulatedPlaintextBlock::from_message(spec, 0b1010);
     assert_eq!(block.storage, 0b1010);
     assert_eq!(block.spec, spec);
 }
 
 #[test]
+fn from_complete() {
+    let spec = SpecBlock(2, 4);
+    let block = EmulatedPlaintextBlock::from_complete(spec, 0b1_11_1010);
+    assert_eq!(block.storage, 0b1_11_1010);
+    assert_eq!(block.raw_complete_bits(), 0b1_11_1010);
+    assert_eq!(block.raw_message_bits(), 0b1010);
+    assert_eq!(block.raw_carry_bits(), 0b11);
+}
+
+#[test]
 fn raw_message_bits() {
-    let spec = PlaintextBlockSpec(4);
+    let spec = SpecBlock(2, 4);
     let block = EmulatedPlaintextBlock {
         storage: 0b1111_1010,
         spec,
@@ -48,28 +32,28 @@ fn raw_message_bits() {
 }
 
 #[test]
-fn raw_mask_message() {
-    let spec = PlaintextBlockSpec(4);
+fn raw_complete_bits_ignores_high_bits() {
+    let spec = SpecBlock(2, 3);
     let block = EmulatedPlaintextBlock {
-        storage: 0b1111_1010,
+        storage: 0b11_1_11_010,
         spec,
     };
-    assert_eq!(block.raw_mask_message(), 0b1010);
+    assert_eq!(block.raw_complete_bits(), 0b1_11_010);
 }
 
 #[test]
-fn raw_mask_message_ignores_high_bits() {
-    let spec = PlaintextBlockSpec(3);
-    let block = EmulatedPlaintextBlock {
-        storage: 0b1111_1010,
-        spec,
-    };
-    assert_eq!(block.raw_mask_message(), 0b010);
+fn has_only_predicates() {
+    let spec = SpecBlock(2, 3);
+    assert!(EmulatedPlaintextBlock::from_message(spec, 0b101).is_message_only());
+    assert!(!EmulatedPlaintextBlock::from_complete(spec, 0b0_10_000).is_message_only());
+    assert!(EmulatedPlaintextBlock::from_complete(spec, 0b0_10_000).is_carry_only());
+    assert!(!EmulatedPlaintextBlock::from_complete(spec, 0b0_10_001).is_carry_only());
+    assert!(!EmulatedPlaintextBlock::from_complete(spec, 0b1_10_000).is_carry_only());
 }
 
 #[test]
 fn equality_same_spec() {
-    let spec = PlaintextBlockSpec(4);
+    let spec = SpecBlock(2, 4);
     let block1 = EmulatedPlaintextBlock {
         storage: 0b1010,
         spec,
@@ -89,8 +73,8 @@ fn equality_same_spec() {
 
 #[test]
 fn equality_different_spec() {
-    let spec1 = PlaintextBlockSpec(4);
-    let spec2 = PlaintextBlockSpec(3);
+    let spec1 = SpecBlock(2, 4);
+    let spec2 = SpecBlock(2, 3);
     let block1 = EmulatedPlaintextBlock {
         storage: 0b1010,
         spec: spec1,
@@ -105,13 +89,13 @@ fn equality_different_spec() {
 
 #[test]
 fn equality_ignores_extra_bits() {
-    let spec = PlaintextBlockSpec(4);
+    let spec = SpecBlock(2, 4);
     let block1 = EmulatedPlaintextBlock {
         storage: 0b1010,
         spec,
     };
     let block2 = EmulatedPlaintextBlock {
-        storage: 0b11111010,
+        storage: 0b1_0_00_1010,
         spec,
     };
 
@@ -120,7 +104,7 @@ fn equality_ignores_extra_bits() {
 
 #[test]
 fn partial_ordering() {
-    let spec = PlaintextBlockSpec(4);
+    let spec = SpecBlock(2, 4);
     let block1 = EmulatedPlaintextBlock {
         storage: 0b1010,
         spec,
@@ -131,7 +115,7 @@ fn partial_ordering() {
     };
     let block3 = EmulatedPlaintextBlock {
         storage: 0b1010,
-        spec: PlaintextBlockSpec(3),
+        spec: SpecBlock(2, 3),
     };
 
     assert!(block1 < block2);
@@ -140,7 +124,7 @@ fn partial_ordering() {
 
 #[test]
 fn hash_consistency() {
-    let spec = PlaintextBlockSpec(4);
+    let spec = SpecBlock(2, 4);
     let block1 = EmulatedPlaintextBlock {
         storage: 0b1010,
         spec,
@@ -150,7 +134,7 @@ fn hash_consistency() {
         spec,
     };
     let block3 = EmulatedPlaintextBlock {
-        storage: 0b1111_1010,
+        storage: 0b1_0_00_1010,
         spec,
     };
 
@@ -168,19 +152,26 @@ fn hash_consistency() {
 
 #[test]
 fn display_formatting() {
-    let spec = PlaintextBlockSpec(4);
+    let spec = SpecBlock(2, 4);
     let block = EmulatedPlaintextBlock {
         storage: 0b1010,
         spec,
     };
 
-    assert_eq!(format!("{:?}", block), "10_ptblock");
-    assert_eq!(format!("{:#?}", block), "1010_ptblock");
+    assert_eq!(format!("{:?}", block), "0_0_10_ptblock");
+    assert_eq!(format!("{:#?}", block), "0_00_1010_ptblock");
 }
 
 #[test]
 #[should_panic(expected = "exceeds maximum value for message size")]
 fn from_message_overflow_panics() {
-    let spec = PlaintextBlockSpec(3);
-    spec.from_message(0b1_000);
+    let spec = SpecBlock(2, 3);
+    EmulatedPlaintextBlock::from_message(spec, 0b1_000);
+}
+
+#[test]
+#[should_panic(expected = "exceeds maximum value for complete size")]
+fn from_complete_overflow_panics() {
+    let spec = SpecBlock(2, 3);
+    EmulatedPlaintextBlock::from_complete(spec, 0b10_00_000);
 }

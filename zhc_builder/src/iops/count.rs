@@ -1,5 +1,5 @@
-use zhc_crypto::integer_semantics::CiphertextSpec;
-use zhc_langs::ioplang::{Lut1Def, Lut2Def};
+use zhc_crypto::integer_semantics::SpecInteger;
+use zhc_langs::ioplang::{Lut1, Lut2};
 use zhc_utils::{
     SafeAs,
     iter::{ChunkIt, CollectInVec, UnwrapChunks},
@@ -8,7 +8,7 @@ use zhc_utils::{
 
 use crate::{
     BitType, CiphertextBlock, NU,
-    builder::{Builder, Ciphertext},
+    builder::{Builder, CiphertextInteger},
 };
 
 /// Creates an IR that counts zero bits in an encrypted integer.
@@ -19,16 +19,16 @@ use crate::{
 /// # Examples
 ///
 /// ```rust,no_run
-/// # use zhc_builder::{CiphertextSpec, count_0};
-/// # let spec = CiphertextSpec::new(16, 2, 2);
+/// # use zhc_builder::{SpecInteger, count_0};
+/// # let spec = SpecInteger::new(16, 2, 2);
 /// let builder = count_0(spec);
 /// let ir = builder.optimize_ir();
 /// ```
-pub fn count_0(spec: CiphertextSpec) -> Builder {
+pub fn count_0(spec: SpecInteger) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src_a = builder.ciphertext_input(spec.int_size());
+    let src_a = builder.ciphertext_integer_input(spec.int_size());
     let res = builder.iop_count(&src_a, BitType::Zero);
-    builder.ciphertext_output(res);
+    builder.ciphertext_integer_output(res);
     builder
 }
 
@@ -40,16 +40,16 @@ pub fn count_0(spec: CiphertextSpec) -> Builder {
 /// # Examples
 ///
 /// ```rust,no_run
-/// # use zhc_builder::{CiphertextSpec, count_1};
-/// # let spec = CiphertextSpec::new(16, 2, 2);
+/// # use zhc_builder::{SpecInteger, count_1};
+/// # let spec = SpecInteger::new(16, 2, 2);
 /// let builder = count_1(spec);
 /// let ir = builder.optimize_ir();
 /// ```
-pub fn count_1(spec: CiphertextSpec) -> Builder {
+pub fn count_1(spec: SpecInteger) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src_a = builder.ciphertext_input(spec.int_size());
+    let src_a = builder.ciphertext_integer_input(spec.int_size());
     let res = builder.iop_count(&src_a, BitType::One);
-    builder.ciphertext_output(res);
+    builder.ciphertext_integer_output(res);
     builder
 }
 
@@ -62,29 +62,29 @@ impl Builder {
     /// recursive column-based reduction that sums them with carry
     /// propagation. When `kind` is [`BitType::Zero`], the first
     /// reduction pass uses inverted look-up tables so that each bit
-    /// contributes 1 when it is zero. The returned [`Ciphertext`] has a
+    /// contributes 1 when it is zero. The returned [`CiphertextInteger`] has a
     /// width of `⌈log₂(int_size + 1)⌉` bits, just enough to represent
     /// every possible count from 0 to `int_size`.
     ///
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use zhc_builder::{CiphertextSpec, Builder, BitType};
-    /// # let spec = CiphertextSpec::new(16, 2, 2);
+    /// # use zhc_builder::{SpecInteger, Builder, BitType};
+    /// # let spec = SpecInteger::new(16, 2, 2);
     /// # let builder = Builder::new(spec.block_spec());
-    /// # let a = builder.ciphertext_input(spec.int_size());
+    /// # let a = builder.ciphertext_integer_input(spec.int_size());
     /// let pop = builder.iop_count(&a, BitType::One);
     /// ```
-    pub fn iop_count(&self, inp: &Ciphertext, kind: BitType) -> Ciphertext {
+    pub fn iop_count(&self, inp: &CiphertextInteger, kind: BitType) -> CiphertextInteger {
         assert!(
             inp.spec().int_size().is_multiple_of(2),
             "Non-multiple-of-two integer size not supported."
         );
         self.with_comment("iop_count", || {
-            let blocks = self.ciphertext_split(inp);
+            let blocks = self.ciphertext_integer_split(inp);
             let bits = self
                 .comment("extract bits")
-                .vector_lookup2(blocks, Lut2Def::ManyMsgSplit)
+                .vector_lookup2(blocks, Lut2::many_msg_split(*self.spec()))
                 .into_iter()
                 .flat_map(|(l, r)| [l, r].into_iter())
                 .take(inp.spec().int_size().sas())
@@ -93,7 +93,7 @@ impl Builder {
             let output_size: u16 = n_bits_to_encode(inp.spec().int_size());
             let n_blocks = output_size.div_ceil(self.spec().message_size().sas()).sas();
             self.comment("output")
-                .ciphertext_join(&res[..n_blocks], Some(inp.spec().int_size()))
+                .ciphertext_integer_join(&res[..n_blocks], Some(inp.spec().int_size()))
         })
     }
 
@@ -137,19 +137,40 @@ impl Builder {
                             if kind == BitType::Zero && reduction_iteration == 1 {
                                 self.with_comment("zero and first reduction", || {
                                     match chunk.len() {
-                                        1 => self.block_lookup2(sum, Lut2Def::ManyInv1CarryMsg),
-                                        2 => self.block_lookup2(sum, Lut2Def::ManyInv2CarryMsg),
-                                        3 => self.block_lookup2(sum, Lut2Def::ManyInv3CarryMsg),
-                                        4 => self.block_lookup2(sum, Lut2Def::ManyInv4CarryMsg),
-                                        5 => self.block_lookup2(sum, Lut2Def::ManyInv5CarryMsg),
-                                        6 => self.block_lookup2(sum, Lut2Def::ManyInv6CarryMsg),
-                                        7 => self.block_lookup2(sum, Lut2Def::ManyInv7CarryMsg),
+                                        1 => self.block_lookup2(
+                                            sum,
+                                            Lut2::many_inv1_carry_msg(*self.spec()),
+                                        ),
+                                        2 => self.block_lookup2(
+                                            sum,
+                                            Lut2::many_inv2_carry_msg(*self.spec()),
+                                        ),
+                                        3 => self.block_lookup2(
+                                            sum,
+                                            Lut2::many_inv3_carry_msg(*self.spec()),
+                                        ),
+                                        4 => self.block_lookup2(
+                                            sum,
+                                            Lut2::many_inv4_carry_msg(*self.spec()),
+                                        ),
+                                        5 => self.block_lookup2(
+                                            sum,
+                                            Lut2::many_inv5_carry_msg(*self.spec()),
+                                        ),
+                                        6 => self.block_lookup2(
+                                            sum,
+                                            Lut2::many_inv6_carry_msg(*self.spec()),
+                                        ),
+                                        7 => self.block_lookup2(
+                                            sum,
+                                            Lut2::many_inv7_carry_msg(*self.spec()),
+                                        ),
                                         _ => unreachable!(),
                                     }
                                 })
                             } else {
                                 self.with_comment("common branch", || {
-                                    self.block_lookup2(sum, Lut2Def::ManyCarryMsg)
+                                    self.block_lookup2(sum, Lut2::many_carry_msg(*self.spec()))
                                 })
                             }
                         })
@@ -168,12 +189,12 @@ impl Builder {
                             let sum = self.vector_add_reduce(&chunk);
                             if chunk.len() <= 2 {
                                 // We have enough room to use a 2lookup in this case
-                                self.block_lookup2(sum, Lut2Def::ManyCarryMsg)
+                                self.block_lookup2(sum, Lut2::many_carry_msg(*self.spec()))
                             } else {
                                 // We don't have enough room. We must do two pbses
                                 (
-                                    self.block_lookup(sum, Lut1Def::MsgOnly),
-                                    self.block_lookup(sum, Lut1Def::CarryInMsg),
+                                    self.block_lookup(sum, Lut1::msg_only(*self.spec())),
+                                    self.block_lookup(sum, Lut1::carry_in_msg(*self.spec())),
                                 )
                             }
                         })
@@ -218,7 +239,7 @@ mod test {
 
     #[test]
     fn test_count0() {
-        let spec = CiphertextSpec::new(18, 2, 2);
+        let spec = SpecInteger::new(18, 2, 2);
         let ir = count_0(spec).optimize_ir();
         assert_display_is!(
             ir.format()
@@ -293,55 +314,55 @@ mod test {
     #[test]
     fn correctness_count0() {
         fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::Ciphertext(inp)] = inp else {
+            let [IopValue::CiphertextInteger(inp)] = inp else {
                 unreachable!()
             };
             let res =
                 inp.as_storage().count_zeros() - (u128::BITS - inp.spec().int_size().sas::<u32>());
-            Some(vec![IopValue::Ciphertext(
+            Some(vec![IopValue::CiphertextInteger(
                 inp.spec()
                     .block_spec()
-                    .ciphertext_spec(inp.spec().int_size())
+                    .integer_spec(inp.spec().int_size())
                     .from_int(res.sas()),
             )])
         }
 
         for size in (2..128).step_by(2) {
-            count_0(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+            count_0(SpecInteger::new(size, 2, 2)).test_random(100, semantic);
         }
     }
 
     #[test]
     fn correctness_count1() {
         fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::Ciphertext(inp)] = inp else {
+            let [IopValue::CiphertextInteger(inp)] = inp else {
                 unreachable!()
             };
             let res = inp.as_storage().count_ones();
-            Some(vec![IopValue::Ciphertext(
+            Some(vec![IopValue::CiphertextInteger(
                 inp.spec()
                     .block_spec()
-                    .ciphertext_spec(inp.spec().int_size())
+                    .integer_spec(inp.spec().int_size())
                     .from_int(res.sas()),
             )])
         }
 
         for size in (2..128).step_by(2) {
-            count_1(CiphertextSpec::new(size, 2, 2)).test_random(100, semantic);
+            count_1(SpecInteger::new(size, 2, 2)).test_random(100, semantic);
         }
     }
 
     #[test]
     fn noise_count0() {
         for size in (2..128).step_by(2) {
-            count_0(CiphertextSpec::new(size, 2, 2)).check_noise();
+            count_0(SpecInteger::new(size, 2, 2)).check_noise();
         }
     }
 
     #[test]
     fn noise_count1() {
         for size in (2..128).step_by(2) {
-            count_1(CiphertextSpec::new(size, 2, 2)).check_noise();
+            count_1(SpecInteger::new(size, 2, 2)).check_noise();
         }
     }
 }

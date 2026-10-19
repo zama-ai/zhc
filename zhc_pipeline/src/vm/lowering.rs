@@ -15,15 +15,17 @@ pub fn lower_iop_to_vm(ir: &IR<IopLang>) -> IR<VmLang> {
         .filter(|op| {
             matches!(
                 op.get_instruction(),
-                InputCiphertext { .. } | InputPlaintext { .. }
+                InputCiphertextInteger { .. }
+                    | InputCiphertextBool { .. }
+                    | InputPlaintextInteger { .. }
             )
         })
         .scan((0, 0), |(ct_id, pt_id), op| match op.get_instruction() {
-            InputCiphertext { pos, .. } => {
+            InputCiphertextInteger { pos, .. } | InputCiphertextBool { pos } => {
                 *ct_id += 1;
                 Some((*pos, *ct_id - 1))
             }
-            InputPlaintext { pos, .. } => {
+            InputPlaintextInteger { pos, .. } => {
                 *pt_id += 1;
                 Some((*pos, *pt_id - 1))
             }
@@ -33,10 +35,10 @@ pub fn lower_iop_to_vm(ir: &IR<IopLang>) -> IR<VmLang> {
     let ann_ir = ir
         .forward_dataflow_analysis(|a| {
             let opann = match a.get_instruction() {
-                InputCiphertext { pos, .. } | InputPlaintext { pos, .. } => {
-                    Some(*remap.get(&pos).unwrap())
-                }
-                ExtractCtBlock { .. } | ExtractPtBlock { .. } => a
+                InputCiphertextInteger { pos, .. }
+                | InputCiphertextBool { pos }
+                | InputPlaintextInteger { pos, .. } => Some(*remap.get(&pos).unwrap()),
+                ExtractCiphertextIntegerBlock { .. } | ExtractPlaintextIntegerBlock { .. } => a
                     .get_args_iter()
                     .next()
                     .unwrap()
@@ -52,8 +54,8 @@ pub fn lower_iop_to_vm(ir: &IR<IopLang>) -> IR<VmLang> {
         })
         .backward_dataflow_analysis(|a, prev| {
             let opann = match a.get_instruction() {
-                OutputCiphertext { pos, .. } => Some(*pos),
-                StoreCtBlock { .. } => {
+                OutputCiphertextInteger { pos, .. } => Some(*pos),
+                StoreCiphertextIntegerBlock { .. } => {
                     let ret = a.get_returns_iter().next().unwrap();
                     assert_eq!(ret.get_users_iter().count(), 1);
                     ret.get_users_iter()
@@ -73,24 +75,50 @@ pub fn lower_iop_to_vm(ir: &IR<IopLang>) -> IR<VmLang> {
             IopInstructionSet::_Consume { .. } => {
                 panic!("Tried to translate a _consume op");
             }
-            IopInstructionSet::InputCiphertext { .. }
-            | IopInstructionSet::InputPlaintext { .. }
+            IopInstructionSet::InputCiphertextInteger { .. }
+            | IopInstructionSet::InputPlaintextInteger { .. }
             | IopInstructionSet::LetPlaintextBlock { .. } => {
                 // Handled in consumers.
             }
-            IopInstructionSet::OutputCiphertext { .. } => {
+            IopInstructionSet::OutputCiphertextInteger { .. } => {
                 // No-op
             }
-            IopInstructionSet::DeclareCiphertext { .. } => {
-                // DeclareCiphertext has no semantics in hpulang.
+            IopInstructionSet::InputCiphertextBool { .. } => {
+                let new_rets = translator.add_op(
+                    VmInstructionSet::SrcLd {
+                        from_pos: op.get_annotation().unwrap().try_into().unwrap(),
+                        from_block: 0,
+                    },
+                    svec![],
+                );
+                translator.register_translation(op.get_return_valids()[0], new_rets[0]);
+            }
+            IopInstructionSet::OutputCiphertextBool { pos } => {
+                translator.add_op(
+                    VmInstructionSet::DstSt {
+                        to_pos: (*pos).sas(),
+                        to_block: 0,
+                    },
+                    svec![translator.translate_val(op.get_arg_valids()[0])],
+                );
+            }
+            IopInstructionSet::StoreCiphertextBoolBlock
+            | IopInstructionSet::ExtractCiphertextBoolBlock => {
+                translator.register_translation(
+                    op.get_return_valids()[0],
+                    translator.translate_val(op.get_arg_valids()[0]),
+                );
+            }
+            IopInstructionSet::DeclareCiphertextInteger { .. } => {
+                // DeclareCiphertextInteger has no semantics in hpulang.
                 // We just verify that it is not used in an unexpected way.
                 assert!(
                     op.get_reached_iter().all(|reached| matches!(
                         reached.get_instruction(),
-                        IopInstructionSet::StoreCtBlock { .. }
-                            | IopInstructionSet::OutputCiphertext { .. }
+                        IopInstructionSet::StoreCiphertextIntegerBlock { .. }
+                            | IopInstructionSet::OutputCiphertextInteger { .. }
                     )),
-                    "Unexpectd use of DeclareCiphertext encountered."
+                    "Unexpectd use of DeclareCiphertextInteger encountered."
                 )
             }
             IopInstructionSet::Inspect { .. } => {
@@ -213,7 +241,7 @@ pub fn lower_iop_to_vm(ir: &IR<IopLang>) -> IR<VmLang> {
                     }
                 }
             }
-            IopInstructionSet::ExtractCtBlock { index } => {
+            IopInstructionSet::ExtractCiphertextIntegerBlock { index } => {
                 let new_rets = translator.add_op(
                     VmInstructionSet::SrcLd {
                         from_pos: op.get_annotation().unwrap().try_into().unwrap(),
@@ -223,7 +251,7 @@ pub fn lower_iop_to_vm(ir: &IR<IopLang>) -> IR<VmLang> {
                 );
                 translator.register_translation(op.get_return_valids()[0], new_rets[0]);
             }
-            IopInstructionSet::ExtractPtBlock { index } => {
+            IopInstructionSet::ExtractPlaintextIntegerBlock { index } => {
                 let new_rets = translator.add_op(
                     VmInstructionSet::ImmLd {
                         from_pos: op.get_annotation().unwrap().try_into().unwrap(),
@@ -233,7 +261,7 @@ pub fn lower_iop_to_vm(ir: &IR<IopLang>) -> IR<VmLang> {
                 );
                 translator.register_translation(op.get_return_valids()[0], new_rets[0]);
             }
-            IopInstructionSet::StoreCtBlock { index } => {
+            IopInstructionSet::StoreCiphertextIntegerBlock { index } => {
                 let new_arg = translator.translate_val(op.get_arg_valids()[0]);
                 translator.add_op(
                     VmInstructionSet::DstSt {

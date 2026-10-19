@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 
 use crate::{CiphertextBlock, NU, NU_BOOL, builder::Builder};
-use zhc_crypto::integer_semantics::CiphertextSpec;
-use zhc_langs::ioplang::{Lut1Def, Lut2Def};
+use zhc_crypto::integer_semantics::SpecInteger;
+use zhc_langs::ioplang::{Lut1, Lut2};
 use zhc_utils::SafeAs;
 
 /// Creates an IR for a multiplication of two encrypted integers split into mh_factor sub-graph.
@@ -17,12 +17,12 @@ use zhc_utils::SafeAs;
 /// # Examples
 ///
 /// ```rust,no_run
-/// # use zhc_builder::{CiphertextSpec, mh_mul};
-/// # let spec = CiphertextSpec::new(16, 2, 2);
+/// # use zhc_builder::{SpecInteger, mh_mul};
+/// # let spec = SpecInteger::new(16, 2, 2);
 /// let builder = mh_mul(spec, 2);
 /// let ir = builder.optimize_ir();
 /// ```
-pub fn mh_mul(spec: CiphertextSpec, split_depth: usize) -> Builder {
+pub fn mh_mul(spec: SpecInteger, split_depth: usize) -> Builder {
     mh_mul_with_opt(spec, split_depth, false)
 }
 
@@ -38,12 +38,12 @@ pub fn mh_mul(spec: CiphertextSpec, split_depth: usize) -> Builder {
 /// # Examples
 ///
 /// ```rust,no_run
-/// # use zhc_builder::{CiphertextSpec, mh_overflow_mul_lsb};
-/// # let spec = CiphertextSpec::new(16, 2, 2);
+/// # use zhc_builder::{SpecInteger, mh_overflow_mul_lsb};
+/// # let spec = SpecInteger::new(16, 2, 2);
 /// let builder = mh_overflow_mul_lsb(spec, 2);
 /// let ir = builder.optimize_ir();
 /// ```
-pub fn mh_overflow_mul_lsb(spec: CiphertextSpec, split_depth: usize) -> Builder {
+pub fn mh_overflow_mul_lsb(spec: SpecInteger, split_depth: usize) -> Builder {
     mh_mul_with_opt(spec, split_depth, true)
 }
 
@@ -64,19 +64,19 @@ pub fn mh_overflow_mul_lsb(spec: CiphertextSpec, split_depth: usize) -> Builder 
 /// [`mh_overflow_mul_lsb`] (`gen_overflow = true`):
 ///
 /// ```rust,no_run
-/// # use zhc_builder::{CiphertextSpec, mh_overflow_mul_lsb};
-/// # let spec = CiphertextSpec::new(16, 2, 2);
+/// # use zhc_builder::{SpecInteger, mh_overflow_mul_lsb};
+/// # let spec = SpecInteger::new(16, 2, 2);
 /// let builder = mh_overflow_mul_lsb(spec, 2);
 /// let ir = builder.optimize_ir();
 /// ```
-fn mh_mul_with_opt(spec: CiphertextSpec, split_depth: usize, gen_overflow: bool) -> Builder {
+fn mh_mul_with_opt(spec: SpecInteger, split_depth: usize, gen_overflow: bool) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src_a = builder.ciphertext_input(spec.int_size());
-    let src_b = builder.ciphertext_input(spec.int_size());
+    let src_a = builder.ciphertext_integer_input(spec.int_size());
+    let src_b = builder.ciphertext_integer_input(spec.int_size());
 
     // Get input as array of blk
-    let src_a_blocks = builder.ciphertext_split(&src_a);
-    let src_b_blocks = builder.ciphertext_split(&src_b);
+    let src_a_blocks = builder.ciphertext_integer_split(&src_a);
+    let src_b_blocks = builder.ciphertext_integer_split(&src_b);
     // Only kept LSB to obtain a IxI -> I operations
     let cut_off = spec.block_count() as usize;
 
@@ -85,13 +85,13 @@ fn mh_mul_with_opt(spec: CiphertextSpec, split_depth: usize, gen_overflow: bool)
         builder.mh_iop_mul_raw(&src_a_blocks, &src_b_blocks, cut_off, split_depth);
 
     if gen_overflow {
-        let flag = builder.ciphertext_join(&[flag_block], Some(1)); // NB: This is a boolean flag
-        builder.ciphertext_output(flag);
+        let flag = builder.ciphertext_bool_store_block(flag_block);
+        builder.ciphertext_bool_output(flag);
     }
     // View output as one
     let pack_output = outputs.into_iter().flatten().collect::<Vec<_>>();
-    let output = builder.ciphertext_join(&pack_output, Some(spec.int_size()));
-    builder.ciphertext_output(output);
+    let output = builder.ciphertext_integer_join(&pack_output, Some(spec.int_size()));
+    builder.ciphertext_integer_output(output);
 
     builder
 }
@@ -148,13 +148,13 @@ impl Builder {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use zhc_builder::{CiphertextSpec, Builder};
-    /// # let spec = CiphertextSpec::new(16, 2, 2);
+    /// # use zhc_builder::{SpecInteger, Builder};
+    /// # let spec = SpecInteger::new(16, 2, 2);
     /// # let builder = Builder::new(spec.block_spec());
-    /// # let a = builder.ciphertext_input(spec.int_size());
-    /// # let b = builder.ciphertext_input(spec.int_size());
-    /// # let a = builder.ciphertext_split(&a);
-    /// # let b = builder.ciphertext_split(&b);
+    /// # let a = builder.ciphertext_integer_input(spec.int_size());
+    /// # let b = builder.ciphertext_integer_input(spec.int_size());
+    /// # let a = builder.ciphertext_integer_split(&a);
+    /// # let b = builder.ciphertext_integer_split(&b);
     /// let (flag, res) = builder.mh_iop_mul_raw(&a, &b, spec.block_count() as usize, 2);
     /// ```
     pub fn mh_iop_mul_raw(
@@ -340,7 +340,7 @@ impl Builder {
             let mut chunk_iter = chunk.iter();
             let init = *chunk_iter.next().unwrap();
             let chunk_sum = chunk_iter.fold(init, |acc, v| self.block_add(&acc, v));
-            let is_some_flag = self.block_lookup(chunk_sum, Lut1Def::IsSome);
+            let is_some_flag = self.block_lookup(chunk_sum, Lut1::is_some(*self.spec()));
             overflow_v.push(is_some_flag);
         }
         self.pop_comment();
@@ -357,7 +357,7 @@ impl Builder {
                         let mut chunk_iter = chunk.iter();
                         let init = *chunk_iter.next().unwrap();
                         let chunk_sum = chunk_iter.fold(init, |acc, v| self.block_add(&acc, v));
-                        self.block_lookup(chunk_sum, Lut1Def::IsSome)
+                        self.block_lookup(chunk_sum, Lut1::is_some(*self.spec()))
                     })
                     .collect();
             }
@@ -391,13 +391,13 @@ impl Builder {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use zhc_builder::{CiphertextSpec, Builder};
-    /// # let spec = CiphertextSpec::new(16, 2, 2);
+    /// # use zhc_builder::{SpecInteger, Builder};
+    /// # let spec = SpecInteger::new(16, 2, 2);
     /// # let builder = Builder::new(spec.block_spec());
-    /// # let a = builder.ciphertext_input(spec.int_size());
-    /// # let b = builder.ciphertext_input(spec.int_size());
-    /// # let a = builder.ciphertext_split(&a);
-    /// # let b = builder.ciphertext_split(&b);
+    /// # let a = builder.ciphertext_integer_input(spec.int_size());
+    /// # let b = builder.ciphertext_integer_input(spec.int_size());
+    /// # let a = builder.ciphertext_integer_split(&a);
+    /// # let b = builder.ciphertext_integer_split(&b);
     /// let (res, flag) = builder.iop_mul_raw(&a, &b, spec.block_count());
     /// ```
     pub fn limb_mul_chain(
@@ -435,19 +435,19 @@ impl Builder {
                     // Compute Lsb
                     partial_product_map.entry(i + j).or_default().push(
                         self.comment(format!("pp_{i}_{j}_lsb"))
-                            .block_lookup(packed, Lut1Def::MultCarryMsgLsb),
+                            .block_lookup(packed, Lut1::mult_carry_msg_lsb(*self.spec())),
                     );
                     // Compute Msb
                     partial_product_map.entry(i + j + 1).or_default().push(
                         self.comment(format!("pp_{i}_{j}_msb"))
-                            .block_lookup(packed, Lut1Def::MultCarryMsgMsb),
+                            .block_lookup(packed, Lut1::mult_carry_msg_msb(*self.spec())),
                     );
                 } else {
                     // Only overflow extraction
                     let mul_is_some = self.comment(format!("ovf_{i}_{j}")).block_pack_then_lookup(
                         ai,
                         bj,
-                        Lut1Def::MultCarryMsgIsSome,
+                        Lut1::mult_carry_msg_is_some(*self.spec()),
                     );
                     overflow_v.push(mul_is_some);
                 }
@@ -480,8 +480,8 @@ impl Builder {
                     // Extract carry if required
                     if acc_nu == NU {
                         acc_nu = 1;
-                        nxt_stage.push(self.block_lookup(acc_ct, Lut1Def::CarryInMsg));
-                        acc_ct = self.block_lookup(acc_ct, Lut1Def::MsgOnly);
+                        nxt_stage.push(self.block_lookup(acc_ct, Lut1::carry_in_msg(*self.spec())));
+                        acc_ct = self.block_lookup(acc_ct, Lut1::msg_only(*self.spec()));
                     }
                 }
 
@@ -493,12 +493,13 @@ impl Builder {
                     // only has room for two terms.
                     let many_capacity = self.spec().data_mask().sas::<usize>() >> 1;
                     if acc_nu * self.spec().message_mask().sas::<usize>() <= many_capacity {
-                        let (msg, carry) = self.block_lookup2(acc_ct, Lut2Def::ManyCarryMsg);
+                        let (msg, carry) =
+                            self.block_lookup2(acc_ct, Lut2::many_carry_msg(*self.spec()));
                         nxt_stage.push(carry);
                         acc_ct = msg;
                     } else {
-                        nxt_stage.push(self.block_lookup(acc_ct, Lut1Def::CarryInMsg));
-                        acc_ct = self.block_lookup(acc_ct, Lut1Def::MsgOnly);
+                        nxt_stage.push(self.block_lookup(acc_ct, Lut1::carry_in_msg(*self.spec())));
+                        acc_ct = self.block_lookup(acc_ct, Lut1::msg_only(*self.spec()));
                     }
                 }
                 dst_blk.push(acc_ct);
@@ -526,7 +527,7 @@ impl Builder {
                 let mut chunk_iter = chunk.iter();
                 let init = *chunk_iter.next().unwrap();
                 let chunk_sum = chunk_iter.fold(init, |acc, v| self.block_add(&acc, v));
-                let is_some_flag = self.block_lookup(chunk_sum, Lut1Def::IsSome);
+                let is_some_flag = self.block_lookup(chunk_sum, Lut1::is_some(*self.spec()));
                 overflow_v.push(is_some_flag);
             }
             in_carry_v
@@ -545,7 +546,7 @@ impl Builder {
                         let mut chunk_iter = chunk.iter();
                         let init = *chunk_iter.next().unwrap();
                         let chunk_sum = chunk_iter.fold(init, |acc, v| self.block_add(&acc, v));
-                        self.block_lookup(chunk_sum, Lut1Def::IsSome)
+                        self.block_lookup(chunk_sum, Lut1::is_some(*self.spec()))
                     })
                     .collect();
             }
@@ -564,7 +565,7 @@ impl Builder {
 #[cfg(test)]
 mod test {
     use super::*;
-    use zhc_crypto::integer_semantics::CiphertextSpec;
+    use zhc_crypto::integer_semantics::SpecInteger;
     use zhc_langs::ioplang::IopValue;
     use zhc_utils::assert_display_is;
 
@@ -573,21 +574,25 @@ mod test {
     #[test]
     fn correctness_mh_mul() {
         fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
-            let [IopValue::Ciphertext(lhs), IopValue::Ciphertext(rhs)] = inp else {
+            let [
+                IopValue::CiphertextInteger(lhs),
+                IopValue::CiphertextInteger(rhs),
+            ] = inp
+            else {
                 unreachable!()
             };
-            Some(vec![IopValue::Ciphertext(lhs.mul_lsb(*rhs))])
+            Some(vec![IopValue::CiphertextInteger(lhs.mul_lsb(*rhs))])
         }
         for split_depth in SPLIT_DEPTH.iter() {
             for size in (4 * *split_depth as u16..64).step_by(2 * *split_depth as usize) {
-                mh_mul(CiphertextSpec::new(size, 2, 2), *split_depth).test_random(100, semantic);
+                mh_mul(SpecInteger::new(size, 2, 2), *split_depth).test_random(100, semantic);
             }
         }
     }
 
     #[test]
     fn test_mh_mul() {
-        let spec = CiphertextSpec::new(8, 2, 2);
+        let spec = SpecInteger::new(8, 2, 2);
         let ir = mh_mul(spec, 2);
         assert_display_is!(
             ir.ir()
@@ -734,7 +739,7 @@ mod test {
     fn noise_mh_mul() {
         for split_depth in SPLIT_DEPTH.iter() {
             for size in (4 * *split_depth as u16..64).step_by(2 * *split_depth as usize) {
-                mh_mul(CiphertextSpec::new(size, 2, 2), *split_depth).check_noise();
+                mh_mul(SpecInteger::new(size, 2, 2), *split_depth).check_noise();
             }
         }
     }

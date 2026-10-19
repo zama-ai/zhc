@@ -2,8 +2,8 @@ use std::fmt::Debug;
 
 use zhc_crypto::integer_semantics::lut::{Lut1, Lut2, LutId};
 use zhc_crypto::integer_semantics::{
-    CiphertextBlockSpec, EmulatedCiphertextBlock, EmulatedCiphertextBlockStorage,
-    EmulatedPlaintextBlock, EmulatedPlaintextBlockStorage, lut::LookupCheck,
+    EmulatedCiphertextBlock, EmulatedCiphertextBlockStorage, EmulatedPlaintextBlock,
+    EmulatedPlaintextBlockStorage, SpecBlock, lut::LookupCheck,
 };
 use zhc_ir::evaluation::{EvalOutcome, Evaluable, EvaluatesTo, Evaluation};
 use zhc_utils::iter::CollectInSmallVec;
@@ -11,6 +11,11 @@ use zhc_utils::small::SmallVec;
 use zhc_utils::{FastMap, SafeAs, Store, svec};
 
 use crate::hpulang::{HpuId, HpuTypeSystem, Slot, TDstId, TImmId, TSrcId};
+
+const MANY_LUT_CHECK: LookupCheck = LookupCheck {
+    allow_output_padding: true,
+    ..LookupCheck::Protect
+};
 
 /// Interpretation domain for HPU programs.
 ///
@@ -86,7 +91,7 @@ impl EvaluatesTo<HpuValue> for HpuTypeSystem {
 /// revisits blocked operations.
 #[derive(Debug)]
 pub struct HpuInterpreterContext {
-    pub spec: CiphertextBlockSpec,
+    pub spec: SpecBlock,
     /// Ciphertext block inputs, keyed by source identifier.
     pub sources: FastMap<TSrcId, EmulatedCiphertextBlock>,
     /// Ciphertext block outputs, populated during interpretation.
@@ -107,7 +112,7 @@ pub struct HpuInterpreterContext {
 
 impl HpuInterpreterContext {
     /// Creates a new context with the given spec and empty I/O maps.
-    pub fn new(spec: CiphertextBlockSpec) -> Self {
+    pub fn new(spec: SpecBlock) -> Self {
         Self {
             spec,
             sources: FastMap::default(),
@@ -236,34 +241,31 @@ impl Evaluable<HpuValue> for super::HpuInstructionSet {
             // ── Inline constant arithmetic ───────────────────────────
             AddCst { cst } => {
                 let ct = arguments[0].clone().unwrap_ct_register();
-                let pt = context
-                    .spec
-                    .complete_plaintext_block_spec()
-                    .from_message(cst.0.sas());
+                let pt = EmulatedPlaintextBlock::from_complete(context.spec, cst.0.sas());
                 svec![HpuValue::CtRegister(ct.wrapping_add_pt(pt))]
             }
             SubCst { cst } => {
                 let ct = arguments[0].clone().unwrap_ct_register();
-                let pt = context
-                    .spec
-                    .complete_plaintext_block_spec()
-                    .from_message(cst.0 as EmulatedPlaintextBlockStorage);
+                let pt = EmulatedPlaintextBlock::from_complete(
+                    context.spec,
+                    cst.0 as EmulatedPlaintextBlockStorage,
+                );
                 svec![HpuValue::CtRegister(ct.wrapping_sub_pt(pt))]
             }
             CstSub { cst } => {
                 let ct = arguments[0].clone().unwrap_ct_register();
-                let pt = context
-                    .spec
-                    .complete_plaintext_block_spec()
-                    .from_message(cst.0 as EmulatedPlaintextBlockStorage);
+                let pt = EmulatedPlaintextBlock::from_complete(
+                    context.spec,
+                    cst.0 as EmulatedPlaintextBlockStorage,
+                );
                 svec![HpuValue::CtRegister(pt.wrapping_sub_ct(ct))]
             }
             MulCst { cst } => {
                 let ct = arguments[0].clone().unwrap_ct_register();
-                let pt = context
-                    .spec
-                    .complete_plaintext_block_spec()
-                    .from_message(cst.0 as EmulatedPlaintextBlockStorage);
+                let pt = EmulatedPlaintextBlock::from_complete(
+                    context.spec,
+                    cst.0 as EmulatedPlaintextBlockStorage,
+                );
                 svec![HpuValue::CtRegister(ct.wrapping_mul_pt(pt))]
             }
 
@@ -271,17 +273,17 @@ impl Evaluable<HpuValue> for super::HpuInstructionSet {
             Pbs { lut } | PbsF { lut } => {
                 let ct = arguments[0].clone().unwrap_ct_register();
                 svec![HpuValue::CtRegister(
-                    lut.lookup(ct, LookupCheck::AllowBothPadding)
+                    lut.lookup(ct, LookupCheck::Permissive)
                 )]
             }
             Pbs2 { lut } | Pbs2F { lut } => {
                 let ct = arguments[0].clone().unwrap_ct_register();
-                let (ct0, ct1) = lut.lookup(ct, LookupCheck::AllowOutputPadding);
+                let (ct0, ct1) = lut.lookup(ct, MANY_LUT_CHECK);
                 svec![HpuValue::CtRegister(ct0), HpuValue::CtRegister(ct1)]
             }
             Pbs4 { lut } | Pbs4F { lut } => {
                 let ct = arguments[0].clone().unwrap_ct_register();
-                let (o0, o1, o2, o3) = lut.lookup(ct, LookupCheck::AllowOutputPadding);
+                let (o0, o1, o2, o3) = lut.lookup(ct, MANY_LUT_CHECK);
                 [o0, o1, o2, o3]
                     .into_iter()
                     .map(HpuValue::CtRegister)
@@ -289,8 +291,7 @@ impl Evaluable<HpuValue> for super::HpuInstructionSet {
             }
             Pbs8 { lut } | Pbs8F { lut } => {
                 let ct = arguments[0].clone().unwrap_ct_register();
-                let (o0, o1, o2, o3, o4, o5, o6, o7) =
-                    lut.lookup(ct, LookupCheck::AllowOutputPadding);
+                let (o0, o1, o2, o3, o4, o5, o6, o7) = lut.lookup(ct, MANY_LUT_CHECK);
                 [o0, o1, o2, o3, o4, o5, o6, o7]
                     .into_iter()
                     .map(HpuValue::CtRegister)

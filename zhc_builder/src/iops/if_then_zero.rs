@@ -1,20 +1,20 @@
-use zhc_crypto::integer_semantics::CiphertextSpec;
-use zhc_langs::ioplang::Lut1Def;
-use zhc_utils::{SafeAs, iter::CollectInSmallVec};
+use zhc_crypto::integer_semantics::SpecInteger;
+use zhc_langs::ioplang::Lut1;
+use zhc_utils::iter::CollectInSmallVec;
 
-use crate::{Ciphertext, builder::Builder};
+use crate::{CiphertextBool, CiphertextInteger, builder::Builder};
 
 /// Creates an IR for conditional zeroing of an encrypted integer.
 ///
 /// Convenience wrapper that calls [`Builder::iop_if_then_zero`]. Declares one
 /// integer input, one boolean condition input, and one output.
 /// See the builder method for details.
-pub fn if_then_zero(spec: CiphertextSpec) -> Builder {
+pub fn if_then_zero(spec: SpecInteger) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src = builder.ciphertext_input(spec.int_size());
-    let cond = builder.ciphertext_input(spec.block_spec().message_size().sas());
+    let src = builder.ciphertext_integer_input(spec.int_size());
+    let cond = builder.ciphertext_bool_input();
     let output = builder.iop_if_then_zero(&src, &cond);
-    builder.ciphertext_output(output);
+    builder.ciphertext_integer_output(output);
     builder
 }
 
@@ -33,26 +33,30 @@ impl Builder {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use zhc_builder::{CiphertextSpec, Builder};
-    /// # let spec = CiphertextSpec::new(16, 2, 2);
+    /// # use zhc_builder::{SpecInteger, Builder};
+    /// # let spec = SpecInteger::new(16, 2, 2);
     /// # let builder = Builder::new(spec.block_spec());
-    /// # let src = builder.ciphertext_input(spec.int_size());
-    /// # let cond = builder.ciphertext_input(spec.block_spec().message_size() as u16);
+    /// # let src = builder.ciphertext_integer_input(spec.int_size());
+    /// # let cond = builder.ciphertext_bool_input();
     /// let zeroed = builder.iop_if_then_zero(&src, &cond);
     /// ```
-    pub fn iop_if_then_zero(&self, src: &Ciphertext, cond: &Ciphertext) -> Ciphertext {
-        let src_blocks = self.ciphertext_split(src);
-        let cond_blocks = self.ciphertext_split(cond);
+    pub fn iop_if_then_zero(
+        &self,
+        src: &CiphertextInteger,
+        cond: &CiphertextBool,
+    ) -> CiphertextInteger {
+        let src_blocks = self.ciphertext_integer_split(src);
+        let cond_block = self.ciphertext_bool_get_block(cond);
 
         let output_blocks = src_blocks
             .iter()
             .map(|b| {
-                let out = self.block_pack(&cond_blocks[0], b);
-                self.block_lookup(&out, Lut1Def::IfFalseZeroed)
+                let out = self.block_pack(&cond_block, b);
+                self.block_lookup(&out, Lut1::if_false_zeroed(*self.spec()))
             })
             .cosvec();
 
-        self.ciphertext_join(output_blocks, None)
+        self.ciphertext_integer_join(output_blocks, None)
     }
 }
 
@@ -63,13 +67,13 @@ mod test {
 
     #[test]
     fn test_if_then_zero() {
-        let spec = CiphertextSpec::new(16, 2, 2);
+        let spec = SpecInteger::new(16, 2, 2);
         let ir = if_then_zero(spec).optimize_ir();
         assert_display_is!(
             ir.format(),
             r#"
                 %0 = input_ciphertext<0, 16>();
-                %1 = input_ciphertext<1, 2>();
+                %1 = input_ciphertext_bool<1>();
                 %2 = extract_ct_block<0>(%0);
                 %3 = extract_ct_block<1>(%0);
                 %4 = extract_ct_block<2>(%0);
@@ -78,7 +82,7 @@ mod test {
                 %7 = extract_ct_block<5>(%0);
                 %8 = extract_ct_block<6>(%0);
                 %9 = extract_ct_block<7>(%0);
-                %10 = extract_ct_block<0>(%1);
+                %10 = extract_ctbool_block(%1);
                 %11 = pack_ct<4>(%10, %2);
                 %12 = pbs<Protect, Lut1("IfFalseZeroed")>(%11);
                 %13 = pack_ct<4>(%10, %3);
@@ -112,7 +116,7 @@ mod test {
     #[test]
     fn noise_if_then_zero() {
         for size in (2..128).step_by(2) {
-            if_then_zero(CiphertextSpec::new(size, 2, 2)).check_noise();
+            if_then_zero(SpecInteger::new(size, 2, 2)).check_noise();
         }
     }
 }

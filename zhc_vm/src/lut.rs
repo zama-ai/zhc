@@ -1,6 +1,6 @@
 use zhc_config::vm::{LUTS_REGISTRY_SIZE, VmConfig};
 use zhc_crypto::integer_semantics::{
-    CiphertextBlockSpec,
+    SpecBlock,
     lut::{LutRegistry, RawLut},
 };
 use zhc_utils::SafeAs;
@@ -38,7 +38,7 @@ fn build_accumulator(params: &VmConfig, raw: &RawLut, out: &mut [u64]) {
     let n = params.bsk_polynomial_size;
     let body = &mut out[params.bsk_glwe_dim * n..];
 
-    let spec = CiphertextBlockSpec(params.carry_size.sas(), params.message_size.sas());
+    let spec = SpecBlock(params.carry_size.sas(), params.message_size.sas());
     assert_eq!(
         raw.spec(),
         &spec,

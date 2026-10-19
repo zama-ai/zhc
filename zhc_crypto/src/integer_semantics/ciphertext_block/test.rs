@@ -1,10 +1,11 @@
-use super::{CiphertextBlockSpec, EmulatedCiphertextBlock};
+use super::super::SpecBlock;
+use super::EmulatedCiphertextBlock;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 #[test]
 fn spec_creation() {
-    let spec = CiphertextBlockSpec(3, 4);
+    let spec = SpecBlock(3, 4);
     assert_eq!(spec.carry_size(), 3);
     assert_eq!(spec.message_size(), 4);
     assert_eq!(spec.padding_size(), 1);
@@ -14,7 +15,7 @@ fn spec_creation() {
 
 #[test]
 fn spec_masks() {
-    let spec = CiphertextBlockSpec(2, 3);
+    let spec = SpecBlock(2, 3);
     assert_eq!(spec.message_mask(), 0b000_0_00_111);
     assert_eq!(spec.carry_mask(), 0b000_11_000);
     assert_eq!(spec.padding_mask(), 0b000_1_00_000);
@@ -24,7 +25,7 @@ fn spec_masks() {
 
 #[test]
 fn spec_overflow_checks() {
-    let spec = CiphertextBlockSpec(2, 3);
+    let spec = SpecBlock(2, 3);
 
     assert!(!spec.overflows_message(0b000_0_00_111));
     assert!(spec.overflows_message(0b000_0_01_000));
@@ -38,7 +39,7 @@ fn spec_overflow_checks() {
 
 #[test]
 fn from_message() {
-    let spec = CiphertextBlockSpec(2, 3);
+    let spec = SpecBlock(2, 3);
     let block = spec.from_message(0b000_0_00_101);
     assert_eq!(block.storage, 0b000_0_00_101);
     assert_eq!(block.raw_message_bits(), 0b000_0_00_101);
@@ -48,7 +49,7 @@ fn from_message() {
 
 #[test]
 fn from_carry() {
-    let spec = CiphertextBlockSpec(2, 3);
+    let spec = SpecBlock(2, 3);
     let block = spec.from_carry(0b10);
     assert_eq!(block.storage, 0b000_0_10_000);
     assert_eq!(block.raw_message_bits(), 0);
@@ -58,7 +59,7 @@ fn from_carry() {
 
 #[test]
 fn from_data() {
-    let spec = CiphertextBlockSpec(2, 3);
+    let spec = SpecBlock(2, 3);
     let block = spec.from_data(0b000_0_11_101);
     assert_eq!(block.storage, 0b000_0_11_101);
     assert_eq!(block.raw_data_bits(), 0b11_101);
@@ -66,15 +67,15 @@ fn from_data() {
 
 #[test]
 fn from_complete() {
-    let spec = CiphertextBlockSpec(2, 3);
+    let spec = SpecBlock(2, 3);
     let block = spec.from_complete(0b000_1_11_101);
     assert_eq!(block.storage, 0b000_1_11_101);
     assert_eq!(block.raw_complete_bits(), 0b1_11_101);
 }
 
 #[test]
-fn raw_bit_extractors() {
-    let spec = CiphertextBlockSpec(2, 3);
+fn nat_extractors() {
+    let spec = SpecBlock(2, 3);
     let block = EmulatedCiphertextBlock {
         storage: 0b000_1_11_101,
         spec,
@@ -88,8 +89,8 @@ fn raw_bit_extractors() {
 }
 
 #[test]
-fn raw_bit_extractors_with_extra_bits() {
-    let spec = CiphertextBlockSpec(2, 3);
+fn nat_extractors_with_extra_bits() {
+    let spec = SpecBlock(2, 3);
     let block = EmulatedCiphertextBlock {
         storage: 0b011_1_11_111,
         spec,
@@ -102,7 +103,7 @@ fn raw_bit_extractors_with_extra_bits() {
 
 #[test]
 fn move_carry_to_message() {
-    let spec = CiphertextBlockSpec(2, 3);
+    let spec = SpecBlock(2, 3);
     let block = EmulatedCiphertextBlock {
         storage: 0b000_0_11_000,
         spec,
@@ -113,8 +114,20 @@ fn move_carry_to_message() {
 }
 
 #[test]
+fn has_only_predicates() {
+    let spec = SpecBlock(2, 3);
+    assert!(spec.from_message(0b101).is_message_only());
+    assert!(!spec.from_carry(0b10).is_message_only());
+    assert!(spec.from_carry(0b10).is_carry_only());
+    assert!(!spec.from_data(0b10_001).is_carry_only());
+    assert!(!spec.from_complete(0b1_10_000).is_carry_only());
+    assert!(spec.from_message(0).is_message_only());
+    assert!(spec.from_message(0).is_carry_only());
+}
+
+#[test]
 fn equality_same_spec() {
-    let spec = CiphertextBlockSpec(2, 3);
+    let spec = SpecBlock(2, 3);
     let block1 = EmulatedCiphertextBlock {
         storage: 0b1_11_101,
         spec,
@@ -134,8 +147,8 @@ fn equality_same_spec() {
 
 #[test]
 fn equality_different_spec() {
-    let spec1 = CiphertextBlockSpec(2, 3);
-    let spec2 = CiphertextBlockSpec(3, 2);
+    let spec1 = SpecBlock(2, 3);
+    let spec2 = SpecBlock(3, 2);
     let block1 = EmulatedCiphertextBlock {
         storage: 0b1_11_101,
         spec: spec1,
@@ -150,7 +163,7 @@ fn equality_different_spec() {
 
 #[test]
 fn equality_ignores_extra_bits() {
-    let spec = CiphertextBlockSpec(2, 3);
+    let spec = SpecBlock(2, 3);
     let block1 = EmulatedCiphertextBlock {
         storage: 0b1_11_101,
         spec,
@@ -165,7 +178,7 @@ fn equality_ignores_extra_bits() {
 
 #[test]
 fn partial_ordering() {
-    let spec = CiphertextBlockSpec(2, 3);
+    let spec = SpecBlock(2, 3);
     let block1 = EmulatedCiphertextBlock {
         storage: 0b0_00_101,
         spec,
@@ -176,7 +189,7 @@ fn partial_ordering() {
     };
     let block3 = EmulatedCiphertextBlock {
         storage: 0b0_00_101,
-        spec: CiphertextBlockSpec(3, 2),
+        spec: SpecBlock(3, 2),
     };
 
     assert!(block1 < block2);
@@ -185,7 +198,7 @@ fn partial_ordering() {
 
 #[test]
 fn partial_ordering_ignore_extra_bits() {
-    let spec = CiphertextBlockSpec(2, 3);
+    let spec = SpecBlock(2, 3);
     let block1 = EmulatedCiphertextBlock {
         storage: 0b0_00_101,
         spec,
@@ -206,7 +219,7 @@ fn partial_ordering_ignore_extra_bits() {
 
 #[test]
 fn hash_consistency() {
-    let spec = CiphertextBlockSpec(2, 3);
+    let spec = SpecBlock(2, 3);
     let block1 = EmulatedCiphertextBlock {
         storage: 0b1_11_101,
         spec,
@@ -234,7 +247,7 @@ fn hash_consistency() {
 
 #[test]
 fn display_formatting() {
-    let spec = CiphertextBlockSpec(2, 3);
+    let spec = SpecBlock(2, 3);
     let block = EmulatedCiphertextBlock {
         storage: 0b1_11_101,
         spec,
@@ -247,27 +260,27 @@ fn display_formatting() {
 #[test]
 #[should_panic(expected = "exceeds maximum value for message size")]
 fn from_message_overflow_panics() {
-    let spec = CiphertextBlockSpec(2, 3);
+    let spec = SpecBlock(2, 3);
     spec.from_message(0b1_000);
 }
 
 #[test]
 #[should_panic(expected = "exceeds maximum value for carry size")]
 fn from_carry_overflow_panics() {
-    let spec = CiphertextBlockSpec(2, 3);
+    let spec = SpecBlock(2, 3);
     spec.from_carry(0b1_00);
 }
 
 #[test]
 #[should_panic(expected = "exceeds maximum value for data size")]
 fn from_data_overflow_panics() {
-    let spec = CiphertextBlockSpec(2, 3);
+    let spec = SpecBlock(2, 3);
     spec.from_data(0b1_00_000);
 }
 
 #[test]
 #[should_panic(expected = "exceeds maximum value for complete size")]
 fn from_complete_overflow_panics() {
-    let spec = CiphertextBlockSpec(2, 3);
+    let spec = SpecBlock(2, 3);
     spec.from_complete(0b10_00_000);
 }

@@ -3,16 +3,18 @@ use zhc_utils::DisplayVariant;
 
 /// Type system for the IOP dialect.
 ///
-/// Distinguishes composite multi-block values (`Ciphertext`, `Plaintext`)
+/// Distinguishes composite multi-block values (`CiphertextInteger`, `PlaintextInteger`)
 /// from their individual scalar blocks (`CiphertextBlock`, `PlaintextBlock`).
 /// The `Lut{1,2,4,8}` variants represent lookup table types of increasing
 /// output arity, used as operands to PBS instructions.
 #[derive(DisplayVariant, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum IopTypeSystem {
     /// Multi-block radix ciphertext (encrypted integer).
-    Ciphertext,
+    CiphertextInteger,
+    /// Encrypted Boolean backed by one clean ciphertext block.
+    CiphertextBool,
     /// Multi-block radix plaintext (clear integer).
-    Plaintext,
+    PlaintextInteger,
     /// Single LWE ciphertext block.
     CiphertextBlock,
     /// Single plaintext block.

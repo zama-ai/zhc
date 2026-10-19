@@ -1,6 +1,7 @@
 use zhc_utils::{Dumpable, SafeAs};
 
-use super::{CiphertextBlockSpec, EmulatedCiphertextBlockStorage};
+use super::super::SpecBlock;
+use super::EmulatedCiphertextBlockStorage;
 use std::fmt::Debug;
 
 /// An emulated TFHE ciphertext block for semantic testing.
@@ -9,8 +10,8 @@ use std::fmt::Debug;
 /// regions: `[padding_bit | carry_bits | message_bits]`. It emulates the behavior of encrypted
 /// blocks without actual encryption, enabling fast validation of homomorphic operation semantics.
 ///
-/// Blocks are created via [`CiphertextBlockSpec`] factory methods like
-/// [`from_message`](CiphertextBlockSpec::from_message). Arithmetic operations are available as
+/// Blocks are created via [`SpecBlock`] factory methods like
+/// [`from_message`](SpecBlock::from_message). Arithmetic operations are available as
 /// methods with different semantics (`protect_*`, `temper_*`, `wrapping_*`) — see the
 /// [module documentation](super::super) for details.
 ///
@@ -19,95 +20,66 @@ use std::fmt::Debug;
 ///
 /// # Debug formatting
 ///
-/// - Default format: `{padding}_{carry}_{message}_cblk` (decimal values)
+/// - Default format: `{padding}_{carry}_{message}_ctblock` (decimal values)
 /// - Alternate format (`{:#?}`): binary representation with proper bit widths
 #[derive(Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub struct EmulatedCiphertextBlock {
     pub(crate) storage: EmulatedCiphertextBlockStorage,
-    pub(crate) spec: CiphertextBlockSpec,
+    pub(crate) spec: SpecBlock,
 }
 
 impl EmulatedCiphertextBlock {
     /// Returns the message bits in their original position, with all other bits cleared.
-    ///
-    /// The result occupies the lowest bits of the storage; no shifting is performed.
     pub fn raw_mask_message(&self) -> EmulatedCiphertextBlockStorage {
         self.storage & self.spec.message_mask()
     }
 
     /// Returns the carry bits in their original position, with all other bits cleared.
-    ///
-    /// The result is *not* shifted down; use [`raw_carry_bits`](Self::raw_carry_bits) to obtain
-    /// the carry value as a right-aligned integer.
     pub fn raw_mask_carry(&self) -> EmulatedCiphertextBlockStorage {
         self.storage & self.spec.carry_mask()
     }
 
     /// Returns the padding bit in its original position, with all other bits cleared.
-    ///
-    /// The result is *not* shifted down; use [`raw_padding_bits`](Self::raw_padding_bits) to
-    /// obtain the padding value as 0 or 1.
     pub fn raw_mask_padding(&self) -> EmulatedCiphertextBlockStorage {
         self.storage & self.spec.padding_mask()
     }
 
     /// Returns the data bits (carry | message) in their original position.
-    ///
-    /// The padding bit is cleared. This is equivalent to
-    /// `raw_mask_carry() | raw_mask_message()`.
     pub fn raw_mask_data(&self) -> EmulatedCiphertextBlockStorage {
         self.storage & self.spec.data_mask()
     }
 
     /// Returns all bits (padding | carry | message) masked to the block's valid range.
-    ///
-    /// Any bits beyond the block's complete size are cleared.
     pub fn raw_mask_complete(&self) -> EmulatedCiphertextBlockStorage {
         self.storage & self.spec.complete_mask()
     }
 
     /// Returns the message value as a right-aligned integer.
-    ///
-    /// Equivalent to [`raw_mask_message`](Self::raw_mask_message) since message bits are already
-    /// in the lowest position.
     pub fn raw_message_bits(&self) -> EmulatedCiphertextBlockStorage {
         self.raw_mask_message()
     }
 
     /// Returns the carry value as a right-aligned integer.
-    ///
-    /// The carry bits are shifted down to the lowest position. For a spec with 4 message bits
-    /// and carry value 3 (binary `11`), this returns `3`, not `0b11_0000`.
     pub fn raw_carry_bits(&self) -> EmulatedCiphertextBlockStorage {
         self.raw_mask_carry() >> self.spec.message_size()
     }
 
     /// Returns the padding bit value as 0 or 1.
-    ///
-    /// The padding bit is shifted down to the lowest position.
     pub fn raw_padding_bits(&self) -> EmulatedCiphertextBlockStorage {
         self.raw_mask_padding() >> self.spec.data_size()
     }
 
     /// Returns the data value (carry | message) as a right-aligned integer.
-    ///
-    /// Equivalent to [`raw_mask_data`](Self::raw_mask_data) since data bits are already in
-    /// the lowest position (only the padding bit is excluded).
     pub fn raw_data_bits(&self) -> EmulatedCiphertextBlockStorage {
         self.raw_mask_data()
     }
 
     /// Returns all bits as a right-aligned integer.
-    ///
-    /// Equivalent to [`raw_mask_complete`](Self::raw_mask_complete) since the complete value
-    /// starts at bit 0.
     pub fn raw_complete_bits(&self) -> EmulatedCiphertextBlockStorage {
         self.raw_mask_complete()
     }
 
     /// Checks whether bit `i` (counting from LSB) is set.
-    ///
-    /// Bit 0 is the least significant bit of the message region.
     ///
     /// # Panics
     ///
@@ -129,59 +101,67 @@ impl EmulatedCiphertextBlock {
     }
 
     /// Checks whether the padding bit is set.
-    ///
-    /// A block with an active padding bit will trigger negacyclic folding during a PBS lookup.
     pub fn has_active_padding_bit(&self) -> bool {
         self.has_active_last_ith_bit(0)
-    }
-
-    /// Returns the specification describing this block's layout.
-    pub fn spec(&self) -> CiphertextBlockSpec {
-        self.spec
-    }
-
-    /// Returns a new block containing only the message bits, with carry and padding cleared.
-    ///
-    /// This is useful for extracting the message portion after arithmetic operations that may
-    /// have produced carries.
-    pub fn mask_message(&self) -> EmulatedCiphertextBlock {
-        EmulatedCiphertextBlock {
-            storage: self.raw_mask_message(),
-            spec: self.spec,
-        }
-    }
-
-    /// Returns a new block containing only the carry bits in their original position.
-    ///
-    /// Message and padding bits are cleared. The carry value remains shifted; use
-    /// [`move_carry_to_message`](Self::move_carry_to_message) to shift the carry into the
-    /// message position.
-    pub fn mask_carry(&self) -> EmulatedCiphertextBlock {
-        EmulatedCiphertextBlock {
-            storage: self.raw_mask_carry(),
-            spec: self.spec,
-        }
-    }
-
-    /// Returns a new block with the carry bits shifted down into the message position.
-    ///
-    /// The original message and padding bits are discarded. This is useful for propagating
-    /// carries between blocks: extract the carry from one block and add it to the next.
-    pub fn move_carry_to_message(&self) -> EmulatedCiphertextBlock {
-        EmulatedCiphertextBlock {
-            storage: self.raw_mask_carry() >> self.spec.message_size(),
-            spec: self.spec,
-        }
     }
 
     /// Checks whether this block contains only message bits.
     ///
     /// Returns true if both carry and padding bits are zero. A block must be message-only
     /// before it can be written back into an
-    /// [`EmulatedCiphertext`](super::super::EmulatedCiphertext)
-    /// via [`set_block`](super::super::EmulatedCiphertext::set_block).
+    /// [`EmulatedCiphertextInteger`](super::super::EmulatedCiphertextInteger)
+    /// via [`set_block`](super::super::EmulatedCiphertextInteger::set_block).
     pub fn is_message_only(&self) -> bool {
         (self.raw_complete_bits() >> self.spec.message_size()) == 0
+    }
+
+    /// Checks whether this block contains only carry bits.
+    ///
+    /// Returns true if both message and padding bits are zero.
+    pub fn is_carry_only(&self) -> bool {
+        self.raw_message_bits() == 0 && self.raw_padding_bits() == 0
+    }
+
+    /// Returns the specification describing this block's layout.
+    pub fn spec(&self) -> SpecBlock {
+        self.spec
+    }
+
+    /// Returns a new block containing only the message bits, with carry and padding cleared.
+    pub fn mask_message(&self) -> EmulatedCiphertextBlock {
+        EmulatedCiphertextBlock {
+            storage: self.raw_message_bits(),
+            spec: self.spec,
+        }
+    }
+
+    /// Returns a new block containing only the carry bits in their original position.
+    pub fn mask_carry(&self) -> EmulatedCiphertextBlock {
+        EmulatedCiphertextBlock {
+            storage: self.storage & self.spec.carry_mask(),
+            spec: self.spec,
+        }
+    }
+
+    /// Returns a new block with the carry bits shifted down into the message position.
+    ///
+    /// The original message and padding bits are discarded.
+    pub fn move_carry_to_message(&self) -> EmulatedCiphertextBlock {
+        EmulatedCiphertextBlock {
+            storage: self.raw_carry_bits(),
+            spec: self.spec,
+        }
+    }
+
+    /// Negates the ciphertext block on its complete width. This can freely set or unset the
+    /// padding bit.
+    ///
+    /// Used to emulate the negacyclic folding of lookups. Circuits should express negation as
+    /// a wrapping `0 - x` plaintext subtraction, which computes the same value.
+    pub fn neg(mut self) -> Self {
+        let a = !self.raw_complete_bits() & self.spec().complete_mask();
+        self.storage = (a + 1) & self.spec().complete_mask();
+        self
     }
 }
 

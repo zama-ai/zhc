@@ -1,5 +1,5 @@
 use zhc::compat::Iop;
-use zhc_builder::CiphertextSpec;
+use zhc_builder::SpecInteger;
 use zhc_config::multi_hpu::MultiHpuConfig;
 use zhc_ir::IR;
 use zhc_langs::{
@@ -60,7 +60,7 @@ fn count_transfers(hpu_irs: &[IR<HpuLang>]) -> (usize, usize) {
 
 #[test]
 fn smoke() {
-    let spec = CiphertextSpec::new(8, 2, 2);
+    let spec = SpecInteger::new(8, 2, 2);
     let iop_ir = Iop::Add.to_builder(spec).optimize_ir();
     let config = partitioner_config(
         2,
@@ -95,7 +95,7 @@ fn correctness(
     spreadp: SpreadPolicy,
     n_hpus: usize,
 ) {
-    let spec = CiphertextSpec::new(size, 2, 2);
+    let spec = SpecInteger::new(size, 2, 2);
     let iop_ir = iop.to_builder(spec).optimize_ir();
     let config = partitioner_config(n_hpus, schedp, tiep, spreadp);
     let hpu_irs = pipeline(&iop_ir, &config);

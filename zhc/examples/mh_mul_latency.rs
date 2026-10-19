@@ -4,13 +4,13 @@
 
 use zhc::PipelineExt;
 use zhc::compat::Iop;
-use zhc_builder::CiphertextSpec;
+use zhc_builder::SpecInteger;
 use zhc_config::multi_hpu::MultiHpuConfig;
 use zhc_langs::doplang::DopInstructionSet;
 use zhc_pipeline::Pipeline;
 
 fn main() {
-    let spec = CiphertextSpec::new(64, 2, 2);
+    let spec = SpecInteger::new(64, 2, 2);
     let n_hpus = 8;
     let mut pl = Pipeline::new()
         .with_builder(Iop::MhMul { par_n: n_hpus }.to_builder(spec))

@@ -1,5 +1,5 @@
 use zhc::compat::Iop;
-use zhc_builder::CiphertextSpec;
+use zhc_builder::SpecInteger;
 use zhc_ir::IR;
 use zhc_langs::{hpulang::HpuLang, ioplang::IopLang};
 use zhc_pipeline::{
@@ -24,7 +24,7 @@ fn smoke() {
     let tiep = TiePolicy::Balance;
     let spreadp = SpreadPolicy::FavorBandwidth;
     let n_hpus = 8;
-    let b = iop.to_builder(CiphertextSpec::new(size, 2, 2));
+    let b = iop.to_builder(SpecInteger::new(size, 2, 2));
     let iop_ir = b.optimize_ir();
     let config = PartitionerConfig {
         specs: std::iter::repeat(PartitionSpec {
@@ -57,7 +57,7 @@ fn correctness(
     spreadp: SpreadPolicy,
     n_hpus: usize,
 ) {
-    let spec = CiphertextSpec::new(size, 2, 2);
+    let spec = SpecInteger::new(size, 2, 2);
     let b = iop.to_builder(spec);
     let iop_ir = b.optimize_ir();
     let config = PartitionerConfig {

@@ -8,7 +8,7 @@ use std::{
     cell::{Ref, RefCell},
     rc::Rc,
 };
-use zhc_crypto::integer_semantics::CiphertextBlockSpec;
+use zhc_crypto::integer_semantics::SpecBlock;
 use zhc_ir::{
     PrintWalker, ValId,
     visualization::{
@@ -30,15 +30,15 @@ use crate::builder::InnerBuilder;
 ///
 /// ```rust,no_run
 /// # use zhc_builder::*;
-/// let builder = Builder::new(CiphertextBlockSpec(2, 2));
-/// let a = builder.ciphertext_input(8);
-/// builder.ciphertext_output(&a);
+/// let builder = Builder::new(SpecBlock(2, 2));
+/// let a = builder.ciphertext_integer_input(8);
+/// builder.ciphertext_integer_output(&a);
 /// let outputs = builder.interpret()
 ///     .with_inputs(&[a.make_value(42)])
 ///     .get_outputs();
 /// ```
 pub struct Interpreter {
-    pub(super) spec: CiphertextBlockSpec,
+    pub(super) spec: SpecBlock,
     pub(super) inputs: Vec<IopValue>,
     pub(super) inner: Rc<RefCell<InnerBuilder>>,
 }
@@ -97,9 +97,9 @@ impl Interpreter {
     ///
     /// ```rust,no_run
     /// # use zhc_builder::*;
-    /// # let builder = Builder::new(CiphertextBlockSpec(2, 2));
-    /// # let a = builder.ciphertext_input(8);
-    /// # builder.ciphertext_output(&a);
+    /// # let builder = Builder::new(SpecBlock(2, 2));
+    /// # let a = builder.ciphertext_integer_input(8);
+    /// # builder.ciphertext_integer_output(&a);
     /// builder.interpret()
     ///     .with_inputs(&[a.make_value(42)])
     ///     .draw()

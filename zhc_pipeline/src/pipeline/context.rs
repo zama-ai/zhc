@@ -1,5 +1,5 @@
 use zhc_config::{hpu::HpuConfig, multi_hpu::MultiHpuConfig, vm::VmConfig};
-use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type, lut::LutId};
+use zhc_crypto::integer_semantics::{SpecBlock, Type, lut::LutId};
 use zhc_ir::{IR, OpMap, Signature, partitioning::PartitionAnnotation};
 use zhc_langs::ioplang::IopLang;
 use zhc_utils::topology::Topology;
@@ -12,7 +12,7 @@ pub struct PipelineContext {
     pub partitions: Option<OpMap<PartitionAnnotation>>,
     pub use_builder_partitions: bool,
     pub prototype: Option<Signature<Type>>,
-    pub ciphertext_block_spec: Option<CiphertextBlockSpec>,
+    pub ciphertext_block_spec: Option<SpecBlock>,
     pub hpu_config: Option<HpuConfig>,
     pub multi_hpu_config: Option<MultiHpuConfig>,
     pub vm_config: Option<VmConfig>,

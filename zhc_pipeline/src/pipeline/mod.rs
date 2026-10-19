@@ -43,14 +43,14 @@
 //!
 //! ```rust,no_run
 //! # use zhc_pipeline::Pipeline;
-//! # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
+//! # use zhc_crypto::integer_semantics::{SpecBlock, Type};
 //! # use zhc_config::hpu::HpuConfig;
 //! # let ir = zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty();
 //! let mut pipeline = Pipeline::new()
 //!     .with_unchecked_ioplang(ir)
 //! #     .with_prototype(zhc_ir::Signature::empty())
 //! #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
-//!     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
+//!     .with_ciphertext_block_spec(SpecBlock(2, 2))
 //!     .with_hpu_config(HpuConfig::default());
 //!
 //! let stream = pipeline.get_hpu_stream().clone();
@@ -66,14 +66,14 @@
 //!
 //! ```rust,no_run
 //! # use zhc_pipeline::Pipeline;
-//! # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
+//! # use zhc_crypto::integer_semantics::{SpecBlock, Type};
 //! # use zhc_config::multi_hpu::MultiHpuConfig;
 //! # let ir = zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty();
 //! let mut pipeline = Pipeline::new()
 //!     .with_unchecked_ioplang(ir)
 //! #     .with_prototype(zhc_ir::Signature::empty())
 //! #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
-//!     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
+//!     .with_ciphertext_block_spec(SpecBlock(2, 2))
 //!     .with_multi_hpu_config(MultiHpuConfig::default());
 //!
 //! // One instruction stream per HPU of the system.
@@ -88,7 +88,7 @@
 //!
 //! ```rust,no_run
 //! # use zhc_pipeline::Pipeline;
-//! # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
+//! # use zhc_crypto::integer_semantics::{SpecBlock, Type};
 //! # use zhc_config::vm::VmConfig;
 //! # let ir = zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty();
 //! # let vm_config: VmConfig = unimplemented!();
@@ -96,7 +96,7 @@
 //!     .with_unchecked_ioplang(ir)
 //! #     .with_prototype(zhc_ir::Signature::empty())
 //! #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
-//!     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
+//!     .with_ciphertext_block_spec(SpecBlock(2, 2))
 //!     .with_vm_config(vm_config);
 //!
 //! let plan = pipeline.get_vm_execution_plan();
@@ -105,7 +105,7 @@
 
 use zhc_config::{hpu::HpuConfig, multi_hpu::MultiHpuConfig, vm::VmConfig};
 use zhc_crypto::integer_semantics::lut::{LutId, LutRegistry};
-use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
+use zhc_crypto::integer_semantics::{SpecBlock, Type};
 use zhc_ir::partitioning::{PartitionAnnotation, PartitionId};
 use zhc_ir::{IR, OpMap, Signature, evaluation::LazyEvaluator, visualization::Hierarchy};
 use zhc_langs::{
@@ -191,14 +191,14 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
+    /// # use zhc_crypto::integer_semantics::{SpecBlock, Type};
     /// # use zhc_config::hpu::HpuConfig;
     /// # let ir = zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty();
     /// let pipeline = Pipeline::new()
     ///     .with_unchecked_ioplang(ir)
     /// #     .with_prototype(zhc_ir::Signature::empty())
     /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
-    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
+    ///     .with_ciphertext_block_spec(SpecBlock(2, 2))
     ///     .with_hpu_config(HpuConfig::default());
     /// ```
     pub fn new() -> Self {
@@ -303,7 +303,7 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
+    /// # use zhc_crypto::integer_semantics::{SpecBlock, Type};
     /// # use zhc_config::multi_hpu::MultiHpuConfig;
     /// # let ir = zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty();
     /// # let partitions = ir.totally_mapped_opmap(|_| unreachable!());
@@ -312,7 +312,7 @@ impl Pipeline {
     /// #     .with_prototype(zhc_ir::Signature::empty())
     ///     .with_partitions(partitions)
     ///     .with_builder_partitions(true)
-    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
+    ///     .with_ciphertext_block_spec(SpecBlock(2, 2))
     ///     .with_multi_hpu_config(MultiHpuConfig::default());
     ///
     /// // The placement now follows the partitions declared while building the circuit.
@@ -334,7 +334,7 @@ impl Pipeline {
     }
 
     /// Supplies the ciphertext block layout used to check the input IR's noise.
-    pub fn with_ciphertext_block_spec(mut self, spec: CiphertextBlockSpec) -> Self {
+    pub fn with_ciphertext_block_spec(mut self, spec: SpecBlock) -> Self {
         self.context.ciphertext_block_spec = Some(spec);
         self.eval
             .invalidate_from_val(VALIDS().ciphertext_block_spec);
@@ -437,14 +437,14 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
+    /// # use zhc_crypto::integer_semantics::{SpecBlock, Type};
     /// # use zhc_config::hpu::HpuConfig;
     /// # let ir = zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty();
     /// let mut pipeline = Pipeline::new()
     ///     .with_unchecked_ioplang(ir)
     /// #     .with_prototype(zhc_ir::Signature::empty())
     /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
-    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
+    ///     .with_ciphertext_block_spec(SpecBlock(2, 2))
     ///     .with_hpu_config(HpuConfig::default())
     ///     .with_legacy_hpu_scheduler();
     ///
@@ -472,14 +472,14 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::{Pipeline, SchedPolicy};
-    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
+    /// # use zhc_crypto::integer_semantics::{SpecBlock, Type};
     /// # use zhc_config::hpu::HpuConfig;
     /// # let ir = zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty();
     /// let mut pipeline = Pipeline::new()
     ///     .with_unchecked_ioplang(ir)
     /// #     .with_prototype(zhc_ir::Signature::empty())
     /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
-    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
+    ///     .with_ciphertext_block_spec(SpecBlock(2, 2))
     ///     .with_hpu_config(HpuConfig::default())
     ///     .with_schedule_policy(SchedPolicy::AsSoonAsPossible);
     ///
@@ -515,14 +515,14 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
+    /// # use zhc_crypto::integer_semantics::{SpecBlock, Type};
     /// # use zhc_config::hpu::HpuConfig;
     /// # let ir = zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty();
     /// let mut pipeline = Pipeline::new()
     ///     .with_unchecked_ioplang(ir)
     /// #     .with_prototype(zhc_ir::Signature::empty())
     /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
-    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
+    ///     .with_ciphertext_block_spec(SpecBlock(2, 2))
     ///     .with_hpu_config(HpuConfig::default())
     ///     .with_trace_hpu_events();
     ///
@@ -559,7 +559,7 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
+    /// # use zhc_crypto::integer_semantics::{SpecBlock, Type};
     /// # use zhc_config::hpu::HpuConfig;
     /// # use zhc_crypto::integer_semantics::lut::LutId;
     /// # let ir = zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty();
@@ -567,7 +567,7 @@ impl Pipeline {
     ///     .with_unchecked_ioplang(ir)
     /// #     .with_prototype(zhc_ir::Signature::empty())
     /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
-    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
+    ///     .with_ciphertext_block_spec(SpecBlock(2, 2))
     ///     .with_hpu_config(HpuConfig::default())
     ///     .with_hpu_lut_relocation(vec![LutId(4), LutId(2)]);
     ///
@@ -643,12 +643,12 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
+    /// # use zhc_crypto::integer_semantics::{SpecBlock, Type};
     /// # let mut pipeline = Pipeline::new()
     /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
     /// #     .with_prototype(zhc_ir::Signature::empty())
     /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
-    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2));
+    ///     .with_ciphertext_block_spec(SpecBlock(2, 2));
     /// let prototype = pipeline.get_prototype();
     /// println!("{:?} -> {:?}", prototype.get_args(), prototype.get_returns());
     /// ```
@@ -667,7 +667,7 @@ impl Pipeline {
     ///
     /// Panics if no specification was supplied with
     /// [`with_ciphertext_block_spec`](Self::with_ciphertext_block_spec).
-    pub fn get_ciphertext_block_spec(&mut self) -> &CiphertextBlockSpec {
+    pub fn get_ciphertext_block_spec(&mut self) -> &SpecBlock {
         self.eval
             .pull_val(&mut self.context, VALIDS().ciphertext_block_spec);
         self.eventually_report_failure();
@@ -741,12 +741,12 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
+    /// # use zhc_crypto::integer_semantics::{SpecBlock, Type};
     /// # let mut pipeline = Pipeline::new()
     /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
     /// #     .with_prototype(zhc_ir::Signature::empty())
     /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
-    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2));
+    ///     .with_ciphertext_block_spec(SpecBlock(2, 2));
     /// println!("{} integer operations", pipeline.get_ioplang().n_ops());
     /// ```
     pub fn get_ioplang(&mut self) -> &IR<IopLang> {
@@ -793,12 +793,12 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
+    /// # use zhc_crypto::integer_semantics::{SpecBlock, Type};
     /// # let mut pipeline = Pipeline::new()
     /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
     /// #     .with_prototype(zhc_ir::Signature::empty())
     /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
-    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2));
+    ///     .with_ciphertext_block_spec(SpecBlock(2, 2));
     /// println!("{} block operations", pipeline.get_translated_hpulang().n_ops());
     /// ```
     pub fn get_translated_hpulang(&mut self) -> &IR<HpuLang> {
@@ -831,13 +831,13 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
+    /// # use zhc_crypto::integer_semantics::{SpecBlock, Type};
     /// # use zhc_config::hpu::HpuConfig;
     /// # let mut pipeline = Pipeline::new()
     /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
     /// #     .with_prototype(zhc_ir::Signature::empty())
     /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
-    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
+    ///     .with_ciphertext_block_spec(SpecBlock(2, 2))
     /// #     .with_hpu_config(HpuConfig::default());
     /// // Draws the scheduled program, whose operations are laid out in execution order.
     /// pipeline.get_scheduled_hpulang().draw_to_html(None).open().unwrap();
@@ -870,13 +870,13 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
+    /// # use zhc_crypto::integer_semantics::{SpecBlock, Type};
     /// # use zhc_config::hpu::HpuConfig;
     /// # let mut pipeline = Pipeline::new()
     /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
     /// #     .with_prototype(zhc_ir::Signature::empty())
     /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
-    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
+    ///     .with_ciphertext_block_spec(SpecBlock(2, 2))
     /// #     .with_hpu_config(HpuConfig::default());
     /// println!("{} device operations", pipeline.get_doplang().n_ops());
     /// ```
@@ -905,13 +905,13 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
+    /// # use zhc_crypto::integer_semantics::{SpecBlock, Type};
     /// # use zhc_config::hpu::HpuConfig;
     /// # let mut pipeline = Pipeline::new()
     /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
     /// #     .with_prototype(zhc_ir::Signature::empty())
     /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
-    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
+    ///     .with_ciphertext_block_spec(SpecBlock(2, 2))
     /// #     .with_hpu_config(HpuConfig::default());
     /// let stream = pipeline.get_hpu_stream();
     /// println!("{} instructions in {} words", stream[0], stream.len());
@@ -942,12 +942,12 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
+    /// # use zhc_crypto::integer_semantics::{SpecBlock, Type};
     /// # let mut pipeline = Pipeline::new()
     /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
     /// #     .with_prototype(zhc_ir::Signature::empty())
     /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
-    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2));
+    ///     .with_ciphertext_block_spec(SpecBlock(2, 2));
     /// let metrics = pipeline.get_pbs_metrics();
     /// println!("{} bootstrappings, {} deep", metrics.count, metrics.critical_length);
     /// ```
@@ -978,13 +978,13 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
+    /// # use zhc_crypto::integer_semantics::{SpecBlock, Type};
     /// # use zhc_crypto::integer_semantics::lut::LutId;
     /// # let mut pipeline = Pipeline::new()
     /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
     /// #     .with_prototype(zhc_ir::Signature::empty())
     /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
-    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2));
+    ///     .with_ciphertext_block_spec(SpecBlock(2, 2));
     /// let registry = pipeline.get_lut_registry();
     /// println!("{:?}", registry.get_raw_lut(&LutId(0)));
     /// ```
@@ -1014,13 +1014,13 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
+    /// # use zhc_crypto::integer_semantics::{SpecBlock, Type};
     /// # use zhc_config::hpu::HpuConfig;
     /// # let mut pipeline = Pipeline::new()
     /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
     /// #     .with_prototype(zhc_ir::Signature::empty())
     /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
-    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
+    ///     .with_ciphertext_block_spec(SpecBlock(2, 2))
     /// #     .with_hpu_config(HpuConfig::default());
     /// let metrics = pipeline.get_hpu_metrics();
     /// println!("{} (lower bound {})", metrics.latency, metrics.lower_bound);
@@ -1052,13 +1052,13 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
+    /// # use zhc_crypto::integer_semantics::{SpecBlock, Type};
     /// # use zhc_config::hpu::HpuConfig;
     /// # let mut pipeline = Pipeline::new()
     /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
     /// #     .with_prototype(zhc_ir::Signature::empty())
     /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
-    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
+    ///     .with_ciphertext_block_spec(SpecBlock(2, 2))
     /// #     .with_hpu_config(HpuConfig::default());
     /// pipeline.get_hpu_trace().open().unwrap();
     /// ```
@@ -1087,12 +1087,12 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
+    /// # use zhc_crypto::integer_semantics::{SpecBlock, Type};
     /// # let mut pipeline = Pipeline::new()
     /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
     /// #     .with_prototype(zhc_ir::Signature::empty())
     /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
-    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2));
+    ///     .with_ciphertext_block_spec(SpecBlock(2, 2));
     /// pipeline.get_slack_drawing().open().unwrap();
     /// ```
     pub fn get_slack_drawing(&mut self) -> &FileHandle {
@@ -1124,13 +1124,13 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
+    /// # use zhc_crypto::integer_semantics::{SpecBlock, Type};
     /// # use zhc_config::multi_hpu::MultiHpuConfig;
     /// # let mut pipeline = Pipeline::new()
     /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
     /// #     .with_prototype(zhc_ir::Signature::empty())
     /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
-    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
+    ///     .with_ciphertext_block_spec(SpecBlock(2, 2))
     /// #     .with_multi_hpu_config(MultiHpuConfig::default());
     /// let partitions = pipeline.get_partitions();
     /// println!("{} operations placed in partitions", partitions.iter().count());
@@ -1161,13 +1161,13 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
+    /// # use zhc_crypto::integer_semantics::{SpecBlock, Type};
     /// # use zhc_config::hpu::HpuConfig;
     /// # let mut pipeline = Pipeline::new()
     /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
     /// #     .with_prototype(zhc_ir::Signature::empty())
     /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
-    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
+    ///     .with_ciphertext_block_spec(SpecBlock(2, 2))
     /// #     .with_hpu_config(HpuConfig::default());
     /// pipeline.get_hpu_assembly().open().unwrap();
     /// ```
@@ -1253,13 +1253,13 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
+    /// # use zhc_crypto::integer_semantics::{SpecBlock, Type};
     /// # use zhc_config::multi_hpu::MultiHpuConfig;
     /// # let mut pipeline = Pipeline::new()
     /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
     /// #     .with_prototype(zhc_ir::Signature::empty())
     /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
-    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
+    ///     .with_ciphertext_block_spec(SpecBlock(2, 2))
     /// #     .with_multi_hpu_config(MultiHpuConfig::default());
     /// let ir = pipeline.get_translated_multi_hpulang();
     /// println!("{} block operations, transfers included", ir.n_ops());
@@ -1292,14 +1292,14 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
+    /// # use zhc_crypto::integer_semantics::{SpecBlock, Type};
     /// # use zhc_config::multi_hpu::MultiHpuConfig;
     /// # use zhc_langs::hpulang::HpuLocality;
     /// # let mut pipeline = Pipeline::new()
     /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
     /// #     .with_prototype(zhc_ir::Signature::empty())
     /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
-    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
+    ///     .with_ciphertext_block_spec(SpecBlock(2, 2))
     /// #     .with_multi_hpu_config(MultiHpuConfig::default());
     /// let transfers = pipeline
     ///     .get_multi_hpu_localities()
@@ -1335,13 +1335,13 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
+    /// # use zhc_crypto::integer_semantics::{SpecBlock, Type};
     /// # use zhc_config::multi_hpu::MultiHpuConfig;
     /// # let mut pipeline = Pipeline::new()
     /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
     /// #     .with_prototype(zhc_ir::Signature::empty())
     /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
-    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
+    ///     .with_ciphertext_block_spec(SpecBlock(2, 2))
     /// #     .with_multi_hpu_config(MultiHpuConfig::default());
     /// for (hpu, ir) in pipeline.get_scheduled_multi_hpulang().iter().enumerate() {
     ///     println!("HPU {hpu}: {} block operations", ir.n_ops());
@@ -1374,13 +1374,13 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
+    /// # use zhc_crypto::integer_semantics::{SpecBlock, Type};
     /// # use zhc_config::multi_hpu::MultiHpuConfig;
     /// # let mut pipeline = Pipeline::new()
     /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
     /// #     .with_prototype(zhc_ir::Signature::empty())
     /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
-    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
+    ///     .with_ciphertext_block_spec(SpecBlock(2, 2))
     /// #     .with_multi_hpu_config(MultiHpuConfig::default());
     /// for (hpu, ir) in pipeline.get_multi_doplang().iter().enumerate() {
     ///     println!("HPU {hpu}: {} device operations", ir.n_ops());
@@ -1414,13 +1414,13 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
+    /// # use zhc_crypto::integer_semantics::{SpecBlock, Type};
     /// # use zhc_config::multi_hpu::MultiHpuConfig;
     /// # let mut pipeline = Pipeline::new()
     /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
     /// #     .with_prototype(zhc_ir::Signature::empty())
     /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
-    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
+    ///     .with_ciphertext_block_spec(SpecBlock(2, 2))
     /// #     .with_multi_hpu_config(MultiHpuConfig::default());
     /// pipeline.get_multi_hpu_trace().open().unwrap();
     /// ```
@@ -1448,13 +1448,13 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
+    /// # use zhc_crypto::integer_semantics::{SpecBlock, Type};
     /// # use zhc_config::multi_hpu::MultiHpuConfig;
     /// # let mut pipeline = Pipeline::new()
     /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
     /// #     .with_prototype(zhc_ir::Signature::empty())
     /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
-    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
+    ///     .with_ciphertext_block_spec(SpecBlock(2, 2))
     /// #     .with_multi_hpu_config(MultiHpuConfig::default());
     /// println!("{}", pipeline.get_multi_hpu_metrics().latency);
     /// ```
@@ -1485,13 +1485,13 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
+    /// # use zhc_crypto::integer_semantics::{SpecBlock, Type};
     /// # use zhc_config::multi_hpu::MultiHpuConfig;
     /// # let mut pipeline = Pipeline::new()
     /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
     /// #     .with_prototype(zhc_ir::Signature::empty())
     /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
-    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
+    ///     .with_ciphertext_block_spec(SpecBlock(2, 2))
     /// #     .with_multi_hpu_config(MultiHpuConfig::default());
     /// for (hpu, stream) in pipeline.get_multi_hpu_stream().iter().enumerate() {
     ///     println!("HPU {hpu}: {} instructions", stream[0]);
@@ -1524,13 +1524,13 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
+    /// # use zhc_crypto::integer_semantics::{SpecBlock, Type};
     /// # use zhc_config::multi_hpu::MultiHpuConfig;
     /// # let mut pipeline = Pipeline::new()
     /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
     /// #     .with_prototype(zhc_ir::Signature::empty())
     /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
-    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
+    ///     .with_ciphertext_block_spec(SpecBlock(2, 2))
     /// #     .with_multi_hpu_config(MultiHpuConfig::default());
     /// for listing in pipeline.get_multi_hpu_assembly() {
     ///     println!("{listing:?}");
@@ -1614,12 +1614,12 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
+    /// # use zhc_crypto::integer_semantics::{SpecBlock, Type};
     /// # let mut pipeline = Pipeline::new()
     /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
     /// #     .with_prototype(zhc_ir::Signature::empty())
     /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
-    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2));
+    ///     .with_ciphertext_block_spec(SpecBlock(2, 2));
     /// println!("{} VM operations", pipeline.get_vmlang().n_ops());
     /// ```
     pub fn get_vmlang(&mut self) -> &IR<VmLang> {
@@ -1649,14 +1649,14 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
+    /// # use zhc_crypto::integer_semantics::{SpecBlock, Type};
     /// # use zhc_config::vm::VmConfig;
     /// # let config: VmConfig = unimplemented!();
     /// # let mut pipeline = Pipeline::new()
     /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
     /// #     .with_prototype(zhc_ir::Signature::empty())
     /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
-    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
+    ///     .with_ciphertext_block_spec(SpecBlock(2, 2))
     /// #     .with_vm_config(config);
     /// let plan = pipeline.get_vm_execution_plan();
     /// println!("{} worker threads", plan.irs.len());
@@ -1712,7 +1712,7 @@ impl Pipeline {
     /// # Panics
     ///
     /// See [`get_ciphertext_block_spec`](Self::get_ciphertext_block_spec).
-    pub fn into_ciphertext_block_spec(mut self) -> CiphertextBlockSpec {
+    pub fn into_ciphertext_block_spec(mut self) -> SpecBlock {
         self.eval
             .pull_val(&mut self.context, VALIDS().ciphertext_block_spec);
         self.eventually_report_failure();
@@ -1851,13 +1851,13 @@ impl Pipeline {
     ///
     /// ```rust,no_run
     /// # use zhc_pipeline::Pipeline;
-    /// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, Type};
+    /// # use zhc_crypto::integer_semantics::{SpecBlock, Type};
     /// # use zhc_config::hpu::HpuConfig;
     /// # let pipeline = Pipeline::new()
     /// #     .with_unchecked_ioplang(zhc_ir::IR::empty())
     /// #     .with_prototype(zhc_ir::Signature::empty())
     /// #     .with_partitions(zhc_ir::IR::<zhc_langs::ioplang::IopLang>::empty().totally_mapped_opmap(|_| unreachable!()))
-    ///     .with_ciphertext_block_spec(CiphertextBlockSpec(2, 2))
+    ///     .with_ciphertext_block_spec(SpecBlock(2, 2))
     /// #     .with_hpu_config(HpuConfig::default());
     /// // The stream is now owned, and the pipeline it came from can no longer be used.
     /// let stream: Vec<_> = pipeline.into_hpu_stream();

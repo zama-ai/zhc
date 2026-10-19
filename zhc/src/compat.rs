@@ -1,5 +1,5 @@
 use zhc_builder::{
-    Builder, CiphertextSpec, SIMD_N, add, add_simd, adds, bitwise_and, bitwise_inv, bitwise_or,
+    Builder, SIMD_N, SpecInteger, add, add_simd, adds, bitwise_and, bitwise_inv, bitwise_or,
     bitwise_xor, cast, cmp_eq, cmp_gt, cmp_gte, cmp_lt, cmp_lte, cmp_neq, count_0, count_1, div,
     divs, erc7984, erc7984_simd, flip, if_then_else, if_then_zero, ilog2, lead0, lead1, memcpy,
     mh_mul, mods, mul, muls, overflow_add, overflow_adds, overflow_mul, overflow_muls,
@@ -225,7 +225,7 @@ impl Iop {
     ];
 
     /// Returns the builder for this operation with the given ciphertext spec.
-    pub fn to_builder(&self, spec: CiphertextSpec) -> Builder {
+    pub fn to_builder(&self, spec: SpecInteger) -> Builder {
         match self {
             Iop::CmpGt => cmp_gt(spec),
             Iop::CmpGte => cmp_gte(spec),

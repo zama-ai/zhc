@@ -4,7 +4,7 @@
 //! lookups on ciphertext blocks. In TFHE, a PBS applies an arbitrary function to an encrypted
 //! value by evaluating a lookup table — this module emulates that behavior for semantic testing.
 //!
-//! Two LUT types are provided for different use cases:
+//! Four LUT types are provided for different use cases:
 //!
 //! - [`Lut1`] — single-output lookup table. Build with [`Lut1::from_fn`], apply with
 //!   [`Lut1::lookup`].
@@ -16,12 +16,17 @@
 //! The legacy [`lookup`] function is also available for ad-hoc lookups without precomputing a
 //! table.
 //!
-//! Padding-bit assertions on both input and output are controlled by a [`LookupCheck`] mode:
+//! Assertions on the input and the outputs are controlled by a [`LookupCheck`] policy. Each flag
+//! disables one assertion:
 //!
-//! - [`Protect`](LookupCheck::Protect) — assert both padding bits are zero (strictest).
-//! - [`AllowInputPadding`](LookupCheck::AllowInputPadding) — skip the input check.
-//! - [`AllowOutputPadding`](LookupCheck::AllowOutputPadding) — skip the output check.
-//! - [`AllowBothPadding`](LookupCheck::AllowBothPadding) — disable all assertions.
+//! - [`allow_input_padding`](LookupCheck::allow_input_padding) — skip the input padding check. An
+//!   input with its padding bit set negates the outputs.
+//! - [`allow_index_bits`](LookupCheck::allow_index_bits) — skip the many-LUT index check. An input
+//!   with index bits set rotates the sub-tables. This flag has no effect on [`Lut1`].
+//! - [`allow_output_padding`](LookupCheck::allow_output_padding) — skip the output padding check.
+//!
+//! [`Protect`](LookupCheck::Protect) sets all flags to false (strictest), and
+//! [`Permissive`](LookupCheck::Permissive) sets all flags to true (no assertion).
 //!
 //! The module also re-exports a catalog of concrete LUT functions (e.g. [`None_0`],
 //! [`MsgOnly_0`], [`CmpGt_0`], …) that implement specific TFHE operations on a single
@@ -30,8 +35,8 @@
 //! # Examples
 //!
 //! ```rust,no_run
-//! # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, lut::{Lut1, LookupCheck}};
-//! let spec = CiphertextBlockSpec(2, 4);
+//! # use zhc_crypto::integer_semantics::{SpecBlock, lut::{Lut1, LookupCheck}};
+//! let spec = SpecBlock(2, 4);
 //!
 //! // Build a reusable LUT
 //! let double = Lut1::from_fn("double", spec, |b| {
@@ -44,6 +49,7 @@
 //! ```
 
 mod builtin;
+mod constructors;
 mod id;
 mod lookup;
 mod lut;

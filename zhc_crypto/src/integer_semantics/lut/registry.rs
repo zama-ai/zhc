@@ -20,8 +20,8 @@ use super::{Lut1, Lut2, Lut4, Lut8, LutId, RawLut};
 /// # Examples
 ///
 /// ```rust,no_run
-/// # use zhc_crypto::integer_semantics::{CiphertextBlockSpec, lut::{Lut1, LutRegistry}};
-/// let spec = CiphertextBlockSpec(2, 4);
+/// # use zhc_crypto::integer_semantics::{SpecBlock, lut::{Lut1, LutRegistry}};
+/// let spec = SpecBlock(2, 4);
 /// let double = Lut1::from_fn("double", spec, |b| {
 ///     spec.from_message((b.raw_message_bits() * 2) & spec.message_mask())
 /// });

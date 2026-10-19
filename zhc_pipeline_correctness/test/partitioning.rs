@@ -1,5 +1,5 @@
 use zhc::compat::Iop;
-use zhc_builder::CiphertextSpec;
+use zhc_builder::SpecInteger;
 use zhc_ir::IR;
 use zhc_langs::ioplang::IopLang;
 use zhc_pipeline::{PartitionSpec, PartitionerConfig, SchedPolicy, SpreadPolicy, TiePolicy};
@@ -39,7 +39,7 @@ fn correctness(
         tie_policy: tiep,
         spread_policy: spreadp,
     };
-    let builder = iop.to_builder(CiphertextSpec::new(size, 2, 2));
+    let builder = iop.to_builder(SpecInteger::new(size, 2, 2));
     let spec = *builder.spec();
     let original = builder.optimize_ir();
     let materialized = pipeline(&original, &config);

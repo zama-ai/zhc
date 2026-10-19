@@ -99,7 +99,7 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                 interval_begin(c"CheckIopLang", 0);
                 let unchecked = arguments[0].unwrap_unchecked_iop_lang_ref();
                 let spec = arguments[1].unwrap_ciphertext_block_spec_ref();
-                check_noise(unchecked, &spec.matching_plaintext_block_spec());
+                check_noise(unchecked, spec);
                 let result = svec![PipelineArtifact::IopLang(unchecked.clone())];
                 interval_end(c"CheckIopLang", 0);
                 result

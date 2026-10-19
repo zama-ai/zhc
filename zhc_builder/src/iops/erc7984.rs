@@ -1,20 +1,20 @@
-use zhc_crypto::integer_semantics::CiphertextSpec;
+use zhc_crypto::integer_semantics::SpecInteger;
 
-use crate::{Ciphertext, CmpKind, builder::Builder};
+use crate::{CiphertextInteger, CmpKind, builder::Builder};
 
 /// Creates an IR for a homomorphic encrypted fund transfer (ERC-7984).
 ///
 /// Convenience wrapper that calls [`Builder::iop_erc_7984_impl`]. Declares three
 /// inputs (from, to, amount) and two outputs (new_from, new_to). For batched
 /// transfers see [`erc7984_simd`]. See the builder method for algorithm details.
-pub fn erc7984(spec: CiphertextSpec) -> Builder {
+pub fn erc7984(spec: SpecInteger) -> Builder {
     let builder = Builder::new(spec.block_spec());
-    let src_from = builder.ciphertext_input(spec.int_size());
-    let src_to = builder.ciphertext_input(spec.int_size());
-    let src_amount = builder.ciphertext_input(spec.int_size());
+    let src_from = builder.ciphertext_integer_input(spec.int_size());
+    let src_to = builder.ciphertext_integer_input(spec.int_size());
+    let src_amount = builder.ciphertext_integer_input(spec.int_size());
     let (new_from, new_to) = builder.iop_erc_7984_impl(&src_from, &src_to, &src_amount, spec);
-    builder.ciphertext_output(new_from);
-    builder.ciphertext_output(new_to);
+    builder.ciphertext_integer_output(new_from);
+    builder.ciphertext_integer_output(new_to);
     builder
 }
 
@@ -27,16 +27,16 @@ pub fn erc7984(spec: CiphertextSpec) -> Builder {
 /// # Panics
 ///
 /// Panics if `n <= 1`.
-pub fn erc7984_simd(spec: CiphertextSpec, n: u16) -> Builder {
+pub fn erc7984_simd(spec: SpecInteger, n: u16) -> Builder {
     assert!(n > 1);
     let builder = Builder::new(spec.block_spec());
     for _ in 0..n {
-        let src_from = builder.ciphertext_input(spec.int_size());
-        let src_to = builder.ciphertext_input(spec.int_size());
-        let src_amount = builder.ciphertext_input(spec.int_size());
+        let src_from = builder.ciphertext_integer_input(spec.int_size());
+        let src_to = builder.ciphertext_integer_input(spec.int_size());
+        let src_amount = builder.ciphertext_integer_input(spec.int_size());
         let (new_from, new_to) = builder.iop_erc_7984_ripple(&src_from, &src_to, &src_amount);
-        builder.ciphertext_output(new_from);
-        builder.ciphertext_output(new_to);
+        builder.ciphertext_integer_output(new_from);
+        builder.ciphertext_integer_output(new_to);
     }
 
     builder
@@ -52,11 +52,11 @@ impl Builder {
     /// throughput-oriented variant.
     pub fn iop_erc_7984_impl(
         &self,
-        src_from: &Ciphertext,
-        src_to: &Ciphertext,
-        src_amount: &Ciphertext,
-        spec: CiphertextSpec,
-    ) -> (Ciphertext, Ciphertext) {
+        src_from: &CiphertextInteger,
+        src_to: &CiphertextInteger,
+        src_amount: &CiphertextInteger,
+        spec: SpecInteger,
+    ) -> (CiphertextInteger, CiphertextInteger) {
         // Step 1: Check if sender has sufficient funds.
         let enough_fund = self.iop_cmp(src_from, src_amount, CmpKind::GreaterOrEqual);
 
@@ -99,10 +99,10 @@ impl Builder {
     /// independent transfers run in parallel.
     pub fn iop_erc_7984_ripple(
         &self,
-        src_from: &Ciphertext,
-        src_to: &Ciphertext,
-        src_amount: &Ciphertext,
-    ) -> (Ciphertext, Ciphertext) {
+        src_from: &CiphertextInteger,
+        src_to: &CiphertextInteger,
+        src_amount: &CiphertextInteger,
+    ) -> (CiphertextInteger, CiphertextInteger) {
         // Step 1: Check if sender has sufficient funds.
         let amount_inv = self.iop_bitwise_inv(src_amount);
         let one = self.block_let_ciphertext(1);
@@ -132,27 +132,30 @@ mod test {
 
     fn erc7984_semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
         let [
-            IopValue::Ciphertext(from),
-            IopValue::Ciphertext(to),
-            IopValue::Ciphertext(amount),
+            IopValue::CiphertextInteger(from),
+            IopValue::CiphertextInteger(to),
+            IopValue::CiphertextInteger(amount),
         ] = inp
         else {
             unreachable!()
         };
         if from >= amount {
             Some(vec![
-                IopValue::Ciphertext(from.sub(*amount)),
-                IopValue::Ciphertext(to.add(*amount)),
+                IopValue::CiphertextInteger(from.sub(*amount)),
+                IopValue::CiphertextInteger(to.add(*amount)),
             ])
         } else {
-            Some(vec![IopValue::Ciphertext(*from), IopValue::Ciphertext(*to)])
+            Some(vec![
+                IopValue::CiphertextInteger(*from),
+                IopValue::CiphertextInteger(*to),
+            ])
         }
     }
 
     #[test]
     fn correctness_erc7984() {
         for size in (2..64).step_by(2) {
-            erc7984(CiphertextSpec::new(size, 2, 2)).test_random(100, erc7984_semantic);
+            erc7984(SpecInteger::new(size, 2, 2)).test_random(100, erc7984_semantic);
         }
     }
 
@@ -162,41 +165,44 @@ mod test {
             inp.chunks(3)
                 .flat_map(|chunk| {
                     let [
-                        IopValue::Ciphertext(from),
-                        IopValue::Ciphertext(to),
-                        IopValue::Ciphertext(amount),
+                        IopValue::CiphertextInteger(from),
+                        IopValue::CiphertextInteger(to),
+                        IopValue::CiphertextInteger(amount),
                     ] = chunk
                     else {
                         unreachable!()
                     };
                     if from >= amount {
                         vec![
-                            IopValue::Ciphertext(from.sub(*amount)),
-                            IopValue::Ciphertext(to.add(*amount)),
+                            IopValue::CiphertextInteger(from.sub(*amount)),
+                            IopValue::CiphertextInteger(to.add(*amount)),
                         ]
                     } else {
-                        vec![IopValue::Ciphertext(*from), IopValue::Ciphertext(*to)]
+                        vec![
+                            IopValue::CiphertextInteger(*from),
+                            IopValue::CiphertextInteger(*to),
+                        ]
                     }
                 })
                 .collect::<Vec<_>>()
                 .into()
         }
         for size in (2..64).step_by(2) {
-            erc7984_simd(CiphertextSpec::new(size, 2, 2), SIMD_N).test_random(100, semantic);
+            erc7984_simd(SpecInteger::new(size, 2, 2), SIMD_N).test_random(100, semantic);
         }
     }
 
     #[test]
     fn noise_erc7984() {
         for size in (2..64).step_by(2) {
-            erc7984(CiphertextSpec::new(size, 2, 2)).check_noise();
+            erc7984(SpecInteger::new(size, 2, 2)).check_noise();
         }
     }
 
     #[test]
     fn noise_erc7984_simd() {
         for size in (2..64).step_by(2) {
-            erc7984_simd(CiphertextSpec::new(size, 2, 2), SIMD_N).check_noise();
+            erc7984_simd(SpecInteger::new(size, 2, 2), SIMD_N).check_noise();
         }
     }
 }

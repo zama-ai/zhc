@@ -24,47 +24,47 @@ pub fn CarryInMsg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
 }
 
 pub fn MultCarryMsg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let carry_val = block.move_carry_to_message().raw_mask_message();
-    let msg_val = block.raw_mask_message();
+    let carry_val = block.move_carry_to_message().raw_message_bits();
+    let msg_val = block.raw_message_bits();
     block
         .spec
         .from_data((carry_val * msg_val) & block.spec.data_mask())
 }
 
 pub fn MultCarryMsgLsb_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let carry_val = block.move_carry_to_message().raw_mask_message();
-    let msg_val = block.raw_mask_message();
+    let carry_val = block.move_carry_to_message().raw_message_bits();
+    let msg_val = block.raw_message_bits();
     block
         .spec
         .from_message((carry_val * msg_val) & block.spec.message_mask())
 }
 
 pub fn MultCarryMsgMsb_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let carry_val = block.move_carry_to_message().raw_mask_message();
-    let msg_val = block.raw_mask_message();
+    let carry_val = block.move_carry_to_message().raw_message_bits();
+    let msg_val = block.raw_message_bits();
     let result = ((carry_val * msg_val) >> block.spec.message_size()) & block.spec.message_mask();
     block.spec.from_message(result)
 }
 
 pub fn BwAnd_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let carry_val = block.move_carry_to_message().raw_mask_message();
-    let msg_val = block.raw_mask_message();
+    let carry_val = block.move_carry_to_message().raw_message_bits();
+    let msg_val = block.raw_message_bits();
     block
         .spec
         .from_message((carry_val & msg_val) & block.spec.message_mask())
 }
 
 pub fn BwOr_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let carry_val = block.move_carry_to_message().raw_mask_message();
-    let msg_val = block.raw_mask_message();
+    let carry_val = block.move_carry_to_message().raw_message_bits();
+    let msg_val = block.raw_message_bits();
     block
         .spec
         .from_message((carry_val | msg_val) & block.spec.message_mask())
 }
 
 pub fn BwXor_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let carry_val = block.move_carry_to_message().raw_mask_message();
-    let msg_val = block.raw_mask_message();
+    let carry_val = block.move_carry_to_message().raw_message_bits();
+    let msg_val = block.raw_message_bits();
     block
         .spec
         .from_message((carry_val ^ msg_val) & block.spec.message_mask())
@@ -102,7 +102,7 @@ pub fn CmpReduce_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
 }
 
 pub fn CmpGt_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let result = match block.raw_mask_message() {
+    let result = match block.raw_message_bits() {
         CMP_SUPERIOR => 1,
         _ => 0,
     };
@@ -110,7 +110,7 @@ pub fn CmpGt_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
 }
 
 pub fn CmpGte_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let result = match block.raw_mask_message() {
+    let result = match block.raw_message_bits() {
         CMP_SUPERIOR | CMP_EQUAL => 1,
         _ => 0,
     };
@@ -119,7 +119,7 @@ pub fn CmpGte_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
 
 // Could be merge with Gt/Gte
 pub fn CmpLt_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let result = match block.raw_mask_message() {
+    let result = match block.raw_message_bits() {
         CMP_INFERIOR => 1,
         _ => 0,
     };
@@ -127,7 +127,7 @@ pub fn CmpLt_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
 }
 
 pub fn CmpLte_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let result = match block.raw_mask_message() {
+    let result = match block.raw_message_bits() {
         CMP_INFERIOR | CMP_EQUAL => 1,
         _ => 0,
     };
@@ -135,7 +135,7 @@ pub fn CmpLte_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
 }
 
 pub fn CmpEq_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let result = match block.raw_mask_message() {
+    let result = match block.raw_message_bits() {
         CMP_EQUAL => 1,
         _ => 0,
     };
@@ -143,7 +143,7 @@ pub fn CmpEq_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
 }
 
 pub fn CmpNeq_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let result = match block.raw_mask_message() {
+    let result = match block.raw_message_bits() {
         CMP_EQUAL => 0,
         _ => 1,
     };
@@ -151,8 +151,8 @@ pub fn CmpNeq_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
 }
 
 pub fn ManyGenProp_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let carry_val = block.move_carry_to_message().raw_mask_message();
-    let msg_val = block.raw_mask_message();
+    let carry_val = block.move_carry_to_message().raw_message_bits();
+    let msg_val = block.raw_message_bits();
     let result = (carry_val << 1) |                                   // Generate
                  ((msg_val == block.spec.message_mask()).sas::<EmulatedCiphertextBlockStorage>()); // Propagate
     block.spec.from_data(result)
@@ -192,8 +192,8 @@ pub fn ReduceCarryPad_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlo
 }
 
 pub fn GenPropAdd_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let lhs = block.raw_mask_message();
-    let rhs = block.move_carry_to_message().raw_mask_message();
+    let lhs = block.raw_message_bits();
+    let rhs = block.move_carry_to_message().raw_message_bits();
     let rhs_gen = rhs >> 1;
 
     block
@@ -202,28 +202,28 @@ pub fn GenPropAdd_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
 }
 
 pub fn IfTrueZeroed_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let value = block.raw_mask_message();
-    let cond = block.move_carry_to_message().raw_mask_message();
+    let value = block.raw_message_bits();
+    let cond = block.move_carry_to_message().raw_message_bits();
 
     let result = if cond != 0 { 0 } else { value };
     block.spec.from_message(result)
 }
 
 pub fn IfFalseZeroed_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let value = block.raw_mask_message();
-    let cond = block.move_carry_to_message().raw_mask_message();
+    let value = block.raw_message_bits();
+    let cond = block.move_carry_to_message().raw_message_bits();
 
     let result = if cond != 0 { value } else { 0 };
     block.spec.from_message(result)
 }
 
 pub fn Ripple2GenProp_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let result = block.raw_mask_message() * 2;
+    let result = block.raw_message_bits() * 2;
     block.spec.from_data(result)
 }
 
 pub fn ManyCarryMsg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    block.spec.from_message(block.raw_mask_message())
+    block.spec.from_message(block.raw_message_bits())
 }
 
 pub fn ManyCarryMsg_1(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
@@ -232,8 +232,8 @@ pub fn ManyCarryMsg_1(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock
 }
 
 pub fn CmpGtMrg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let carry_field = block.move_carry_to_message().raw_mask_message();
-    let msg_field = block.raw_mask_message();
+    let carry_field = block.move_carry_to_message().raw_message_bits();
+    let msg_field = block.raw_message_bits();
 
     let result = match (carry_field, msg_field) {
         (CMP_SUPERIOR, _) | (CMP_EQUAL, CMP_SUPERIOR) => 1,
@@ -244,8 +244,8 @@ pub fn CmpGtMrg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
 }
 
 pub fn CmpGteMrg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let carry_field = block.move_carry_to_message().raw_mask_message();
-    let msg_field = block.raw_mask_message();
+    let carry_field = block.move_carry_to_message().raw_message_bits();
+    let msg_field = block.raw_message_bits();
 
     let result = match (carry_field, msg_field) {
         (CMP_SUPERIOR, _) | (CMP_EQUAL, CMP_SUPERIOR) | (CMP_EQUAL, CMP_EQUAL) => 1,
@@ -256,8 +256,8 @@ pub fn CmpGteMrg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
 }
 
 pub fn CmpLtMrg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let carry_field = block.move_carry_to_message().raw_mask_message();
-    let msg_field = block.raw_mask_message();
+    let carry_field = block.move_carry_to_message().raw_message_bits();
+    let msg_field = block.raw_message_bits();
 
     let result = match (carry_field, msg_field) {
         (CMP_INFERIOR, _) | (CMP_EQUAL, CMP_INFERIOR) => 1,
@@ -268,8 +268,8 @@ pub fn CmpLtMrg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
 }
 
 pub fn CmpLteMrg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let carry_field = block.move_carry_to_message().raw_mask_message();
-    let msg_field = block.raw_mask_message();
+    let carry_field = block.move_carry_to_message().raw_message_bits();
+    let msg_field = block.raw_message_bits();
 
     let result = match (carry_field, msg_field) {
         (CMP_INFERIOR, _) | (CMP_EQUAL, CMP_INFERIOR) | (CMP_EQUAL, CMP_EQUAL) => 1,
@@ -280,8 +280,8 @@ pub fn CmpLteMrg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
 }
 
 pub fn CmpEqMrg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let carry_field = block.move_carry_to_message().raw_mask_message();
-    let msg_field = block.raw_mask_message();
+    let carry_field = block.move_carry_to_message().raw_message_bits();
+    let msg_field = block.raw_message_bits();
 
     let result = match (carry_field, msg_field) {
         (CMP_EQUAL, CMP_EQUAL) => 1,
@@ -292,8 +292,8 @@ pub fn CmpEqMrg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
 }
 
 pub fn CmpNeqMrg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let carry_field = block.move_carry_to_message().raw_mask_message();
-    let msg_field = block.raw_mask_message();
+    let carry_field = block.move_carry_to_message().raw_message_bits();
+    let msg_field = block.raw_message_bits();
 
     let result = match (carry_field, msg_field) {
         (CMP_EQUAL, CMP_EQUAL) => 0,
@@ -309,20 +309,20 @@ pub fn IsSome_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
 }
 
 pub fn CarryIsSome_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let carry_field = block.move_carry_to_message().raw_mask_message();
+    let carry_field = block.move_carry_to_message().raw_message_bits();
     let result = if carry_field != 0 { 1 } else { 0 };
     block.spec.from_message(result)
 }
 
 pub fn CarryIsNone_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let carry_field = block.move_carry_to_message().raw_mask_message();
+    let carry_field = block.move_carry_to_message().raw_message_bits();
     let result = if carry_field != 0 { 0 } else { 1 };
     block.spec.from_message(result)
 }
 
 pub fn MultCarryMsgIsSome_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let carry_val = block.move_carry_to_message().raw_mask_message();
-    let msg_val = block.raw_mask_message();
+    let carry_val = block.move_carry_to_message().raw_message_bits();
+    let msg_val = block.raw_message_bits();
     let carry_x_msg = (carry_val * msg_val) & block.spec.data_mask();
 
     let result = if carry_x_msg != 0 { 1 } else { 0 };
@@ -330,8 +330,8 @@ pub fn MultCarryMsgIsSome_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertex
 }
 
 pub fn MultCarryMsgMsbIsSome_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let carry_val = block.move_carry_to_message().raw_mask_message();
-    let msg_val = block.raw_mask_message();
+    let carry_val = block.move_carry_to_message().raw_message_bits();
+    let msg_val = block.raw_message_bits();
     let mul_msb = ((carry_val * msg_val) >> block.spec.message_size()) & block.spec.message_mask();
 
     let result = if mul_msb != 0 { 1 } else { 0 };
@@ -339,8 +339,8 @@ pub fn MultCarryMsgMsbIsSome_0(block: EmulatedCiphertextBlock) -> EmulatedCipher
 }
 
 pub fn IsNull_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let carry_field = block.move_carry_to_message().raw_mask_message();
-    let msg_field = block.raw_mask_message();
+    let carry_field = block.move_carry_to_message().raw_message_bits();
+    let msg_field = block.raw_message_bits();
 
     let result = match (carry_field.sas::<usize>(), msg_field.sas::<usize>()) {
         (0, 0) => 1,
@@ -352,8 +352,8 @@ pub fn IsNull_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
 
 pub fn IsNullPos1_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Output boolean at bit position 1 instead of 0
-    let carry_field = block.move_carry_to_message().raw_mask_message();
-    let msg_field = block.raw_mask_message();
+    let carry_field = block.move_carry_to_message().raw_message_bits();
+    let msg_field = block.raw_message_bits();
 
     let result = match (carry_field, msg_field) {
         (0, 0) => 1 << 1,
@@ -364,8 +364,8 @@ pub fn IsNullPos1_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
 }
 
 pub fn NotNull_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let carry_field = block.move_carry_to_message().raw_mask_message();
-    let msg_field = block.raw_mask_message();
+    let carry_field = block.move_carry_to_message().raw_message_bits();
+    let msg_field = block.raw_message_bits();
 
     let result = match (carry_field, msg_field) {
         (0, 0) => 0,
@@ -376,7 +376,7 @@ pub fn NotNull_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
 }
 
 pub fn MsgNotNull_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
-    let msg_field = block.raw_mask_message();
+    let msg_field = block.raw_message_bits();
 
     let result = match msg_field {
         0 => 0,
@@ -390,7 +390,7 @@ pub fn MsgNotNullPos1_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlo
     // Return the null (0) or not null (1)
     // status of the msg part.
     // Put the result at position 1.
-    let msg_field = block.raw_mask_message();
+    let msg_field = block.raw_message_bits();
 
     let result = match msg_field {
         0 => 0,
@@ -404,14 +404,14 @@ pub fn ManyMsgSplitShift1_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertex
     // Use manyLUT : split msg in halves, inverse their position
     // in the message, and  output them separately.
     let lsb_size = (block.spec.message_size()).div_ceil(2);
-    let msg_lsb = block.raw_mask_message() & ((1 << lsb_size) - 1);
+    let msg_lsb = block.raw_message_bits() & ((1 << lsb_size) - 1);
 
     block.spec.from_message(msg_lsb << lsb_size)
 }
 
 pub fn ManyMsgSplitShift1_1(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let lsb_size = block.spec.message_size().div_ceil(2);
-    let result = block.raw_mask_message() >> lsb_size; // msg_msb
+    let result = block.raw_message_bits() >> lsb_size; // msg_msb
 
     block.spec.from_message(result)
 }
@@ -469,8 +469,8 @@ pub fn ExtractPropGroup0_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertext
     // set the value at the correct position location.
     // Here the position is 0.
     let position = 0;
-    let msg = block.raw_mask_message();
-    let carry = block.move_carry_to_message().raw_mask_message() & 1;
+    let msg = block.raw_message_bits();
+    let carry = block.move_carry_to_message().raw_message_bits() & 1;
 
     let result = if carry == 1 {
         2 << position // Generate
@@ -488,8 +488,8 @@ pub fn ExtractPropGroup1_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertext
     // set the value at the correct position location.
     // Here the position is 1.
     let position = 1;
-    let msg = block.raw_mask_message();
-    let carry = block.move_carry_to_message().raw_mask_message() & 1;
+    let msg = block.raw_message_bits();
+    let carry = block.move_carry_to_message().raw_message_bits() & 1;
 
     let result = if carry == 1 {
         2 << position // Generate
@@ -507,8 +507,8 @@ pub fn ExtractPropGroup2_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertext
     // set the value at the correct position location.
     // Here the position is 2.
     let position = 2;
-    let msg = block.raw_mask_message();
-    let carry = block.move_carry_to_message().raw_mask_message() & 1;
+    let msg = block.raw_message_bits();
+    let carry = block.move_carry_to_message().raw_message_bits() & 1;
 
     let result = if carry == 1 {
         2 << position // Generate
@@ -526,8 +526,8 @@ pub fn ExtractPropGroup3_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertext
     // set the value at the correct position location.
     // Here the position is 3.
     let position = 3;
-    let msg = block.raw_mask_message();
-    let carry = block.move_carry_to_message().raw_mask_message() & 1;
+    let msg = block.raw_message_bits();
+    let carry = block.move_carry_to_message().raw_message_bits() & 1;
 
     let result = if carry == 1 {
         2 << position // Generate
@@ -545,8 +545,8 @@ pub fn SolveProp_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // 2 propagation status are stored in the input:
     // MSB : propagation to solved
     // LSB : neighbor's propagation
-    let msb = block.move_carry_to_message().raw_mask_message();
-    let lsb = block.raw_mask_message();
+    let msb = block.move_carry_to_message().raw_message_bits();
+    let lsb = block.raw_message_bits();
 
     let result = if msb == 1 {
         // Propagate
@@ -564,8 +564,8 @@ pub fn SolvePropCarry_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlo
     // Output a carry value.
     // MSB : propagation to solved
     // LSB : neighbor's carry bit
-    let msb = block.move_carry_to_message().raw_mask_message();
-    let lsb = block.raw_mask_message();
+    let msb = block.move_carry_to_message().raw_message_bits();
+    let lsb = block.raw_message_bits();
 
     let result = if msb == 1 {
         // Propagate
@@ -587,7 +587,7 @@ pub fn SolveQuotient_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBloc
     // 'b1000 => 2 (sum = 1)
     // 'b1100 => 1 (sum = 2)
     // 'b1110 => 0 (sum = 3)
-    let v = block.raw_mask_data();
+    let v = block.raw_data_bits();
 
     let result = match v.sas::<usize>() {
         0 => 3,
@@ -613,7 +613,7 @@ pub fn SolveQuotientPos1_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertext
     // 'b1000 => 2 (sum = 1*2)
     // 'b1100 => 1 (sum = 2*2)
     // 'b1110 => 0 (sum = 3*2)
-    let v = block.raw_mask_data();
+    let v = block.raw_data_bits();
 
     let result = match v {
         0 => 3,
@@ -630,7 +630,7 @@ pub fn SolveQuotientPos1_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertext
 pub fn IfPos1FalseZeroed_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Ct must contain CondCt in Carry bit 1 and ValueCt in Msg. If condition it's *FALSE*, value ct
     // is forced to 0
-    let value = block.raw_mask_message();
+    let value = block.raw_message_bits();
     let cond = (block.storage >> (block.spec.message_size() + 1)) & 1;
 
     let result = if cond != 0 { value } else { 0 };
@@ -650,8 +650,8 @@ pub fn IfPos1FalseZeroedMsgCarry1_0(block: EmulatedCiphertextBlock) -> EmulatedC
 // Shift related Pbs
 pub fn ShiftLeftByCarryPos0Msg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Ct must contain shift amount only bit 1 considered
-    let value = block.raw_mask_message();
-    let shift = block.move_carry_to_message().raw_mask_message() & 0x1;
+    let value = block.raw_message_bits();
+    let shift = block.move_carry_to_message().raw_message_bits() & 0x1;
 
     let result = (value << shift) & block.spec.message_mask();
     block.spec.from_message(result)
@@ -659,8 +659,8 @@ pub fn ShiftLeftByCarryPos0Msg_0(block: EmulatedCiphertextBlock) -> EmulatedCiph
 
 pub fn ShiftLeftByCarryPos0MsgNext_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Ct must contain shift amount only bit 1 considered
-    let value = block.raw_mask_message();
-    let shift = block.move_carry_to_message().raw_mask_message() & 0x1;
+    let value = block.raw_message_bits();
+    let shift = block.move_carry_to_message().raw_message_bits() & 0x1;
 
     let result = ((value << shift) & block.spec.carry_mask()) >> block.spec.message_size();
     block.spec.from_message(result)
@@ -668,8 +668,8 @@ pub fn ShiftLeftByCarryPos0MsgNext_0(block: EmulatedCiphertextBlock) -> Emulated
 
 pub fn ShiftRightByCarryPos0Msg_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Ct must contain shift amount only bit 1 considered
-    let value = block.raw_mask_message();
-    let shift = block.move_carry_to_message().raw_mask_message() & 0x1;
+    let value = block.raw_message_bits();
+    let shift = block.move_carry_to_message().raw_message_bits() & 0x1;
 
     let result = (value >> shift) & block.spec.message_mask();
     block.spec.from_message(result)
@@ -678,8 +678,8 @@ pub fn ShiftRightByCarryPos0Msg_0(block: EmulatedCiphertextBlock) -> EmulatedCip
 pub fn ShiftRightByCarryPos0MsgNext_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Ct must contain shift amount only bit 1 considered
     // NB: MsgNext with right shift is the content of blk at the right position (i.e. LSB side)
-    let value = block.raw_mask_message();
-    let shift = block.move_carry_to_message().raw_mask_message() & 0x1;
+    let value = block.raw_message_bits();
+    let shift = block.move_carry_to_message().raw_message_bits() & 0x1;
 
     let result = ((value << block.spec.message_size()) >> shift) & block.spec.message_mask();
     block.spec.from_message(result)
@@ -688,8 +688,8 @@ pub fn ShiftRightByCarryPos0MsgNext_0(block: EmulatedCiphertextBlock) -> Emulate
 pub fn IfPos0TrueZeroed_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Ct must contain CondCt in Carry[0] and ValueCt in Msg. If condition it's *TRUE*, value ct is
     // forced to 0
-    let value = block.raw_mask_message();
-    let cond = block.move_carry_to_message().raw_mask_message() & 0x1;
+    let value = block.raw_message_bits();
+    let cond = block.move_carry_to_message().raw_message_bits() & 0x1;
 
     let result = if cond != 0 { 0 } else { value };
     block.spec.from_message(result)
@@ -698,8 +698,8 @@ pub fn IfPos0TrueZeroed_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextB
 pub fn IfPos0FalseZeroed_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Ct must contain CondCt in Carry[0] and ValueCt in Msg. If condition it's *FALSE*, value ct is
     // forced to 0
-    let value = block.raw_mask_message();
-    let cond = block.move_carry_to_message().raw_mask_message() & 0x1;
+    let value = block.raw_message_bits();
+    let cond = block.move_carry_to_message().raw_message_bits() & 0x1;
 
     let result = if cond != 0 { value } else { 0 };
     block.spec.from_message(result)
@@ -709,8 +709,8 @@ pub fn IfPos0FalseZeroed_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertext
 pub fn IfPos1TrueZeroed_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     // Ct must contain CondCt in Carry[1] and ValueCt in Msg. If condition it's *TRUE*, value ct is
     // forced to 0
-    let value = block.raw_mask_message();
-    let cond = (block.move_carry_to_message().raw_mask_message() >> 1) & 0x1;
+    let value = block.raw_message_bits();
+    let cond = (block.move_carry_to_message().raw_message_bits() >> 1) & 0x1;
 
     let result = if cond != 0 { 0 } else { value };
     block.spec.from_message(result)
@@ -959,14 +959,14 @@ pub fn ManyMsgSplit_0(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock
     // Use manyLUT : split msg in halves
     let lsb_size = block.spec.message_size().div_ceil(2);
 
-    let result = block.raw_mask_message() & ((1 << lsb_size) - 1); // msg_lsb
+    let result = block.raw_message_bits() & ((1 << lsb_size) - 1); // msg_lsb
     block.spec.from_message(result)
 }
 
 pub fn ManyMsgSplit_1(block: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
     let lsb_size = block.spec.message_size().div_ceil(2);
 
-    let result = block.raw_mask_message() >> lsb_size; // msg_msb
+    let result = block.raw_message_bits() >> lsb_size; // msg_msb
     block.spec.from_message(result)
 }
 
