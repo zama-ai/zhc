@@ -1,4 +1,4 @@
-# zhc_pipeline_correctness_macro
+# zhc_validation_macro
 
 Part of [ZHC](https://github.com/zama-ai/zhc), the compiler toolchain for FHE computation.
 

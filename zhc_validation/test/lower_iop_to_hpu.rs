@@ -2,10 +2,10 @@ use zhc::compat::Iop;
 use zhc_builder::{SpecInteger, add, cmp_gt};
 use zhc_ir::IR;
 use zhc_langs::{hpulang::HpuLang, ioplang::IopLang};
-use zhc_pipeline_correctness_macro::test_matrix;
 use zhc_utils::assert_display_is;
+use zhc_validation_macro::test_matrix;
 
-use zhc_pipeline_correctness::equivalence_check::check_iop_hpu_equivalence;
+use zhc_validation::equivalence_check::check_iop_hpu_equivalence;
 
 fn pipeline(ir: &IR<IopLang>) -> IR<HpuLang> {
     zhc_pipeline::passes::lower_iop_to_hpu(&ir).output

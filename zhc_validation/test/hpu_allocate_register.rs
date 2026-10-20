@@ -4,14 +4,14 @@ use zhc_config::hpu::{HpuConfig, PhysicalConfig};
 use zhc_crypto::integer_semantics::lut::LutRegistry;
 use zhc_ir::{IR, PrintWalker};
 use zhc_langs::{doplang::DopLang, ioplang::IopLang};
-use zhc_pipeline_correctness_macro::test_matrix;
 use zhc_utils::assert_display_is;
+use zhc_validation_macro::test_matrix;
 
 use zhc_pipeline::{
     SchedPolicy, extract_lut_registry,
     passes::{hpu_allocate_registers, hpu_schedule_legacy, lower_iop_to_hpu},
 };
-use zhc_pipeline_correctness::equivalence_check::check_iop_dop_equivalence;
+use zhc_validation::equivalence_check::check_iop_dop_equivalence;
 
 fn pipeline(ir: &IR<IopLang>) -> (IR<DopLang>, LutRegistry) {
     let lut_reg = extract_lut_registry(&ir);

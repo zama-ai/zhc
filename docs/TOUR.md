@@ -127,7 +127,7 @@ PBS R5 R2 PbsExtractPropGroup1
 <summary>More on verification</summary>
 <br>
     
-Every pass of the pipeline (including scheduling and register allocation) is verified, on [_the complete IOP library_](../zhc_pipeline_correctness), for precisions ranging from 2 to 128 bits. The current approach used for verification is differential evaluation. For each circuit, the IRs before and after the pass are both emulated (each dialect having its own emulator) on a large number of inputs, and the results are asserted bitwise equal.
+Every pass of the pipeline (including scheduling and register allocation) is verified, on [_the complete IOP library_](../zhc_validation), for precisions ranging from 2 to 128 bits. The current approach used for verification is differential evaluation. For each circuit, the IRs before and after the pass are both emulated (each dialect having its own emulator) on a large number of inputs, and the results are asserted bitwise equal.
 
 </details>
 

@@ -14,9 +14,11 @@ members = [
     "zhc_config",
     "zhc_vm",
     "zhc_profiling",
-    "zhc_pipeline_correctness",
-    "zhc_pipeline_correctness_macro",
+    "zhc_validation",
+    "zhc_validation_macro",
     "zhc_cli",
+    "zhc_abc_sys",
+    "zhc_abc",
 ]
 default-members = [
     "zhc",
@@ -32,9 +34,11 @@ default-members = [
     "zhc_bench",
     "zhc_config",
     "zhc_profiling",
-    "zhc_pipeline_correctness",
-    "zhc_pipeline_correctness_macro",
+    "zhc_validation",
+    "zhc_validation_macro",
     "zhc_cli",
+    "zhc_abc_sys",
+    "zhc_abc",
 ]
 resolver = "3"
 
@@ -59,9 +63,11 @@ zhc_crypto = { path = "zhc_crypto", version = "0.10.1" }
 zhc_bench = {path = "zhc_bench", version = "0.10.1" }
 zhc_vm = {path = "zhc_vm", version = "0.10.1" }
 zhc_profiling = {path = "zhc_profiling", version = "0.10.1" }
-zhc_pipeline_correctness = { path = "zhc_pipeline_correctness", version = "0.10.1" }
-zhc_pipeline_correctness_macro = { path = "zhc_pipeline_correctness_macro", version = "0.10.1" }
+zhc_validation = { path = "zhc_validation", version = "0.10.1" }
+zhc_validation_macro = { path = "zhc_validation_macro", version = "0.10.1" }
 zhc_cli = { path = "zhc_cli", version = "0.10.0" }
+zhc_abc_sys = { path = "zhc_abc_sys", version = "0.10.1" }
+zhc_abc = { path = "zhc_abc", version = "0.10.1" }
 
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -74,6 +80,7 @@ syn = { version = "2.0", features = ["full"] }
 proc-macro2 = "1.0"
 libc = "0.2"
 rustc-hash = "2.1"
+cc = "1"
 
 # Custom compilation profile
 # Compiles much faster for tests and allows reasonable performance for iterating

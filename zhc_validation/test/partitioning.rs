@@ -3,9 +3,9 @@ use zhc_builder::SpecInteger;
 use zhc_ir::IR;
 use zhc_langs::ioplang::IopLang;
 use zhc_pipeline::{PartitionSpec, PartitionerConfig, SchedPolicy, SpreadPolicy, TiePolicy};
-use zhc_pipeline_correctness::equivalence_check::check_iop_equivalence;
-use zhc_pipeline_correctness_macro::test_matrix;
 use zhc_utils::units::Cycle;
+use zhc_validation::equivalence_check::check_iop_equivalence;
+use zhc_validation_macro::test_matrix;
 
 fn pipeline(ir: &IR<IopLang>, config: &PartitionerConfig) -> IR<IopLang> {
     zhc_pipeline::passes::partition_and_materialize(ir, config).0

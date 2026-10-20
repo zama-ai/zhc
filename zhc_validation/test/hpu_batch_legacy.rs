@@ -3,9 +3,9 @@ use zhc_builder::{SpecInteger, add};
 use zhc_config::hpu::PhysicalConfig;
 use zhc_ir::IR;
 use zhc_langs::{hpulang::HpuLang, ioplang::IopLang};
-use zhc_pipeline_correctness::equivalence_check::check_iop_hpu_equivalence;
-use zhc_pipeline_correctness_macro::test_matrix;
 use zhc_utils::assert_display_is;
+use zhc_validation::equivalence_check::check_iop_hpu_equivalence;
+use zhc_validation_macro::test_matrix;
 
 use zhc_config::hpu::HpuConfig;
 use zhc_pipeline::{

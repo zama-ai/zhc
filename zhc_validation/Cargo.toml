@@ -1,5 +1,5 @@
 [package]
-name = "zhc_pipeline_correctness"
+name = "zhc_validation"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -15,7 +15,8 @@ zhc_utils.workspace = true
 zhc.workspace = true
 zhc_pipeline.workspace = true
 zhc_config.workspace = true
-zhc_pipeline_correctness_macro.workspace = true
+zhc_validation_macro.workspace = true
+zhc_abc.workspace = true
 
 [[test]]
 name = "partitioning"

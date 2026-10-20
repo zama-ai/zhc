@@ -6,10 +6,10 @@ use zhc_pipeline::{
     PartitionSpec, PartitionerConfig, SchedPolicy, SpreadPolicy, TiePolicy,
     partition_and_materialize,
 };
-use zhc_pipeline_correctness_macro::test_matrix;
 use zhc_utils::units::Cycle;
+use zhc_validation_macro::test_matrix;
 
-use zhc_pipeline_correctness::equivalence_check::check_iop_hpu_equivalence;
+use zhc_validation::equivalence_check::check_iop_hpu_equivalence;
 
 fn pipeline(ir: &IR<IopLang>, config: &PartitionerConfig) -> IR<HpuLang> {
     let (remat, partitions) = partition_and_materialize(ir, config);

@@ -10,9 +10,9 @@ use zhc_pipeline::{
     PartitionSpec, PartitionerConfig, SchedPolicy, SpreadPolicy, TiePolicy,
     passes::{lower_iop_to_multi_hpu, multi_hpu_schedule, partition_and_materialize},
 };
-use zhc_pipeline_correctness::equivalence_check::check_iop_multi_hpu_equivalence;
-use zhc_pipeline_correctness_macro::test_matrix;
 use zhc_utils::units::Cycle;
+use zhc_validation::equivalence_check::check_iop_multi_hpu_equivalence;
+use zhc_validation_macro::test_matrix;
 
 fn partitioner_config(
     n_hpus: usize,

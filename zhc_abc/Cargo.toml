@@ -1,0 +1,11 @@
+[package]
+name = "zhc_abc"
+description = "ZHC: Combinational equivalence checking with ABC"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+zhc_abc_sys.workspace = true
