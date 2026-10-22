@@ -26,7 +26,7 @@ fn main() {
         .arg("ABC_USE_NO_READLINE=1")
         .arg("ABC_USE_PIC=1")
         .arg("ABC_USE_STDINT_H=1")
-        .arg("OPTFLAGS=-O2")
+        .arg("OPTFLAGS=-O2 -fno-common")
         .arg(format!("-j{jobs}"))
         .arg("libabc.a")
         .status()

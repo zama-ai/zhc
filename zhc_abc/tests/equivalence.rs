@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use zhc_abc::{CheckError, CheckOptions, Circuit, Lit, Verdict, check_equivalence};
+use zhc_utils::assert_display_is;
 
 struct Recorded {
     circuit: Circuit,
@@ -126,8 +127,58 @@ fn build(width: usize, adder: fn(&mut Recorded, &[Lit], &[Lit]) -> Vec<Lit>) -> 
 
 #[test]
 fn different_adders_are_equivalent() {
-    let left = build(16, ripple_adder);
-    let right = build(16, majority_adder);
+    let left = build(2, ripple_adder);
+    let right = build(2, majority_adder);
+    assert_display_is!(
+        left.circuit,
+        r#"
+            n1 = input 0
+            n2 = input 1
+            n3 = input 2
+            n4 = input 3
+            n5 = and(n1, !n3)
+            n6 = and(!n1, n3)
+            n7 = and(!n5, !n6)
+            n8 = and(n1, n3)
+            n9 = and(n2, !n4)
+            n10 = and(!n2, n4)
+            n11 = and(!n9, !n10)
+            n12 = and(!n8, !n11)
+            n13 = and(n8, n11)
+            n14 = and(!n12, !n13)
+            n15 = and(n2, n4)
+            n16 = and(n8, !n11)
+            n17 = and(!n15, !n16)
+            output 0 = !n7
+            output 1 = !n14
+        "#
+    );
+    assert_display_is!(
+        right.circuit,
+        r#"
+            n1 = input 0
+            n2 = input 1
+            n3 = input 2
+            n4 = input 3
+            n5 = and(n1, !n3)
+            n6 = and(!n1, n3)
+            n7 = and(!n5, !n6)
+            n8 = and(n1, n3)
+            n9 = and(n2, !n4)
+            n10 = and(!n2, n4)
+            n11 = and(!n9, !n10)
+            n12 = and(n8, n11)
+            n13 = and(!n8, !n11)
+            n14 = and(!n12, !n13)
+            n15 = and(n2, n4)
+            n16 = and(n2, n8)
+            n17 = and(n4, n8)
+            n18 = and(!n15, !n16)
+            n19 = and(!n17, n18)
+            output 0 = !n7
+            output 1 = !n14
+        "#
+    );
     let verdict =
         check_equivalence(&left.circuit, &right.circuit, &CheckOptions::default()).unwrap();
     assert_eq!(verdict, Verdict::Equivalent);
@@ -135,21 +186,74 @@ fn different_adders_are_equivalent() {
 
 #[test]
 fn broken_adder_gives_a_valid_counterexample() {
-    let left = build(16, ripple_adder);
+    let left = build(2, ripple_adder);
     let mut right = Recorded::new();
-    let a: Vec<Lit> = (0..16).map(|_| right.input()).collect();
-    let b: Vec<Lit> = (0..16).map(|_| right.input()).collect();
+    let a: Vec<Lit> = (0..2).map(|_| right.input()).collect();
+    let b: Vec<Lit> = (0..2).map(|_| right.input()).collect();
     let mut s = majority_adder(&mut right, &a, &b);
-    s[9] = right.xor(s[9], a[3]);
+    s[1] = right.xor(s[1], a[0]);
     for l in s {
         right.output(l);
     }
+    assert_display_is!(
+        left.circuit,
+        r#"
+            n1 = input 0
+            n2 = input 1
+            n3 = input 2
+            n4 = input 3
+            n5 = and(n1, !n3)
+            n6 = and(!n1, n3)
+            n7 = and(!n5, !n6)
+            n8 = and(n1, n3)
+            n9 = and(n2, !n4)
+            n10 = and(!n2, n4)
+            n11 = and(!n9, !n10)
+            n12 = and(!n8, !n11)
+            n13 = and(n8, n11)
+            n14 = and(!n12, !n13)
+            n15 = and(n2, n4)
+            n16 = and(n8, !n11)
+            n17 = and(!n15, !n16)
+            output 0 = !n7
+            output 1 = !n14
+        "#
+    );
+    assert_display_is!(
+        right.circuit,
+        r#"
+            n1 = input 0
+            n2 = input 1
+            n3 = input 2
+            n4 = input 3
+            n5 = and(n1, !n3)
+            n6 = and(!n1, n3)
+            n7 = and(!n5, !n6)
+            n8 = and(n1, n3)
+            n9 = and(n2, !n4)
+            n10 = and(!n2, n4)
+            n11 = and(!n9, !n10)
+            n12 = and(n8, n11)
+            n13 = and(!n8, !n11)
+            n14 = and(!n12, !n13)
+            n15 = and(n2, n4)
+            n16 = and(n2, n8)
+            n17 = and(n4, n8)
+            n18 = and(!n15, !n16)
+            n19 = and(!n17, n18)
+            n20 = and(!n1, !n14)
+            n21 = and(n1, n14)
+            n22 = and(!n20, !n21)
+            output 0 = !n7
+            output 1 = !n22
+        "#
+    );
     let verdict =
         check_equivalence(&left.circuit, &right.circuit, &CheckOptions::default()).unwrap();
     let Verdict::NotEquivalent(cex) = verdict else {
         panic!("expected a counterexample, got {verdict:?}");
     };
-    assert_eq!(cex.inputs.len(), 32);
+    assert_eq!(cex.inputs.len(), 4);
     let l = left.eval(&cex.inputs);
     let r = right.eval(&cex.inputs);
     assert_ne!(l, r);
@@ -158,11 +262,47 @@ fn broken_adder_gives_a_valid_counterexample() {
 
 #[test]
 fn shape_mismatch_is_an_error() {
-    let left = build(8, ripple_adder);
-    let right = build(4, ripple_adder);
+    let left = build(2, ripple_adder);
+    let right = build(1, ripple_adder);
+    assert_display_is!(
+        left.circuit,
+        r#"
+            n1 = input 0
+            n2 = input 1
+            n3 = input 2
+            n4 = input 3
+            n5 = and(n1, !n3)
+            n6 = and(!n1, n3)
+            n7 = and(!n5, !n6)
+            n8 = and(n1, n3)
+            n9 = and(n2, !n4)
+            n10 = and(!n2, n4)
+            n11 = and(!n9, !n10)
+            n12 = and(!n8, !n11)
+            n13 = and(n8, n11)
+            n14 = and(!n12, !n13)
+            n15 = and(n2, n4)
+            n16 = and(n8, !n11)
+            n17 = and(!n15, !n16)
+            output 0 = !n7
+            output 1 = !n14
+        "#
+    );
+    assert_display_is!(
+        right.circuit,
+        r#"
+            n1 = input 0
+            n2 = input 1
+            n3 = and(n1, !n2)
+            n4 = and(!n1, n2)
+            n5 = and(!n3, !n4)
+            n6 = and(n1, n2)
+            output 0 = !n5
+        "#
+    );
     let err =
         check_equivalence(&left.circuit, &right.circuit, &CheckOptions::default()).unwrap_err();
-    assert_eq!(err, CheckError::InputCountMismatch { left: 16, right: 8 });
+    assert_eq!(err, CheckError::InputCountMismatch { left: 4, right: 2 });
 }
 
 #[test]
@@ -178,10 +318,44 @@ fn constants_fold() {
     assert_eq!(c.and(x, nx), Lit::FALSE);
     assert_eq!(c.and(x, x), x);
     assert_eq!(c.n_ands(), 0);
+    c.output(x);
+    c.output(nx);
+    assert_display_is!(
+        c,
+        r#"
+            n1 = input 0
+            output 0 = n1
+            output 1 = !n1
+        "#
+    );
 }
 
 #[test]
 fn parallel_checks_agree_with_serial_ones() {
+    assert_display_is!(
+        build(2, ripple_adder).circuit,
+        r#"
+            n1 = input 0
+            n2 = input 1
+            n3 = input 2
+            n4 = input 3
+            n5 = and(n1, !n3)
+            n6 = and(!n1, n3)
+            n7 = and(!n5, !n6)
+            n8 = and(n1, n3)
+            n9 = and(n2, !n4)
+            n10 = and(!n2, n4)
+            n11 = and(!n9, !n10)
+            n12 = and(!n8, !n11)
+            n13 = and(n8, n11)
+            n14 = and(!n12, !n13)
+            n15 = and(n2, n4)
+            n16 = and(n8, !n11)
+            n17 = and(!n15, !n16)
+            output 0 = !n7
+            output 1 = !n14
+        "#
+    );
     let expected: Vec<(usize, bool)> = (0..64).map(|i| (4 + i % 13, i % 3 == 0)).collect();
     let run = |(width, broken): (usize, bool)| -> bool {
         let left = build(width, ripple_adder);
@@ -223,4 +397,29 @@ fn parallel_checks_agree_with_serial_ones() {
             assert_eq!(ok, serial[i], "verdict differs in parallel for case {i}");
         }
     }
+}
+
+#[test]
+fn display_lists_inputs_gates_and_outputs() {
+    let mut c = Circuit::new();
+    let a = c.input();
+    let b = c.input();
+    let x = c.xor(a, b);
+    c.output(x);
+    let na = c.not(a);
+    c.output(na);
+    c.output(Lit::TRUE);
+    assert_display_is!(
+        c,
+        r#"
+            n1 = input 0
+            n2 = input 1
+            n3 = and(n1, !n2)
+            n4 = and(!n1, n2)
+            n5 = and(!n3, !n4)
+            output 0 = !n5
+            output 1 = !n1
+            output 2 = true
+        "#
+    );
 }

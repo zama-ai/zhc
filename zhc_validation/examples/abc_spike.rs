@@ -3,9 +3,8 @@ use std::process::Command;
 use std::time::Instant;
 
 use zhc::compat::Iop;
-use zhc_builder::CiphertextSpec;
 use zhc_config::hpu::{HpuConfig, PhysicalConfig};
-use zhc_crypto::integer_semantics::{CiphertextBlockSpec, lut::LookupCheck};
+use zhc_crypto::integer_semantics::{SpecBlock, SpecInteger, lut::LookupCheck};
 use zhc_ir::{IR, ValId};
 use zhc_langs::hpulang::{HpuInstructionSet, HpuLang, TDstId, TImmId, TSrcId};
 use zhc_pipeline::{
@@ -277,7 +276,7 @@ impl Blocks {
 }
 
 fn enumerate_table(
-    spec: CiphertextBlockSpec,
+    spec: SpecBlock,
     f: impl Fn(zhc_crypto::integer_semantics::EmulatedCiphertextBlock) -> u16,
 ) -> Vec<u16> {
     let n = 1usize << spec.complete_size();
@@ -331,7 +330,7 @@ struct Export {
 struct Exporter {
     g: Aig,
     blocks: Blocks,
-    spec: CiphertextBlockSpec,
+    spec: SpecBlock,
     sources: FastMap<TSrcId, Bundle>,
     immediates: FastMap<TImmId, Bundle>,
     destinations: FastMap<TDstId, Bundle>,
@@ -403,7 +402,7 @@ impl Exporter {
             MulCst { cst } => vec![blocks.mul_const(g, &args[0], cst.0 as u16)],
             Pbs { lut } | PbsF { lut } => {
                 let mut t = enumerate_table(spec, |b| {
-                    lut.lookup(b, LookupCheck::AllowBothPadding).raw_complete_bits()
+                    lut.lookup(b, LookupCheck::Permissive).raw_complete_bits()
                 });
                 if self.mutate && !self.mutated {
                     self.mutated = true;
@@ -414,7 +413,7 @@ impl Exporter {
             Pbs2 { lut } | Pbs2F { lut } => (0..2)
                 .map(|k| {
                     let t = enumerate_table(spec, |b| {
-                        let r = lut.lookup(b, LookupCheck::AllowOutputPadding);
+                        let r = lut.lookup(b, LookupCheck::Permissive);
                         [r.0, r.1][k].raw_complete_bits()
                     });
                     blocks.table(g, &args[0], &t)
@@ -423,7 +422,7 @@ impl Exporter {
             Pbs4 { lut } | Pbs4F { lut } => (0..4)
                 .map(|k| {
                     let t = enumerate_table(spec, |b| {
-                        let r = lut.lookup(b, LookupCheck::AllowOutputPadding);
+                        let r = lut.lookup(b, LookupCheck::Permissive);
                         [r.0, r.1, r.2, r.3][k].raw_complete_bits()
                     });
                     blocks.table(g, &args[0], &t)
@@ -432,7 +431,7 @@ impl Exporter {
             Pbs8 { lut } | Pbs8F { lut } => (0..8)
                 .map(|k| {
                     let t = enumerate_table(spec, |b| {
-                        let r = lut.lookup(b, LookupCheck::AllowOutputPadding);
+                        let r = lut.lookup(b, LookupCheck::Permissive);
                         [r.0, r.1, r.2, r.3, r.4, r.5, r.6, r.7][k].raw_complete_bits()
                     });
                     blocks.table(g, &args[0], &t)
@@ -472,7 +471,7 @@ impl Exporter {
 
 fn export(
     ir: &IR<HpuLang>,
-    spec: CiphertextBlockSpec,
+    spec: SpecBlock,
     io: &Io,
     mutate: bool,
     alt: bool,
@@ -531,7 +530,7 @@ fn export(
     }
 }
 
-fn selfcheck(spec: CiphertextBlockSpec, alt: bool) {
+fn selfcheck(spec: SpecBlock, alt: bool) {
     let width = spec.complete_size() as usize;
     let blocks = Blocks { width, alt };
     let n = 1u16 << width;
@@ -574,7 +573,7 @@ fn main() {
     let dir = "/tmp/abc_spike";
     std::fs::create_dir_all(dir).unwrap();
 
-    let ct_spec = CiphertextSpec::new(size, 2, 2);
+    let ct_spec = SpecInteger::new(size, 2, 2);
     let spec = ct_spec.block_spec();
     selfcheck(spec, false);
     selfcheck(spec, true);

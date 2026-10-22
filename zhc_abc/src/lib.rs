@@ -199,6 +199,43 @@ impl Circuit {
     }
 }
 
+impl std::fmt::Display for Circuit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let p = self.man.as_ptr();
+        let lit = |l: i32| -> String {
+            let var = l >> 1;
+            let neg = l & 1 == 1;
+            match (var, neg) {
+                (0, false) => "false".to_string(),
+                (0, true) => "true".to_string(),
+                (v, false) => format!("n{v}"),
+                (v, true) => format!("!n{v}"),
+            }
+        };
+        let n_objs = unsafe { sys::zhc_abc_gia_obj_num(p) };
+        for id in 0..n_objs {
+            match unsafe { sys::zhc_abc_gia_obj_kind(p, id) } {
+                1 => {
+                    let k = unsafe { sys::zhc_abc_gia_obj_cio_id(p, id) };
+                    writeln!(f, "n{id} = input {k}")?;
+                }
+                2 => {
+                    let a = unsafe { sys::zhc_abc_gia_obj_fanin0_lit(p, id) };
+                    let b = unsafe { sys::zhc_abc_gia_obj_fanin1_lit(p, id) };
+                    writeln!(f, "n{id} = and({}, {})", lit(a), lit(b))?;
+                }
+                3 => {
+                    let k = unsafe { sys::zhc_abc_gia_obj_cio_id(p, id) };
+                    let a = unsafe { sys::zhc_abc_gia_obj_fanin0_lit(p, id) };
+                    writeln!(f, "output {k} = {}", lit(a))?;
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+}
+
 impl Drop for Circuit {
     fn drop(&mut self) {
         unsafe { sys::zhc_abc_gia_stop(self.man.as_ptr()) };

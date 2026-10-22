@@ -1491,6 +1491,7 @@ name = "zhc_abc"
 version = "0.10.1"
 dependencies = [
  "zhc_abc_sys",
+ "zhc_utils",
 ]
 
 [[package]]

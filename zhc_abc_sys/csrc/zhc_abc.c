@@ -38,6 +38,39 @@ int zhc_abc_gia_and_num(Gia_Man_t *p) {
     return Gia_ManAndNum(p);
 }
 
+int zhc_abc_gia_obj_num(Gia_Man_t *p) {
+    return Gia_ManObjNum(p);
+}
+
+int zhc_abc_gia_obj_kind(Gia_Man_t *p, int id) {
+    Gia_Obj_t *obj = Gia_ManObj(p, id);
+    if (Gia_ObjIsConst0(obj)) {
+        return 0;
+    }
+    if (Gia_ObjIsCi(obj)) {
+        return 1;
+    }
+    if (Gia_ObjIsAnd(obj)) {
+        return 2;
+    }
+    if (Gia_ObjIsCo(obj)) {
+        return 3;
+    }
+    return -1;
+}
+
+int zhc_abc_gia_obj_cio_id(Gia_Man_t *p, int id) {
+    return Gia_ObjCioId(Gia_ManObj(p, id));
+}
+
+int zhc_abc_gia_obj_fanin0_lit(Gia_Man_t *p, int id) {
+    return Gia_ObjFaninLit0(Gia_ManObj(p, id), id);
+}
+
+int zhc_abc_gia_obj_fanin1_lit(Gia_Man_t *p, int id) {
+    return Gia_ObjFaninLit1(Gia_ManObj(p, id), id);
+}
+
 int zhc_abc_cec_verify(
     Gia_Man_t *p0,
     Gia_Man_t *p1,

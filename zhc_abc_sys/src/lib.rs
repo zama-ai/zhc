@@ -16,6 +16,11 @@ unsafe extern "C" {
     pub fn zhc_abc_gia_ci_num(p: *mut Gia_Man_t) -> c_int;
     pub fn zhc_abc_gia_co_num(p: *mut Gia_Man_t) -> c_int;
     pub fn zhc_abc_gia_and_num(p: *mut Gia_Man_t) -> c_int;
+    pub fn zhc_abc_gia_obj_num(p: *mut Gia_Man_t) -> c_int;
+    pub fn zhc_abc_gia_obj_kind(p: *mut Gia_Man_t, id: c_int) -> c_int;
+    pub fn zhc_abc_gia_obj_cio_id(p: *mut Gia_Man_t, id: c_int) -> c_int;
+    pub fn zhc_abc_gia_obj_fanin0_lit(p: *mut Gia_Man_t, id: c_int) -> c_int;
+    pub fn zhc_abc_gia_obj_fanin1_lit(p: *mut Gia_Man_t, id: c_int) -> c_int;
     pub fn zhc_abc_cec_verify(
         p0: *mut Gia_Man_t,
         p1: *mut Gia_Man_t,

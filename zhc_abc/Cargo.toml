@@ -9,3 +9,6 @@ publish = false
 
 [dependencies]
 zhc_abc_sys.workspace = true
+
+[dev-dependencies]
+zhc_utils.workspace = true
