@@ -134,8 +134,8 @@
 //! let result = builder.ciphertext_integer_join(&sum_blocks, None);
 //! builder.ciphertext_integer_output(&result);
 //!
-//! // 5. Finalize — this runs dead-code elimination and CSE.
-//! let ir = builder.optimize_ir();
+//! // 5. Get the IR. Optimization happens later, in the compilation pipeline.
+//! let ir = builder.ir();
 //! ```
 
 const NU: usize = 5;

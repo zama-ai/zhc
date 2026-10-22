@@ -263,7 +263,7 @@ mod tests {
         // Simulate computing analysis for each (op, bits) pair
         for (row_idx, op) in ops.iter().enumerate() {
             for (col_idx, bits) in bits.iter().enumerate() {
-                // This would be: let ir = builder.optimize_ir(); analyze_ir(&ir)
+                // This would be: let ir = builder.ir(); analyze_ir(&ir)
                 let analysis_result = format!("{} ops @ {}b", op.len() * 10, bits);
                 table.set(row_idx, col_idx, analysis_result);
             }

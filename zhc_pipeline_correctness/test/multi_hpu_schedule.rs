@@ -61,7 +61,7 @@ fn count_transfers(hpu_irs: &[IR<HpuLang>]) -> (usize, usize) {
 #[test]
 fn smoke() {
     let spec = SpecInteger::new(8, 2, 2);
-    let iop_ir = Iop::Add.to_builder(spec).optimize_ir();
+    let iop_ir = zhc_pipeline::passes::optimize_iop(&Iop::Add.to_builder(spec).ir());
     let config = partitioner_config(
         2,
         SchedPolicy::AsSoonAsPossible,
@@ -96,7 +96,7 @@ fn correctness(
     n_hpus: usize,
 ) {
     let spec = SpecInteger::new(size, 2, 2);
-    let iop_ir = iop.to_builder(spec).optimize_ir();
+    let iop_ir = zhc_pipeline::passes::optimize_iop(&iop.to_builder(spec).ir());
     let config = partitioner_config(n_hpus, schedp, tiep, spreadp);
     let hpu_irs = pipeline(&iop_ir, &config);
     check_iop_multi_hpu_equivalence(&iop_ir, &hpu_irs, spec.block_spec(), 100);

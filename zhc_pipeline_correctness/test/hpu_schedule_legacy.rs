@@ -22,7 +22,9 @@ fn pipeline(ir: &IR<IopLang>) -> IR<HpuLang> {
 
 #[test]
 fn smoke() {
-    let ir = pipeline(&count_0(SpecInteger::new(16, 2, 2)).optimize_ir());
+    let ir = pipeline(&zhc_pipeline::passes::optimize_iop(
+        &count_0(SpecInteger::new(16, 2, 2)).ir(),
+    ));
     assert_display_is!(
         ir.format(),
         r#"
@@ -142,7 +144,7 @@ fn smoke() {
 fn correctness(iop: Iop, size: u16) {
     let b = iop.to_builder(SpecInteger::new(size, 2, 2));
     let spec = *b.spec();
-    let iop_ir = b.optimize_ir();
+    let iop_ir = zhc_pipeline::passes::optimize_iop(&b.ir());
     let hpu_ir = pipeline(&iop_ir);
     check_iop_hpu_equivalence(&iop_ir, &hpu_ir, spec, 100);
 }

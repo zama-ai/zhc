@@ -12,7 +12,7 @@ use zhc_pipeline::Pipeline;
 
 #[test]
 fn hpu_stream_reflects_lut_relocation_set_after_first_pull() {
-    let ir = add(SpecInteger::new(16, 2, 2)).optimize_ir();
+    let ir = add(SpecInteger::new(16, 2, 2)).ir().clone();
     let config = HpuConfig::from(PhysicalConfig::gaussian_64b_fast());
 
     let mut pipeline = Pipeline::new()

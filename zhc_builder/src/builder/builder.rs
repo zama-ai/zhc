@@ -14,7 +14,7 @@
 //! let doubled: Vec<_> = blocks.iter().map(|b| builder.block_add(b, b)).collect();
 //! let output = builder.ciphertext_integer_join(&doubled, None);
 //! builder.ciphertext_integer_output(&output);
-//! let ir = builder.optimize_ir();
+//! let ir = builder.ir();
 //! ```
 
 use crate::{
@@ -34,14 +34,12 @@ use zhc_crypto::integer_semantics::{
 };
 use zhc_ir::{
     AnnIR, IR, OpId, OpMap, PrintWalker, Signature, ValId,
-    cse::eliminate_common_subexpressions,
-    dce::eliminate_dead_code,
     partitioning::{PartitionAnnotation, PartitionId, PartitionPlacement, PartitionTable},
     visualization::{Hierarchy, draw_ann_ir_to_html, draw_ir_to_html},
 };
 use zhc_langs::ioplang::{
     IopInstructionSet, IopLang, IopTypeSystem, IopValue, Lut1, Lut2, Lut4, Lut8, analyze_noise,
-    check_noise, eliminate_aliases, skip_redundant_stores, skip_store_load,
+    check_noise,
 };
 use zhc_utils::{
     Dumpable, FastSet, SafeAs, Store, StoreIndex,
@@ -52,17 +50,6 @@ use zhc_utils::{
 };
 
 pub use zhc_crypto::integer_semantics::Type;
-
-/// What kind of IR to work on.
-///
-/// Passed as argument to the `draw*` and `partition*` methods in order to specify which IR must be
-/// used.
-pub enum IrKind {
-    /// Use the original IR, as built by the builder.
-    Original,
-    /// Use the optimized IR, notably after dead code elimination.
-    Optimized,
-}
 
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct InnerBuilder {
@@ -109,7 +96,7 @@ impl InnerBuilder {
 /// A [`Builder`] accumulates IR instructions through its methods, using interior mutability
 /// so that all operations take `&self`. The typical lifecycle is: create a builder, declare
 /// inputs, emit block-level or vector-level operations, declare outputs, and finally call
-/// [`optimize_ir`](Self::optimize_ir) to obtain the optimized IR.
+/// [`ir`](Self::ir) to obtain the IR. Optimization is a step of the compilation pipeline.
 ///
 /// Every builder is parameterized by a single [`SpecBlock`] that defines the
 /// message/carry bit layout shared by all ciphertext blocks in the circuit. This spec is
@@ -145,7 +132,7 @@ impl InnerBuilder {
 /// // ... operate on blocks ...
 /// let output = builder.ciphertext_integer_join(&blocks, None);
 /// builder.ciphertext_integer_output(&output);
-/// let ir = builder.optimize_ir();
+/// let ir = builder.ir();
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Builder {
@@ -198,35 +185,6 @@ impl Builder {
         }
     }
 
-    /// Returns an optimized copy of the circuit's IR graph.
-    ///
-    /// The builder keeps the IR exactly as it was built. This method clones it and runs the
-    /// IOP optimization passes on the copy: alias elimination, store/load forwarding, removal of
-    /// redundant stores, dead code elimination, and common subexpression elimination. The
-    /// builder itself is left unchanged, so the method can be called at any time and as many
-    /// times as needed. Use it to inspect what the compiler actually lowers, or to feed the IR
-    /// to the compilation passes directly.
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// # use zhc_builder::*;
-    /// let builder = Builder::new(SpecBlock(2, 2));
-    /// let ct = builder.ciphertext_integer_input(8);
-    /// builder.ciphertext_integer_output(&ct);
-    /// let ir = builder.optimize_ir();
-    /// ```
-    pub fn optimize_ir(&self) -> IR<IopLang> {
-        let mut ir = self.ir().clone();
-        eliminate_aliases(&mut ir);
-        skip_store_load(&mut ir);
-        eliminate_dead_code(&mut ir);
-        skip_redundant_stores(&mut ir);
-        eliminate_dead_code(&mut ir);
-        eliminate_common_subexpressions(&mut ir);
-        ir
-    }
-
     /// Returns the block specification shared by all ciphertext blocks in this circuit.
     ///
     /// This is the specification given to [`new`](Self::new). Every block, integer, and lookup
@@ -243,10 +201,10 @@ impl Builder {
         self.inner().sig.clone()
     }
 
-    /// Borrows the current (unoptimized) IR graph.
+    /// Borrows the current IR graph, exactly as built.
     ///
-    /// Unlike [`optimize_ir`](Self::optimize_ir), this does not consume the builder and does not
-    /// apply any optimization passes. Useful for debugging and inspection mid-construction.
+    /// No optimization pass is applied. The borrow can be taken at any time, including
+    /// mid-construction.
     pub fn ir(&self) -> Ref<'_, IR<IopLang>> {
         Ref::map(self.inner(), |inner| &inner.ir)
     }
@@ -366,15 +324,11 @@ impl Builder {
     /// # use zhc_builder::*;
     /// # let builder = Builder::new(SpecBlock(2, 2));
     /// # let ct = builder.ciphertext_integer_input(4);
-    /// builder.draw(IrKind::Original).open().unwrap();
+    /// builder.draw().open().unwrap();
     /// ```
-    pub fn draw(&self, kind: IrKind) -> FileHandle {
-        let ir = match kind {
-            IrKind::Original => &self.ir(),
-            IrKind::Optimized => &self.optimize_ir(),
-        };
+    pub fn draw(&self) -> FileHandle {
         draw_ir_to_html(
-            ir,
+            &self.ir(),
             Some(
                 self.ir()
                     .partially_mapped_opmap(|op| self.inner().hierarchies.get(*op).cloned()),
@@ -400,14 +354,11 @@ impl Builder {
     /// # use zhc_builder::*;
     /// # let builder = Builder::new(SpecBlock(2, 2));
     /// # let ct = builder.ciphertext_integer_input(4);
-    /// builder.draw_partitions(IrKind::Original).open().unwrap();
+    /// builder.draw_partitions().open().unwrap();
     /// ```
-    pub fn draw_partitions(&self, kind: IrKind) -> FileHandle {
-        let ir = match kind {
-            IrKind::Original => &self.ir(),
-            IrKind::Optimized => &self.optimize_ir(),
-        };
-        let ann_ir = AnnIR::new(ir, self.partitions(kind), ir.filled_valmap(()));
+    pub fn draw_partitions(&self) -> FileHandle {
+        let ir = self.ir();
+        let ann_ir = AnnIR::new(&ir, self.partitions(), ir.filled_valmap(()));
         draw_ann_ir_to_html(
             &ann_ir.view(),
             Some(
@@ -503,7 +454,7 @@ impl Builder {
         id: <PartitionId as StoreIndex>::Raw,
     ) -> Option<PartitionAnnotation> {
         let mut part_set = self
-            .partitions(IrKind::Original)
+            .partitions()
             .into_iter()
             .map(|p| p.1)
             .filter(|p| p.placement == PartitionPlacement::Exclusive(PartitionId(id)))
@@ -574,9 +525,9 @@ impl Builder {
             .reduce(|acc, p| self.merge_partitions(acc, p))
     }
 
-    /// Returns the partition assigned to every operation of the given IR.
+    /// Returns the partition assigned to every operation of the IR.
     ///
-    /// Produces an [`OpMap`] associating each operation of `ir` with its [`PartitionAnnotation`],
+    /// Produces an [`OpMap`] associating each operation of the IR with its [`PartitionAnnotation`],
     /// capturing the current partition assignment of the whole graph. This is the raw
     /// per-operation view; for a de-duplicated overview see
     /// [`partitions_table`](Self::partitions_table).
@@ -587,19 +538,16 @@ impl Builder {
     /// # use zhc_builder::*;
     /// # let builder = Builder::new(SpecBlock(2, 2));
     /// # let ct = builder.ciphertext_integer_input(4);
-    /// let per_op = builder.partitions(IrKind::Original);
+    /// let per_op = builder.partitions();
     /// ```
-    pub fn partitions(&self, kind: IrKind) -> OpMap<PartitionAnnotation> {
-        let ir = match kind {
-            IrKind::Original => &self.ir(),
-            IrKind::Optimized => &self.optimize_ir(),
-        };
-        ir.totally_mapped_opmap(|op| self.inner().partitions[*op].clone())
+    pub fn partitions(&self) -> OpMap<PartitionAnnotation> {
+        self.ir()
+            .totally_mapped_opmap(|op| self.inner().partitions[*op].clone())
     }
 
-    /// Returns the distinct partitions of the given IR as an inspection table.
+    /// Returns the distinct partitions of the IR as an inspection table.
     ///
-    /// Collapses the per-operation assignment of `ir` into a [`PartitionTable`] — the sorted,
+    /// Collapses the per-operation assignment of the IR into a [`PartitionTable`] — the sorted,
     /// de-duplicated set of partitions the graph is split into — which is convenient for
     /// inspecting the available units of computation at a glance.
     ///
@@ -609,11 +557,11 @@ impl Builder {
     /// # use zhc_builder::*;
     /// # let builder = Builder::new(SpecBlock(2, 2));
     /// # let ct = builder.ciphertext_integer_input(4);
-    /// let table = builder.partitions_table(IrKind::Original);
+    /// let table = builder.partitions_table();
     /// ```
-    pub fn partitions_table(&self, kind: IrKind) -> PartitionTable {
+    pub fn partitions_table(&self) -> PartitionTable {
         PartitionTable::from(
-            self.partitions(kind)
+            self.partitions()
                 .into_iter()
                 .map(|(_k, v)| v)
                 .collect::<std::collections::BTreeSet<_>>(),

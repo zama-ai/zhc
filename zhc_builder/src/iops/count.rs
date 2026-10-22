@@ -22,7 +22,7 @@ use crate::{
 /// # use zhc_builder::{SpecInteger, count_0};
 /// # let spec = SpecInteger::new(16, 2, 2);
 /// let builder = count_0(spec);
-/// let ir = builder.optimize_ir();
+/// let ir = builder.ir();
 /// ```
 pub fn count_0(spec: SpecInteger) -> Builder {
     let builder = Builder::new(spec.block_spec());
@@ -43,7 +43,7 @@ pub fn count_0(spec: SpecInteger) -> Builder {
 /// # use zhc_builder::{SpecInteger, count_1};
 /// # let spec = SpecInteger::new(16, 2, 2);
 /// let builder = count_1(spec);
-/// let ir = builder.optimize_ir();
+/// let ir = builder.ir();
 /// ```
 pub fn count_1(spec: SpecInteger) -> Builder {
     let builder = Builder::new(spec.block_spec());
@@ -240,7 +240,7 @@ mod test {
     #[test]
     fn test_count0() {
         let spec = SpecInteger::new(18, 2, 2);
-        let ir = count_0(spec).optimize_ir();
+        let ir = zhc_pipeline::passes::optimize_iop(&count_0(spec).ir());
         assert_display_is!(
             ir.format()
                 .with_walker(zhc_ir::PrintWalker::Linear)

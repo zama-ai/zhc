@@ -27,7 +27,7 @@ pub enum SumKind {
 /// # use zhc_builder::{SpecInteger, sum};
 /// # let spec = SpecInteger::new(16, 2, 2);
 /// let builder = sum(spec, 4);
-/// let ir = builder.optimize_ir();
+/// let ir = builder.ir();
 /// ```
 pub fn sum(spec: SpecInteger, n: usize) -> Builder {
     let builder = Builder::new(spec.block_spec());
@@ -316,7 +316,9 @@ mod test {
 
     #[test]
     fn test_sum_column_reduce() {
-        let ir = sum_column_reduce(SpecInteger::new(4, 2, 2), 3).optimize_ir();
+        let ir = zhc_pipeline::passes::optimize_iop(
+            &sum_column_reduce(SpecInteger::new(4, 2, 2), 3).ir(),
+        );
         assert_display_is!(
             ir.format()
                 .show_comments(false)
@@ -363,7 +365,9 @@ mod test {
 
     #[test]
     fn test_sum_ripple_carry() {
-        let ir = sum_ripple_carry(SpecInteger::new(4, 2, 2), 3).optimize_ir();
+        let ir = zhc_pipeline::passes::optimize_iop(
+            &sum_ripple_carry(SpecInteger::new(4, 2, 2), 3).ir(),
+        );
         assert_display_is!(
             ir.format()
                 .show_comments(false)

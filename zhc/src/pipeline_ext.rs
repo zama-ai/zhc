@@ -1,12 +1,13 @@
-use zhc_builder::{Builder, IrKind};
+use zhc_builder::Builder;
 use zhc_pipeline::Pipeline;
 
 /// Connects the circuit builder to the compilation pipeline.
 pub trait PipelineExt {
-    /// Supplies an optimized snapshot of the builder's IR and its metadata.
+    /// Supplies a snapshot of the builder's IR and its metadata.
     ///
-    /// Optimization happens immediately. Noise checking and target compilation remain lazy.
-    /// Later changes through another clone of the builder do not affect this pipeline.
+    /// The snapshot is taken immediately. Optimization, noise checking and target compilation
+    /// remain lazy steps of the pipeline. Later changes through another clone of the builder do
+    /// not affect this pipeline.
     ///
     /// ```
     /// use zhc::prelude::*;
@@ -22,8 +23,8 @@ pub trait PipelineExt {
 
 impl PipelineExt for Pipeline {
     fn with_builder(self, builder: Builder) -> Self {
-        self.with_unchecked_ioplang(builder.optimize_ir())
-            .with_partitions(builder.partitions(IrKind::Optimized))
+        self.with_unchecked_ioplang(builder.ir().clone())
+            .with_partitions(builder.partitions())
             .with_prototype(builder.signature())
             .with_ciphertext_block_spec(*builder.spec())
     }

@@ -37,6 +37,7 @@ pub mod passes {
     pub use crate::hpu::translation_table::decode_translation_table as hpu_decode_translation_table;
     pub use crate::hpu::translation_table::generate_translation_table as hpu_generate_translation_table;
     pub use crate::hpu::translation_table::instruction_from_dop_repr as hpu_decode_dop_repr;
+    pub use crate::iop::optimize_iop;
     pub use crate::iop::partition_and_materialize;
     pub use crate::multi_hpu::lowering::lower_iop_to_multi_hpu;
     pub use crate::multi_hpu::scheduler::schedule as multi_hpu_schedule;
