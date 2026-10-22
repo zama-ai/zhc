@@ -160,7 +160,7 @@ impl Hash for RawLut {
 }
 
 impl RawLut {
-    fn pbs(&self, inp: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
+    pub fn pbs(&self, inp: EmulatedCiphertextBlock) -> EmulatedCiphertextBlock {
         assert_eq!(inp.spec(), self.spec, "Spec mismatch.");
         let output = self.entry(inp.raw_data_bits().sas::<usize>());
         assert!(

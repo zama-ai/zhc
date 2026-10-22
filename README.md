@@ -90,8 +90,8 @@ ZHC is made of many crates, ensuring fast from-source compilation. Here is a map
 | [`zhc_config`](zhc_config) | HPU, multi-HPU and VM configurations, with physical parameter presets. |
 | [`zhc_vm`](zhc_vm) | Multi-threaded CPU runtime executing VM plans with tfhe-rs. |
 | [`zhc_profiling`](zhc_profiling) | Host-side profiling spans with pluggable backends. |
-| [`zhc_pipeline_correctness`](zhc_pipeline_correctness) | Snapshot and differential tests for every pass. |
-| [`zhc_pipeline_correctness_macro`](zhc_pipeline_correctness_macro) | Test matrix macro over operations and bit widths. |
+| [`zhc_validation`](zhc_validation) | Snapshot and differential tests for every pass. |
+| [`zhc_validation_macro`](zhc_validation_macro) | Test matrix macro over operations and bit widths. |
 | [`zhc_bench`](zhc_bench) | Latency benchmarks across operations and commits. |
 | [`zhc_cli`](zhc_cli) | Command-line tools. `dop_fmt` converts, checks, interprets and profiles device programs. |
 | [`zhc_utils`](zhc_utils) | Stores, small vectors, iterators, topology detection, trace and file helpers. |
