@@ -40,7 +40,7 @@ pub fn bitwise_or(spec: SpecInteger) -> Builder {
 /// # use zhc_builder::{SpecInteger, bitwise_xor};
 /// # let spec = SpecInteger::new(16, 2, 2);
 /// let builder = bitwise_xor(spec);
-/// let ir = builder.optimize_ir();
+/// let ir = builder.ir();
 /// ```
 pub fn bitwise_xor(spec: SpecInteger) -> Builder {
     let builder = Builder::new(spec.block_spec());
@@ -62,7 +62,7 @@ pub fn bitwise_xor(spec: SpecInteger) -> Builder {
 /// # use zhc_builder::{SpecInteger, bitwise_inv};
 /// # let spec = SpecInteger::new(16, 2, 2);
 /// let builder = bitwise_inv(spec);
-/// let ir = builder.optimize_ir();
+/// let ir = builder.ir();
 /// ```
 pub fn bitwise_inv(spec: SpecInteger) -> Builder {
     let builder = Builder::new(spec.block_spec());
@@ -165,7 +165,7 @@ mod test {
     #[test]
     fn test_bw_and() {
         let spec = SpecInteger::new(64, 2, 2);
-        let ir = bitwise_and(spec).optimize_ir();
+        let ir = zhc_pipeline::passes::optimize_iop(&bitwise_and(spec).ir());
         assert_display_is!(
             ir.format().with_walker(zhc_ir::PrintWalker::Linear),
             r#"

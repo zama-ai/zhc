@@ -89,7 +89,7 @@ mod test {
 
     #[test]
     fn test_flip() {
-        let ir = flip(SpecInteger::new(4, 2, 2)).optimize_ir();
+        let ir = zhc_pipeline::passes::optimize_iop(&flip(SpecInteger::new(4, 2, 2)).ir());
         assert_display_is!(
             ir.format()
                 .show_comments(false)

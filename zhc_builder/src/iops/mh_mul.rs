@@ -20,7 +20,7 @@ use zhc_utils::SafeAs;
 /// # use zhc_builder::{SpecInteger, mh_mul};
 /// # let spec = SpecInteger::new(16, 2, 2);
 /// let builder = mh_mul(spec, 2);
-/// let ir = builder.optimize_ir();
+/// let ir = builder.ir();
 /// ```
 pub fn mh_mul(spec: SpecInteger, split_depth: usize) -> Builder {
     mh_mul_with_opt(spec, split_depth, false)
@@ -41,7 +41,7 @@ pub fn mh_mul(spec: SpecInteger, split_depth: usize) -> Builder {
 /// # use zhc_builder::{SpecInteger, mh_overflow_mul_lsb};
 /// # let spec = SpecInteger::new(16, 2, 2);
 /// let builder = mh_overflow_mul_lsb(spec, 2);
-/// let ir = builder.optimize_ir();
+/// let ir = builder.ir();
 /// ```
 pub fn mh_overflow_mul_lsb(spec: SpecInteger, split_depth: usize) -> Builder {
     mh_mul_with_opt(spec, split_depth, true)
@@ -67,7 +67,7 @@ pub fn mh_overflow_mul_lsb(spec: SpecInteger, split_depth: usize) -> Builder {
 /// # use zhc_builder::{SpecInteger, mh_overflow_mul_lsb};
 /// # let spec = SpecInteger::new(16, 2, 2);
 /// let builder = mh_overflow_mul_lsb(spec, 2);
-/// let ir = builder.optimize_ir();
+/// let ir = builder.ir();
 /// ```
 fn mh_mul_with_opt(spec: SpecInteger, split_depth: usize, gen_overflow: bool) -> Builder {
     let builder = Builder::new(spec.block_spec());

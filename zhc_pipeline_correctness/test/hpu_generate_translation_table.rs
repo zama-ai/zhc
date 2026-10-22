@@ -35,7 +35,9 @@ fn format_binary_vec(inp: &Vec<u32>) -> String {
 
 #[test]
 fn test_hex_add_ir() {
-    let hex = pipeline(&add(SpecInteger::new(16, 2, 2)).optimize_ir());
+    let hex = pipeline(&zhc_pipeline::passes::optimize_iop(
+        &add(SpecInteger::new(16, 2, 2)).ir(),
+    ));
     assert_display_is!(
         format_binary_vec(&hex),
         r#"
@@ -114,7 +116,9 @@ fn test_hex_add_ir() {
 
 #[test]
 fn test_hex_cmp_ir() {
-    let hex = pipeline(&cmp_gt(SpecInteger::new(16, 2, 2)).optimize_ir());
+    let hex = pipeline(&zhc_pipeline::passes::optimize_iop(
+        &cmp_gt(SpecInteger::new(16, 2, 2)).ir(),
+    ));
     assert_display_is!(
         format_binary_vec(&hex),
         r#"

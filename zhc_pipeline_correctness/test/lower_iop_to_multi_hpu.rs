@@ -25,7 +25,7 @@ fn smoke() {
     let spreadp = SpreadPolicy::MinimizeWork;
     let n_hpus = 8;
     let b = iop.to_builder(SpecInteger::new(size, 2, 2));
-    let iop_ir = b.optimize_ir();
+    let iop_ir = zhc_pipeline::passes::optimize_iop(&b.ir());
     let config = PartitionerConfig {
         specs: std::iter::repeat(PartitionSpec {
             parallelism: 12,
@@ -59,7 +59,7 @@ fn correctness(
 ) {
     let spec = SpecInteger::new(size, 2, 2);
     let b = iop.to_builder(spec);
-    let iop_ir = b.optimize_ir();
+    let iop_ir = zhc_pipeline::passes::optimize_iop(&b.ir());
     let config = PartitionerConfig {
         specs: std::iter::repeat(PartitionSpec {
             parallelism: 12,

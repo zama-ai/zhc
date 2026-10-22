@@ -31,7 +31,10 @@ fn pipeline(ir: &IR<IopLang>) -> (IR<DopLang>, LutRegistry) {
 
 #[test]
 fn smoke1() {
-    let ir = pipeline(&add(SpecInteger::new(16, 2, 2)).optimize_ir()).0;
+    let ir = pipeline(&zhc_pipeline::passes::optimize_iop(
+        &add(SpecInteger::new(16, 2, 2)).ir(),
+    ))
+    .0;
     assert_display_is!(
         ir.format(),
         r#"
@@ -111,7 +114,10 @@ fn smoke1() {
 
 #[test]
 fn smoke2() {
-    let ir = pipeline(&cmp_gt(SpecInteger::new(16, 2, 2)).optimize_ir()).0;
+    let ir = pipeline(&zhc_pipeline::passes::optimize_iop(
+        &cmp_gt(SpecInteger::new(16, 2, 2)).ir(),
+    ))
+    .0;
     assert_display_is!(
         ir.format().with_walker(PrintWalker::Linear),
         r#"
@@ -178,7 +184,7 @@ fn correctness(iop: Iop, size: u16) {
     let config = HpuConfig::from(PhysicalConfig::gaussian_64b());
     let b = iop.to_builder(SpecInteger::new(size, 2, 2));
     let spec = *b.spec();
-    let iop_ir = b.optimize_ir();
+    let iop_ir = zhc_pipeline::passes::optimize_iop(&b.ir());
     let (dop_ir, lut_reg) = pipeline(&iop_ir);
     check_iop_dop_equivalence(&iop_ir, &dop_ir, &lut_reg, spec, config.regf_size, 100);
 }

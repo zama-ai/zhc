@@ -37,7 +37,7 @@ fn main() {
     bd.dump_noise();
 
     // Interactive drawing of the block-level IR.
-    bd.draw(IrKind::Original).open().unwrap();
+    bd.draw().open().unwrap();
 
     // Compilation for a single HPU, with the predicted latency.
     let mut pl = Pipeline::new()

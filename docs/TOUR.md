@@ -24,7 +24,7 @@ let sh =   bd.block_lookup(
                 )
            );
 
-bd.draw(IrKind::Original).open().unwrap();
+bd.draw().open().unwrap();
 ```
 
 <br clear="right">

@@ -54,7 +54,7 @@ pub fn add_simd(spec: SpecInteger, n: u16) -> Builder {
 /// # use zhc_builder::{SpecInteger, add_hillis_steele};
 /// # let spec = SpecInteger::new(16, 2, 2);
 /// let builder = add_hillis_steele(spec);
-/// let ir = builder.optimize_ir();
+/// let ir = builder.ir();
 /// ```
 pub fn add_hillis_steele(spec: SpecInteger) -> Builder {
     let builder = Builder::new(spec.block_spec());
@@ -76,7 +76,7 @@ pub fn add_hillis_steele(spec: SpecInteger) -> Builder {
 /// # use zhc_builder::{SpecInteger, add_ripple_carry};
 /// # let spec = SpecInteger::new(8, 2, 2);
 /// let builder = add_ripple_carry(spec);
-/// let ir = builder.optimize_ir();
+/// let ir = builder.ir();
 /// ```
 pub fn add_ripple_carry(spec: SpecInteger) -> Builder {
     let builder = Builder::new(spec.block_spec());
@@ -527,7 +527,7 @@ mod test {
     #[test]
     fn test_add() {
         let spec = SpecInteger::new(18, 2, 2);
-        let ir = add(spec).optimize_ir();
+        let ir = zhc_pipeline::passes::optimize_iop(&add(spec).ir());
         assert_display_is!(
             ir.format()
                 .with_walker(zhc_ir::PrintWalker::Linear)

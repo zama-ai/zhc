@@ -1510,6 +1510,7 @@ dependencies = [
  "zhc_crypto",
  "zhc_ir",
  "zhc_langs",
+ "zhc_pipeline",
  "zhc_utils",
 ]
 

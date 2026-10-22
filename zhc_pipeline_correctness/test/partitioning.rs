@@ -41,7 +41,7 @@ fn correctness(
     };
     let builder = iop.to_builder(SpecInteger::new(size, 2, 2));
     let spec = *builder.spec();
-    let original = builder.optimize_ir();
+    let original = zhc_pipeline::passes::optimize_iop(&builder.ir());
     let materialized = pipeline(&original, &config);
     check_iop_equivalence(&original, &materialized, spec, 10);
 }

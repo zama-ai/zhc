@@ -435,7 +435,7 @@ mod test {
     #[test]
     fn test_muls_lsb() {
         let spec = SpecInteger::new(8, 2, 2);
-        let ir = muls(spec).optimize_ir();
+        let ir = zhc_pipeline::passes::optimize_iop(&muls(spec).ir());
         assert_display_is!(
             ir.format()
                 .with_walker(zhc_ir::PrintWalker::Linear)

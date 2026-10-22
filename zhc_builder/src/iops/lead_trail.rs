@@ -18,7 +18,7 @@ use crate::{
 /// # use zhc_builder::{SpecInteger, lead0};
 /// # let spec = SpecInteger::new(16, 2, 2);
 /// let builder = lead0(spec);
-/// let ir = builder.optimize_ir();
+/// let ir = builder.ir();
 /// ```
 pub fn lead0(spec: SpecInteger) -> Builder {
     let builder = Builder::new(spec.block_spec());
@@ -39,7 +39,7 @@ pub fn lead0(spec: SpecInteger) -> Builder {
 /// # use zhc_builder::{SpecInteger, lead1};
 /// # let spec = SpecInteger::new(16, 2, 2);
 /// let builder = lead1(spec);
-/// let ir = builder.optimize_ir();
+/// let ir = builder.ir();
 /// ```
 pub fn lead1(spec: SpecInteger) -> Builder {
     let builder = Builder::new(spec.block_spec());
@@ -60,7 +60,7 @@ pub fn lead1(spec: SpecInteger) -> Builder {
 /// # use zhc_builder::{SpecInteger, trail0};
 /// # let spec = SpecInteger::new(16, 2, 2);
 /// let builder = trail0(spec);
-/// let ir = builder.optimize_ir();
+/// let ir = builder.ir();
 /// ```
 pub fn trail0(spec: SpecInteger) -> Builder {
     let builder = Builder::new(spec.block_spec());
@@ -81,7 +81,7 @@ pub fn trail0(spec: SpecInteger) -> Builder {
 /// # use zhc_builder::{SpecInteger, trail1};
 /// # let spec = SpecInteger::new(16, 2, 2);
 /// let builder = trail1(spec);
-/// let ir = builder.optimize_ir();
+/// let ir = builder.ir();
 /// ```
 pub fn trail1(spec: SpecInteger) -> Builder {
     let builder = Builder::new(spec.block_spec());
@@ -102,7 +102,7 @@ pub fn trail1(spec: SpecInteger) -> Builder {
 /// # use zhc_builder::{SpecInteger, ilog2};
 /// # let spec = SpecInteger::new(16, 2, 2);
 /// let builder = ilog2(spec);
-/// let ir = builder.optimize_ir();
+/// let ir = builder.ir();
 /// ```
 pub fn ilog2(spec: SpecInteger) -> Builder {
     let builder = Builder::new(spec.block_spec());
