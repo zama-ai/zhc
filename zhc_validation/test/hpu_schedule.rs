@@ -2,11 +2,11 @@ use zhc::compat::Iop;
 use zhc_builder::{SpecInteger, mul};
 use zhc_config::hpu::PhysicalConfig;
 use zhc_langs::ioplang::IopLang;
-use zhc_pipeline_correctness_macro::test_matrix;
 use zhc_utils::assert_display_is;
+use zhc_validation_macro::test_matrix;
 
 use zhc_pipeline::{
-    SchedPolicy,
+    SchedPolicy, optimize_iop,
     passes::{hpu_schedule, lower_iop_to_hpu},
 };
 
@@ -150,12 +150,10 @@ fn smoke() {
 
 #[test_matrix(iop = @all_iops, size = @main_precs)]
 #[ignore]
-fn correctness(iop: Iop, size: u16) {
+fn validate_hpu_schedule(iop: Iop, size: u16) {
     let b = iop.to_builder(SpecInteger::new(size, 2, 2));
     let spec = *b.spec();
-    let iop_ir = zhc_pipeline::passes::optimize_iop(&b.ir());
+    let iop_ir = optimize_iop(&b.ir());
     let hpu_ir = pipeline(&iop_ir);
-    zhc_pipeline_correctness::equivalence_check::check_iop_hpu_equivalence(
-        &iop_ir, &hpu_ir, spec, 100,
-    );
+    zhc_validation::equivalence_check::check_iop_hpu_equivalence(&iop_ir, &hpu_ir, spec);
 }
