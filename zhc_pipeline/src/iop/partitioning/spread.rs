@@ -13,12 +13,12 @@ pub fn spread(
     policy: SpreadPolicy,
 ) -> OpMap<PartitionPlacement> {
     match policy {
-        SpreadPolicy::FavorLatency => spread_for_latency(ir, opmap),
-        SpreadPolicy::FavorBandwidth => spread_for_bandwidth(ir, opmap),
+        SpreadPolicy::MinimizeTransfers => spread_minimizing_transfers(ir, opmap),
+        SpreadPolicy::MinimizeWork => spread_minimizing_work(ir, opmap),
     }
 }
 
-fn spread_for_latency(
+fn spread_minimizing_transfers(
     ir: &IR<IopLang>,
     opmap: OpMap<PartitionPlacement>,
 ) -> OpMap<PartitionPlacement> {
@@ -134,7 +134,7 @@ fn spread_for_latency(
     .into_opmap()
 }
 
-fn spread_for_bandwidth(
+fn spread_minimizing_work(
     ir: &IR<IopLang>,
     opmap: OpMap<PartitionPlacement>,
 ) -> OpMap<PartitionPlacement> {

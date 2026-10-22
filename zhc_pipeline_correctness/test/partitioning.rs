@@ -16,7 +16,7 @@ fn pipeline(ir: &IR<IopLang>, config: &PartitionerConfig) -> IR<IopLang> {
     size = @main_precs,
     schedp = @all_schedps,
     tiep = [tiep_concentrate = TiePolicy::Concentrate, tiep_balance = TiePolicy::Balance],
-    spreadp = [spreadp_latency = SpreadPolicy::FavorLatency, spreadp_bandwidth = SpreadPolicy::FavorBandwidth],
+    spreadp = [spreadp_min_transfers = SpreadPolicy::MinimizeTransfers, spreadp_min_work = SpreadPolicy::MinimizeWork],
     n = [m2 = 2, m4 = 4, m8 = 8])
 ]
 #[ignore]

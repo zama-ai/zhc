@@ -22,7 +22,7 @@ fn smoke() {
     let size = 8;
     let schedp = SchedPolicy::AsSoonAsPossible;
     let tiep = TiePolicy::Balance;
-    let spreadp = SpreadPolicy::FavorBandwidth;
+    let spreadp = SpreadPolicy::MinimizeWork;
     let n_hpus = 8;
     let b = iop.to_builder(SpecInteger::new(size, 2, 2));
     let iop_ir = b.optimize_ir();
@@ -45,7 +45,7 @@ fn smoke() {
     size = @main_precs,
     schedp = @all_schedps,
     tiep = [tiep_concentrate = TiePolicy::Concentrate, tiep_balance = TiePolicy::Balance],
-    spreadp = [spreadp_latency = SpreadPolicy::FavorLatency, spreadp_bandwidth = SpreadPolicy::FavorBandwidth],
+    spreadp = [spreadp_min_transfers = SpreadPolicy::MinimizeTransfers, spreadp_min_work = SpreadPolicy::MinimizeWork],
     n_hpus = [m2 = 2, m4 = 4, m8 = 8])
 ]
 #[ignore]

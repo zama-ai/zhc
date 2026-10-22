@@ -37,7 +37,7 @@
 //!         .collect(),
 //!     sched_policy: SchedPolicy::AsSoonAsPossible,
 //!     tie_policy: TiePolicy::Concentrate,
-//!     spread_policy: SpreadPolicy::FavorLatency,
+//!     spread_policy: SpreadPolicy::MinimizeTransfers,
 //! };
 //!
 //! let (materialized, partitions) = partition_and_materialize(&ir, &config);
@@ -45,7 +45,7 @@
 //!     println!("{:?} runs in partition {:?}", op.get_id(), partitions[op.get_id()]);
 //! }
 //! ```
-use crate::{SchedPolicy, iop::partitioning::materialize::materialize_partitioning};
+use crate::SchedPolicy;
 use zhc_ir::{
     AnnIR, AnnOpRef, IR, OpId, OpMap, ValMap,
     height_depth::{HeightDepth, analyze_height_depth},
@@ -67,6 +67,7 @@ mod spread;
 mod tests;
 
 pub use config::*;
+pub use materialize::materialize_partitioning;
 
 /// Partitions a circuit automatically, and rewrites it so that each operation runs in one
 /// partition.
@@ -104,7 +105,7 @@ pub use config::*;
 ///         .collect(),
 ///     sched_policy: SchedPolicy::AsSoonAsPossible,
 ///     tie_policy: TiePolicy::Balance,
-///     spread_policy: SpreadPolicy::FavorBandwidth,
+///     spread_policy: SpreadPolicy::MinimizeWork,
 /// };
 ///
 /// let (materialized, partitions) = partition_and_materialize(&ir, &config);
@@ -150,7 +151,7 @@ pub fn partition_and_materialize(
 /// #     specs: std::iter::empty::<PartitionSpec>().collect(),
 /// #     sched_policy: SchedPolicy::AsSoonAsPossible,
 /// #     tie_policy: TiePolicy::Concentrate,
-/// #     spread_policy: SpreadPolicy::FavorLatency,
+/// #     spread_policy: SpreadPolicy::MinimizeTransfers,
 /// # };
 /// // `partitions` holds the partitions declared while building `ir`.
 /// let (materialized, placement) = materialize_builder_partitioning(&ir, &partitions, &config);
@@ -170,7 +171,7 @@ pub fn materialize_builder_partitioning(
     materialize_partitioning(ir, &placement)
 }
 
-fn partition(ir: &IR<IopLang>, config: &PartitionerConfig) -> OpMap<PartitionPlacement> {
+pub fn partition(ir: &IR<IopLang>, config: &PartitionerConfig) -> OpMap<PartitionPlacement> {
     let Translation {
         output: tasklang,
         provenance_map,

@@ -207,7 +207,7 @@ impl std::fmt::Display for SvgElement {
             } => {
                 write!(
                     f,
-                    r#"  <text x="{}" y="{}" font-size="{}" text-anchor="{}" dominant-baseline="{}""#,
+                    r#"  <text x="{}" y="{}" font-size="{}" text-anchor="{}" dominant-baseline="{}" xml:space="preserve" style="white-space: pre""#,
                     x, y, font_size, text_anchor, dominant_baseline
                 )?;
                 if let Some(id) = id {

@@ -57,7 +57,7 @@ pub enum SpreadPolicy {
     /// The operation is computed in each of these partitions, so its result does not have to be
     /// copied between partitions. This costs duplicated computations, and reduces the number of
     /// copies.
-    FavorLatency,
+    MinimizeTransfers,
 
     /// Places an operation first in the partition that produces most of its operands.
     ///
@@ -65,7 +65,7 @@ pub enum SpreadPolicy {
     /// it. This avoids duplicated computations, and increases the number of copies. An operation
     /// whose operands come from no partition is still placed in the partitions that use its
     /// result.
-    FavorBandwidth,
+    MinimizeWork,
 }
 
 /// The parameters of the automatic partitioner.

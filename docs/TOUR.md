@@ -4,7 +4,7 @@
 
 ZHC's main frontend is the Rust [`Builder`](https://docs.rs/zhc_builder/latest/zhc_builder/struct.Builder.html) object which can be used to programmatically build arithmetic circuits. It provides access to design-oriented features:
 
-<img align="right" width="300" src="assets/rendered_ir.png" alt="IR visualization">
+<img align="right" width="300" src="assets/tour/rendered_ir.png" alt="IR visualization">
 
 ```rust
 use zhc::prelude::*;
@@ -88,7 +88,7 @@ Note that ZHC also checks the noise during compilation to ensure that noise-inco
 
 ## Compilation
 
-<img align="left" width="160" src="assets/restricted_pipeline.png" alt="Pipeline">
+<img align="left" width="160" src="assets/tour/restricted_pipeline.png" alt="Pipeline">
 
 The compiler itself is managed via the [`Pipeline`](https://docs.rs/zhc_pipeline/latest/zhc_pipeline/struct.Pipeline.html) object. It provides a lazy, query-based compilation of all the artifacts, and is itself based on a [ZHC Dialect](../zhc_langs/src/pipelinelang/mod.rs). This mechanism ensures a single source of truth exists for every artifact derivation. The pipeline, restricted to the HPU backend, is represented on the left. 
 
@@ -133,7 +133,7 @@ Every pass of the pipeline (including scheduling and register allocation) is ver
 
 ## Execution
 
-<img align="right" width="300" src="assets/trace.png" alt="Perfetto trace">
+<img align="right" width="300" src="assets/tour/trace.png" alt="Perfetto trace">
 
 HPU board / cluster may not be readily available for development, impairing the ability of designers to iterate on their algorithms. Fortunately, ZHC includes a discrete-event simulator of the HPU and HPU-cluster targets, which can be used to get an accurate estimation of the HPU behavior on the compiled streams. Even better, [Perfetto](https://perfetto.dev/) traces of the execution can be extracted from the simulator via the [`Pipeline::get_hpu_trace`](https://docs.rs/zhc_pipeline/latest/zhc_pipeline/struct.Pipeline.html#method.get_hpu_trace) method. 
 

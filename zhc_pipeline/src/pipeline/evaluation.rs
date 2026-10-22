@@ -443,7 +443,7 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                     specs,
                     sched_policy: SchedPolicy::AsSoonAsPossible,
                     tie_policy: TiePolicy::Concentrate,
-                    spread_policy: SpreadPolicy::FavorLatency
+                    spread_policy: SpreadPolicy::MinimizeTransfers
                 })];
                 interval_end(c"InputPartitionerConfig", 0);
                 result

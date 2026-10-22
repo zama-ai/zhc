@@ -24,3 +24,7 @@ path = "examples/profile_pipeline.rs"
 [[example]]
 name = "mh_mul_latency"
 path = "examples/mh_mul_latency.rs"
+
+[[example]]
+name = "auto_partitioning"
+path = "examples/auto_partitioning.rs"
