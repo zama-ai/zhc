@@ -1,0 +1,15 @@
+[package]
+name = "zhc_abc_sys"
+description = "ZHC: Raw bindings to the ABC equivalence checker"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+links = "abc"
+build = "build.rs"
+
+[dependencies]
+
+[build-dependencies]
+cc.workspace = true

@@ -41,4 +41,5 @@ pub mod passes {
     pub use crate::iop::partition_and_materialize;
     pub use crate::multi_hpu::lowering::lower_iop_to_multi_hpu;
     pub use crate::multi_hpu::scheduler::schedule as multi_hpu_schedule;
+    pub use crate::vm::lowering::lower_iop_to_vm;
 }

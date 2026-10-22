@@ -4,7 +4,6 @@
 #[allow(unused)]
 pub(crate) mod testlang;
 
-mod concat;
 mod construction;
 mod deletion;
 mod positions;

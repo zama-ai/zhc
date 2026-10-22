@@ -1,5 +1,5 @@
 [package]
-name = "zhc_pipeline_correctness"
+name = "zhc_validation"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -15,7 +15,12 @@ zhc_utils.workspace = true
 zhc.workspace = true
 zhc_pipeline.workspace = true
 zhc_config.workspace = true
-zhc_pipeline_correctness_macro.workspace = true
+zhc_validation_macro.workspace = true
+zhc_abc.workspace = true
+
+[[test]]
+name = "optimize_ir"
+path = "test/optimize_ir.rs"
 
 [[test]]
 name = "partitioning"
@@ -24,6 +29,10 @@ path = "test/partitioning.rs"
 [[test]]
 name = "lower_iop_to_hpu"
 path = "test/lower_iop_to_hpu.rs"
+
+[[test]]
+name = "lower_iop_to_vm"
+path = "test/lower_iop_to_vm.rs"
 
 [[test]]
 name = "hpu_allocate_register"
@@ -52,3 +61,7 @@ path = "test/lower_iop_to_multi_hpu.rs"
 [[test]]
 name = "multi_hpu_schedule"
 path = "test/multi_hpu_schedule.rs"
+
+[[test]]
+name = "multi_hpu_allocate_register"
+path = "test/multi_hpu_allocate_register.rs"

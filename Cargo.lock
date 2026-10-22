@@ -1487,6 +1487,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "zhc_abc"
+version = "0.11.0"
+dependencies = [
+ "zhc_abc_sys",
+ "zhc_utils",
+]
+
+[[package]]
+name = "zhc_abc_sys"
+version = "0.11.0"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "zhc_bench"
 version = "0.11.0"
 dependencies = [
@@ -1594,30 +1609,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "zhc_pipeline_correctness"
-version = "0.11.0"
-dependencies = [
- "zhc",
- "zhc_builder",
- "zhc_config",
- "zhc_crypto",
- "zhc_ir",
- "zhc_langs",
- "zhc_pipeline",
- "zhc_pipeline_correctness_macro",
- "zhc_utils",
-]
-
-[[package]]
-name = "zhc_pipeline_correctness_macro"
-version = "0.11.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.119",
-]
-
-[[package]]
 name = "zhc_profiling"
 version = "0.11.0"
 dependencies = [
@@ -1651,6 +1642,31 @@ dependencies = [
 
 [[package]]
 name = "zhc_utils_macro"
+version = "0.11.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
+name = "zhc_validation"
+version = "0.11.0"
+dependencies = [
+ "zhc",
+ "zhc_abc",
+ "zhc_builder",
+ "zhc_config",
+ "zhc_crypto",
+ "zhc_ir",
+ "zhc_langs",
+ "zhc_pipeline",
+ "zhc_utils",
+ "zhc_validation_macro",
+]
+
+[[package]]
+name = "zhc_validation_macro"
 version = "0.11.0"
 dependencies = [
  "proc-macro2",

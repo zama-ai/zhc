@@ -1,5 +1,5 @@
 [package]
-name = "zhc_pipeline_correctness_macro"
+name = "zhc_validation_macro"
 description = "ZHC: Test matrix macro for pipeline correctness tests"
 version.workspace = true
 edition.workspace = true

@@ -8,11 +8,11 @@ use zhc_langs::{
 };
 use zhc_pipeline::{
     PartitionSpec, PartitionerConfig, SchedPolicy, SpreadPolicy, TiePolicy,
-    passes::{lower_iop_to_multi_hpu, multi_hpu_schedule, partition_and_materialize},
+    passes::{lower_iop_to_multi_hpu, multi_hpu_schedule, optimize_iop, partition_and_materialize},
 };
-use zhc_pipeline_correctness::equivalence_check::check_iop_multi_hpu_equivalence;
-use zhc_pipeline_correctness_macro::test_matrix;
 use zhc_utils::units::Cycle;
+use zhc_validation::equivalence_check::check_iop_multi_hpu_equivalence;
+use zhc_validation_macro::test_matrix;
 
 fn partitioner_config(
     n_hpus: usize,
@@ -61,7 +61,7 @@ fn count_transfers(hpu_irs: &[IR<HpuLang>]) -> (usize, usize) {
 #[test]
 fn smoke() {
     let spec = SpecInteger::new(8, 2, 2);
-    let iop_ir = zhc_pipeline::passes::optimize_iop(&Iop::Add.to_builder(spec).ir());
+    let iop_ir = optimize_iop(&Iop::Add.to_builder(spec).ir());
     let config = partitioner_config(
         2,
         SchedPolicy::AsSoonAsPossible,
@@ -75,7 +75,7 @@ fn smoke() {
         "The schedule has no transfer; the test is vacuous."
     );
     assert_eq!(ins, outs, "Unbalanced transfers");
-    check_iop_multi_hpu_equivalence(&iop_ir, &hpu_irs, spec.block_spec(), 10);
+    check_iop_multi_hpu_equivalence(&iop_ir, &hpu_irs, spec.block_spec());
 }
 
 #[test_matrix(
@@ -87,7 +87,7 @@ fn smoke() {
     n_hpus = [m2 = 2, m4 = 4, m8 = 8])
 ]
 #[ignore]
-fn correctness(
+fn validate_multi_hpu_schedule(
     iop: Iop,
     size: u16,
     schedp: SchedPolicy,
@@ -96,8 +96,8 @@ fn correctness(
     n_hpus: usize,
 ) {
     let spec = SpecInteger::new(size, 2, 2);
-    let iop_ir = zhc_pipeline::passes::optimize_iop(&iop.to_builder(spec).ir());
+    let iop_ir = optimize_iop(&iop.to_builder(spec).ir());
     let config = partitioner_config(n_hpus, schedp, tiep, spreadp);
     let hpu_irs = pipeline(&iop_ir, &config);
-    check_iop_multi_hpu_equivalence(&iop_ir, &hpu_irs, spec.block_spec(), 100);
+    check_iop_multi_hpu_equivalence(&iop_ir, &hpu_irs, spec.block_spec());
 }
