@@ -1,4 +1,4 @@
-use crate::{CiphertextBool, CiphertextInteger, builder::Builder};
+use crate::{CiphertextBool, CiphertextInteger, NU_BOOL, builder::Builder};
 use zhc_crypto::integer_semantics::{SpecBlock, SpecInteger};
 use zhc_langs::ioplang::Lut1;
 use zhc_utils::iter::MultiZip;
@@ -108,7 +108,8 @@ pub fn cmp_eq(spec: SpecInteger) -> Builder {
     let builder = Builder::new(spec.block_spec());
     let src_a = builder.ciphertext_integer_input(spec.int_size());
     let src_b = builder.ciphertext_integer_input(spec.int_size());
-    let output = builder.iop_cmp(&src_a, &src_b, CmpKind::Equal);
+    //let output = builder.iop_cmp(&src_a, &src_b, CmpKind::Equal);
+    let output = builder.iop_eq(&src_a, &src_b);
     builder.ciphertext_bool_output(output);
     builder
 }
@@ -130,7 +131,7 @@ pub fn cmp_neq(spec: SpecInteger) -> Builder {
     let builder = Builder::new(spec.block_spec());
     let src_a = builder.ciphertext_integer_input(spec.int_size());
     let src_b = builder.ciphertext_integer_input(spec.int_size());
-    let output = builder.iop_cmp(&src_a, &src_b, CmpKind::NotEqual);
+    let output = builder.iop_neq(&src_a, &src_b);
     builder.ciphertext_bool_output(output);
     builder
 }
@@ -211,8 +212,8 @@ impl Builder {
         let src_b_blocks = self.ciphertext_integer_split(&src_b);
 
         // pack cts
-        let packed_a = self.comment("Pack A").vector_pack_then_clean(src_a_blocks);
-        let packed_b = self.comment("Pack B").vector_pack_then_clean(src_b_blocks);
+        let packed_a = self.comment("Pack A").vector_pack(src_a_blocks);
+        let packed_b = self.comment("Pack B").vector_pack(src_b_blocks);
 
         // merge a /b and get sign
         self.push_comment("Compare blocks");
@@ -251,6 +252,86 @@ impl Builder {
         };
 
         self.ciphertext_bool_store_block(cmp_res)
+    }
+
+    pub fn iop_eq(
+          &self,
+          src_a: &CiphertextInteger,
+          src_b: &CiphertextInteger,
+      ) -> CiphertextBool {
+          self.iop_eq_neq(src_a, src_b, false)
+    }
+
+    pub fn iop_neq(
+          &self,
+          src_a: &CiphertextInteger,
+          src_b: &CiphertextInteger,
+      ) -> CiphertextBool {
+          self.iop_eq_neq(src_a, src_b, true)
+    }
+
+    /// Equality (`neq == false`) or inequality (`neq == true`) of two integers.
+    fn iop_eq_neq(
+          &self,
+          src_a: &CiphertextInteger,
+          src_b: &CiphertextInteger,
+          neq: bool,
+      ) -> CiphertextBool {
+          // get input as array of blk
+          let src_a_blocks = self.ciphertext_integer_split(&src_a);
+          let src_b_blocks = self.ciphertext_integer_split(&src_b);
+
+          let a_packed = self.vector_pack(&src_a_blocks);
+          let b_packed = self.vector_pack(&src_b_blocks);
+          
+          // Here we have half number of blocks.
+          // a - b is in [-15, 15]: wrapping keeps it within the block, and it is 0 iff a == b.
+          let diff: Vec<_> = a_packed
+              .iter()
+              .zip(b_packed.iter())
+              .map(|(a, b)| self.block_wrapping_sub(a, b))
+              .collect();
+
+          let eq_mh: Vec<_> = diff
+              .iter()
+              .map(|d| self.block_wrapping_lookup(d, Lut1::is_null(*self.spec())))
+              .collect();
+          
+          // Split in groups of NU_BOOL
+          let op_nb_bool = NU_BOOL;
+          let mut res_v = eq_mh.clone();
+          let mut blk_nb = res_v.len();
+
+          // For neq, the last reduction step uses NotNull instead of IsNull. With a single
+          // packed block, one reduction step is still run to apply it.
+          let mut neq_pending = neq;
+
+          while blk_nb > 1 || neq_pending {
+              let mut v = Vec::new();
+              let last_step = blk_nb <= op_nb_bool;
+              let lut = if neq && last_step {
+                  neq_pending = false;
+                  Lut1::not_null(*self.spec())
+              } else {
+                  Lut1::is_null(*self.spec())
+              };
+
+              for chk in res_v.chunks(op_nb_bool) {
+                  // Sum the booleans of the group
+                  let acc = self.vector_add_reduce_tree(chk);
+
+                  // len - sum is in [0, len], and is 0 iff every block of the group is equal.
+                  // It is never negative, so the padding bit stays clear and NotNull is valid.
+                  let k = self.block_let_plaintext(chk.len() as u8);
+                  let acc = self.block_plaintext_sub(&k, &acc);
+                  v.push(self.block_lookup(&acc, lut.clone()));
+              }
+
+              res_v = v.clone();
+              blk_nb = res_v.len();
+
+          }
+          self.ciphertext_bool_store_block(&res_v[0])
     }
 }
 
@@ -294,42 +375,29 @@ mod test {
                 %16 = extract_ct_block<6>(%1);
                 %17 = extract_ct_block<7>(%1);
                 %18 = pack_ct<4>(%3, %2);
-                %19 = pbs<Protect, Lut1("None")>(%18);
-                %20 = pack_ct<4>(%5, %4);
-                %21 = pbs<Protect, Lut1("None")>(%20);
-                %22 = pack_ct<4>(%7, %6);
-                %23 = pbs<Protect, Lut1("None")>(%22);
-                %24 = pack_ct<4>(%9, %8);
-                %25 = pbs<Protect, Lut1("None")>(%24);
-                %26 = pack_ct<4>(%11, %10);
-                %27 = pbs<Protect, Lut1("None")>(%26);
-                %28 = pack_ct<4>(%13, %12);
-                %29 = pbs<Protect, Lut1("None")>(%28);
-                %30 = pack_ct<4>(%15, %14);
-                %31 = pbs<Protect, Lut1("None")>(%30);
-                %32 = pack_ct<4>(%17, %16);
-                %33 = pbs<Protect, Lut1("None")>(%32);
-                %34 = wrapping_sub_ct(%19, %27);
-                %35 = pbs<Permissive, Lut1("CmpSign")>(%34);
-                %36 = let_pt_block<1>();
-                %37 = wrapping_add_pt(%35, %36);
-                %38 = wrapping_sub_ct(%21, %29);
-                %39 = pbs<Permissive, Lut1("CmpSign")>(%38);
-                %41 = wrapping_add_pt(%39, %36);
-                %42 = wrapping_sub_ct(%23, %31);
-                %43 = pbs<Permissive, Lut1("CmpSign")>(%42);
-                %45 = wrapping_add_pt(%43, %36);
-                %46 = wrapping_sub_ct(%25, %33);
-                %47 = pbs<Permissive, Lut1("CmpSign")>(%46);
-                %49 = wrapping_add_pt(%47, %36);
-                %50 = pack_ct<4>(%41, %37);
-                %51 = pbs<Protect, Lut1("CmpReduce")>(%50);
-                %52 = pack_ct<4>(%49, %45);
-                %53 = pbs<Protect, Lut1("CmpReduce")>(%52);
-                %54 = pack_ct<4>(%53, %51);
-                %55 = pbs<Protect, Lut1("CmpEqMrg")>(%54);
-                %56 = store_ctbool_block(%55);
-                output_bool<0>(%56);
+                %19 = pack_ct<4>(%5, %4);
+                %20 = pack_ct<4>(%7, %6);
+                %21 = pack_ct<4>(%9, %8);
+                %22 = pack_ct<4>(%11, %10);
+                %23 = pack_ct<4>(%13, %12);
+                %24 = pack_ct<4>(%15, %14);
+                %25 = pack_ct<4>(%17, %16);
+                %26 = wrapping_sub_ct(%18, %22);
+                %27 = wrapping_sub_ct(%19, %23);
+                %28 = wrapping_sub_ct(%20, %24);
+                %29 = wrapping_sub_ct(%21, %25);
+                %30 = pbs<Permissive, Lut1("IsNull")>(%26);
+                %31 = pbs<Permissive, Lut1("IsNull")>(%27);
+                %32 = pbs<Permissive, Lut1("IsNull")>(%28);
+                %33 = pbs<Permissive, Lut1("IsNull")>(%29);
+                %34 = add_ct(%30, %31);
+                %35 = add_ct(%34, %32);
+                %36 = add_ct(%35, %33);
+                %37 = let_pt_block<4>();
+                %38 = pt_sub(%37, %36);
+                %39 = pbs<Protect, Lut1("IsNull")>(%38);
+                %40 = store_ctbool_block(%39);
+                output_bool<0>(%40);
             "#
         );
     }

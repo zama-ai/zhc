@@ -2764,6 +2764,48 @@ impl Builder {
             .unwrap()
     }
 
+    /// Reduces a block slice to a single block by summing all elements as a balanced tree
+    /// (protect flavor).
+    ///
+    /// Computes the same sum as [`vector_add_reduce`](Self::vector_add_reduce), but adds
+    /// neighbouring blocks pairwise, level by level, so the dependency depth is
+    /// `ceil(log2(n))` additions instead of `n - 1`. When a level has an odd number of
+    /// blocks, the last one is carried over unchanged to the next level. The number of
+    /// additions (`n - 1`) and the noise of the result are the same as with the fold.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `inp` is empty.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use zhc_builder::*;
+    /// let builder = Builder::new(SpecBlock(2, 2));
+    /// let ct = builder.ciphertext_integer_input(8);
+    /// let blocks = builder.ciphertext_integer_split(&ct);
+    /// let total = builder.vector_add_reduce_tree(&blocks); // (b0 + b1) + (b2 + b3)
+    /// ```
+    pub fn vector_add_reduce_tree(&self, inp: impl AsRef<[CiphertextBlock]>) -> CiphertextBlock {
+        let inp = inp.as_ref();
+        assert!(
+            !inp.is_empty(),
+            "Tried add-reduce an empty vector of blocks."
+        );
+        let mut level = inp.to_vec();
+        while level.len() > 1 {
+            level = level
+                .chunks(2)
+                .map(|pair| match pair {
+                    [a, b] => self.block_add(a, b),
+                    [a] => *a,
+                    _ => unreachable!(),
+                })
+                .collect();
+        }
+        level[0]
+    }
+
     /// Applies [`block_inspect`](Self::block_inspect) to every block in a slice.
     ///
     /// Each block is inspected with an index-based comment (`"0"`, `"1"`, ...) appended to
@@ -2875,5 +2917,49 @@ impl Dumpable for Builder {
                 .with_prefix("║ ")
                 .with_walker(PrintWalker::Linear)
         )
+    }
+}
+
+#[cfg(test)]
+mod test_add_reduce_tree {
+    use crate::Builder;
+    use zhc_crypto::integer_semantics::SpecInteger;
+    use zhc_langs::ioplang::{IopValue, Lut1};
+
+    /// Sums the 2-bit digits of an `n`-digit integer with the fold or the tree, and outputs
+    /// the sum as a 2-block integer (low digit, high digit).
+    fn digit_sum(n: u16, tree: bool) -> Builder {
+        let spec = SpecInteger::new(2 * n, 2, 2);
+        let bd = Builder::new(spec.block_spec());
+        let x = bd.ciphertext_integer_input(spec.int_size());
+        let blocks = bd.ciphertext_integer_split(&x);
+        let sum = if tree {
+            bd.vector_add_reduce_tree(&blocks)
+        } else {
+            bd.vector_add_reduce(&blocks)
+        };
+        let lo = bd.block_lookup(&sum, Lut1::msg_only(*bd.spec()));
+        let hi = bd.block_lookup(&sum, Lut1::carry_in_msg(*bd.spec()));
+        bd.ciphertext_integer_output(bd.ciphertext_integer_join(&[lo, hi], Some(4)));
+        bd
+    }
+
+    #[test]
+    fn add_reduce_tree_matches_fold() {
+        // Up to NU = 5 clean digits: the sum (<= 15) fits in the data region.
+        for n in 1..=5u16 {
+            let out_spec = SpecInteger::new(4, 2, 2);
+            let semantic = |inp: &[IopValue]| {
+                let [IopValue::CiphertextInteger(x)] = inp else { unreachable!() };
+                let v = x.as_storage();
+                let s: u128 = (0..n).map(|i| (v >> (2 * i)) & 3).sum();
+                Some(vec![IopValue::CiphertextInteger(out_spec.from_int(s))])
+            };
+            for tree in [false, true] {
+                let bd = digit_sum(n, tree);
+                bd.check_noise();
+                bd.test_random(200, semantic);
+            }
+        }
     }
 }
