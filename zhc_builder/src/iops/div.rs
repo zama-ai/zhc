@@ -201,12 +201,18 @@ impl Builder {
         let mut remain_a = Vec::new();
         let cst_sign = self.block_let_ciphertext((1 << self.spec().1) - 1);
 
+        // Invariant: at the end of each iteration `remain < div`, so the remainder fits in
+        // `div_x1_a.len()` blocks. After shifting the next dividend block in, it fits in
+        // `div_x1_a.len() + 1` blocks, which also holds 3*div. The working width is therefore
+        // bounded by the divisor size, not by the dividend size.
+        let rem_max_blocks = div_x1_a.len();
+
         for loop_idx in 0..num_a.len() {
-            let block_nb = loop_idx + 1;
             let mut entry_num = Vec::new();
             entry_num.push(num_a[num_a.len() - 1 - loop_idx].clone());
             entry_num.append(&mut remain_a);
             remain_a = entry_num; // rename
+            let block_nb = remain_a.len(); // min(loop_idx + 1, rem_max_blocks + 1)
 
             let mut diff_x_v: Vec<Vec<_>> = Vec::new();
             let mut r_lt_div_x_v = Vec::new();
@@ -280,10 +286,13 @@ impl Builder {
             // Select the remain with the 1-hot
             // Mask then Or
             // Note that the sign block is not used here.
+            // remain < div after selection: blocks above the divisor width are always zero,
+            // so only the low `keep_nb` blocks are selected.
+            let keep_nb = block_nb.min(rem_max_blocks);
             let mut remain_tmp_v = Vec::new();
             for (sel, diff) in q_1h.iter().zip(diff_x_v.iter()) {
                 remain_tmp_v.push(self.iop_if_then_else_0v(
-                    &diff[0..block_nb],
+                    &diff[0..keep_nb],
                     sel,
                     Some(IfThenElse0Select::SelPos1Msg),
                 ));
@@ -291,7 +300,7 @@ impl Builder {
 
             remain_a = Vec::new();
             #[allow(clippy::needless_range_loop)]
-            for i in 0..block_nb {
+            for i in 0..keep_nb {
                 remain_tmp_v[0][i] = self.block_add(&remain_tmp_v[0][i], &remain_tmp_v[1][i]);
                 remain_tmp_v[2][i] = self.block_add(&remain_tmp_v[2][i], &remain_tmp_v[3][i]);
                 remain_tmp_v[0][i] = self.block_add(&remain_tmp_v[0][i], &remain_tmp_v[2][i]);
@@ -485,6 +494,50 @@ mod test {
     fn noise_div() {
         for size in (2..128).step_by(2) {
             div(SpecInteger::new(size, 2, 2)).check_noise();
+        }
+    }
+}
+
+#[cfg(test)]
+mod test_asym {
+    use crate::Builder;
+    use zhc_crypto::integer_semantics::SpecInteger;
+    use zhc_langs::ioplang::IopValue;
+
+    #[test]
+    fn correctness_div_asym_edge_cases() {
+        for (nb, db) in [(64u16, 16u16), (64, 8), (32, 2), (16, 6), (128, 32), (10, 4)] {
+            let bd = Builder::new(SpecInteger::new(nb, 2, 2).block_spec());
+            let n = bd.ciphertext_integer_input(nb);
+            let d = bd.ciphertext_integer_input(db);
+            let (q, r) = bd.iop_divx(&n, &d);
+            bd.ciphertext_integer_output(q);
+            bd.ciphertext_integer_output(r);
+            bd.check_noise();
+            let (ns, ds) = (SpecInteger::new(nb, 2, 2), SpecInteger::new(db, 2, 2));
+            let nmax = if nb >= 128 { u128::MAX } else { (1u128 << nb) - 1 };
+            let dmax = (1u128 << db) - 1;
+            let nums = [0, 1, 2, 3, 5, dmax - 1, dmax, dmax + 1, nmax / 3, nmax - 1, nmax];
+            let dens = [1, 2, 3, 4, 7, dmax / 2, dmax - 1, dmax];
+            for &a in nums.iter().filter(|&&a| a <= nmax) {
+                for &b in dens.iter().filter(|&&b| b >= 1 && b <= dmax) {
+                    let out = bd
+                        .interpret()
+                        .with_inputs(&[
+                            IopValue::CiphertextInteger(ns.from_int(a)),
+                            IopValue::CiphertextInteger(ds.from_int(b)),
+                        ])
+                        .get_outputs();
+                    assert_eq!(
+                        out.to_vec(),
+                        vec![
+                            IopValue::CiphertextInteger(ns.from_int(a / b)),
+                            IopValue::CiphertextInteger(ds.from_int(a % b)),
+                        ],
+                        "{a} / {b} with {nb}b / {db}b"
+                    );
+                }
+            }
         }
     }
 }
