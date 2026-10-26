@@ -28,3 +28,12 @@ path = "examples/mh_mul_latency.rs"
 [[example]]
 name = "auto_partitioning"
 path = "examples/auto_partitioning.rs"
+
+[[example]]
+name = "mul_asym_latency"
+path = "examples/mul_asym_latency.rs"
+
+[[example]]
+name = "div_asym_latency"
+path = "examples/div_asym_latency.rs"
+
