@@ -46,12 +46,22 @@ fn main() {
     bd.check_noise();
     let out_spec = SpecInteger::new(out_bits, 2, 2);
     bd.test_random(200, |inp| {
-        let [IopValue::CiphertextInteger(a), IopValue::CiphertextInteger(b)] = inp else {
+        let [
+            IopValue::CiphertextInteger(a),
+            IopValue::CiphertextInteger(b),
+        ] = inp
+        else {
             unreachable!()
         };
-        let mask = if out_bits >= 128 { u128::MAX } else { (1u128 << out_bits) - 1 };
+        let mask = if out_bits >= 128 {
+            u128::MAX
+        } else {
+            (1u128 << out_bits) - 1
+        };
         let expected = a.as_storage().wrapping_mul(b.as_storage()) & mask;
-        Some(vec![IopValue::CiphertextInteger(out_spec.from_int(expected))])
+        Some(vec![IopValue::CiphertextInteger(
+            out_spec.from_int(expected),
+        )])
     });
 
     let mut pl = Pipeline::new()

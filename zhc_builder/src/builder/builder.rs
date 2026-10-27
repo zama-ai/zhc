@@ -2950,7 +2950,9 @@ mod test_add_reduce_tree {
         for n in 1..=5u16 {
             let out_spec = SpecInteger::new(4, 2, 2);
             let semantic = |inp: &[IopValue]| {
-                let [IopValue::CiphertextInteger(x)] = inp else { unreachable!() };
+                let [IopValue::CiphertextInteger(x)] = inp else {
+                    unreachable!()
+                };
                 let v = x.as_storage();
                 let s: u128 = (0..n).map(|i| (v >> (2 * i)) & 3).sum();
                 Some(vec![IopValue::CiphertextInteger(out_spec.from_int(s))])
