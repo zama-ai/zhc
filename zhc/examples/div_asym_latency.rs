@@ -53,7 +53,11 @@ fn main() {
     bd.check_noise();
     let q_spec = SpecInteger::new(num_bits, 2, 2);
     bd.test_random(200, |inp| {
-        let [IopValue::CiphertextInteger(a), IopValue::CiphertextInteger(b)] = inp else {
+        let [
+            IopValue::CiphertextInteger(a),
+            IopValue::CiphertextInteger(b),
+        ] = inp
+        else {
             unreachable!()
         };
         let (a, b) = (a.as_storage(), b.as_storage());

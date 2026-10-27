@@ -506,7 +506,14 @@ mod test_asym {
 
     #[test]
     fn correctness_div_asym_edge_cases() {
-        for (nb, db) in [(64u16, 16u16), (64, 8), (32, 2), (16, 6), (128, 32), (10, 4)] {
+        for (nb, db) in [
+            (64u16, 16u16),
+            (64, 8),
+            (32, 2),
+            (16, 6),
+            (128, 32),
+            (10, 4),
+        ] {
             let bd = Builder::new(SpecInteger::new(nb, 2, 2).block_spec());
             let n = bd.ciphertext_integer_input(nb);
             let d = bd.ciphertext_integer_input(db);
@@ -515,9 +522,25 @@ mod test_asym {
             bd.ciphertext_integer_output(r);
             bd.check_noise();
             let (ns, ds) = (SpecInteger::new(nb, 2, 2), SpecInteger::new(db, 2, 2));
-            let nmax = if nb >= 128 { u128::MAX } else { (1u128 << nb) - 1 };
+            let nmax = if nb >= 128 {
+                u128::MAX
+            } else {
+                (1u128 << nb) - 1
+            };
             let dmax = (1u128 << db) - 1;
-            let nums = [0, 1, 2, 3, 5, dmax - 1, dmax, dmax + 1, nmax / 3, nmax - 1, nmax];
+            let nums = [
+                0,
+                1,
+                2,
+                3,
+                5,
+                dmax - 1,
+                dmax,
+                dmax + 1,
+                nmax / 3,
+                nmax - 1,
+                nmax,
+            ];
             let dens = [1, 2, 3, 4, 7, dmax / 2, dmax - 1, dmax];
             for &a in nums.iter().filter(|&&a| a <= nmax) {
                 for &b in dens.iter().filter(|&&b| b >= 1 && b <= dmax) {

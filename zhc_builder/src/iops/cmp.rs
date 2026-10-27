@@ -108,7 +108,7 @@ pub fn cmp_eq(spec: SpecInteger) -> Builder {
     let builder = Builder::new(spec.block_spec());
     let src_a = builder.ciphertext_integer_input(spec.int_size());
     let src_b = builder.ciphertext_integer_input(spec.int_size());
-    //let output = builder.iop_cmp(&src_a, &src_b, CmpKind::Equal);
+    // let output = builder.iop_cmp(&src_a, &src_b, CmpKind::Equal);
     let output = builder.iop_eq(&src_a, &src_b);
     builder.ciphertext_bool_output(output);
     builder
@@ -254,84 +254,75 @@ impl Builder {
         self.ciphertext_bool_store_block(cmp_res)
     }
 
-    pub fn iop_eq(
-          &self,
-          src_a: &CiphertextInteger,
-          src_b: &CiphertextInteger,
-      ) -> CiphertextBool {
-          self.iop_eq_neq(src_a, src_b, false)
+    pub fn iop_eq(&self, src_a: &CiphertextInteger, src_b: &CiphertextInteger) -> CiphertextBool {
+        self.iop_eq_neq(src_a, src_b, false)
     }
 
-    pub fn iop_neq(
-          &self,
-          src_a: &CiphertextInteger,
-          src_b: &CiphertextInteger,
-      ) -> CiphertextBool {
-          self.iop_eq_neq(src_a, src_b, true)
+    pub fn iop_neq(&self, src_a: &CiphertextInteger, src_b: &CiphertextInteger) -> CiphertextBool {
+        self.iop_eq_neq(src_a, src_b, true)
     }
 
     /// Equality (`neq == false`) or inequality (`neq == true`) of two integers.
     fn iop_eq_neq(
-          &self,
-          src_a: &CiphertextInteger,
-          src_b: &CiphertextInteger,
-          neq: bool,
-      ) -> CiphertextBool {
-          // get input as array of blk
-          let src_a_blocks = self.ciphertext_integer_split(&src_a);
-          let src_b_blocks = self.ciphertext_integer_split(&src_b);
+        &self,
+        src_a: &CiphertextInteger,
+        src_b: &CiphertextInteger,
+        neq: bool,
+    ) -> CiphertextBool {
+        // get input as array of blk
+        let src_a_blocks = self.ciphertext_integer_split(&src_a);
+        let src_b_blocks = self.ciphertext_integer_split(&src_b);
 
-          let a_packed = self.vector_pack(&src_a_blocks);
-          let b_packed = self.vector_pack(&src_b_blocks);
-          
-          // Here we have half number of blocks.
-          // a - b is in [-15, 15]: wrapping keeps it within the block, and it is 0 iff a == b.
-          let diff: Vec<_> = a_packed
-              .iter()
-              .zip(b_packed.iter())
-              .map(|(a, b)| self.block_wrapping_sub(a, b))
-              .collect();
+        let a_packed = self.vector_pack(&src_a_blocks);
+        let b_packed = self.vector_pack(&src_b_blocks);
 
-          let eq_mh: Vec<_> = diff
-              .iter()
-              .map(|d| self.block_wrapping_lookup(d, Lut1::is_null(*self.spec())))
-              .collect();
-          
-          // Split in groups of NU_BOOL
-          let op_nb_bool = NU_BOOL;
-          let mut res_v = eq_mh.clone();
-          let mut blk_nb = res_v.len();
+        // Here we have half number of blocks.
+        // a - b is in [-15, 15]: wrapping keeps it within the block, and it is 0 iff a == b.
+        let diff: Vec<_> = a_packed
+            .iter()
+            .zip(b_packed.iter())
+            .map(|(a, b)| self.block_wrapping_sub(a, b))
+            .collect();
 
-          // For neq, the last reduction step uses NotNull instead of IsNull. With a single
-          // packed block, one reduction step is still run to apply it.
-          let mut neq_pending = neq;
+        let eq_mh: Vec<_> = diff
+            .iter()
+            .map(|d| self.block_wrapping_lookup(d, Lut1::is_null(*self.spec())))
+            .collect();
 
-          while blk_nb > 1 || neq_pending {
-              let mut v = Vec::new();
-              let last_step = blk_nb <= op_nb_bool;
-              let lut = if neq && last_step {
-                  neq_pending = false;
-                  Lut1::not_null(*self.spec())
-              } else {
-                  Lut1::is_null(*self.spec())
-              };
+        // Split in groups of NU_BOOL
+        let op_nb_bool = NU_BOOL;
+        let mut res_v = eq_mh.clone();
+        let mut blk_nb = res_v.len();
 
-              for chk in res_v.chunks(op_nb_bool) {
-                  // Sum the booleans of the group
-                  let acc = self.vector_add_reduce_tree(chk);
+        // For neq, the last reduction step uses NotNull instead of IsNull. With a single
+        // packed block, one reduction step is still run to apply it.
+        let mut neq_pending = neq;
 
-                  // len - sum is in [0, len], and is 0 iff every block of the group is equal.
-                  // It is never negative, so the padding bit stays clear and NotNull is valid.
-                  let k = self.block_let_plaintext(chk.len() as u8);
-                  let acc = self.block_plaintext_sub(&k, &acc);
-                  v.push(self.block_lookup(&acc, lut.clone()));
-              }
+        while blk_nb > 1 || neq_pending {
+            let mut v = Vec::new();
+            let last_step = blk_nb <= op_nb_bool;
+            let lut = if neq && last_step {
+                neq_pending = false;
+                Lut1::not_null(*self.spec())
+            } else {
+                Lut1::is_null(*self.spec())
+            };
 
-              res_v = v.clone();
-              blk_nb = res_v.len();
+            for chk in res_v.chunks(op_nb_bool) {
+                // Sum the booleans of the group
+                let acc = self.vector_add_reduce_tree(chk);
 
-          }
-          self.ciphertext_bool_store_block(&res_v[0])
+                // len - sum is in [0, len], and is 0 iff every block of the group is equal.
+                // It is never negative, so the padding bit stays clear and NotNull is valid.
+                let k = self.block_let_plaintext(chk.len() as u8);
+                let acc = self.block_plaintext_sub(&k, &acc);
+                v.push(self.block_lookup(&acc, lut.clone()));
+            }
+
+            res_v = v.clone();
+            blk_nb = res_v.len();
+        }
+        self.ciphertext_bool_store_block(&res_v[0])
     }
 }
 

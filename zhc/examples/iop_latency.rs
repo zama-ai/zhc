@@ -13,11 +13,17 @@ use zhc_builder::SpecInteger;
 /// Variant name of an IOP, without fields (`AddSimd { n: 8 }` -> `AddSimd`).
 fn variant_name(iop: &Iop) -> String {
     let dbg = format!("{iop:?}");
-    dbg.split([' ', '{', '(']).next().unwrap_or(&dbg).to_string()
+    dbg.split([' ', '{', '('])
+        .next()
+        .unwrap_or(&dbg)
+        .to_string()
 }
 
 fn normalize(s: &str) -> String {
-    s.chars().filter(|c| *c != '_' && *c != '-').collect::<String>().to_lowercase()
+    s.chars()
+        .filter(|c| *c != '_' && *c != '-')
+        .collect::<String>()
+        .to_lowercase()
 }
 
 fn main() {
@@ -34,7 +40,9 @@ fn main() {
         return;
     }
 
-    let bits: u16 = args.get(1).map_or(64, |s| s.parse().expect("bits must be an integer"));
+    let bits: u16 = args
+        .get(1)
+        .map_or(64, |s| s.parse().expect("bits must be an integer"));
     let Some(iop) = Iop::ALL_STATIC
         .iter()
         .find(|iop| normalize(&variant_name(iop)) == normalize(name))
