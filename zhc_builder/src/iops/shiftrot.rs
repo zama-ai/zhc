@@ -1,5 +1,9 @@
 use zhc_crypto::integer_semantics::SpecInteger;
-use zhc_langs::ioplang::Lut1;
+use zhc_crypto::integer_semantics::lut::{
+    IfPos0FalseZeroed_0, IfPos0TrueZeroed_0, ShiftLeftByCarryPos0Msg_0,
+    ShiftLeftByCarryPos0MsgNext_0, ShiftRightByCarryPos0Msg_0, ShiftRightByCarryPos0MsgNext_0,
+};
+use zhc_langs::ioplang::{Lut1, Lut2};
 
 use crate::{
     CiphertextBlock, NU, NU_BOOL,
@@ -44,15 +48,6 @@ fn shiftrot_swap_source<'b>(
         ShiftRotKind::RotateRight => Some(&blocks[(i + stride) % blk_w]),
         ShiftRotKind::RotateLeft => Some(&blocks[(i + blk_w - stride % blk_w) % blk_w]),
     }
-}
-
-/// Which bit position in the carry field to test as the swap condition.
-#[derive(Debug, Clone, Copy)]
-enum CondPos {
-    /// Bit 0 of the carry (LSB).
-    Pos0,
-    /// Bit 1 of the carry.
-    Pos1,
 }
 
 /// Creates an IR for logical right shift of an encrypted integer.
@@ -207,13 +202,19 @@ impl Builder {
 
     /// Shifts or rotates an encrypted integer by an encrypted amount.
     ///
-    /// Implements a barrel shifter with three stages:
+    /// Implements a barrel shifter with four stages:
+    /// 0. **Bit extraction** — each amount bit used by the shifter is put in its own block, one
+    ///    two-output PBS per amount block. A single bit packed with a 2-bit value fits the input of
+    ///    a two-output many-LUT, which the next stages rely on.
     /// 1. **Inner shift** — handles bit 0 of the amount (intra-block shift by 0 or 1 position
-    ///    within each block's message bits).
+    ///    within each block's message bits). From 16 to 64 bits, one two-output PBS per block on
+    ///    the extracted bit. Otherwise, two PBS per block on the raw amount block, which spares the
+    ///    wait for stage 0.
     /// 2. **Merge** — combines each block's shifted message with the overflow from the neighboring
     ///    block (direction depends on shift kind).
     /// 3. **Block swap** — log₂ butterfly stages that conditionally swap whole blocks based on
-    ///    higher bits of the amount.
+    ///    higher bits of the amount, one two-output PBS per block and stage giving both the kept
+    ///    and the moved part.
     ///
     /// The effective shift amount is `amount mod int_size` (for power-of-two
     /// integer sizes).
@@ -234,59 +235,111 @@ impl Builder {
         amount: &CiphertextInteger,
         kind: ShiftRotKind,
     ) -> CiphertextInteger {
+        // Variant A (extract amount bit 0 first): one more PBS level, but half the inner-shift
+        // PBS. It pays off from 16 bits up, where the PBS count dominates the latency.
+        // Not at 128 bits and above: the HPU register allocator cannot always find two
+        // consecutive free registers for the Lut2 outputs (see correctness_right_shifts_s128).
+        // TODO: remove the upper bound once the allocator can handle this.
+        let bits = src.spec().int_size();
+        let extract_first = (16..128).contains(&bits);
+        self.iop_shiftrot_manylut(src, amount, kind, extract_first)
+    }
+
+    /// Barrel shifter using many-LUTs.
+    ///
+    /// Stage 0 extracts each amount bit used by the barrel shifter into its own block (one
+    /// `Lut2` per amount block). Packing a single bit with a 2-bit value gives a 3-bit input,
+    /// which fits a `Lut2`. Stage 3 then uses one `Lut2` per block, producing both the "keep"
+    /// and the "move" parts in a single PBS.
+    ///
+    /// With `extract_first`, stage 1 also uses a `Lut2` on the extracted bit 0 (half the PBS,
+    /// one more level). Otherwise stage 1 is unchanged and runs in parallel with stage 0.
+    fn iop_shiftrot_manylut(
+        &self,
+        src: &CiphertextInteger,
+        amount: &CiphertextInteger,
+        kind: ShiftRotKind,
+        extract_first: bool,
+    ) -> CiphertextInteger {
+        let spec = *self.spec();
         let src_blocks = self.ciphertext_integer_split(src);
         let amount_blocks = self.ciphertext_integer_split(amount);
         let blk_w = src_blocks.len();
-        let msg_w = self.spec().message_size() as usize;
+        let num_stages = (2 * blk_w).ilog2() as usize; // = log2(int_size) amount bits used
 
-        // Stage 1: Inner shift — process bit 0 of amount.
-        self.push_comment("Inner shift");
-        let (shiftrot_msg, shiftrot_next): (Vec<_>, Vec<_>) = src_blocks
-            .iter()
-            .enumerate()
-            .map(|(i, block)| {
-                self.push_comment(format!("Block {i}"));
-                let r = self.shiftrot_inner(kind, block, &amount_blocks[0]);
-                self.pop_comment();
-                r
-            })
-            .unzip();
+        // Stage 0: one block per amount bit (0 or 1 in the message).
+        self.push_comment("Extract amount bits");
+        let split_bits = Lut2::from_fn(
+            "ManyMsgBit0Bit1",
+            spec,
+            |b| b.spec().from_message(b.raw_message_bits() & 1),
+            |b| b.spec().from_message((b.raw_message_bits() >> 1) & 1),
+        );
+        let mut bits = Vec::with_capacity(num_stages);
+        for blk in amount_blocks.iter().take(num_stages.div_ceil(2)) {
+            let (b0, b1) = self.block_lookup2(blk, split_bits.clone());
+            bits.push(b0);
+            bits.push(b1);
+        }
         self.pop_comment();
 
-        // Stage 2: Fuse msg and msg_next from neighboring blocks.
+        // Stage 1: inner shift by amount bit 0.
+        self.push_comment("Inner shift");
+        let (shiftrot_msg, shiftrot_next): (Vec<_>, Vec<_>) = if extract_first {
+            let lut = match kind {
+                ShiftRotKind::ShiftRight | ShiftRotKind::RotateRight => Lut2::from_fn(
+                    "ManyShiftRightByCarryPos0",
+                    spec,
+                    ShiftRightByCarryPos0Msg_0,
+                    ShiftRightByCarryPos0MsgNext_0,
+                ),
+                ShiftRotKind::ShiftLeft | ShiftRotKind::RotateLeft => Lut2::from_fn(
+                    "ManyShiftLeftByCarryPos0",
+                    spec,
+                    ShiftLeftByCarryPos0Msg_0,
+                    ShiftLeftByCarryPos0MsgNext_0,
+                ),
+            };
+            src_blocks
+                .iter()
+                .map(|blk| self.block_lookup2(&self.block_pack(&bits[0], blk), lut.clone()))
+                .unzip()
+        } else {
+            src_blocks
+                .iter()
+                .map(|blk| self.shiftrot_inner(kind, blk, &amount_blocks[0]))
+                .unzip()
+        };
+        self.pop_comment();
+
+        // Stage 2: merge (unchanged).
         self.push_comment("Merge");
         let mut merged: Vec<CiphertextBlock> = (0..blk_w)
-            .map(|i| {
-                // The overflow of a block always lands one position away, in the shift direction.
-                let neighbor = shiftrot_swap_source(kind, &shiftrot_next, i, 1);
-                match neighbor {
-                    Some(n) => self.block_add(&shiftrot_msg[i], n),
-                    None => shiftrot_msg[i],
-                }
+            .map(|i| match shiftrot_swap_source(kind, &shiftrot_next, i, 1) {
+                Some(n) => self.block_add(&shiftrot_msg[i], n),
+                None => shiftrot_msg[i],
             })
             .collect();
         self.pop_comment();
 
-        // Stage 3: Block swap — butterfly stages for higher amount bits.
-        // Each stage handles one bit of the shift amount. Stage `stg` tests
-        // bit `stg` of the amount (spread across amount blocks, 2 bits per
-        // block for (2,2) params).
-        let num_stages = (2 * blk_w).ilog2() as usize;
+        // Stage 3: one Lut2 per block gives (keep if bit = 0, move if bit = 1).
+        let keep_move = Lut2::from_fn(
+            "ManyIfPos0Zeroed",
+            spec,
+            IfPos0TrueZeroed_0,
+            IfPos0FalseZeroed_0,
+        );
         for stg in 1..num_stages {
             self.push_comment(format!("Swap stage {stg}"));
             let stride = 1usize << (stg - 1);
-            let cond_block = &amount_blocks[stg / msg_w];
-            let cond_pos = if stg % 2 == 1 {
-                CondPos::Pos1
-            } else {
-                CondPos::Pos0
-            };
-
-            let prev = merged.clone();
+            let (keep, moved): (Vec<_>, Vec<_>) = merged
+                .iter()
+                .map(|blk| self.block_lookup2(&self.block_pack(&bits[stg], blk), keep_move.clone()))
+                .unzip();
             merged = (0..blk_w)
-                .map(|i| {
-                    let swap = shiftrot_swap_source(kind, &prev, i, stride);
-                    self.shiftrot_block_swap(&prev[i], swap, cond_block, cond_pos)
+                .map(|i| match shiftrot_swap_source(kind, &moved, i, stride) {
+                    Some(m) => self.block_add(&keep[i], m),
+                    None => keep[i],
                 })
                 .collect();
             self.pop_comment();
@@ -295,7 +348,7 @@ impl Builder {
         if matches!(kind, ShiftRotKind::RotateLeft | ShiftRotKind::RotateRight) {
             merged = merged
                 .into_iter()
-                .map(|b| self.block_lookup(&b, Lut1::msg_only(*self.spec())))
+                .map(|b| self.block_lookup(&b, Lut1::msg_only(spec)))
                 .collect();
         }
 
@@ -330,45 +383,6 @@ impl Builder {
         let msg = self.block_lookup(&packed, lut_msg);
         let msg_next = self.block_lookup(&packed, lut_next);
         (msg, msg_next)
-    }
-
-    /// Conditionally selects between the original block and a swap block based
-    /// on a condition bit.
-    ///
-    /// When the tested bit of `cond` is 0, returns `src_orig`. When 1, returns
-    /// `src_swap` (or zero if `src_swap` is `None`).
-    fn shiftrot_block_swap(
-        &self,
-        src_orig: &CiphertextBlock,
-        src_swap: Option<&CiphertextBlock>,
-        cond: &CiphertextBlock,
-        cond_pos: CondPos,
-    ) -> CiphertextBlock {
-        let (lut_true_zeroed, lut_false_zeroed) = match cond_pos {
-            CondPos::Pos0 => (
-                Lut1::if_pos0_true_zeroed(*self.spec()),
-                Lut1::if_pos0_false_zeroed(*self.spec()),
-            ),
-            CondPos::Pos1 => (
-                Lut1::if_pos1_true_zeroed(*self.spec()),
-                Lut1::if_pos1_false_zeroed(*self.spec()),
-            ),
-        };
-
-        // Pack: cond in carry (high), value in message (low).
-        let pack_orig = self.block_pack(cond, src_orig);
-        if let Some(swap) = src_swap {
-            let pack_swap = self.block_pack(cond, swap);
-            // TrueZeroed: if cond bit = 1 → zero (suppress orig)
-            // FalseZeroed: if cond bit = 0 → zero (suppress swap)
-            // Sum gives: cond=0 → orig+0, cond=1 → 0+swap
-            let orig_part = self.block_lookup(&pack_orig, lut_true_zeroed);
-            let swap_part = self.block_lookup(&pack_swap, lut_false_zeroed);
-            self.block_add(&orig_part, &swap_part)
-        } else {
-            // No swap source — zero the block when condition is true.
-            self.block_lookup(&pack_orig, lut_true_zeroed)
-        }
     }
 
     /// Zeros `shifted` when `amount >= int_size` (unsigned overshift).
@@ -553,67 +567,64 @@ mod test {
                                                            | %22 = extract_ct_block<1>(%0);
                                                            | %23 = extract_ct_block<2>(%0);
                                                            | %24 = extract_ct_block<3>(%0);
-                // Inner shift / Block 0                   | %29 = pack_ct<4>(%7, %21);
-                // Inner shift / Block 0                   | %30 = pbs<Protect, Lut1("ShiftLeftByCarryPos0Msg")>(%29);
-                // Inner shift / Block 0                   | %31 = pbs<Protect, Lut1("ShiftLeftByCarryPos0MsgNext")>(%29);
-                // Inner shift / Block 1                   | %32 = pack_ct<4>(%7, %22);
-                // Inner shift / Block 1                   | %33 = pbs<Protect, Lut1("ShiftLeftByCarryPos0Msg")>(%32);
-                // Inner shift / Block 1                   | %34 = pbs<Protect, Lut1("ShiftLeftByCarryPos0MsgNext")>(%32);
-                // Inner shift / Block 2                   | %35 = pack_ct<4>(%7, %23);
-                // Inner shift / Block 2                   | %36 = pbs<Protect, Lut1("ShiftLeftByCarryPos0Msg")>(%35);
-                // Inner shift / Block 2                   | %37 = pbs<Protect, Lut1("ShiftLeftByCarryPos0MsgNext")>(%35);
-                // Inner shift / Block 3                   | %38 = pack_ct<4>(%7, %24);
-                // Inner shift / Block 3                   | %39 = pbs<Protect, Lut1("ShiftLeftByCarryPos0Msg")>(%38);
-                // Merge                                   | %41 = add_ct(%33, %31);
-                // Merge                                   | %42 = add_ct(%36, %34);
-                // Merge                                   | %43 = add_ct(%39, %37);
-                // Swap stage 1                            | %44 = pack_ct<4>(%7, %30);
-                // Swap stage 1                            | %45 = pbs<Protect, Lut1("IfPos1TrueZeroed")>(%44);
-                // Swap stage 1                            | %46 = pack_ct<4>(%7, %41);
-                // Swap stage 1                            | %48 = pbs<Protect, Lut1("IfPos1TrueZeroed")>(%46);
-                // Swap stage 1                            | %49 = pbs<Protect, Lut1("IfPos1FalseZeroed")>(%44);
-                // Swap stage 1                            | %50 = add_ct(%48, %49);
-                // Swap stage 1                            | %51 = pack_ct<4>(%7, %42);
-                // Swap stage 1                            | %53 = pbs<Protect, Lut1("IfPos1TrueZeroed")>(%51);
-                // Swap stage 1                            | %54 = pbs<Protect, Lut1("IfPos1FalseZeroed")>(%46);
-                // Swap stage 1                            | %55 = add_ct(%53, %54);
-                // Swap stage 1                            | %56 = pack_ct<4>(%7, %43);
-                // Swap stage 1                            | %58 = pbs<Protect, Lut1("IfPos1TrueZeroed")>(%56);
-                // Swap stage 1                            | %59 = pbs<Protect, Lut1("IfPos1FalseZeroed")>(%51);
-                // Swap stage 1                            | %60 = add_ct(%58, %59);
-                // Swap stage 2                            | %61 = pack_ct<4>(%8, %45);
-                // Swap stage 2                            | %62 = pbs<Protect, Lut1("IfPos0TrueZeroed")>(%61);
-                // Swap stage 2                            | %63 = pack_ct<4>(%8, %50);
-                // Swap stage 2                            | %64 = pbs<Protect, Lut1("IfPos0TrueZeroed")>(%63);
-                // Swap stage 2                            | %65 = pack_ct<4>(%8, %55);
-                // Swap stage 2                            | %67 = pbs<Protect, Lut1("IfPos0TrueZeroed")>(%65);
-                // Swap stage 2                            | %68 = pbs<Protect, Lut1("IfPos0FalseZeroed")>(%61);
-                // Swap stage 2                            | %69 = add_ct(%67, %68);
-                // Swap stage 2                            | %70 = pack_ct<4>(%8, %60);
-                // Swap stage 2                            | %72 = pbs<Protect, Lut1("IfPos0TrueZeroed")>(%70);
-                // Swap stage 2                            | %73 = pbs<Protect, Lut1("IfPos0FalseZeroed")>(%63);
-                // Swap stage 2                            | %74 = add_ct(%72, %73);
-                // Overshift detection                     | %89 = let_ct_block<1>();
-                // Overshift detection                     | %90 = pack_ct<4>(%8, %89);
-                // Overshift detection                     | %91 = pbs<Protect, Lut1("IfPos1FalseZeroed")>(%90);
-                // Overshift detection                     | %92 = add_ct(%9, %10);
-                // Overshift detection / IsSome on chunk   | %93 = pbs<Protect, Lut1("IsSome")>(%92);
-                // Overshift reduce                        | %94 = add_ct(%91, %93);
-                // Overshift reduce                        | %95 = pbs<Protect, Lut1("IsSome")>(%94);
-                // return 0 if overshift                   | %100 = pack_ct<4>(%95, %62);
-                // return 0 if overshift                   | %101 = pbs<Protect, Lut1("IfTrueZeroed")>(%100);
-                // return 0 if overshift                   | %102 = pack_ct<4>(%95, %64);
+                // Extract amount bits                     | %29, %30 = pbs2<Protect, Lut2("ManyMsgBit0Bit1")>(%7);
+                // Extract amount bits                     | %31, %32 = pbs2<Protect, Lut2("ManyMsgBit0Bit1")>(%8);
+                // Inner shift                             | %33 = pack_ct<4>(%7, %21);
+                // Inner shift                             | %34 = pbs<Protect, Lut1("ShiftLeftByCarryPos0Msg")>(%33);
+                // Inner shift                             | %35 = pbs<Protect, Lut1("ShiftLeftByCarryPos0MsgNext")>(%33);
+                // Inner shift                             | %36 = pack_ct<4>(%7, %22);
+                // Inner shift                             | %37 = pbs<Protect, Lut1("ShiftLeftByCarryPos0Msg")>(%36);
+                // Inner shift                             | %38 = pbs<Protect, Lut1("ShiftLeftByCarryPos0MsgNext")>(%36);
+                // Inner shift                             | %39 = pack_ct<4>(%7, %23);
+                // Inner shift                             | %40 = pbs<Protect, Lut1("ShiftLeftByCarryPos0Msg")>(%39);
+                // Inner shift                             | %41 = pbs<Protect, Lut1("ShiftLeftByCarryPos0MsgNext")>(%39);
+                // Inner shift                             | %42 = pack_ct<4>(%7, %24);
+                // Inner shift                             | %43 = pbs<Protect, Lut1("ShiftLeftByCarryPos0Msg")>(%42);
+                // Merge                                   | %45 = add_ct(%37, %35);
+                // Merge                                   | %46 = add_ct(%40, %38);
+                // Merge                                   | %47 = add_ct(%43, %41);
+                // Swap stage 1                            | %48 = pack_ct<4>(%30, %34);
+                // Swap stage 1                            | %49, %50 = pbs2<Protect, Lut2("ManyIfPos0Zeroed")>(%48);
+                // Swap stage 1                            | %51 = pack_ct<4>(%30, %45);
+                // Swap stage 1                            | %52, %53 = pbs2<Protect, Lut2("ManyIfPos0Zeroed")>(%51);
+                // Swap stage 1                            | %54 = pack_ct<4>(%30, %46);
+                // Swap stage 1                            | %55, %56 = pbs2<Protect, Lut2("ManyIfPos0Zeroed")>(%54);
+                // Swap stage 1                            | %57 = pack_ct<4>(%30, %47);
+                // Swap stage 1                            | %58, %59 = pbs2<Protect, Lut2("ManyIfPos0Zeroed")>(%57);
+                // Swap stage 1                            | %60 = add_ct(%52, %50);
+                // Swap stage 1                            | %61 = add_ct(%55, %53);
+                // Swap stage 1                            | %62 = add_ct(%58, %56);
+                // Swap stage 2                            | %63 = pack_ct<4>(%31, %49);
+                // Swap stage 2                            | %64, %65 = pbs2<Protect, Lut2("ManyIfPos0Zeroed")>(%63);
+                // Swap stage 2                            | %66 = pack_ct<4>(%31, %60);
+                // Swap stage 2                            | %67, %68 = pbs2<Protect, Lut2("ManyIfPos0Zeroed")>(%66);
+                // Swap stage 2                            | %69 = pack_ct<4>(%31, %61);
+                // Swap stage 2                            | %70, %71 = pbs2<Protect, Lut2("ManyIfPos0Zeroed")>(%69);
+                // Swap stage 2                            | %72 = pack_ct<4>(%31, %62);
+                // Swap stage 2                            | %73, %74 = pbs2<Protect, Lut2("ManyIfPos0Zeroed")>(%72);
+                // Swap stage 2                            | %75 = add_ct(%70, %65);
+                // Swap stage 2                            | %76 = add_ct(%73, %68);
+                // Overshift detection                     | %91 = let_ct_block<1>();
+                // Overshift detection                     | %92 = pack_ct<4>(%8, %91);
+                // Overshift detection                     | %93 = pbs<Protect, Lut1("IfPos1FalseZeroed")>(%92);
+                // Overshift detection                     | %94 = add_ct(%9, %10);
+                // Overshift detection / IsSome on chunk   | %95 = pbs<Protect, Lut1("IsSome")>(%94);
+                // Overshift reduce                        | %96 = add_ct(%93, %95);
+                // Overshift reduce                        | %97 = pbs<Protect, Lut1("IsSome")>(%96);
+                // return 0 if overshift                   | %102 = pack_ct<4>(%97, %64);
                 // return 0 if overshift                   | %103 = pbs<Protect, Lut1("IfTrueZeroed")>(%102);
-                // return 0 if overshift                   | %104 = pack_ct<4>(%95, %69);
+                // return 0 if overshift                   | %104 = pack_ct<4>(%97, %67);
                 // return 0 if overshift                   | %105 = pbs<Protect, Lut1("IfTrueZeroed")>(%104);
-                // return 0 if overshift                   | %106 = pack_ct<4>(%95, %74);
+                // return 0 if overshift                   | %106 = pack_ct<4>(%97, %75);
                 // return 0 if overshift                   | %107 = pbs<Protect, Lut1("IfTrueZeroed")>(%106);
-                                                           | %108 = decl_ct<8>();
-                                                           | %114 = store_ct_block<0>(%101, %108);
-                                                           | %115 = store_ct_block<1>(%103, %114);
-                                                           | %116 = store_ct_block<2>(%105, %115);
-                                                           | %117 = store_ct_block<3>(%107, %116);
-                                                           | output<0>(%117);
+                // return 0 if overshift                   | %108 = pack_ct<4>(%97, %76);
+                // return 0 if overshift                   | %109 = pbs<Protect, Lut1("IfTrueZeroed")>(%108);
+                                                           | %110 = decl_ct<8>();
+                                                           | %116 = store_ct_block<0>(%103, %110);
+                                                           | %117 = store_ct_block<1>(%105, %116);
+                                                           | %118 = store_ct_block<2>(%107, %117);
+                                                           | %119 = store_ct_block<3>(%109, %118);
+                                                           | output<0>(%119);
             "#
         );
     }
