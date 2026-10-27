@@ -17,7 +17,7 @@ use crate::{
 /// # use zhc_builder::{SpecInteger, div};
 /// # let spec = SpecInteger::new(16, 2, 2);
 /// let builder = div(spec);
-/// let ir = builder.optimize_ir();
+/// let ir = builder.ir();
 /// ```
 pub fn div(spec: SpecInteger) -> Builder {
     let builder = Builder::new(spec.block_spec());
@@ -81,7 +81,7 @@ impl Builder {
 /// # use zhc_builder::{SpecInteger, rem};
 /// # let spec = SpecInteger::new(16, 2, 2);
 /// let builder = rem(spec);
-/// let ir = builder.optimize_ir();
+/// let ir = builder.ir();
 /// ```
 pub fn rem(spec: SpecInteger) -> Builder {
     let builder = Builder::new(spec.block_spec());

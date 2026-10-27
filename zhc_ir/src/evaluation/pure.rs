@@ -77,10 +77,11 @@ where
         self.inner.get_val(valid)
     }
 
-    /// Returns `true` if every active value of the IR has been evaluated.
+    /// Returns `true` if every active operation of the IR has been evaluated.
     ///
-    /// Reports that no value is left pending or poisoned. Operation states are not inspected, so
-    /// an operation that declares no result can have failed while this still returns `true`.
+    /// Reports that no operation is left pending, panicked or poisoned, including operations that
+    /// declare no result. Since every value is produced by an operation, every active value is
+    /// then evaluated too.
     pub fn is_ok(&self) -> bool {
         self.inner.is_ok()
     }

@@ -1,0 +1,76 @@
+use zhc::compat::Iop;
+use zhc_builder::SpecInteger;
+use zhc_ir::IR;
+use zhc_langs::{hpulang::HpuLang, ioplang::IopLang};
+use zhc_pipeline::{
+    PartitionSpec, PartitionerConfig, SchedPolicy, SpreadPolicy, TiePolicy, optimize_iop,
+    partition_and_materialize,
+};
+use zhc_utils::units::Cycle;
+use zhc_validation_macro::test_matrix;
+
+use zhc_validation::equivalence_check::check_iop_hpu_equivalence;
+
+fn pipeline(ir: &IR<IopLang>, config: &PartitionerConfig) -> IR<HpuLang> {
+    let (remat, partitions) = partition_and_materialize(ir, config);
+    zhc_pipeline::passes::lower_iop_to_multi_hpu(&remat, &partitions).0
+}
+
+#[test]
+fn smoke() {
+    let iop = Iop::TrailingZeros;
+    let size = 8;
+    let schedp = SchedPolicy::AsSoonAsPossible;
+    let tiep = TiePolicy::Balance;
+    let spreadp = SpreadPolicy::MinimizeWork;
+    let n_hpus = 8;
+    let b = iop.to_builder(SpecInteger::new(size, 2, 2));
+    let iop_ir = zhc_pipeline::passes::optimize_iop(&b.ir());
+    let config = PartitionerConfig {
+        specs: std::iter::repeat(PartitionSpec {
+            parallelism: 12,
+            latency: Cycle(1),
+        })
+        .take(n_hpus)
+        .collect(),
+        sched_policy: schedp,
+        tie_policy: tiep,
+        spread_policy: spreadp,
+    };
+    let _hpu_ir = pipeline(&iop_ir, &config);
+}
+
+#[test_matrix(
+    iop = @all_iops,
+    size = @main_precs,
+    schedp = @all_schedps,
+    tiep = [tiep_concentrate = TiePolicy::Concentrate, tiep_balance = TiePolicy::Balance],
+    spreadp = [spreadp_min_transfers = SpreadPolicy::MinimizeTransfers, spreadp_min_work = SpreadPolicy::MinimizeWork],
+    n_hpus = [m2 = 2, m4 = 4, m8 = 8])
+]
+#[ignore]
+fn validate_lower_iop_to_multi_hpu(
+    iop: Iop,
+    size: u16,
+    schedp: SchedPolicy,
+    tiep: TiePolicy,
+    spreadp: SpreadPolicy,
+    n_hpus: usize,
+) {
+    let spec = SpecInteger::new(size, 2, 2);
+    let b = iop.to_builder(spec);
+    let iop_ir = optimize_iop(&b.ir());
+    let config = PartitionerConfig {
+        specs: std::iter::repeat(PartitionSpec {
+            parallelism: 12,
+            latency: Cycle(1),
+        })
+        .take(n_hpus)
+        .collect(),
+        sched_policy: schedp,
+        tie_policy: tiep,
+        spread_policy: spreadp,
+    };
+    let hpu_ir = pipeline(&iop_ir, &config);
+    check_iop_hpu_equivalence(&iop_ir, &hpu_ir, spec.block_spec());
+}

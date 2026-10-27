@@ -13,7 +13,7 @@ use zhc_utils::iter::CollectInSmallVec;
 /// # use zhc_builder::{SpecInteger, trivial_encrypt};
 /// # let spec = SpecInteger::new(16, 2, 2);
 /// let builder = trivial_encrypt(spec);
-/// let ir = builder.optimize_ir();
+/// let ir = builder.ir();
 /// ```
 pub fn trivial_encrypt(spec: SpecInteger) -> Builder {
     let builder = Builder::new(spec.block_spec());
@@ -70,7 +70,7 @@ mod test {
         let spec = SpecInteger::new(16, 2, 2);
         let ir = trivial_encrypt(spec);
         assert_display_is!(
-            ir.optimize_ir()
+            zhc_pipeline::passes::optimize_iop(&ir.ir())
                 .format()
                 .show_comments(false)
                 .show_types(false)

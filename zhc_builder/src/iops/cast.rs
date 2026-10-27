@@ -10,7 +10,7 @@ use zhc_utils::SafeAs;
 /// # use zhc_builder::{SpecInteger, cast};
 /// # let spec = SpecInteger::new(16, 2, 2);
 /// let builder = cast(spec, 32);
-/// let ir = builder.optimize_ir();
+/// let ir = builder.ir();
 /// ```
 pub fn cast(spec: SpecInteger, to_size: u16) -> Builder {
     let builder = Builder::new(spec.block_spec());
@@ -56,7 +56,7 @@ mod test {
     fn test_cast_widen() {
         let ir = cast(SpecInteger::new(8, 2, 2), 16);
         assert_display_is!(
-            ir.optimize_ir()
+            zhc_pipeline::passes::optimize_iop(&ir.ir())
                 .format()
                 .show_comments(false)
                 .show_types(false)
@@ -87,7 +87,7 @@ mod test {
     fn test_cast_narrow() {
         let ir = cast(SpecInteger::new(16, 2, 2), 8);
         assert_display_is!(
-            ir.optimize_ir()
+            zhc_pipeline::passes::optimize_iop(&ir.ir())
                 .format()
                 .show_comments(false)
                 .show_types(false)

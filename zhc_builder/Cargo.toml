@@ -15,3 +15,4 @@ zhc_crypto.workspace = true
 
 [dev-dependencies]
 rand.workspace = true
+zhc_pipeline.workspace = true

@@ -623,6 +623,16 @@ impl Pipeline {
             .unwrap_unchecked_iop_lang_ref()
     }
 
+    pub fn get_optimized_ioplang(&mut self) -> &IR<IopLang> {
+        self.eval
+            .pull_val(&mut self.context, VALIDS().optimized_ioplang);
+        self.eventually_report_failure();
+        self.eval
+            .get_val(VALIDS().optimized_ioplang)
+            .unwrap()
+            .unwrap_optimized_iop_lang_ref()
+    }
+
     /// Returns the input and output types of the circuit.
     ///
     /// The prototype is the I/O signature of the circuit: the type of every argument it takes and

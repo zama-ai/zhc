@@ -30,6 +30,7 @@ impl EvaluatesTo<PipelineArtifact> for PipelineTypeSystem {
     fn type_of(interp: &PipelineArtifact) -> Self {
         match interp {
             PipelineArtifact::UncheckedIopLang(_) => PipelineTypeSystem::UncheckedIoplang,
+            PipelineArtifact::OptimizedIopLang(_) => PipelineTypeSystem::OptimizedIoplang,
             PipelineArtifact::IopLang(_) => PipelineTypeSystem::Ioplang,
             PipelineArtifact::Fingerprint(_) => PipelineTypeSystem::Fingerprint,
             PipelineArtifact::HpuConfig(_) => PipelineTypeSystem::HpuConfig,
@@ -95,12 +96,20 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                 interval_end(c"InputUncheckedIopLang", 0);
                 result
             }
+            PipelineInstructionSet::OptimizeIoplang => {
+                interval_begin(c"OptimizeIopLang", 0);
+                let unchecked = arguments[0].unwrap_unchecked_iop_lang_ref();
+                let optimized = iop::optimize_iop(unchecked);
+                let result = svec![PipelineArtifact::OptimizedIopLang(Box::new(optimized))];
+                interval_end(c"OptimizeIopLang", 0);
+                result
+            }
             PipelineInstructionSet::CheckIoplang => {
                 interval_begin(c"CheckIopLang", 0);
-                let unchecked = arguments[0].unwrap_unchecked_iop_lang_ref();
+                let optimized = arguments[0].unwrap_optimized_iop_lang_ref();
                 let spec = arguments[1].unwrap_ciphertext_block_spec_ref();
-                check_noise(unchecked, spec);
-                let result = svec![PipelineArtifact::IopLang(unchecked.clone())];
+                check_noise(optimized, spec);
+                let result = svec![PipelineArtifact::IopLang(optimized.clone())];
                 interval_end(c"CheckIopLang", 0);
                 result
             }
@@ -194,7 +203,7 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
             }
             PipelineInstructionSet::ComputePbsMetrics => {
                 interval_begin(c"ComputePbsMetrics", 0);
-                let ioplang = arguments[0].unwrap_unchecked_iop_lang_ref();
+                let ioplang = arguments[0].unwrap_optimized_iop_lang_ref();
                 let metrics = iop::compute_pbs_metrics(ioplang);
                 let result = svec![PipelineArtifact::PbsMetrics(Box::new(metrics))];
                 interval_end(c"ComputePbsMetrics", 0);
@@ -221,7 +230,7 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
             }
             PipelineInstructionSet::DrawSlack => {
                 interval_begin(c"DrawSlack", 0);
-                let ioplang = arguments[0].unwrap_unchecked_iop_lang_ref();
+                let ioplang = arguments[0].unwrap_optimized_iop_lang_ref();
                 let file = iop::draw_slack(ioplang);
                 let result = svec![PipelineArtifact::SlackDrawing(file)];
                 interval_end(c"DrawSlack", 0);
@@ -457,9 +466,11 @@ impl Evaluable<PipelineArtifact> for PipelineInstructionSet {
                         .partitions
                         .as_ref()
                         .expect("Missing pipeline input: partitions");
+                    let builder_partitions =
+                        ioplang.totally_mapped_opmap(|op| builder_partitions[*op].clone());
                     materialize_builder_partitioning(
                         ioplang,
-                        builder_partitions,
+                        &builder_partitions,
                         partitioner_config,
                     )
                 } else {

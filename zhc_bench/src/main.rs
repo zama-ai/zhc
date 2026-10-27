@@ -696,8 +696,8 @@ fn heap_usage(ir: &IR<DopLang>) -> usize {
 
 /// Customize this function during development to analyze the IR.
 fn analyze_ir(iop: &Iop, target: Target, spec: SpecInteger) -> String {
-    let n_ops = iop.to_builder(spec).optimize_ir().n_ops();
     let mut pipeline = target.pipeline(iop, spec);
+    let n_ops = pipeline.get_optimized_ioplang().n_ops();
     let heap = match target {
         Target::Hpu => heap_usage(pipeline.get_doplang()),
         Target::MultiHpu(_) => pipeline

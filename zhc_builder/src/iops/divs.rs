@@ -13,7 +13,7 @@ use crate::builder::{Builder, CiphertextInteger, PlaintextInteger};
 /// # use zhc_builder::{SpecInteger, divs};
 /// # let spec = SpecInteger::new(16, 2, 2);
 /// let builder = divs(spec);
-/// let ir = builder.optimize_ir();
+/// let ir = builder.ir();
 /// ```
 pub fn divs(spec: SpecInteger) -> Builder {
     let builder = Builder::new(spec.block_spec());
@@ -36,7 +36,7 @@ pub fn divs(spec: SpecInteger) -> Builder {
 /// # use zhc_builder::{SpecInteger, mods};
 /// # let spec = SpecInteger::new(16, 2, 2);
 /// let builder = mods(spec);
-/// let ir = builder.optimize_ir();
+/// let ir = builder.ir();
 /// ```
 pub fn mods(spec: SpecInteger) -> Builder {
     let builder = Builder::new(spec.block_spec());
