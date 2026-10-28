@@ -1,6 +1,8 @@
 use zhc_crypto::integer_semantics::SpecInteger;
+use zhc_langs::ioplang::Lut1;
+use zhc_utils::iter::CollectInSmallVec;
 
-use crate::{CiphertextInteger, CmpKind, builder::Builder};
+use crate::{CiphertextBlock, CiphertextInteger, builder::Builder};
 
 /// Creates an IR for a homomorphic encrypted fund transfer (ERC-7984).
 ///
@@ -58,13 +60,14 @@ impl Builder {
         spec: SpecInteger,
     ) -> (CiphertextInteger, CiphertextInteger) {
         // Step 1: Check if sender has sufficient funds.
-        let enough_fund = self.iop_cmp(src_from, src_amount, CmpKind::GreaterOrEqual);
+        // The result is a raw block in 0..=3, meaning "enough funds" when >= 2. It skips the
+        // final PBS of the comparison: the selection below tests it directly.
+        let enough_fund = self.erc_7984_enough_fund(src_from, src_amount);
 
         // Step 2: Compute conditional transfer amount.
-        // iop_if_then_zero uses IfFalseZeroed internally:
-        //   enough_fund=1 (sufficient) -> actual_amount = src_amount
-        //   enough_fund=0 (insufficient) -> actual_amount = 0
-        let actual_amount = self.iop_if_then_zero(src_amount, &enough_fund);
+        //   enough_fund >= 2 (sufficient) -> actual_amount = src_amount
+        //   enough_fund <  2 (insufficient) -> actual_amount = 0
+        let actual_amount = self.erc_7984_if_enough_fund(src_amount, &enough_fund);
 
         // Step 4: new_to = src_to + actual_amount
         let new_to = match spec.int_size() {
@@ -120,6 +123,68 @@ impl Builder {
         let (new_from, _) = self.iop_add_ripple_carry(src_from, &actual_amount_inv, Some(&one));
 
         (new_from, new_to)
+    }
+
+    /// `src_from >= src_amount`, returned as a raw block instead of a boolean.
+    ///
+    /// The result `f` is in `0..=3` and means "enough funds" exactly when `f >= 2`. It is the
+    /// sum of two PBS outputs, not fresh, which spares the final PBS of
+    /// [`iop_cmp`](Self::iop_cmp). It must only be consumed by
+    /// [`erc_7984_if_enough_fund`](Self::erc_7984_if_enough_fund).
+    ///
+    /// With the high comparison digit `hi` (0: lower, 1: equal, 2: greater) and the low part
+    /// as a boolean `lo_gte`, `f = hi + lo_gte`.
+    fn erc_7984_enough_fund(
+        &self,
+        src_from: &CiphertextInteger,
+        src_amount: &CiphertextInteger,
+    ) -> CiphertextBlock {
+        let spec = *self.spec();
+        let (digits, lo_is_gte) = self.cmp_reduce_digits(src_from, src_amount, true);
+        self.push_comment("Enough fund");
+        let one = self.block_let_plaintext(1);
+        let raw = match (digits.len(), lo_is_gte) {
+            // f = hi + lo_gte: 0, 1 -> not enough; 2, 3 -> enough.
+            (2, true) => self.block_add(&digits[1], &digits[0]),
+            // No reduction step ran: merge the two digits into a boolean, then f = bool + 1.
+            (2, false) => {
+                let p = self.vector_pack(digits.as_slice());
+                let gte = self.block_lookup(&p[0], Lut1::cmp_gte_mrg(spec));
+                self.block_add_plaintext(&gte, &one)
+            }
+            // Single digit d (0: lower, 1: equal, 2: greater): f = d + 1.
+            (1, _) => self.block_wrapping_add_plaintext(&digits[0], &one),
+            _ => unreachable!(),
+        };
+        self.pop_comment();
+        raw
+    }
+
+    /// Keeps `src_amount` if the raw selector `enough_fund` is `>= 2`, zero otherwise.
+    ///
+    /// `enough_fund` comes from [`erc_7984_enough_fund`](Self::erc_7984_enough_fund). Each
+    /// block of `src_amount` goes into the carry and the selector into the message
+    /// (`4 * block + enough_fund`), so the selector needs no PBS of its own: one lookup per
+    /// block does both the test and the selection.
+    fn erc_7984_if_enough_fund(
+        &self,
+        src_amount: &CiphertextInteger,
+        enough_fund: &CiphertextBlock,
+    ) -> CiphertextInteger {
+        let src_blocks = self.ciphertext_integer_split(src_amount);
+        let lut = Lut1::from_fn("IfMsgGe2CarryElseZero", *self.spec(), |b| {
+            let keep = b.raw_message_bits() >= 2;
+            let data = b.move_carry_to_message().raw_message_bits();
+            b.spec().from_message(if keep { data } else { 0 })
+        });
+        let output_blocks = src_blocks
+            .iter()
+            .map(|b| {
+                let packed = self.block_pack(b, enough_fund);
+                self.block_lookup(&packed, lut.clone())
+            })
+            .cosvec();
+        self.ciphertext_integer_join(output_blocks, None)
     }
 }
 

@@ -451,6 +451,28 @@ impl Builder {
         }
         self.pop_comment();
 
+        // Fused final blocks. For the first block solved in each group (`SolvePropGroupFinal0`),
+        // the incoming carry is bit 1 of `x = state + previous carry`, with `x <= 3`. Then
+        // `y = 2 * sum + x <= 15` and `(y >> 1) & 3` is directly the cleaned output block: a
+        // single PBS replaces `SolvePropGroupFinal0` followed by `MsgOnly`.
+        // Only for a cleaned output (the raw blocks are kept otherwise), and never for the
+        // last output block, whose carry field gives the carry-out.
+        let fused_x: Vec<(usize, CiphertextBlock)> = if clean {
+            let mut v = vec![(2, group_states[0][1])];
+            for g in 1..group_states.len() {
+                v.push((
+                    4 * g + 1,
+                    self.block_add(&group_states[g][0], &group_carries[g - 1]),
+                ));
+            }
+            v.into_iter()
+                .filter(|(i, _)| *i < output_size - 1)
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let sums_for_fusion = sums.clone();
+
         self.push_comment("Final resolution");
         let carries = (group_states.into_iter(), group_carries.into_iter())
             .mzip()
@@ -505,9 +527,26 @@ impl Builder {
 
         if clean {
             self.push_comment("Cleanup");
+            let half_msg = Lut1::from_fn("HalfMsg", *self.spec(), |b| {
+                let y = (b.move_carry_to_message().raw_message_bits() << b.spec().message_size())
+                    | b.raw_message_bits();
+                b.spec().from_message((y >> 1) & b.spec().message_mask())
+            });
             result = result
                 .into_iter()
-                .map(|ct| self.block_lookup(&ct, Lut1::msg_only(*self.spec())))
+                .enumerate()
+                .map(|(i, ct)| {
+                    if i == 0 {
+                        // Already clean: message output of ManyCarryMsg.
+                        ct
+                    } else if let Some((_, x)) = fused_x.iter().find(|(j, _)| *j == i) {
+                        let s = &sums_for_fusion[i];
+                        let y = self.block_add(&self.block_add(s, s), x);
+                        self.block_lookup(&y, half_msg.clone())
+                    } else {
+                        self.block_lookup(&ct, Lut1::msg_only(*self.spec()))
+                    }
+                })
                 .cosvec();
             self.pop_comment();
         }
@@ -583,42 +622,41 @@ mod test {
                 // Group states                    | %60 = wrapping_add_pt(%58, %59);
                 // Group carries / HS 0-th stage   | %85 = pack_ct<4>(%60, %50);
                 // Group carries / HS 0-th stage   | %86 = pbs<Protect, Lut1("SolvePropCarry")>(%85);
-                // Final resolution                | %95 = pbs<Protect, Lut1("SolvePropGroupFinal0")>(%47);
-                // Final resolution                | %96 = pbs<Protect, Lut1("SolvePropGroupFinal1")>(%48);
-                // Final resolution                | %101 = add_ct(%35, %50);
-                // Final resolution                | %102 = pbs<Protect, Lut1("SolvePropGroupFinal0")>(%101);
-                // Final resolution                | %103 = add_ct(%55, %50);
-                // Final resolution                | %104 = pbs<Protect, Lut1("SolvePropGroupFinal1")>(%103);
-                // Final resolution                | %105 = add_ct(%56, %50);
-                // Final resolution                | %106 = pbs<Protect, Lut1("SolvePropGroupFinal2")>(%105);
-                // Carry propagation               | %133 = add_ct(%21, %31);
-                // Carry propagation               | %134 = add_ct(%22, %95);
-                // Carry propagation               | %135 = add_ct(%23, %96);
-                // Carry propagation               | %136 = add_ct(%24, %50);
-                // Carry propagation               | %137 = add_ct(%25, %102);
-                // Carry propagation               | %138 = add_ct(%26, %104);
-                // Carry propagation               | %139 = add_ct(%27, %106);
-                // Carry propagation               | %140 = add_ct(%28, %86);
-                // Cleanup                         | %149 = pbs<Protect, Lut1("MsgOnly")>(%30);
-                // Cleanup                         | %150 = pbs<Protect, Lut1("MsgOnly")>(%133);
-                // Cleanup                         | %151 = pbs<Protect, Lut1("MsgOnly")>(%134);
-                // Cleanup                         | %152 = pbs<Protect, Lut1("MsgOnly")>(%135);
-                // Cleanup                         | %153 = pbs<Protect, Lut1("MsgOnly")>(%136);
-                // Cleanup                         | %154 = pbs<Protect, Lut1("MsgOnly")>(%137);
-                // Cleanup                         | %155 = pbs<Protect, Lut1("MsgOnly")>(%138);
-                // Cleanup                         | %156 = pbs<Protect, Lut1("MsgOnly")>(%139);
-                // Cleanup                         | %157 = pbs<Protect, Lut1("MsgOnly")>(%140);
-                // Join Output                     | %165 = decl_ct<18>();
-                // Join Output                     | %176 = store_ct_block<0>(%149, %165);
-                // Join Output                     | %177 = store_ct_block<1>(%150, %176);
-                // Join Output                     | %178 = store_ct_block<2>(%151, %177);
-                // Join Output                     | %179 = store_ct_block<3>(%152, %178);
-                // Join Output                     | %180 = store_ct_block<4>(%153, %179);
-                // Join Output                     | %181 = store_ct_block<5>(%154, %180);
-                // Join Output                     | %182 = store_ct_block<6>(%155, %181);
-                // Join Output                     | %183 = store_ct_block<7>(%156, %182);
-                // Join Output                     | %184 = store_ct_block<8>(%157, %183);
-                                                   | output<0>(%184);
+                                                   | %95 = add_ct(%35, %50);
+                // Final resolution                | %99 = pbs<Protect, Lut1("SolvePropGroupFinal1")>(%48);
+                // Final resolution                | %106 = add_ct(%55, %50);
+                // Final resolution                | %107 = pbs<Protect, Lut1("SolvePropGroupFinal1")>(%106);
+                // Final resolution                | %108 = add_ct(%56, %50);
+                // Final resolution                | %109 = pbs<Protect, Lut1("SolvePropGroupFinal2")>(%108);
+                // Carry propagation               | %136 = add_ct(%21, %31);
+                // Carry propagation               | %138 = add_ct(%23, %99);
+                // Carry propagation               | %139 = add_ct(%24, %50);
+                // Carry propagation               | %141 = add_ct(%26, %107);
+                // Carry propagation               | %142 = add_ct(%27, %109);
+                // Carry propagation               | %143 = add_ct(%28, %86);
+                // Cleanup                         | %152 = pbs<Protect, Lut1("MsgOnly")>(%136);
+                // Cleanup                         | %153 = add_ct(%22, %22);
+                // Cleanup                         | %154 = add_ct(%153, %47);
+                // Cleanup                         | %155 = pbs<Protect, Lut1("HalfMsg")>(%154);
+                // Cleanup                         | %156 = pbs<Protect, Lut1("MsgOnly")>(%138);
+                // Cleanup                         | %157 = pbs<Protect, Lut1("MsgOnly")>(%139);
+                // Cleanup                         | %158 = add_ct(%25, %25);
+                // Cleanup                         | %159 = add_ct(%158, %95);
+                // Cleanup                         | %160 = pbs<Protect, Lut1("HalfMsg")>(%159);
+                // Cleanup                         | %161 = pbs<Protect, Lut1("MsgOnly")>(%141);
+                // Cleanup                         | %162 = pbs<Protect, Lut1("MsgOnly")>(%142);
+                // Cleanup                         | %163 = pbs<Protect, Lut1("MsgOnly")>(%143);
+                // Join Output                     | %171 = decl_ct<18>();
+                // Join Output                     | %182 = store_ct_block<0>(%30, %171);
+                // Join Output                     | %183 = store_ct_block<1>(%152, %182);
+                // Join Output                     | %184 = store_ct_block<2>(%155, %183);
+                // Join Output                     | %185 = store_ct_block<3>(%156, %184);
+                // Join Output                     | %186 = store_ct_block<4>(%157, %185);
+                // Join Output                     | %187 = store_ct_block<5>(%160, %186);
+                // Join Output                     | %188 = store_ct_block<6>(%161, %187);
+                // Join Output                     | %189 = store_ct_block<7>(%162, %188);
+                // Join Output                     | %190 = store_ct_block<8>(%163, %189);
+                                                   | output<0>(%190);
             "#
         );
     }
