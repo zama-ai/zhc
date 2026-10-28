@@ -130,8 +130,17 @@ impl Builder {
         // NB: nu encode range of data. nu*(1<<msg_w) = Max Ct value
         // After the cut-off block only NonNull flag is computed instead of the complete partial
         // product with carry extract
-        let mut partial_product_map = BTreeMap::<usize, Vec<CiphertextBlock>>::new();
+        // Each partial product is kept with an upper bound of its value, so that the reduction
+        // can sum as many blocks as the data region allows before a PBS is required.
+        let mut partial_product_map = BTreeMap::<usize, Vec<(CiphertextBlock, u64)>>::new();
         let mut overflow_v = Vec::<CiphertextBlock>::new();
+        let msg_max = self.spec().message_mask() as u64;
+        let msg_w = self.spec().message_size() as u32;
+        // Largest value the data region (carry + message) can hold.
+        let data_max = (1u64 << (self.spec().message_size() + self.spec().carry_size())) - 1;
+        // (a * b) & msg_max can reach msg_max; (a * b) >> msg_w is at most msg_max² >> msg_w.
+        let lsb_max = msg_max;
+        let msb_max = (msg_max * msg_max) >> msg_w;
 
         for (i, ai) in src_a_blocks.iter().enumerate() {
             for (j, bj) in src_b_blocks.iter().enumerate() {
@@ -140,15 +149,17 @@ impl Builder {
                     // Pack
                     let packed = self.comment(format!("pack_{i}_{j}")).block_pack(ai, bj);
                     // Compute Lsb
-                    partial_product_map.entry(i + j).or_default().push(
+                    partial_product_map.entry(i + j).or_default().push((
                         self.comment(format!("pp_{i}_{j}_lsb"))
                             .block_lookup(packed, Lut1::mult_carry_msg_lsb(*self.spec())),
-                    );
+                        lsb_max,
+                    ));
                     // Compute Msb
-                    partial_product_map.entry(i + j + 1).or_default().push(
+                    partial_product_map.entry(i + j + 1).or_default().push((
                         self.comment(format!("pp_{i}_{j}_msb"))
                             .block_lookup(packed, Lut1::mult_carry_msg_msb(*self.spec())),
-                    );
+                        msb_max,
+                    ));
                 } else {
                     // Only overflow extraction
                     let mul_is_some = self.comment(format!("ovf_{i}_{j}")).block_pack_then_lookup(
@@ -161,12 +172,21 @@ impl Builder {
             }
         }
 
+        // Largest bounds first in each column: a cleaning then absorbs the 3-bounded blocks
+        // together and the remaining room is filled by the smaller ones, which needs fewer
+        // cleanings than mixing them. The carries, added during the reduction, stay last, so a
+        // column does not start by waiting for the previous one. The sort is stable.
+        for column in partial_product_map.values_mut() {
+            column.sort_by(|x, y| y.1.cmp(&x.1));
+        }
+
         // Phase 2  Reduce/Merge:
         //
         // Phase 2.a
         // Gather partial products together at each level.
-        // Partial product are sum until nu threshold is reach, then carry is extracted
-        // and injected in the next stages
+        // Partial products are summed as long as the sum of their upper bounds fits in the data
+        // region (and at most NU_BOOL fresh blocks, for the noise). Then the carry is extracted
+        // and injected in the next stage, with its own upper bound.
         // NB: Reduce up to cut_off_block
         let mut dst_blk = Vec::new();
         for k in 0..cut_off_block.sas::<usize>() {
@@ -174,28 +194,34 @@ impl Builder {
             let stage_sum = partial_product_map.remove(&k).unwrap_or_default();
             if !stage_sum.is_empty() {
                 let mut nxt_stage = Vec::new();
-                // Fold them two by two while storing optional carry
+                // Fold them one by one while storing optional carry
                 let mut stg_iter = stage_sum.into_iter();
-                let mut acc_nu = 1;
-                let mut acc_ct = stg_iter.next().unwrap();
+                let (mut acc_ct, mut acc_max) = stg_iter.next().unwrap();
+                let mut acc_nb = 1;
+
+                // Cleans the accumulator: its carry goes to the next stage, its message stays.
+                let mut clean = |acc_ct: CiphertextBlock, acc_max: u64| {
+                    let carry = self.block_lookup(acc_ct, Lut1::carry_in_msg(*self.spec()));
+                    nxt_stage.push((carry, acc_max >> msg_w));
+                    let msg = self.block_lookup(acc_ct, Lut1::msg_only(*self.spec()));
+                    (msg, acc_max.min(msg_max))
+                };
 
                 // NB: only fresh ciphertext is push in partial_product_map
-                for ct in stg_iter {
-                    acc_nu = acc_nu + 1;
-                    acc_ct = self.block_add(ct, acc_ct);
-
-                    // Extract carry if required
-                    if acc_nu == NU {
-                        acc_nu = 1;
-                        nxt_stage.push(self.block_lookup(acc_ct, Lut1::carry_in_msg(*self.spec())));
-                        acc_ct = self.block_lookup(acc_ct, Lut1::msg_only(*self.spec()));
+                for (ct, ct_max) in stg_iter {
+                    // Extract carry if the next block could overflow the data region
+                    if acc_max + ct_max > data_max || acc_nb == NU_BOOL {
+                        (acc_ct, acc_max) = clean(acc_ct, acc_max);
+                        acc_nb = 1;
                     }
+                    acc_ct = self.block_add(ct, acc_ct);
+                    acc_max += ct_max;
+                    acc_nb += 1;
                 }
 
                 // Current stage is completly reduce. Clear block if needed
-                if acc_nu != 1 {
-                    nxt_stage.push(self.block_lookup(acc_ct, Lut1::carry_in_msg(*self.spec())));
-                    acc_ct = self.block_lookup(acc_ct, Lut1::msg_only(*self.spec()));
+                if acc_nb != 1 {
+                    (acc_ct, _) = clean(acc_ct, acc_max);
                 }
                 dst_blk.push(acc_ct);
 
@@ -218,6 +244,7 @@ impl Builder {
         // Start by handling last carry of 2.a
         self.push_comment(format!("carry_in"));
         if let Some(in_carry_v) = partial_product_map.remove(&(cut_off_block.sas())) {
+            let in_carry_v: Vec<_> = in_carry_v.into_iter().map(|(ct, _)| ct).collect();
             for chunk in in_carry_v.chunks(NU) {
                 let mut chunk_iter = chunk.iter();
                 let init = *chunk_iter.next().unwrap();
@@ -344,35 +371,32 @@ mod test {
                 // pp_2_1_lsb    | %37 = pbs<Protect, Lut1("MultCarryMsgLsb")>(%36);
                 // pack_3_0      | %43 = pack_ct<4>(%5, %6);
                 // pp_3_0_lsb    | %44 = pbs<Protect, Lut1("MultCarryMsgLsb")>(%43);
-                // reduction_1   | %52 = add_ct(%14, %12);
-                // reduction_1   | %53 = add_ct(%23, %52);
+                // reduction_1   | %52 = add_ct(%23, %14);
+                // reduction_1   | %53 = add_ct(%12, %52);
                 // reduction_1   | %54 = pbs<Protect, Lut1("CarryInMsg")>(%53);
                 // reduction_1   | %55 = pbs<Protect, Lut1("MsgOnly")>(%53);
-                // reduction_2   | %56 = add_ct(%17, %15);
-                // reduction_2   | %57 = add_ct(%24, %56);
-                // reduction_2   | %58 = add_ct(%26, %57);
-                // reduction_2   | %59 = add_ct(%34, %58);
-                // reduction_2   | %60 = pbs<Protect, Lut1("CarryInMsg")>(%59);
-                // reduction_2   | %61 = pbs<Protect, Lut1("MsgOnly")>(%59);
-                // reduction_2   | %62 = add_ct(%54, %61);
-                // reduction_2   | %63 = pbs<Protect, Lut1("CarryInMsg")>(%62);
-                // reduction_2   | %64 = pbs<Protect, Lut1("MsgOnly")>(%62);
-                // reduction_3   | %65 = add_ct(%20, %18);
-                // reduction_3   | %66 = add_ct(%27, %65);
-                // reduction_3   | %67 = add_ct(%29, %66);
-                // reduction_3   | %68 = add_ct(%35, %67);
-                // reduction_3   | %70 = pbs<Protect, Lut1("MsgOnly")>(%68);
-                // reduction_3   | %71 = add_ct(%37, %70);
-                // reduction_3   | %72 = add_ct(%44, %71);
-                // reduction_3   | %73 = add_ct(%60, %72);
-                // reduction_3   | %74 = add_ct(%63, %73);
-                // reduction_3   | %76 = pbs<Protect, Lut1("MsgOnly")>(%74);
-                                 | %91 = decl_ct<8>();
-                                 | %97 = store_ct_block<0>(%11, %91);
-                                 | %98 = store_ct_block<1>(%55, %97);
-                                 | %99 = store_ct_block<2>(%64, %98);
-                                 | %100 = store_ct_block<3>(%76, %99);
-                                 | output<0>(%100);
+                // reduction_2   | %56 = add_ct(%26, %17);
+                // reduction_2   | %57 = add_ct(%34, %56);
+                // reduction_2   | %58 = add_ct(%15, %57);
+                // reduction_2   | %59 = add_ct(%24, %58);
+                // reduction_2   | %60 = add_ct(%54, %59);
+                // reduction_2   | %61 = pbs<Protect, Lut1("CarryInMsg")>(%60);
+                // reduction_2   | %62 = pbs<Protect, Lut1("MsgOnly")>(%60);
+                // reduction_3   | %63 = add_ct(%29, %20);
+                // reduction_3   | %64 = add_ct(%37, %63);
+                // reduction_3   | %65 = add_ct(%44, %64);
+                // reduction_3   | %66 = add_ct(%18, %65);
+                // reduction_3   | %68 = pbs<Protect, Lut1("MsgOnly")>(%66);
+                // reduction_3   | %69 = add_ct(%27, %68);
+                // reduction_3   | %70 = add_ct(%35, %69);
+                // reduction_3   | %71 = add_ct(%61, %70);
+                // reduction_3   | %73 = pbs<Protect, Lut1("MsgOnly")>(%71);
+                                 | %88 = decl_ct<8>();
+                                 | %94 = store_ct_block<0>(%11, %88);
+                                 | %95 = store_ct_block<1>(%55, %94);
+                                 | %96 = store_ct_block<2>(%62, %95);
+                                 | %97 = store_ct_block<3>(%73, %96);
+                                 | output<0>(%97);
             "#
         );
     }
