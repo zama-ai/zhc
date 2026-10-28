@@ -37,3 +37,7 @@ path = "examples/mul_asym_latency.rs"
 name = "div_asym_latency"
 path = "examples/div_asym_latency.rs"
 
+[[example]]
+name = "sum_latency"
+path = "examples/sum_latency.rs"
+
