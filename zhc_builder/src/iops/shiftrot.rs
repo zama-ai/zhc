@@ -237,11 +237,8 @@ impl Builder {
     ) -> CiphertextInteger {
         // Variant A (extract amount bit 0 first): one more PBS level, but half the inner-shift
         // PBS. It pays off from 16 bits up, where the PBS count dominates the latency.
-        // Not at 128 bits and above: the HPU register allocator cannot always find two
-        // consecutive free registers for the Lut2 outputs (see correctness_right_shifts_s128).
-        // TODO: remove the upper bound once the allocator can handle this.
         let bits = src.spec().int_size();
-        let extract_first = (16..128).contains(&bits);
+        let extract_first = bits >= 16;
         self.iop_shiftrot_manylut(src, amount, kind, extract_first)
     }
 
