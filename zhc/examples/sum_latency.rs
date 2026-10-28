@@ -11,8 +11,12 @@ use zhc_builder::{SpecInteger, sum_column_reduce, sum_ripple_carry};
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let bits: u16 = args.first().map_or(64, |s| s.parse().expect("bits must be an integer"));
-    let n: usize = args.get(1).map_or(4, |s| s.parse().expect("n must be an integer"));
+    let bits: u16 = args
+        .first()
+        .map_or(64, |s| s.parse().expect("bits must be an integer"));
+    let n: usize = args
+        .get(1)
+        .map_or(4, |s| s.parse().expect("n must be an integer"));
     let min_pbs = matches!(args.get(2).map(String::as_str), Some("pbs"));
 
     let spec = SpecInteger::new(bits, 2, 2);
