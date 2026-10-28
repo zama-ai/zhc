@@ -1,5 +1,6 @@
 use zhc_crypto::integer_semantics::SpecInteger;
-use zhc_langs::ioplang::Lut1;
+use zhc_crypto::integer_semantics::lut::{IfFalseZeroed_0, IfTrueZeroed_0};
+use zhc_langs::ioplang::{Lut1, Lut2};
 use zhc_utils::iter::{CollectInSmallVec, MultiZip};
 
 use crate::{CiphertextBool, CiphertextInteger, builder::Builder};
@@ -21,9 +22,11 @@ impl Builder {
     /// Conditionally swaps two encrypted integers:
     /// returns `(src_b, src_a)` when `cond` is non-zero, `(src_a, src_b)` otherwise.
     /// Mirrors tfhe-rs `flip_parallelized`; both packs per block are shared
-    /// by the two outputs, so it costs 2 packs and 6 PBS per block instead
-    /// of the 4 packs and 6 PBS of two `iop_if_then_else`. The final PBS on
-    /// each output block keeps the outputs fresh.
+    /// by the two outputs. Each pack goes through a single two-output PBS
+    /// giving both masks: `cond` being a boolean, the packed value fits in
+    /// 3 bits, which a two-output many-LUT accepts. It costs 2 packs and 4 PBS
+    /// per block, instead of the 4 packs and 6 PBS of two `iop_if_then_else`.
+    /// The final PBS on each output block keeps the outputs fresh.
     ///
     /// # Examples
     ///
@@ -45,6 +48,13 @@ impl Builder {
         let src_a_blocks = self.ciphertext_integer_split(src_a);
         let src_b_blocks = self.ciphertext_integer_split(src_b);
         let cond_block = self.ciphertext_bool_get_block(cond);
+        // Both masks in one PBS: (value if cond is true, value if cond is false).
+        let masks = Lut2::from_fn(
+            "ManyIfFalseTrueZeroed",
+            *self.spec(),
+            IfFalseZeroed_0,
+            IfTrueZeroed_0,
+        );
 
         let (out_a_blocks, out_b_blocks): (Vec<_>, Vec<_>) =
             (src_a_blocks.iter(), src_b_blocks.iter())
@@ -52,16 +62,10 @@ impl Builder {
                 .map(|(a, b)| {
                     // Mask each value both ways depending on the conditition
                     let packed_a = self.block_pack(&cond_block, a);
-                    let a_if_true =
-                        self.block_lookup(&packed_a, Lut1::if_false_zeroed(*self.spec()));
-                    let a_if_false =
-                        self.block_lookup(&packed_a, Lut1::if_true_zeroed(*self.spec()));
+                    let (a_if_true, a_if_false) = self.block_lookup2(&packed_a, masks.clone());
 
                     let packed_b = self.block_pack(&cond_block, b);
-                    let b_if_true =
-                        self.block_lookup(&packed_b, Lut1::if_false_zeroed(*self.spec()));
-                    let b_if_false =
-                        self.block_lookup(&packed_b, Lut1::if_true_zeroed(*self.spec()));
+                    let (b_if_true, b_if_false) = self.block_lookup2(&packed_b, masks.clone());
 
                     // Crossing the masks is the swap; one operand per add is zero.
                     // Bootstrap the sums so the outputs are fresh.
@@ -106,21 +110,17 @@ mod test {
                 %6 = extract_ct_block<1>(%1);
                 %7 = extract_ctbool_block(%2);
                 %8 = pack_ct<4>(%7, %3);
-                %9 = pbs<Protect, Lut1("IfFalseZeroed")>(%8);
-                %10 = pbs<Protect, Lut1("IfTrueZeroed")>(%8);
+                %9, %10 = pbs2<Protect, Lut2("ManyIfFalseTrueZeroed")>(%8);
                 %11 = pack_ct<4>(%7, %5);
-                %12 = pbs<Protect, Lut1("IfFalseZeroed")>(%11);
-                %13 = pbs<Protect, Lut1("IfTrueZeroed")>(%11);
+                %12, %13 = pbs2<Protect, Lut2("ManyIfFalseTrueZeroed")>(%11);
                 %14 = add_ct(%10, %12);
                 %15 = add_ct(%9, %13);
                 %16 = pbs<Protect, Lut1("MsgOnly")>(%14);
                 %17 = pbs<Protect, Lut1("MsgOnly")>(%15);
                 %18 = pack_ct<4>(%7, %4);
-                %19 = pbs<Protect, Lut1("IfFalseZeroed")>(%18);
-                %20 = pbs<Protect, Lut1("IfTrueZeroed")>(%18);
+                %19, %20 = pbs2<Protect, Lut2("ManyIfFalseTrueZeroed")>(%18);
                 %21 = pack_ct<4>(%7, %6);
-                %22 = pbs<Protect, Lut1("IfFalseZeroed")>(%21);
-                %23 = pbs<Protect, Lut1("IfTrueZeroed")>(%21);
+                %22, %23 = pbs2<Protect, Lut2("ManyIfFalseTrueZeroed")>(%21);
                 %24 = add_ct(%20, %22);
                 %25 = add_ct(%19, %23);
                 %26 = pbs<Protect, Lut1("MsgOnly")>(%24);
