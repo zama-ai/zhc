@@ -1,4 +1,4 @@
-use crate::{CiphertextBool, CiphertextInteger, NU_BOOL, builder::Builder};
+use crate::{CiphertextBlock, CiphertextBool, CiphertextInteger, NU_BOOL, builder::Builder};
 use zhc_crypto::integer_semantics::{SpecBlock, SpecInteger};
 use zhc_langs::ioplang::Lut1;
 use zhc_utils::iter::MultiZip;
@@ -207,9 +207,41 @@ impl Builder {
         src_b: &CiphertextInteger,
         kind: CmpKind,
     ) -> CiphertextBool {
+        let (merged, _) = self.cmp_reduce_digits(src_a, src_b, false);
+
+        // last reduce and cast based on user required cmp
+        let cmp_res = match merged.len() {
+            2 => {
+                let p = self.vector_pack(merged.as_slice());
+                self.block_lookup(&p[0], kind.merge(*self.spec()))
+            }
+            1 => self.block_lookup(&merged[0], kind.compare(*self.spec())),
+            _ => unreachable!(),
+        };
+
+        self.ciphertext_bool_store_block(cmp_res)
+    }
+
+    /// Common part of the comparisons: packs both operands, computes one comparison digit per
+    /// pair of packed blocks and reduces them down to at most 2 digits.
+    ///
+    /// Each digit is 0 (lower), 1 (equal) or 2 (greater). Returns the remaining digits, the
+    /// least significant first, and whether the first one was turned into a boolean.
+    ///
+    /// With `lo_as_gte`, the last reduction step outputs the low digit as a boolean
+    /// "low part >= " (`CmpGteMrg`) instead of a comparison digit, at the same cost. This only
+    /// happens when at least one reduction step runs (more than 2 packed blocks); the returned
+    /// flag tells whether it did.
+    pub(crate) fn cmp_reduce_digits(
+        &self,
+        src_a: &CiphertextInteger,
+        src_b: &CiphertextInteger,
+        lo_as_gte: bool,
+    ) -> (Vec<CiphertextBlock>, bool) {
+        let spec = *self.spec();
         // get input as array of blk
-        let src_a_blocks = self.ciphertext_integer_split(&src_a);
-        let src_b_blocks = self.ciphertext_integer_split(&src_b);
+        let src_a_blocks = self.ciphertext_integer_split(src_a);
+        let src_b_blocks = self.ciphertext_integer_split(src_b);
 
         // pack cts
         let packed_a = self.comment("Pack A").vector_pack(src_a_blocks);
@@ -223,7 +255,7 @@ impl Builder {
             .map(|(i, (l, r))| {
                 self.with_comment(format!("{i}-th"), || {
                     let sub_lr = self.block_wrapping_sub(l, r);
-                    let pbsed = self.block_wrapping_lookup(&sub_lr, Lut1::cmp_sign(*self.spec()));
+                    let pbsed = self.block_wrapping_lookup(&sub_lr, Lut1::cmp_sign(spec));
                     let cst = self.block_let_plaintext(1);
                     self.block_wrapping_add_plaintext(&pbsed, &cst)
                 })
@@ -233,25 +265,27 @@ impl Builder {
 
         // reduce (tree-based reduce)
         self.push_comment("Reduce comparison");
+        let mut lo_is_gte = false;
         while merged.len() > 2 {
-            // use vector_pack_then_lookup instead of vector_pack to handle odd number
-            // of elements and not apply Reduce to a single element out of CmpSign
-            merged =
-                self.vector_pack_then_lookup(merged.as_slice(), Lut1::cmp_reduce(*self.spec()));
+            if lo_as_gte && merged.len() <= 4 {
+                // Last step: the low pair gives a boolean, the high pair (if any) a digit.
+                let lo =
+                    self.block_pack_then_lookup(&merged[1], &merged[0], Lut1::cmp_gte_mrg(spec));
+                let hi = if merged.len() == 4 {
+                    self.block_pack_then_lookup(&merged[3], &merged[2], Lut1::cmp_reduce(spec))
+                } else {
+                    merged[2]
+                };
+                merged = vec![lo, hi];
+                lo_is_gte = true;
+            } else {
+                // use vector_pack_then_lookup instead of vector_pack to handle odd number
+                // of elements and not apply Reduce to a single element out of CmpSign
+                merged = self.vector_pack_then_lookup(merged.as_slice(), Lut1::cmp_reduce(spec));
+            }
         }
         self.pop_comment();
-
-        // last reduce and cast based on user required cmp
-        let cmp_res = match merged.len() {
-            2 => {
-                let p = self.vector_pack(merged.as_slice());
-                self.block_lookup(&p[0], kind.merge(*self.spec()))
-            }
-            1 => self.block_lookup(&merged[0], kind.compare(*self.spec())),
-            _ => unreachable!(),
-        };
-
-        self.ciphertext_bool_store_block(cmp_res)
+        (merged, lo_is_gte)
     }
 
     pub fn iop_eq(&self, src_a: &CiphertextInteger, src_b: &CiphertextInteger) -> CiphertextBool {
@@ -310,7 +344,7 @@ impl Builder {
 
             for chk in res_v.chunks(op_nb_bool) {
                 // Sum the booleans of the group
-                let acc = self.vector_add_reduce_tree(chk);
+                let acc = self.vector_add_reduce(chk);
 
                 // len - sum is in [0, len], and is 0 iff every block of the group is equal.
                 // It is never negative, so the padding bit stays clear and NotNull is valid.
