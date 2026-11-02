@@ -302,7 +302,7 @@ mod test {
     #[test]
     fn test_mul_lsb() {
         let spec = SpecInteger::new(8, 2, 2);
-        let ir = mul(spec).optimize_ir();
+        let ir = zhc_pipeline::passes::optimize_iop(&mul(spec).ir());
         assert_display_is!(
             ir.format()
                 .with_walker(zhc_ir::PrintWalker::Linear)

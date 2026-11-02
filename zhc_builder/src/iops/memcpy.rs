@@ -20,7 +20,7 @@ const MIN_IOP_WORDS: usize = 4;
 /// # use zhc_builder::{SpecInteger, memcpy};
 /// # let spec = SpecInteger::new(16, 2, 2);
 /// let builder = memcpy(spec);
-/// let ir = builder.optimize_ir();
+/// let ir = builder.ir();
 /// ```
 pub fn memcpy(spec: SpecInteger) -> Builder {
     let builder = Builder::new(spec.block_spec());
@@ -91,7 +91,7 @@ mod test {
     #[test]
     fn test_memcpy() {
         let spec = SpecInteger::new(8, 2, 2);
-        let ir = memcpy(spec).optimize_ir();
+        let ir = zhc_pipeline::passes::optimize_iop(&memcpy(spec).ir());
         assert_display_is!(
             ir.format()
                 .with_walker(zhc_ir::PrintWalker::Linear)

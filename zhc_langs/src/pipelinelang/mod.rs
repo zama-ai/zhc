@@ -24,9 +24,10 @@ pub fn pipeline() {
         let partitioner_config = input_partitioner_config();
         let prototype = input_prototype();
         let ciphertext_block_spec = input_ciphertext_block_spec();
-        let slack_drawing = draw_slack(unchecked_ioplang);
-        let pbs_metrics = compute_pbs_metrics(unchecked_ioplang);
-        let ioplang = check_ioplang(unchecked_ioplang, ciphertext_block_spec);
+        let optimized_ioplang = optimize_ioplang(unchecked_ioplang);
+        let slack_drawing = draw_slack(optimized_ioplang);
+        let pbs_metrics = compute_pbs_metrics(optimized_ioplang);
+        let ioplang = check_ioplang(optimized_ioplang, ciphertext_block_spec);
         let fingerprint = compute_fingerprint(ioplang);
         let lut_registry = ioplang_to_lut_registry(ioplang);
         let (remat_ioplang, partitions) = partition_ioplang(ioplang, partitioner_config);

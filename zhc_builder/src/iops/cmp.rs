@@ -14,7 +14,7 @@ use zhc_utils::iter::MultiZip;
 /// # use zhc_builder::{SpecInteger, cmp_gt};
 /// # let spec = SpecInteger::new(16, 2, 2);
 /// let builder = cmp_gt(spec);
-/// let ir = builder.optimize_ir();
+/// let ir = builder.ir();
 /// ```
 pub fn cmp_gt(spec: SpecInteger) -> Builder {
     let builder = Builder::new(spec.block_spec());
@@ -36,7 +36,7 @@ pub fn cmp_gt(spec: SpecInteger) -> Builder {
 /// # use zhc_builder::{SpecInteger, cmp_gte};
 /// # let spec = SpecInteger::new(16, 2, 2);
 /// let builder = cmp_gte(spec);
-/// let ir = builder.optimize_ir();
+/// let ir = builder.ir();
 /// ```
 pub fn cmp_gte(spec: SpecInteger) -> Builder {
     let builder = Builder::new(spec.block_spec());
@@ -58,7 +58,7 @@ pub fn cmp_gte(spec: SpecInteger) -> Builder {
 /// # use zhc_builder::{SpecInteger, cmp_lt};
 /// # let spec = SpecInteger::new(16, 2, 2);
 /// let builder = cmp_lt(spec);
-/// let ir = builder.optimize_ir();
+/// let ir = builder.ir();
 /// ```
 pub fn cmp_lt(spec: SpecInteger) -> Builder {
     let builder = Builder::new(spec.block_spec());
@@ -80,7 +80,7 @@ pub fn cmp_lt(spec: SpecInteger) -> Builder {
 /// # use zhc_builder::{SpecInteger, cmp_lte};
 /// # let spec = SpecInteger::new(16, 2, 2);
 /// let builder = cmp_lte(spec);
-/// let ir = builder.optimize_ir();
+/// let ir = builder.ir();
 /// ```
 pub fn cmp_lte(spec: SpecInteger) -> Builder {
     let builder = Builder::new(spec.block_spec());
@@ -102,7 +102,7 @@ pub fn cmp_lte(spec: SpecInteger) -> Builder {
 /// # use zhc_builder::{SpecInteger, cmp_eq};
 /// # let spec = SpecInteger::new(16, 2, 2);
 /// let builder = cmp_eq(spec);
-/// let ir = builder.optimize_ir();
+/// let ir = builder.ir();
 /// ```
 pub fn cmp_eq(spec: SpecInteger) -> Builder {
     let builder = Builder::new(spec.block_spec());
@@ -124,7 +124,7 @@ pub fn cmp_eq(spec: SpecInteger) -> Builder {
 /// # use zhc_builder::{SpecInteger, cmp_neq};
 /// # let spec = SpecInteger::new(16, 2, 2);
 /// let builder = cmp_neq(spec);
-/// let ir = builder.optimize_ir();
+/// let ir = builder.ir();
 /// ```
 pub fn cmp_neq(spec: SpecInteger) -> Builder {
     let builder = Builder::new(spec.block_spec());
@@ -268,7 +268,7 @@ mod test {
         let spec = SpecInteger::new(16, 2, 2);
         let ir = cmp_eq(spec);
         assert_display_is!(
-            ir.optimize_ir()
+            zhc_pipeline::passes::optimize_iop(&ir.ir())
                 .format()
                 .show_comments(false)
                 .show_types(false)
@@ -351,7 +351,7 @@ mod test {
         );
         let res = builder.ciphertext_integer_join(res, None);
         builder.ciphertext_integer_output(res);
-        builder.draw(crate::IrKind::Original);
+        builder.draw();
     }
 
     #[test]

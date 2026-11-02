@@ -27,6 +27,7 @@ use zhc_utils::{existential_enum, topology::Topology};
 pub enum PipelineArtifact {
     // Commons
     UncheckedIopLang(Box<IR<IopLang>>),
+    OptimizedIopLang(Box<IR<IopLang>>),
     IopLang(Box<IR<IopLang>>),
     PartitionerConfig(PartitionerConfig),
     RematIopLang(Box<IR<IopLang>>),

@@ -15,7 +15,7 @@ pub use pipeline_ext::PipelineExt;
 pub mod prelude {
     pub use super::PipelineExt;
     pub use super::compat::*;
-    pub use zhc_builder::{Builder, IrKind};
+    pub use zhc_builder::Builder;
     pub use zhc_config::*;
     pub use zhc_crypto::integer_semantics::SpecBlock;
     pub use zhc_crypto::integer_semantics::lut::{Lut1, Lut2, Lut4, Lut8};

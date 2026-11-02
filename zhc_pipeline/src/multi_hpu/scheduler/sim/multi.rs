@@ -268,7 +268,15 @@ impl<'a, 'b> LightMultiHpu<'a, 'b> {
         let slot = match self.grant_slot(query.firer, flags_on) {
             Some(slot) => slot,
             None => {
-                let Some(wait) = self.sync(query.lander, query.firer, flags_on) else {
+                let notifiers = std::iter::once(query.lander).chain(
+                    (0..self.hpus.len() as u8)
+                        .map(HpuId)
+                        .filter(|h| *h != query.lander && *h != query.firer),
+                );
+                let Some(wait) = notifiers
+                    .into_iter()
+                    .find_map(|notifier| self.sync(notifier, query.firer, flags_on))
+                else {
                     return false;
                 };
                 waits.push(wait);

@@ -78,7 +78,7 @@ fn draw_annotated<A: Annotation + VisualAnnotation>(
 
 fn main() {
     let bd = circuit();
-    let ir = bd.optimize_ir();
+    let ir = optimize_iop(&bd.ir());
     let hierarchy = bd.hierarchy();
 
     draw_ir_to_svg(&ir, Some(hierarchy.clone())).open().unwrap();

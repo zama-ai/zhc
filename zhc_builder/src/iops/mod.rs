@@ -5,8 +5,8 @@
 //! two flavours:
 //!
 //! - A **factory function** (e.g. [`add`], [`cmp_gt`], [`bitwise_xor`]) that returns a fully wired
-//!   [`Builder`](crate::Builder) with declared inputs and outputs, ready to be compiled into an IR
-//!   via [`optimize_ir`](crate::Builder::optimize_ir).
+//!   [`Builder`](crate::Builder) with declared inputs and outputs, whose IR is available through
+//!   [`ir`](crate::Builder::ir).
 //!
 //! - A **builder method** (e.g. [`Builder::iop_add_hillis_steele`], [`Builder::iop_cmp`]) that can
 //!   be called on an existing [`Builder`](crate::Builder) to compose the operation with other
@@ -18,7 +18,7 @@
 //! # use zhc_builder::*;
 //! # let spec = SpecInteger::new(16, 2, 2);
 //! // Standalone: build a complete addition IR.
-//! let ir = add(spec).optimize_ir();
+//! let ir = add(spec).ir().clone();
 //!
 //! // Composed: add then compare inside a single builder.
 //! let mut builder = Builder::new(spec.block_spec());

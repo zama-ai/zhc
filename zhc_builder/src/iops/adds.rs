@@ -20,7 +20,7 @@ use zhc_utils::{
 /// # use zhc_builder::{SpecInteger, adds};
 /// # let spec = SpecInteger::new(16, 2, 2);
 /// let builder = adds(spec);
-/// let ir = builder.optimize_ir();
+/// let ir = builder.ir();
 /// ```
 pub fn adds(spec: SpecInteger) -> Builder {
     let builder = Builder::new(spec.block_spec());
@@ -63,7 +63,7 @@ pub fn overflow_adds(spec: SpecInteger) -> Builder {
 /// # use zhc_builder::{SpecInteger, adds_hillis_steele};
 /// # let spec = SpecInteger::new(16, 2, 2);
 /// let builder = adds_hillis_steele(spec);
-/// let ir = builder.optimize_ir();
+/// let ir = builder.ir();
 /// ```
 pub fn adds_hillis_steele(spec: SpecInteger) -> Builder {
     let builder = Builder::new(spec.block_spec());
@@ -85,7 +85,7 @@ pub fn adds_hillis_steele(spec: SpecInteger) -> Builder {
 /// # use zhc_builder::{SpecInteger, adds_ripple_carry};
 /// # let spec = SpecInteger::new(16, 2, 2);
 /// let builder = adds_ripple_carry(spec);
-/// let ir = builder.optimize_ir();
+/// let ir = builder.ir();
 /// ```
 pub fn adds_ripple_carry(spec: SpecInteger) -> Builder {
     let builder = Builder::new(spec.block_spec());

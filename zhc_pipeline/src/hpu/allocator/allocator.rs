@@ -153,8 +153,8 @@ impl<'ir> Allocator<'ir> {
             TransferIn { dst, slot, .. } => {
                 svec![self.heap.alloc_exclusive(dst.0 as usize, slot.1.0 as usize)]
             }
-            TransferOut { src, slot, .. } => {
-                svec![self.heap.alloc_exclusive(src.0 as usize, slot.1.0 as usize)]
+            TransferOut { dst, slot, .. } => {
+                svec![self.heap.alloc_exclusive(dst.0 as usize, slot.1.0 as usize)]
             }
             _ => svec![],
         }
