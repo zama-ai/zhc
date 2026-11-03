@@ -304,7 +304,15 @@ impl Builder {
                 remain_tmp_v[0][i] = self.block_add(&remain_tmp_v[0][i], &remain_tmp_v[1][i]);
                 remain_tmp_v[2][i] = self.block_add(&remain_tmp_v[2][i], &remain_tmp_v[3][i]);
                 remain_tmp_v[0][i] = self.block_add(&remain_tmp_v[0][i], &remain_tmp_v[2][i]);
-                remain_a.push(self.block_lookup(remain_tmp_v[0][i], Lut1::none(*self.spec())));
+                // The selected remainder is the sum of 4 masked blocks, only one non-zero, so
+                // its value is <= 3. It goes unrefreshed into the next iteration, whose
+                // subtractions and selections stay within the noise budget (checked by
+                // `noise_div`). Only the last iteration refreshes it, as it is an output.
+                if loop_idx + 1 < num_a.len() {
+                    remain_a.push(remain_tmp_v[0][i]);
+                } else {
+                    remain_a.push(self.block_lookup(remain_tmp_v[0][i], Lut1::none(*self.spec())));
+                }
             }
 
             // Quotient
@@ -319,12 +327,24 @@ impl Builder {
             let ct01 = r_lt_div_x_v[0].clone(); // + 0
             let ct23 = self.block_add(&r_lt_div_x_v[1], &r_lt_div_x_v[2]);
             let ct0123 = self.block_add(&ct01, &ct23);
-            quotient_a.push(self.block_lookup(ct0123, Lut1::solve_quotient_pos1(*self.spec())));
+            // Solved at the end, together with the division-by-zero masking.
+            quotient_a.push(ct0123);
         } // for loop_idx
 
         quotient_a.reverse();
-        quotient_a =
-            self.iop_if_then_else_0v(&quotient_a, &keep_div, Some(IfThenElse0Select::SelPos0Msg));
+        // Quotient digit and division-by-zero masking in a single PBS: ct0123 is even
+        // (0, 2, 4 or 6, the sum of the comparisons stored in position 1) and keep_div is 0 or 1,
+        // so their sum holds both. Same result as SolveQuotientPos1 then IfFalseZeroed.
+        let solve_if_keep = Lut1::from_fn("SolveQuotientPos1IfKeep", *self.spec(), |b| {
+            let v = b.raw_message_bits() | (b.move_carry_to_message().raw_message_bits() << 2);
+            let keep = v & 1;
+            let q = 3 - ((v & 6) >> 1);
+            b.spec().from_message(if keep != 0 { q } else { 0 })
+        });
+        quotient_a = quotient_a
+            .iter()
+            .map(|ct| self.block_lookup(&self.block_add(ct, &keep_div), solve_if_keep.clone()))
+            .collect();
 
         (quotient_a, remain_a)
     }
@@ -506,14 +526,7 @@ mod test_asym {
 
     #[test]
     fn correctness_div_asym_edge_cases() {
-        for (nb, db) in [
-            (64u16, 16u16),
-            (64, 8),
-            (32, 2),
-            (16, 6),
-            (128, 32),
-            (10, 4),
-        ] {
+        for (nb, db) in [(64u16, 16u16), (64, 8), (32, 2), (16, 6), (128, 32), (10, 4)] {
             let bd = Builder::new(SpecInteger::new(nb, 2, 2).block_spec());
             let n = bd.ciphertext_integer_input(nb);
             let d = bd.ciphertext_integer_input(db);
@@ -522,25 +535,9 @@ mod test_asym {
             bd.ciphertext_integer_output(r);
             bd.check_noise();
             let (ns, ds) = (SpecInteger::new(nb, 2, 2), SpecInteger::new(db, 2, 2));
-            let nmax = if nb >= 128 {
-                u128::MAX
-            } else {
-                (1u128 << nb) - 1
-            };
+            let nmax = if nb >= 128 { u128::MAX } else { (1u128 << nb) - 1 };
             let dmax = (1u128 << db) - 1;
-            let nums = [
-                0,
-                1,
-                2,
-                3,
-                5,
-                dmax - 1,
-                dmax,
-                dmax + 1,
-                nmax / 3,
-                nmax - 1,
-                nmax,
-            ];
+            let nums = [0, 1, 2, 3, 5, dmax - 1, dmax, dmax + 1, nmax / 3, nmax - 1, nmax];
             let dens = [1, 2, 3, 4, 7, dmax / 2, dmax - 1, dmax];
             for &a in nums.iter().filter(|&&a| a <= nmax) {
                 for &b in dens.iter().filter(|&&b| b >= 1 && b <= dmax) {
