@@ -57,7 +57,7 @@ use zhc_langs::{
     tasklang::{TaskLang, coarsen_ioplang},
 };
 use zhc_sim::Simulator;
-use zhc_utils::{Dumpable, Store, units::MHz};
+use zhc_utils::{Dumpable, FastMap, Store, units::MHz};
 
 mod config;
 mod materialize;
@@ -122,10 +122,13 @@ pub fn partition_and_materialize(
 ///
 /// The `ir` argument is the integer-level circuit, and `partitions` gives the partition
 /// annotation of each of its operations, as declared while building it. Only the placement of each
-/// annotation is read. An operation with an exclusive placement stays in its partition. An
-/// operation with an irrelevant placement is placed by the
+/// annotation is read. Partition ids lower than the number of available partitions are kept as
+/// they are; otherwise the declared partitions are numbered by first appearance in `partitions`,
+/// the n-th one becoming partition n. An operation with an exclusive
+/// placement stays in its partition. An operation with an irrelevant placement is placed by the
 /// [`spread_policy`](PartitionerConfig::spread_policy) of `config`, next to the operations it
-/// exchanges data with. The other fields of `config` are not used.
+/// exchanges data with. Of the other fields of `config`, only the number of
+/// [`specs`](PartitionerConfig::specs) is used, as the number of available partitions.
 ///
 /// The returned pair holds the materialized circuit and the partition of each of its operations,
 /// as for [`partition_and_materialize`]: the materialized circuit computes the same outputs as
@@ -134,8 +137,8 @@ pub fn partition_and_materialize(
 ///
 /// # Panics
 ///
-/// Panics if no operation of `ir` has a relevant placement in `partitions`, or if an operation
-/// has a shared placement.
+/// Panics if no operation of `ir` has a relevant placement in `partitions`, if `partitions`
+/// declares more partitions than `config` has specs, or if an operation has a shared placement.
 ///
 /// # Examples
 ///
@@ -162,11 +165,35 @@ pub fn materialize_builder_partitioning(
     partitions: &OpMap<PartitionAnnotation>,
     config: &PartitionerConfig,
 ) -> (IR<IopLang>, OpMap<PartitionId>) {
-    let placement = partitions.clone().map(|annotation| annotation.placement);
+    // Ids beyond the available partitions (e.g. hand-grouped builder partitions, which keep the
+    // smallest id of their members) are renumbered by first appearance
+    let n_available = config.specs.len() as usize;
+    let mut renumbered: FastMap<PartitionId, PartitionId> = FastMap::default();
+    for (_, annotation) in partitions.iter() {
+        for pid in annotation.placement.iter_pids() {
+            let next = PartitionId(renumbered.len() as u16);
+            renumbered.entry(pid).or_insert(next);
+        }
+    }
     assert!(
-        placement.iter().any(|(_, p)| p.is_relevant()),
+        !renumbered.is_empty(),
         "Builder partitioning has no relevant partition"
     );
+    assert!(
+        renumbered.len() <= n_available,
+        "Builder partitioning declares {} partitions, only {n_available} available",
+        renumbered.len(),
+    );
+    if renumbered.keys().all(|pid| (pid.0 as usize) < n_available) {
+        renumbered.iter_mut().for_each(|(pid, new)| *new = *pid);
+    }
+    let placement = partitions.clone().map(|annotation| {
+        annotation
+            .placement
+            .iter_pids()
+            .map(|pid| renumbered[&pid])
+            .collect::<PartitionPlacement>()
+    });
     let placement = spread::spread(ir, placement, config.spread_policy);
     materialize_partitioning(ir, &placement)
 }

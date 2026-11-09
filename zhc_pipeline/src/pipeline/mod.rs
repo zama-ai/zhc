@@ -297,7 +297,9 @@ impl Pipeline {
     ///
     /// The supplied partitions do not need to cover every operation: operations that carry an
     /// irrelevant placement are placed by the compiler, next to the operations they exchange data
-    /// with. Each partition id is then used as the id of the HPU that runs it.
+    /// with. A partition id is used as the id of the HPU that runs it. If some ids are too large
+    /// for the number of HPUs (e.g. hand-grouped partitions), the partitions are instead numbered
+    /// by first appearance, the n-th one running on HPU n.
     ///
     /// # Examples
     ///
