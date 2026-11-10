@@ -7,7 +7,7 @@ test:
 	cargo test --locked --release
 
 big-test:
-	cargo test --release -- --ignored
+	RUST_MIN_STACK=268435456 cargo test --release -- --ignored
 
 brrr:
 	cargo test --locked --release -- brrr
