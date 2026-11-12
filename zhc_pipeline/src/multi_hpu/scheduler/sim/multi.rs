@@ -47,6 +47,7 @@ pub struct LightMultiHpu<'a, 'b> {
     pending: Vec<TransferQuery>,
     expected_lands: usize,
     last_landed_in: Store<HpuId, Option<OpId>>,
+    anchor_knowledge: Store<HpuId, Knowledge>,
 }
 
 impl<'a, 'b> Serialize for LightMultiHpu<'a, 'b> {
@@ -90,6 +91,10 @@ impl<'a, 'b> LightMultiHpu<'a, 'b> {
             })
             .sum();
         let last_landed_in = Store::with_value(None, config.n_hpus as usize);
+        let anchor_knowledge = Store::with_value(
+            Knowledge::new(config.n_hpus as usize),
+            config.n_hpus as usize,
+        );
         LightMultiHpu {
             hpus,
             slots,
@@ -98,6 +103,7 @@ impl<'a, 'b> LightMultiHpu<'a, 'b> {
             expected_lands,
             policy,
             last_landed_in,
+            anchor_knowledge,
         }
     }
 }
@@ -131,6 +137,7 @@ impl<'a, 'b> Simulatable for LightMultiHpu<'a, 'b> {
                     },
                 );
                 self.last_landed_in[dst_hid] = Some(transfer.opid);
+                self.anchor_knowledge[dst_hid] = self.hpus[dst_hid].knowledge.clone();
                 self.process_pending_transfers(dispatcher);
             }
             MultiHpuEvents::Hpu(_, HpuEvents::TransferQuery(query)) => {
@@ -311,8 +318,19 @@ impl<'a, 'b> LightMultiHpu<'a, 'b> {
     }
 
     fn grant_slot(&mut self, firer: HpuId, flags_on: HpuId) -> Option<Slot> {
-        let knowledge = &self.hpus[firer].knowledge;
-        for (sid, state) in self.slots[flags_on].enumerate_iter_mut() {
+        Self::grant_slot_with(
+            &mut self.slots[flags_on],
+            flags_on,
+            &self.hpus[firer].knowledge,
+        )
+    }
+
+    fn grant_slot_with(
+        table: &mut Store<SlotId, SlotState>,
+        flags_on: HpuId,
+        knowledge: &Knowledge,
+    ) -> Option<Slot> {
+        for (sid, state) in table.enumerate_iter_mut() {
             let granted = state.transition_with(|old| match old {
                 SlotState::Available { next_gen }
                     if next_gen.is_first_gen()
@@ -334,7 +352,7 @@ impl<'a, 'b> LightMultiHpu<'a, 'b> {
 
     fn sync(&mut self, notifier: HpuId, waiter: HpuId, data_flags_on: HpuId) -> Option<SyncWait> {
         let anchor = self.last_landed_in[notifier]?;
-        let notifier_knowledge = &self.hpus[notifier].knowledge;
+        let notifier_knowledge = &self.anchor_knowledge[notifier];
         let useful = self.slots[data_flags_on]
             .enumerate_iter()
             .any(|(sid, state)| {
@@ -346,7 +364,11 @@ impl<'a, 'b> LightMultiHpu<'a, 'b> {
             return None;
         }
         let flags_on = self.sync_flags_on(notifier, waiter);
-        let slot = self.grant_slot(notifier, flags_on)?;
+        let slot = Self::grant_slot_with(
+            &mut self.slots[flags_on],
+            flags_on,
+            &self.anchor_knowledge[notifier],
+        )?;
         self.slots[flags_on][slot.1].transition(|old| match old {
             SlotState::Busy { on_gen } => SlotState::Available {
                 next_gen: on_gen.next(),
@@ -362,7 +384,7 @@ impl<'a, 'b> LightMultiHpu<'a, 'b> {
                 spec.waits.push(SyncWait { src: waiter, slot });
             }
         }
-        let notifier_knowledge = self.hpus[notifier].knowledge.clone();
+        let notifier_knowledge = self.anchor_knowledge[notifier].clone();
         let waiter_knowledge = &mut self.hpus[waiter].knowledge;
         waiter_knowledge.record(&flags_on, &slot);
         waiter_knowledge.merge_with(&notifier_knowledge);
