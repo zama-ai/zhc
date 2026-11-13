@@ -1,6 +1,7 @@
 .cargo
 target
 .zed
+.clangd
 **.DS_Store
 **.svg
 **.html

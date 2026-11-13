@@ -86,7 +86,7 @@ impl Builder {
                 .comment("extract bits")
                 .vector_lookup2(blocks, Lut2::many_msg_split(*self.spec()))
                 .into_iter()
-                .flat_map(|(l, r)| [l, r].into_iter())
+                .flat_map(|[l, r]| [l, r].into_iter())
                 .take(inp.spec().int_size().sas())
                 .collect::<Vec<_>>();
             let res = self.count_from_bits(bits, kind);
@@ -174,7 +174,7 @@ impl Builder {
                                 })
                             }
                         })
-                        .for_each(|(msg, carry)| {
+                        .for_each(|[msg, carry]| {
                             output[col_idx].push(msg);
                             output[col_idx + 1].push(carry);
                         });
@@ -192,13 +192,13 @@ impl Builder {
                                 self.block_lookup2(sum, Lut2::many_carry_msg(*self.spec()))
                             } else {
                                 // We don't have enough room. We must do two pbses
-                                (
+                                [
                                     self.block_lookup(sum, Lut1::msg_only(*self.spec())),
                                     self.block_lookup(sum, Lut1::carry_in_msg(*self.spec())),
-                                )
+                                ]
                             }
                         })
-                        .for_each(|(msg, carry)| {
+                        .for_each(|[msg, carry]| {
                             output[col_idx].push(msg);
                             output[col_idx + 1].push(carry);
                         });

@@ -20,5 +20,7 @@ jobs:
       with:
         persist-credentials: 'false'
         submodules: 'true'
+    - name: Install libuv
+      run: sudo apt-get update && sudo apt-get install -y libuv1-dev
     - name: Run big tests
-      run: make big-test
+      run: make all-big-test

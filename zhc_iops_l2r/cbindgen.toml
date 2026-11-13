@@ -1,0 +1,17 @@
+language = "C"
+include_guard = "ZHC_H"
+cpp_compat = true
+style = "type"
+documentation_style = "c99"
+sort_by = "None"
+usize_is_size_t = true
+no_includes = true
+sys_includes = ["stdbool.h", "stddef.h", "stdint.h"]
+line_length = 100
+tab_width = 4
+header = """
+/* C ABI for ZHC. */
+"""
+
+[export]
+item_types = ["enums", "structs", "opaque", "functions"]

@@ -20,8 +20,17 @@ jobs:
       with:
         persist-credentials: 'false'
         submodules: 'true'
+    - name: Install Lean
+      uses: leanprover/lean-action@ba3fdfe5c4476c925da13bf11a005ddb47e47aee #v1.7.1
+      with:
+        lake-package-directory: zhc_lean
+        auto-config: false
+        use-mathlib-cache: false
+        use-github-cache: false
+    - name: Install libuv
+      run: sudo apt-get update && sudo apt-get install -y libuv1-dev
     - name: Run tests
-      run: make test
+      run: make all-test
 
   check:
     runs-on: ubuntu-latest
@@ -31,5 +40,14 @@ jobs:
       with:
         persist-credentials: 'false'
         submodules: 'true'
+    - name: Install Lean
+      uses: leanprover/lean-action@ba3fdfe5c4476c925da13bf11a005ddb47e47aee #v1.7.1
+      with:
+        lake-package-directory: zhc_lean
+        auto-config: false
+        use-mathlib-cache: false
+        use-github-cache: false
+    - name: Install libuv
+      run: sudo apt-get update && sudo apt-get install -y libuv1-dev
     - name: Run checks
-      run: make check
+      run: make all-check

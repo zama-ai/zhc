@@ -1,5 +1,4 @@
 use super::super::{SpecBlock, SpecInteger};
-use super::EmulatedCiphertextInteger;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
@@ -43,7 +42,7 @@ fn spec_overflow_checks() {
 fn from_int() {
     let spec = SpecInteger::new(8, 2, 4);
     let ciphertext = spec.from_int(0b1111_0101);
-    assert_eq!(ciphertext.storage, 0b1111_0101);
+    assert_eq!(ciphertext.blocks[..2], [0b0101, 0b1111]);
     assert_eq!(ciphertext.spec, spec);
     assert_eq!(ciphertext.as_storage(), 0b1111_0101);
 }
@@ -82,7 +81,7 @@ fn set_block() {
     let new_block = spec.block_spec().from_message(0b1010);
 
     ciphertext.set_block(0, new_block);
-    assert_eq!(ciphertext.storage, 0b1111_1010);
+    assert_eq!(ciphertext.as_storage(), 0b1111_1010);
 }
 
 #[test]
@@ -92,18 +91,47 @@ fn set_block_preserves_other_blocks() {
     let new_block = spec.block_spec().from_message(0b001);
 
     ciphertext.set_block(1, new_block);
-    assert_eq!(ciphertext.storage, 0b111_110_001_010);
+    assert_eq!(ciphertext.as_storage(), 0b111_110_001_010);
 }
 
 #[test]
-fn as_storage_masks_extra_bits() {
+fn set_block_keeps_dirty_block() {
     let spec = SpecInteger::new(8, 2, 4);
-    let ciphertext = EmulatedCiphertextInteger {
-        storage: 0b1111_1111_1111_0101,
-        spec,
-    };
+    let mut ciphertext = spec.from_int(0b1111_0101);
+    let dirty_block = spec.block_spec().from_data(0b11_1010);
 
-    assert_eq!(ciphertext.as_storage(), 0b1111_0101);
+    ciphertext.set_block(0, dirty_block);
+    assert_eq!(ciphertext.get_block(0), dirty_block);
+    assert_eq!(
+        ciphertext.get_block(1),
+        spec.block_spec().from_message(0b1111)
+    );
+}
+
+#[test]
+#[should_panic(expected = "block 0 is dirty")]
+fn as_storage_dirty_carry_panics() {
+    let spec = SpecInteger::new(8, 2, 4);
+    let mut ciphertext = spec.from_int(0b1111_0101);
+    ciphertext.set_block(0, spec.block_spec().from_data(0b01_0101));
+    ciphertext.as_storage();
+}
+
+#[test]
+#[should_panic(expected = "block 1 is dirty")]
+fn as_storage_dirty_padding_panics() {
+    let spec = SpecInteger::new(8, 2, 4);
+    let mut ciphertext = spec.from_int(0b1111_0101);
+    ciphertext.set_block(1, spec.block_spec().from_complete(0b1_00_1111));
+    ciphertext.as_storage();
+}
+
+#[test]
+#[should_panic(expected = "Spec mismatch")]
+fn set_block_other_spec_panics() {
+    let spec = SpecInteger::new(8, 2, 4);
+    let mut ciphertext = spec.from_int(0b1111_0101);
+    ciphertext.set_block(0, SpecBlock(3, 4).from_message(0b1010));
 }
 
 #[test]
@@ -128,63 +156,31 @@ fn equality_different_spec() {
 }
 
 #[test]
-fn equality_ignores_extra_bits() {
+fn equality_compares_carry_bits() {
     let spec = SpecInteger::new(8, 2, 4);
     let ciphertext1 = spec.from_int(0b1111_0101);
-    let ciphertext2 = EmulatedCiphertextInteger {
-        storage: 0b1111_1111_1111_0101,
-        spec,
-    };
+    let mut ciphertext2 = spec.from_int(0b1111_0101);
+    ciphertext2.set_block(0, spec.block_spec().from_data(0b01_0101));
 
-    assert_eq!(ciphertext1, ciphertext2);
-}
-
-#[test]
-fn partial_ordering() {
-    let spec = SpecInteger::new(8, 2, 4);
-    let ciphertext1 = spec.from_int(0b1111_0101);
-    let ciphertext2 = spec.from_int(0b1111_0110);
-    let ciphertext3 = SpecInteger::new(8, 3, 4).from_int(0b1111_0101);
-
-    assert!(ciphertext1 < ciphertext2);
-    assert!(ciphertext1.partial_cmp(&ciphertext3).is_none());
-}
-
-#[test]
-fn partial_ordering_ignore_extra_bits() {
-    let spec = SpecInteger::new(8, 2, 4);
-    let ciphertext1 = spec.from_int(0b1111_0110);
-    let ciphertext2 = EmulatedCiphertextInteger {
-        storage: 0b1111_1111_0101,
-        spec,
-    };
-    let ciphertext3 = spec.from_int(0b1111_0110);
-
-    assert!(ciphertext1 > ciphertext2);
-    assert!(ciphertext1 <= ciphertext3);
-    assert!(ciphertext2 < ciphertext3);
+    assert_eq!(ciphertext1.get_block(1), ciphertext2.get_block(1));
+    assert_ne!(ciphertext1, ciphertext2);
 }
 
 #[test]
 fn hash_consistency() {
     let spec = SpecInteger::new(8, 2, 4);
     let ciphertext1 = spec.from_int(0b1111_0101);
-    let ciphertext2 = spec.from_int(0b1111_0101);
-    let ciphertext3 = EmulatedCiphertextInteger {
-        storage: 0b1111_1111_1111_0101,
-        spec,
-    };
+    let mut ciphertext2 = spec.from_int(0b1111_0000);
+    ciphertext2.set_block(0, spec.block_spec().from_message(0b0101));
 
     let mut hasher1 = DefaultHasher::new();
     let mut hasher2 = DefaultHasher::new();
-    let mut hasher3 = DefaultHasher::new();
 
     ciphertext1.hash(&mut hasher1);
     ciphertext2.hash(&mut hasher2);
-    ciphertext3.hash(&mut hasher3);
 
+    assert_eq!(ciphertext1, ciphertext2);
     assert_eq!(hasher1.finish(), hasher2.finish());
-    assert_eq!(hasher1.finish(), hasher3.finish());
 }
 
 #[test]
@@ -210,15 +206,6 @@ fn set_block_out_of_bounds_panics() {
     let mut ciphertext = spec.from_int(0b1111_0101);
     let block = spec.block_spec().from_message(0b1010);
     ciphertext.set_block(2, block);
-}
-
-#[test]
-#[should_panic(expected = "Tried to set a dirty block")]
-fn set_block_dirty_block_panics() {
-    let spec = SpecInteger::new(8, 2, 4);
-    let mut ciphertext = spec.from_int(0b1111_0101);
-    let dirty_block = spec.block_spec().from_data(0b1_1010);
-    ciphertext.set_block(0, dirty_block);
 }
 
 #[test]

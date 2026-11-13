@@ -1,7 +1,6 @@
 use super::super::{EmulatedCiphertextBlock, EmulatedCiphertextBlockStorage, SpecInteger};
 use super::EmulatedCiphertextIntegerStorage;
 use std::fmt::Debug;
-use std::hash::{Hash, Hasher};
 use zhc_utils::iter::Separate;
 use zhc_utils::{Dumpable, SafeAs};
 
@@ -15,23 +14,36 @@ use zhc_utils::{Dumpable, SafeAs};
 /// blocks can be accessed with [`get_block`](Self::get_block) and modified with
 /// [`set_block`](Self::set_block). Block 0 is the least significant.
 ///
-/// Only *clean* blocks (message-only, with zero carry and padding) can be written back into a
-/// ciphertext. This enforces the invariant that carries must be explicitly propagated before
-/// reassembling the integer.
+/// Each block keeps all its bits: message, carry and padding. A block with non-zero carry or
+/// padding bits is *dirty*. A dirty block can be written into a ciphertext, but the ciphertext
+/// then has no integer value: [`as_storage`](Self::as_storage) panics until the carries are
+/// propagated and the block is clean again.
 ///
-/// Two ciphertexts can be compared for equality or ordering only if they share the same spec.
+/// Two ciphertexts are equal if they have the same spec and the same blocks, carry and padding
+/// bits included.
 ///
 /// # Debug formatting
 ///
 /// - Default format: `{block_n}_.._{block_0}_ctint` (decimal block values, MSB first)
-/// - Alternate format (`{:#?}`): binary representation with proper bit widths
-#[derive(Clone, Copy)]
+/// - Alternate format (`{:#?}`): binary representation, padded to the message size
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct EmulatedCiphertextInteger {
-    pub(crate) storage: EmulatedCiphertextIntegerStorage,
+    pub(crate) blocks: Vec<EmulatedCiphertextBlockStorage>,
     pub(crate) spec: SpecInteger,
 }
 
 impl EmulatedCiphertextInteger {
+    pub(crate) fn from_storage(spec: SpecInteger, int: EmulatedCiphertextIntegerStorage) -> Self {
+        let block_spec = spec.block_spec();
+        let blocks = (0..spec.block_count().sas::<u32>())
+            .map(|i| {
+                let shift = i * block_spec.message_size().sas::<u32>();
+                (int >> shift) as EmulatedCiphertextBlockStorage & block_spec.message_mask()
+            })
+            .collect();
+        Self { blocks, spec }
+    }
+
     /// Returns the number of blocks in this ciphertext.
     pub fn len(&self) -> u8 {
         self.spec.block_count()
@@ -39,41 +51,35 @@ impl EmulatedCiphertextInteger {
 
     /// Returns the block at the given index.
     ///
-    /// Block 0 is the least significant block. The returned block contains only message bits;
-    /// carry and padding are zero.
+    /// Block 0 is the least significant block. The returned block is the block as stored, carry
+    /// and padding bits included.
     ///
     /// # Panics
     ///
     /// Panics if `ith >= len()`.
     pub fn get_block(&self, ith: u8) -> EmulatedCiphertextBlock {
         assert!(ith < self.len(), "Tried to get nonexistent block.");
-        let storage = (self.storage >> (ith * self.spec.block_spec().message_size()))
-            as EmulatedCiphertextBlockStorage
-            & self.spec.block_spec().message_mask();
         EmulatedCiphertextBlock {
-            storage,
+            storage: self.blocks[ith.sas::<usize>()],
             spec: self.spec.block_spec(),
         }
     }
 
     /// Replaces the block at the given index.
     ///
-    /// Block 0 is the least significant block. The provided block must be *clean* — that is,
-    /// it must have zero carry and padding bits. Use [`EmulatedCiphertextBlock::is_message_only`]
-    /// to check, or [`EmulatedCiphertextBlock::mask_message`] to extract just the message.
+    /// Block 0 is the least significant block. The block is stored as is, carry and padding bits
+    /// included. A dirty block makes [`as_storage`](Self::as_storage) panic until it is replaced
+    /// by a clean block.
     ///
     /// # Panics
     ///
     /// Panics if:
     /// - `ith >= len()`
-    /// - `block` has non-zero carry or padding bits
+    /// - the spec of `block` is not the block spec of this ciphertext
     pub fn set_block(&mut self, ith: u8, block: EmulatedCiphertextBlock) {
         assert!(ith < self.len(), "Tried to set nonexistent block.");
-        assert!(block.is_message_only(), "Tried to set a dirty block.");
-        let clearing = self.storage & self.spec.block_mask(ith);
-        self.storage -= clearing;
-        self.storage += (block.storage.sas::<EmulatedCiphertextIntegerStorage>())
-            << (ith * self.spec.block_spec().message_size());
+        assert_eq!(block.spec, self.spec.block_spec(), "Spec mismatch.");
+        self.blocks[ith.sas::<usize>()] = block.storage;
     }
 
     /// Returns the specification describing this ciphertext's layout.
@@ -81,9 +87,21 @@ impl EmulatedCiphertextInteger {
         self.spec
     }
 
-    /// Returns the integer value reconstructed from all blocks' message bits.
+    /// Returns the integer value reconstructed from the message bits of all blocks.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a block is dirty, that is if it has non-zero carry or padding bits.
     pub fn as_storage(&self) -> EmulatedCiphertextIntegerStorage {
-        self.storage & self.spec.int_mask()
+        let block_spec = self.spec.block_spec();
+        self.blocks.iter().enumerate().fold(0, |acc, (i, block)| {
+            assert!(
+                block & !block_spec.message_mask() == 0,
+                "Tried to get the value of an integer, but block {i} is dirty."
+            );
+            let shift = i.sas::<u32>() * block_spec.message_size().sas::<u32>();
+            acc | ((*block).sas::<EmulatedCiphertextIntegerStorage>() << shift)
+        })
     }
 }
 
@@ -107,31 +125,6 @@ impl Debug for EmulatedCiphertextInteger {
             .separate_with(|| format!("_"))
             .for_each(|string| write!(f, "{}", string).unwrap());
         write!(f, "_ctint")
-    }
-}
-
-impl PartialEq for EmulatedCiphertextInteger {
-    fn eq(&self, other: &Self) -> bool {
-        self.as_storage() == other.as_storage() && self.spec == other.spec
-    }
-}
-
-impl Eq for EmulatedCiphertextInteger {}
-
-impl Hash for EmulatedCiphertextInteger {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.as_storage().hash(state);
-        self.spec.hash(state);
-    }
-}
-
-impl PartialOrd for EmulatedCiphertextInteger {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        if self.spec == other.spec {
-            self.as_storage().partial_cmp(&other.as_storage())
-        } else {
-            None
-        }
     }
 }
 

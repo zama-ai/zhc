@@ -284,7 +284,7 @@ impl Builder {
         let many_capacity = self.spec().data_mask().sas::<usize>() >> 1;
         match (want_carry, acc_deg <= many_capacity) {
             (true, true) => {
-                let (msg, carry) = self.block_lookup2(acc_ct, Lut2::many_carry_msg(*self.spec()));
+                let [msg, carry] = self.block_lookup2(acc_ct, Lut2::many_carry_msg(*self.spec()));
                 (msg, Some(carry))
             }
             (true, false) => (
