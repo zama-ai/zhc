@@ -43,31 +43,31 @@ default-members = [
 resolver = "3"
 
 [workspace.package]
-version = "0.12.1"
+version = "0.12.2"
 edition = "2024"
 license = "BSD-3-Clause-Clear"
 repository = "https://github.com/zama-ai/zhc"
 
 [workspace.dependencies]
-zhc ={ path = "zhc", version = "0.12.1" }
-zhc_ir = { path = "zhc_ir", version = "0.12.1" }
-zhc_config = { path = "zhc_config", version = "0.12.1" }
-zhc_langs = { path = "zhc_langs", version = "0.12.1" }
-zhc_langs_macro = { path = "zhc_langs_macro", version = "0.12.1" }
-zhc_pipeline = { path = "zhc_pipeline", version = "0.12.1" }
-zhc_sim = { path = "zhc_sim", version = "0.12.1" }
-zhc_utils = { path = "zhc_utils", version = "0.12.1" }
-zhc_utils_macro = { path = "zhc_utils_macro", version = "0.12.1" }
-zhc_builder = { path = "zhc_builder", version = "0.12.1" }
-zhc_crypto = { path = "zhc_crypto", version = "0.12.1" }
-zhc_bench = {path = "zhc_bench", version = "0.12.1" }
-zhc_vm = {path = "zhc_vm", version = "0.12.1" }
-zhc_profiling = {path = "zhc_profiling", version = "0.12.1" }
-zhc_validation = { path = "zhc_validation", version = "0.12.1" }
-zhc_validation_macro = { path = "zhc_validation_macro", version = "0.12.1" }
-zhc_cli = { path = "zhc_cli", version = "0.12.1" }
-zhc_abc_sys = { path = "zhc_abc_sys", version = "0.12.1"}
-zhc_abc = { path = "zhc_abc", version = "0.12.1"}
+zhc ={ path = "zhc", version = "0.12.2" }
+zhc_ir = { path = "zhc_ir", version = "0.12.2" }
+zhc_config = { path = "zhc_config", version = "0.12.2" }
+zhc_langs = { path = "zhc_langs", version = "0.12.2" }
+zhc_langs_macro = { path = "zhc_langs_macro", version = "0.12.2" }
+zhc_pipeline = { path = "zhc_pipeline", version = "0.12.2" }
+zhc_sim = { path = "zhc_sim", version = "0.12.2" }
+zhc_utils = { path = "zhc_utils", version = "0.12.2" }
+zhc_utils_macro = { path = "zhc_utils_macro", version = "0.12.2" }
+zhc_builder = { path = "zhc_builder", version = "0.12.2" }
+zhc_crypto = { path = "zhc_crypto", version = "0.12.2" }
+zhc_bench = {path = "zhc_bench", version = "0.12.2" }
+zhc_vm = {path = "zhc_vm", version = "0.12.2" }
+zhc_profiling = {path = "zhc_profiling", version = "0.12.2" }
+zhc_validation = { path = "zhc_validation", version = "0.12.2" }
+zhc_validation_macro = { path = "zhc_validation_macro", version = "0.12.2" }
+zhc_cli = { path = "zhc_cli", version = "0.12.2" }
+zhc_abc_sys = { path = "zhc_abc_sys", version = "0.12.2"}
+zhc_abc = { path = "zhc_abc", version = "0.12.2"}
 
 
 serde = { version = "1.0", features = ["derive"] }
