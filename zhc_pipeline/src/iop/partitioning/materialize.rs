@@ -30,8 +30,23 @@ pub fn materialize_partitioning(
                 let mut args = svec![];
                 for arg in op.get_args_iter() {
                     let key = (arg.get_id(), pid);
+                    let origin = arg.get_origin().opref;
                     let materialized = if let Some(value) = values.get(&key).copied() {
                         value
+                    } else if matches!(
+                        origin.get_instruction(),
+                        IopInstructionSet::LetPlaintextBlock { .. }
+                            | IopInstructionSet::LetCiphertextBlock { .. }
+                    ) {
+                        // A block constant is re-emitted in the partition that needs it rather
+                        // than transferred: it costs nothing, and a plaintext cannot be
+                        // transferred at all (the HPU lowering folds plaintext constants into
+                        // their consumers, which a transfer in between prevents).
+                        let returns = translator.add_op(origin.get_instruction().clone(), svec![]);
+                        output_placements.push(pid);
+                        let local = returns[0];
+                        values.insert(key, local);
+                        local
                     } else {
                         // See [1] for why only exclusive are possible.
                         let source_pid = match arg.get_origin().opref.get_annotation() {
