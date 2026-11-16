@@ -22,7 +22,7 @@ fn mul_asym(lhs_bits: u16, rhs_bits: u16, out_bits: u16, carry: u8, msg: u8) -> 
 
     // Number of output blocks to compute (partial products of degree >= cut_off are dropped).
     let out_blocks = SpecInteger::new(out_bits, carry, msg).block_count();
-    let (res, _overflow) = bd.iop_mul_raw(&a, &b, out_blocks);
+    let res = bd.iop_mul_lsb_auto(&a, &b, out_blocks);
 
     let out = bd.ciphertext_integer_join(&res, Some(out_bits));
     bd.ciphertext_integer_output(out);

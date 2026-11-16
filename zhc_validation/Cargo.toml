@@ -65,3 +65,7 @@ path = "test/multi_hpu_schedule.rs"
 [[test]]
 name = "multi_hpu_allocate_register"
 path = "test/multi_hpu_allocate_register.rs"
+
+[[test]]
+name = "mh_mul_tri"
+path = "test/mh_mul_tri.rs"

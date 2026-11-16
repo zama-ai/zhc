@@ -282,35 +282,64 @@ impl Iop {
             Iop::MhMul { par_n } => {
                 let schoolbook_depth = std::cmp::max(2, par_n / 2) as usize;
                 let builder = mh_mul(spec, schoolbook_depth);
-                // One group of builder partitions per HPU. Ids are the order in which `mh_mul`
-                // creates its partitions: Pp[i::j] (lsb/msb), then LimbRed, then Outputs.
-                match par_n {
-                    2 => {
-                        builder.group_partitions_id(&[0, 1, 8]);
-                        builder.group_partitions_id(&[2, 3, 5, 6]);
-                    }
-                    4 => {
-                        builder.group_partitions_id(&[3, 5, 6, 8]);
-                        builder.group_partitions_id(&[1]);
-                        builder.group_partitions_id(&[2]);
-                        builder.group_partitions_id(&[0]);
-                    }
-                    8 => {
-                        builder.group_partitions_id(&[0, 7, 23, 35]);
-                        builder.group_partitions_id(&[1, 2, 22]);
-                        builder.group_partitions_id(&[3, 4, 24, 26, 27]);
-                        builder.group_partitions_id(&[5, 6, 28]);
-                        builder.group_partitions_id(&[8, 9, 25]);
-                        builder.group_partitions_id(&[10, 11, 29, 31, 33]);
-                        builder.group_partitions_id(&[13, 18]);
-                        builder.group_partitions_id(&[14, 15, 30, 32]);
-                    }
-                    _ => {
-                        panic!();
-                    }
-                }
+                // One group of builder partitions per HPU, selected by label: the limb products
+                // `Pp[i::j]` (lsb/msb halves), the carry-save recombination `Csa @{k.h}` (output
+                // limb k, half h), `FinalAdd`, `Outputs`. Each recombination partition goes to
+                // the board holding most of its inputs.
+                let boards: &[&[&str]] = match par_n {
+                    2 => &[
+                        &["Pp[0::0]_lsb", "Pp[0::0]_msb", "Outputs"],
+                        &["Pp[0::1]", "Pp[1::0]", "Csa", "FinalAdd"],
+                    ],
+                    4 => &[
+                        &["Pp[1::0]", "Csa", "FinalAdd", "Outputs"],
+                        &["Pp[0::0]_msb"],
+                        &["Pp[0::1]"],
+                        &["Pp[0::0]_lsb"],
+                    ],
+                    8 => &[
+                        &["Pp[0::0]_lsb", "Pp[1::0]_lsb", "Outputs"],
+                        &["Pp[0::0]_msb", "Pp[0::1]_lsb", "@{1.0}", "@{1.1}"],
+                        &["Pp[0::1]_msb", "Pp[0::2]_lsb", "@{2.0}"],
+                        &["Pp[0::2]_msb", "Pp[0::3]"],
+                        &["Pp[1::0]_msb", "Pp[1::1]_lsb", "@{2.1}"],
+                        &["Pp[1::1]_msb", "Pp[1::2]", "@{3.0}"],
+                        &["Pp[2::0]_lsb", "Pp[3::0]", "FinalAdd"],
+                        &["Pp[2::0]_msb", "Pp[2::1]", "@{3.1}"],
+                    ],
+                    _ => panic!(),
+                };
+                group_partitions_by_label(&builder, boards);
                 builder
             }
         }
     }
 }
+
+/// Groups the builder partitions board by board: a partition goes to the first board with a
+/// pattern that its label starts with, or contains when the pattern starts with `@` (a
+/// position tag such as `@{1.0}`).
+fn group_partitions_by_label(builder: &Builder, boards: &[&[&str]]) {
+    use zhc_ir::partitioning::PartitionPlacement;
+    let mut labels = std::collections::BTreeMap::new();
+    for (_op, part) in builder.partitions().into_iter() {
+        if let PartitionPlacement::Exclusive(pid) = part.placement {
+            labels.insert(pid.0, part.metadata.clone());
+        }
+    }
+    let mut groups: Vec<Vec<u16>> = vec![Vec::new(); boards.len()];
+    for (pid, label) in &labels {
+        let hit = boards.iter().position(|pats| {
+            pats.iter().any(|p| {
+                if p.starts_with('@') { label.contains(p) } else { label.starts_with(p) }
+            })
+        });
+        if let Some(b) = hit {
+            groups[b].push(*pid);
+        }
+    }
+    for g in groups.iter().filter(|g| !g.is_empty()) {
+        builder.group_partitions_id(g);
+    }
+}
+
