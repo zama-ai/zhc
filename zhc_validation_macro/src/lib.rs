@@ -37,6 +37,7 @@ mod presets {
                 add_simd = Iop::AddSimd {n: zhc_builder::SIMD_N},
                 sub = Iop::Sub,
                 mul = Iop::Mul,
+                mul_low_depth = Iop::MulLowDepth,
                 muls = Iop::Muls,
                 ilog2 = Iop::Ilog2,
                 count_zeros = Iop::CountZeros,

@@ -1,6 +1,8 @@
 use std::collections::BTreeMap;
 
-use crate::{CiphertextBlock, NU, NU_BOOL, builder::Builder};
+use zhc_ir::partitioning::PartitionAnnotation;
+
+use crate::{CiphertextBlock, NU, NU_BOOL, TriMulState, builder::Builder};
 use zhc_crypto::integer_semantics::SpecInteger;
 use zhc_langs::ioplang::{Lut1, Lut2};
 use zhc_utils::SafeAs;
@@ -23,7 +25,22 @@ use zhc_utils::SafeAs;
 /// let ir = builder.ir();
 /// ```
 pub fn mh_mul(spec: SpecInteger, split_depth: usize) -> Builder {
-    mh_mul_with_opt(spec, split_depth, false)
+    mh_mul_with_opt(spec, split_depth, false, None, false)
+}
+
+/// [`mh_mul`] with low-depth limb products ([`TriMulState::low_depth`]): the division by 3 of
+/// each limb product is a prefix sum mod 3, and the upper half of its columns is finished with a
+/// parallel-prefix adder. The critical path is shorter, at the price of more PBS: it pays when
+/// the latency follows the depth (4 boards or more with the partitions of `Iop::MhMul`: -9% at
+/// 64 bits on 4 and 8 HPUs), not when each board still has a lot of work (2 boards: +5%).
+pub fn mh_mul_low_depth(spec: SpecInteger, split_depth: usize) -> Builder {
+    mh_mul_with_opt(spec, split_depth, false, None, true)
+}
+
+/// [`mh_mul`] with the limb products forced to the triangular (`true`) or packed (`false`)
+/// multiplication. [`mh_mul`] uses the triangular one from 4-block limbs.
+pub fn mh_mul_tri(spec: SpecInteger, split_depth: usize, use_tri: bool) -> Builder {
+    mh_mul_with_opt(spec, split_depth, false, Some(use_tri), false)
 }
 
 /// Creates an IR for a multiplication of two encrypted integers split into mh_factor sub-graph.
@@ -44,7 +61,7 @@ pub fn mh_mul(spec: SpecInteger, split_depth: usize) -> Builder {
 /// let ir = builder.ir();
 /// ```
 pub fn mh_overflow_mul_lsb(spec: SpecInteger, split_depth: usize) -> Builder {
-    mh_mul_with_opt(spec, split_depth, true)
+    mh_mul_with_opt(spec, split_depth, true, None, false)
 }
 
 /// Creates an IR for a multiplication of two encrypted integers split into mh_factor sub-graph.
@@ -69,7 +86,13 @@ pub fn mh_overflow_mul_lsb(spec: SpecInteger, split_depth: usize) -> Builder {
 /// let builder = mh_overflow_mul_lsb(spec, 2);
 /// let ir = builder.ir();
 /// ```
-fn mh_mul_with_opt(spec: SpecInteger, split_depth: usize, gen_overflow: bool) -> Builder {
+fn mh_mul_with_opt(
+    spec: SpecInteger,
+    split_depth: usize,
+    gen_overflow: bool,
+    force_tri: Option<bool>,
+    low_depth: bool,
+) -> Builder {
     let builder = Builder::new(spec.block_spec());
     let src_a = builder.ciphertext_integer_input(spec.int_size());
     let src_b = builder.ciphertext_integer_input(spec.int_size());
@@ -81,8 +104,20 @@ fn mh_mul_with_opt(spec: SpecInteger, split_depth: usize, gen_overflow: bool) ->
     let cut_off = spec.block_count() as usize;
 
     // Call inner function and construct results
-    let (flag_block, outputs) =
-        builder.mh_iop_mul_raw(&src_a_blocks, &src_b_blocks, cut_off, split_depth);
+    // The triangular limb products do not give the carries the overflow flag is made of.
+    // Otherwise they win with the hand-made partitions of `Iop::MhMul` on 2, 4 and 8 HPUs at
+    // 64 bits (-18%, -10%, -5%), even with 8-block limbs, where a single HPU would prefer the
+    // packed products: the limbs are spread over boards, so what counts is the work per board.
+    let use_tri = !gen_overflow && force_tri.unwrap_or(cut_off / split_depth >= 4);
+    let (flag_block, outputs) = builder.mh_iop_mul_raw_with(
+        &src_a_blocks,
+        &src_b_blocks,
+        cut_off,
+        split_depth,
+        use_tri,
+        !gen_overflow,
+        low_depth,
+    );
 
     if gen_overflow {
         let flag = builder.ciphertext_bool_store_block(flag_block);
@@ -164,6 +199,32 @@ impl Builder {
         cut_off_block: usize,
         split_depth: usize,
     ) -> (CiphertextBlock, Vec<Vec<CiphertextBlock>>) {
+        self.mh_iop_mul_raw_with(
+            src_a_blocks,
+            src_b_blocks,
+            cut_off_block,
+            split_depth,
+            false,
+            false,
+            false,
+        )
+    }
+
+    /// Like [`mh_iop_mul_raw`](Self::mh_iop_mul_raw); with `use_tri`, the limb products use the
+    /// triangular multiplication ([`iop_mul_tri_window`](Self::iop_mul_tri_window)); with
+    /// `csa`, the limb results are recombined with a carry-save reduction and one final adder
+    /// ([`mh_recombine_csa`](Self::mh_recombine_csa)). In both cases the overflow flag is not
+    /// valid.
+    pub fn mh_iop_mul_raw_with(
+        &self,
+        src_a_blocks: &[CiphertextBlock],
+        src_b_blocks: &[CiphertextBlock],
+        cut_off_block: usize,
+        split_depth: usize,
+        use_tri: bool,
+        csa: bool,
+        low_depth: bool,
+    ) -> (CiphertextBlock, Vec<Vec<CiphertextBlock>>) {
         // Compute split structure
         let blocks = if src_a_blocks.len() == src_b_blocks.len() {
             src_a_blocks.len()
@@ -177,6 +238,16 @@ impl Builder {
             panic!("Error: current split only work when blocks is a muliple of mh_factor");
         };
         let limbs_size = (mh_blocks * src_a_blocks[0].spec().message_size() as usize) as u16;
+        // State of a limb product's first window (the second one continues it). In low-depth mode,
+        // the upper half of each limb product (its last `mh_blocks` columns) ends with a
+        // parallel-prefix adder.
+        let limb_state = || {
+            if low_depth {
+                TriMulState::low_depth(mh_blocks)
+            } else {
+                TriMulState::default()
+            }
+        };
 
         let mh_a_blocks = CiphertextLimb::chunks(src_a_blocks, mh_blocks);
         let mh_b_blocks = CiphertextLimb::chunks(src_b_blocks, mh_blocks);
@@ -200,7 +271,42 @@ impl Builder {
                     cut_off_block.saturating_sub(blocks_ofst),
                 );
 
-                let ovf = if relin_cut_off > mh_blocks {
+                let ovf = if use_tri {
+                    let zero = self.block_let_ciphertext(0);
+                    if relin_cut_off > mh_blocks {
+                        self.new_partition(format!("Pp[{i}::{j}]_lsb @{{{}}}", i + j));
+                        let (lsb_res, _, st) = self
+                            .comment(format!("SubMul[{i}][{j}]_lsb"))
+                            .iop_mul_tri_window(
+                                ai,
+                                bj,
+                                relin_cut_off,
+                                (0, mh_blocks),
+                                limb_state(),
+                            );
+                        let lsb_limb = CiphertextLimb::new(i + j, &lsb_res);
+                        limb_map.entry(lsb_limb.offset).or_default().push(lsb_limb);
+
+                        self.new_partition(format!("Pp[{i}::{j}]_msb @{{{}}}", i + j + 1));
+                        let (msb_res, _, _) = self
+                            .comment(format!("SubMul[{i}][{j}]_msb"))
+                            .iop_mul_tri_window(ai, bj, relin_cut_off, (mh_blocks, relin_cut_off), st);
+                        if !msb_res.is_empty() {
+                            let msb_limb = CiphertextLimb::new(i + j + 1, &msb_res);
+                            limb_map.entry(msb_limb.offset).or_default().push(msb_limb);
+                        }
+                    } else {
+                        self.new_partition(format!("Pp[{i}::{j}] @{{{}}}", i + j));
+                        let (cur_res, _, _) = self
+                            .comment(format!("SubMul[{i}][{j}]"))
+                            .iop_mul_tri_window(ai, bj, relin_cut_off, (0, relin_cut_off), limb_state());
+                        if !cur_res.is_empty() {
+                            let cur_limb = CiphertextLimb::new(i + j, &cur_res);
+                            limb_map.entry(cur_limb.offset).or_default().push(cur_limb);
+                        }
+                    }
+                    zero
+                } else if relin_cut_off > mh_blocks {
                     // Compute in two half
                     self.new_partition(format!("Pp[{i}::{j}]_lsb @{{{}}}", i + j));
 
@@ -234,6 +340,14 @@ impl Builder {
                 };
                 overflow_v.push(ovf);
             }
+        }
+
+        if csa {
+            let dst_limb = self.mh_recombine_csa(limb_map, cut_off_block, split_depth);
+            self.new_partition("OverflowReduction");
+            let ovf_flag = self.block_let_ciphertext(0);
+            self.new_partition("Outputs");
+            return (ovf_flag, dst_limb);
         }
 
         // Phase 2 Reduce/Merge:
@@ -321,6 +435,134 @@ impl Builder {
 
         self.new_partition("Outputs");
         (ovf_flag, dst_limb)
+    }
+
+    /// Recombines the limb products with a carry-save reduction.
+    ///
+    /// The tree of full adders per output limb resolves every carry before the next addition
+    /// can start, and the carries ripple from one output limb to the next: about 13 PBS levels
+    /// at 64 bits with split depth 4. Here every limb block is put in its absolute column; each
+    /// column holding more than two blocks is summed and cleaned (message kept, carry sent to
+    /// the next column), a round at a time, without propagating carries, until every column
+    /// holds at most two blocks (two rounds suffice up to seven blocks per column). One
+    /// Hillis-Steele addition of the two remaining numbers ends it, from the first column that
+    /// holds two blocks.
+    ///
+    /// Partitions: one per output limb half, `Csa @{k.h}` (its rounds merged), then `FinalAdd`.
+    /// Out-of-range limbs (only used for overflow) are ignored.
+    fn mh_recombine_csa(
+        &self,
+        mut limb_map: BTreeMap<usize, Vec<CiphertextLimb>>,
+        cut_off_block: usize,
+        split_depth: usize,
+    ) -> Vec<Vec<CiphertextBlock>> {
+        let spec = *self.spec();
+        let mh_blocks = cut_off_block.div_ceil(split_depth);
+        let msg_max = spec.message_mask() as u64;
+        let data_max = spec.data_mask() as u64;
+        let lut2_cap = data_max >> 1;
+        let msg_w = spec.message_size() as u32;
+        let mut columns: Vec<Vec<(CiphertextBlock, u64)>> = vec![Vec::new(); cut_off_block];
+        for k in 0..split_depth {
+            for limb in limb_map.remove(&k).unwrap_or_default() {
+                for (idx, blk) in limb.into_blocks().into_iter().enumerate() {
+                    let col = k * mh_blocks + idx;
+                    if col < cut_off_block {
+                        columns[col].push((blk, msg_max));
+                    }
+                }
+            }
+        }
+        let group = |col: usize| (col / mh_blocks, 2 * (col % mh_blocks) / mh_blocks.max(1));
+        let mut group_parts: BTreeMap<(usize, usize), Vec<PartitionAnnotation>> = BTreeMap::new();
+        let mut round = 0;
+        while columns.iter().any(|c| c.len() > 2) {
+            let mut next: Vec<Vec<(CiphertextBlock, u64)>> = vec![Vec::new(); cut_off_block];
+            let mut current_group = None;
+            for col in 0..cut_off_block {
+                let items = std::mem::take(&mut columns[col]);
+                if items.len() <= 2 {
+                    next[col].extend(items);
+                    continue;
+                }
+                let g = group(col);
+                if current_group != Some(g) {
+                    let p = self.new_partition(format!("Csa r{round} @{{{}.{}}}", g.0, g.1));
+                    group_parts.entry(g).or_default().push(p);
+                    current_group = Some(g);
+                }
+                self.push_comment(format!("csa r{round} col {col}"));
+                let mut items = items;
+                items.sort_by(|x, y| y.1.cmp(&x.1));
+                let last = col + 1 == cut_off_block;
+                let mut it = items.into_iter();
+                let (mut acc, mut acc_max) = it.next().unwrap();
+                let mut acc_nb = 1;
+                let flush = |acc: CiphertextBlock, acc_max: u64, nb: usize, next: &mut Vec<Vec<(CiphertextBlock, u64)>>| {
+                    if nb == 1 {
+                        next[col].push((acc, acc_max));
+                    } else if last {
+                        let m = self.block_lookup(acc, Lut1::msg_only(spec));
+                        next[col].push((m, msg_max));
+                    } else if acc_max <= lut2_cap {
+                        let (m, c) = self.block_lookup2(acc, Lut2::many_carry_msg(spec));
+                        next[col].push((m, acc_max.min(msg_max)));
+                        next[col + 1].push((c, acc_max >> msg_w));
+                    } else {
+                        let c = self.block_lookup(acc, Lut1::carry_in_msg(spec));
+                        let m = self.block_lookup(acc, Lut1::msg_only(spec));
+                        next[col].push((m, msg_max));
+                        next[col + 1].push((c, acc_max >> msg_w));
+                    }
+                };
+                for (ct, ct_max) in it {
+                    if acc_max + ct_max > data_max || acc_nb == NU_BOOL {
+                        flush(acc, acc_max, acc_nb, &mut next);
+                        (acc, acc_max, acc_nb) = (ct, ct_max, 1);
+                        continue;
+                    }
+                    acc = self.block_add(acc, ct);
+                    acc_max += ct_max;
+                    acc_nb += 1;
+                }
+                flush(acc, acc_max, acc_nb, &mut next);
+                self.pop_comment();
+            }
+            columns = next;
+            round += 1;
+        }
+        // One partition per group: merge the rounds.
+        for (_, parts) in group_parts {
+            let mut it = parts.into_iter();
+            let first = it.next().unwrap();
+            it.fold(first, |acc, p| self.merge_partitions(acc, p));
+        }
+
+        // Final addition of the two remaining numbers.
+        let base = columns.iter().position(|c| c.len() == 2).unwrap_or(cut_off_block);
+        let mut digits: Vec<CiphertextBlock> = Vec::with_capacity(cut_off_block);
+        for col in 0..base {
+            let d = match columns[col].first() {
+                Some((b, _)) => *b,
+                None => self.block_let_ciphertext(0),
+            };
+            digits.push(d);
+        }
+        if base < cut_off_block {
+            self.new_partition("FinalAdd");
+            let zero = self.block_let_ciphertext(0);
+            let x: Vec<_> = (base..cut_off_block)
+                .map(|c| columns[c].first().map_or(zero, |b| b.0))
+                .collect();
+            let y: Vec<_> = (base..cut_off_block)
+                .map(|c| columns[c].get(1).map_or(zero, |b| b.0))
+                .collect();
+            let (sum, _) = self
+                .comment("final add".to_string())
+                .iop_add_raw((2 * x.len()) as u16, &x, &y, None);
+            digits.extend(sum);
+        }
+        digits.chunks(mh_blocks).map(|c| c.to_vec()).collect()
     }
 
     /// Overflow Reduction
@@ -591,6 +833,48 @@ mod test {
     }
 
     #[test]
+    fn correctness_mh_mul_tri() {
+        fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
+            let [
+                IopValue::CiphertextInteger(lhs),
+                IopValue::CiphertextInteger(rhs),
+            ] = inp
+            else {
+                unreachable!()
+            };
+            Some(vec![IopValue::CiphertextInteger(lhs.mul_lsb(*rhs))])
+        }
+        for split_depth in SPLIT_DEPTH.iter() {
+            for size in (4 * *split_depth as u16..=128).step_by(2 * *split_depth as usize) {
+                let b = mh_mul_tri(SpecInteger::new(size, 2, 2), *split_depth, true);
+                b.check_noise();
+                b.test_random(50, semantic);
+            }
+        }
+    }
+
+    #[test]
+    fn correctness_mh_mul_low_depth() {
+        fn semantic(inp: &[IopValue]) -> Option<Vec<IopValue>> {
+            let [
+                IopValue::CiphertextInteger(lhs),
+                IopValue::CiphertextInteger(rhs),
+            ] = inp
+            else {
+                unreachable!()
+            };
+            Some(vec![IopValue::CiphertextInteger(lhs.mul_lsb(*rhs))])
+        }
+        for split_depth in SPLIT_DEPTH.iter() {
+            for size in (4 * *split_depth as u16..=128).step_by(2 * *split_depth as usize) {
+                let b = mh_mul_low_depth(SpecInteger::new(size, 2, 2), *split_depth);
+                b.check_noise();
+                b.test_random(50, semantic);
+            }
+        }
+    }
+
+    #[test]
     fn test_mh_mul() {
         let spec = SpecInteger::new(8, 2, 2);
         let ir = mh_mul(spec, 2);
@@ -704,33 +988,30 @@ mod test {
                 @100   // SubMul[1][1] / ovf / merge          | %101 = add_ct(%100, %97);
                 @101   // SubMul[1][1] / ovf / merge          | %102 = add_ct(%101, %99);
                 @102   // SubMul[1][1] / ovf / merge          | %103 = pbs<Protect, Lut1("IsSome")>(%102);
-                @103   // Limb reduce[1] / iter 0             | %104 = let_ct_block<0>();
-                @104   // Limb reduce[1] / iter 0 / 0-th      | %105 = add_ct(%43, %53);
-                @105   // Limb reduce[1] / iter 0 / 0-th      | %106 = add_ct(%105, %104);
-                @106   // Limb reduce[1] / iter 0 / 0-th      | %107, %108 = pbs2<Protect, Lut2("ManyCarryMsg")>(%106);
-                @107   // Limb reduce[1] / iter 0 / 1-th      | %109 = add_ct(%45, %66);
-                @108   // Limb reduce[1] / iter 0 / 1-th      | %110 = add_ct(%109, %108);
-                @109   // Limb reduce[1] / iter 0 / 1-th      | %111, %112 = pbs2<Protect, Lut2("ManyCarryMsg")>(%110);
-                @110   // Limb reduce[1] / iter 1             | %113 = let_ct_block<0>();
-                @111   // Limb reduce[1] / iter 1 / 0-th      | %114 = add_ct(%107, %73);
-                @112   // Limb reduce[1] / iter 1 / 0-th      | %115 = add_ct(%114, %113);
-                @113   // Limb reduce[1] / iter 1 / 0-th      | %116, %117 = pbs2<Protect, Lut2("ManyCarryMsg")>(%115);
-                @114   // Limb reduce[1] / iter 1 / 1-th      | %118 = add_ct(%111, %86);
-                @115   // Limb reduce[1] / iter 1 / 1-th      | %119 = add_ct(%118, %117);
-                @116   // Limb reduce[1] / iter 1 / 1-th      | %120, %121 = pbs2<Protect, Lut2("ManyCarryMsg")>(%119);
-                @117   // Limb_ovf / merge                    | %122 = add_ct(%112, %121);
-                @118   // Limb_ovf / merge                    | %123 = pbs<Protect, Lut1("IsSome")>(%122);
-                @119                                          | %124 = decl_ct<8>();
-                @120                                          | %125 = let_ct_block<0>();
-                @121                                          | %126 = store_ct_block<0>(%125, %124);
-                @122                                          | %127 = store_ct_block<1>(%125, %126);
-                @123                                          | %128 = store_ct_block<2>(%125, %127);
-                @124                                          | %129 = store_ct_block<3>(%125, %128);
-                @125                                          | %130 = store_ct_block<0>(%11, %129);
-                @126                                          | %131 = store_ct_block<1>(%24, %130);
-                @127                                          | %132 = store_ct_block<2>(%116, %131);
-                @128                                          | %133 = store_ct_block<3>(%120, %132);
-                @129                                          | output<0>(%133);
+                @103   // csa r0 col 2                        | %104 = add_ct(%43, %53);
+                @104   // csa r0 col 2                        | %105 = add_ct(%104, %73);
+                @105   // csa r0 col 2                        | %106 = pbs<Protect, Lut1("CarryInMsg")>(%105);
+                @106   // csa r0 col 2                        | %107 = pbs<Protect, Lut1("MsgOnly")>(%105);
+                @107   // csa r0 col 3                        | %108 = add_ct(%45, %66);
+                @108   // csa r0 col 3                        | %109 = add_ct(%108, %86);
+                @109   // csa r0 col 3                        | %110 = pbs<Protect, Lut1("MsgOnly")>(%109);
+                @110                                          | %111 = let_ct_block<0>();
+                @111   // final add                           | %112 = let_ct_block<0>();
+                @112   // final add / 0-th                    | %113 = add_ct(%106, %110);
+                @113   // final add / 0-th                    | %114 = add_ct(%113, %112);
+                @114   // final add / 0-th                    | %115, %116 = pbs2<Protect, Lut2("ManyCarryMsg")>(%114);
+                @115                                          | %117 = let_ct_block<0>();
+                @116                                          | %118 = decl_ct<8>();
+                @117                                          | %119 = let_ct_block<0>();
+                @118                                          | %120 = store_ct_block<0>(%119, %118);
+                @119                                          | %121 = store_ct_block<1>(%119, %120);
+                @120                                          | %122 = store_ct_block<2>(%119, %121);
+                @121                                          | %123 = store_ct_block<3>(%119, %122);
+                @122                                          | %124 = store_ct_block<0>(%11, %123);
+                @123                                          | %125 = store_ct_block<1>(%24, %124);
+                @124                                          | %126 = store_ct_block<2>(%107, %125);
+                @125                                          | %127 = store_ct_block<3>(%115, %126);
+                @126                                          | output<0>(%127);
             "#
         );
     }

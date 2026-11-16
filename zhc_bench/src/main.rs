@@ -136,7 +136,7 @@ fn run_parallel<J: Sync, R: Send>(
 fn cost_rank(iop: &Iop) -> u8 {
     match iop {
         Iop::Div | Iop::Divs | Iop::Mod | Iop::Mods => 0,
-        Iop::Mul | Iop::Muls | Iop::OvfMul | Iop::OvfMuls => 1,
+        Iop::Mul | Iop::MulLowDepth | Iop::Muls | Iop::OvfMul | Iop::OvfMuls => 1,
         _ => 2,
     }
 }

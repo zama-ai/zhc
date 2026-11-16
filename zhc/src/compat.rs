@@ -2,7 +2,7 @@ use zhc_builder::{
     Builder, SIMD_N, SpecInteger, add, add_simd, adds, bitwise_and, bitwise_inv, bitwise_or,
     bitwise_xor, cast, cmp_eq, cmp_gt, cmp_gte, cmp_lt, cmp_lte, cmp_neq, count_0, count_1, div,
     divs, erc7984, erc7984_simd, flip, if_then_else, if_then_zero, ilog2, lead0, lead1, memcpy,
-    mh_mul, mods, mul, muls, overflow_add, overflow_adds, overflow_mul, overflow_muls,
+    mh_mul, mh_mul_low_depth, mods, mul, mul_low_depth, muls, overflow_add, overflow_adds, overflow_mul, overflow_muls,
     overflow_ssub, overflow_sub, overflow_subs, rem, rotate_left, rotate_right, rots_left,
     rots_right, shift_left, shift_right, shifts_left, shifts_right, ssub, sub, subs, sum, trail0,
     trail1,
@@ -25,6 +25,9 @@ pub enum Iop {
     Sub,
     /// Wrapping multiplication of two encrypted integers (LSB result).
     Mul,
+    /// Multiplication with the shortest critical path rather than the fewest PBS, for targets
+    /// whose latency follows the depth (see `Builder::iop_mul_low_depth`).
+    MulLowDepth,
     /// Wrapping multiplication of an encrypted integer by a scalar (`ct * imm`, LSB result).
     Muls,
     Ilog2,
@@ -109,6 +112,7 @@ impl Iop {
         Iop::AddSimd { n: SIMD_N },
         Iop::Sub,
         Iop::Mul,
+        Iop::MulLowDepth,
         Iop::Muls,
         Iop::Ilog2,
         Iop::CountZeros,
@@ -164,6 +168,7 @@ impl Iop {
         Iop::AddSimd { n: 4 * SIMD_N },
         Iop::Sub,
         Iop::Mul,
+        Iop::MulLowDepth,
         Iop::Muls,
         Iop::Ilog2,
         Iop::CountZeros,
@@ -239,6 +244,7 @@ impl Iop {
             Iop::AddSimd { n } => add_simd(spec, *n),
             Iop::Sub => sub(spec),
             Iop::Mul => mul(spec),
+            Iop::MulLowDepth => mul_low_depth(spec),
             Iop::Muls => muls(spec),
             Iop::Ilog2 => ilog2(spec),
             Iop::CountZeros => count_0(spec),
@@ -281,36 +287,72 @@ impl Iop {
             Iop::Sum { n } => sum(spec, *n as usize),
             Iop::MhMul { par_n } => {
                 let schoolbook_depth = std::cmp::max(2, par_n / 2) as usize;
-                let builder = mh_mul(spec, schoolbook_depth);
-                // One group of builder partitions per HPU. Ids are the order in which `mh_mul`
-                // creates its partitions: Pp[i::j] (lsb/msb), then LimbRed, then Outputs.
-                match par_n {
-                    2 => {
-                        builder.group_partitions_id(&[0, 1, 8]);
-                        builder.group_partitions_id(&[2, 3, 5, 6]);
-                    }
-                    4 => {
-                        builder.group_partitions_id(&[3, 5, 6, 8]);
-                        builder.group_partitions_id(&[1]);
-                        builder.group_partitions_id(&[2]);
-                        builder.group_partitions_id(&[0]);
-                    }
-                    8 => {
-                        builder.group_partitions_id(&[0, 7, 23, 35]);
-                        builder.group_partitions_id(&[1, 2, 22]);
-                        builder.group_partitions_id(&[3, 4, 24, 26, 27]);
-                        builder.group_partitions_id(&[5, 6, 28]);
-                        builder.group_partitions_id(&[8, 9, 25]);
-                        builder.group_partitions_id(&[10, 11, 29, 31, 33]);
-                        builder.group_partitions_id(&[13, 18]);
-                        builder.group_partitions_id(&[14, 15, 30, 32]);
-                    }
-                    _ => {
-                        panic!();
-                    }
-                }
+                // From 4 boards, latency follows the depth: low-depth limb products (-9% at 64
+                // bits on 4 and 8 HPUs). On 2 boards each still has a lot of work (+5%), and limbs
+                // of 4 blocks are too short for the depth to matter (32 bits on 8 HPUs: +1%).
+                let limb_blocks = spec.block_count() as usize / schoolbook_depth;
+                let builder = if *par_n >= 4 && limb_blocks >= 8 {
+                    mh_mul_low_depth(spec, schoolbook_depth)
+                } else {
+                    mh_mul(spec, schoolbook_depth)
+                };
+                // One group of builder partitions per HPU, selected by label: the limb products
+                // `Pp[i::j]` (lsb/msb halves), the carry-save recombination `Csa @{k.h}` (output
+                // limb k, half h), `FinalAdd`, `Outputs`. Each recombination partition goes to
+                // the board holding most of its inputs.
+                let boards: &[&[&str]] = match par_n {
+                    2 => &[
+                        &["Pp[0::0]_lsb", "Pp[0::0]_msb", "Outputs"],
+                        &["Pp[0::1]", "Pp[1::0]", "Csa", "FinalAdd"],
+                    ],
+                    4 => &[
+                        &["Pp[1::0]", "Csa", "FinalAdd", "Outputs"],
+                        &["Pp[0::0]_msb"],
+                        &["Pp[0::1]"],
+                        &["Pp[0::0]_lsb"],
+                    ],
+                    8 => &[
+                        &["Pp[0::0]_lsb", "Pp[1::0]_lsb", "Outputs"],
+                        &["Pp[0::0]_msb", "Pp[0::1]_lsb", "@{1.0}", "@{1.1}"],
+                        &["Pp[0::1]_msb", "Pp[0::2]_lsb", "@{2.0}"],
+                        &["Pp[0::2]_msb", "Pp[0::3]"],
+                        &["Pp[1::0]_msb", "Pp[1::1]_lsb", "@{2.1}"],
+                        &["Pp[1::1]_msb", "Pp[1::2]", "@{3.0}"],
+                        &["Pp[2::0]_lsb", "Pp[3::0]", "FinalAdd"],
+                        &["Pp[2::0]_msb", "Pp[2::1]", "@{3.1}"],
+                    ],
+                    _ => panic!(),
+                };
+                group_partitions_by_label(&builder, boards);
                 builder
             }
         }
+    }
+}
+
+/// Groups the builder partitions board by board: a partition goes to the first board with a
+/// pattern that its label starts with, or contains when the pattern starts with `@` (a
+/// position tag such as `@{1.0}`).
+fn group_partitions_by_label(builder: &Builder, boards: &[&[&str]]) {
+    use zhc_ir::partitioning::PartitionPlacement;
+    let mut labels = std::collections::BTreeMap::new();
+    for (_op, part) in builder.partitions().into_iter() {
+        if let PartitionPlacement::Exclusive(pid) = part.placement {
+            labels.insert(pid.0, part.metadata.clone());
+        }
+    }
+    let mut groups: Vec<Vec<u16>> = vec![Vec::new(); boards.len()];
+    for (pid, label) in &labels {
+        let hit = boards.iter().position(|pats| {
+            pats.iter().any(|p| {
+                if p.starts_with('@') { label.contains(p) } else { label.starts_with(p) }
+            })
+        });
+        if let Some(b) = hit {
+            groups[b].push(*pid);
+        }
+    }
+    for g in groups.iter().filter(|g| !g.is_empty()) {
+        builder.group_partitions_id(g);
     }
 }
