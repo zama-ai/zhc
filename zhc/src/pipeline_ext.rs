@@ -19,13 +19,21 @@ pub trait PipelineExt {
     /// assert_eq!(pipeline.get_prototype().get_args_arity(), 1);
     /// ```
     fn with_builder(self, builder: Builder) -> Self;
+
+    /// In-place form of [`with_builder`](Self::with_builder).
+    fn set_builder(&mut self, builder: Builder);
 }
 
 impl PipelineExt for Pipeline {
-    fn with_builder(self, builder: Builder) -> Self {
-        self.with_unchecked_ioplang(builder.ir().clone())
-            .with_partitions(builder.partitions())
-            .with_prototype(builder.signature())
-            .with_ciphertext_block_spec(*builder.spec())
+    fn with_builder(mut self, builder: Builder) -> Self {
+        self.set_builder(builder);
+        self
+    }
+
+    fn set_builder(&mut self, builder: Builder) {
+        self.set_unchecked_ioplang(builder.ir().clone());
+        self.set_partitions(builder.partitions());
+        self.set_prototype(builder.signature());
+        self.set_ciphertext_block_spec(*builder.spec());
     }
 }

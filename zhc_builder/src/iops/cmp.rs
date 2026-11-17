@@ -457,7 +457,7 @@ mod test {
             else {
                 unreachable!()
             };
-            let res = lhs.cgt(*rhs);
+            let res = lhs.cgt(rhs);
             Some(vec![IopValue::CiphertextBool(res)])
         }
         for size in (2..128).step_by(2) {
@@ -475,7 +475,7 @@ mod test {
             else {
                 unreachable!()
             };
-            let res = lhs.cgte(*rhs);
+            let res = lhs.cgte(rhs);
             Some(vec![IopValue::CiphertextBool(res)])
         }
         for size in (2..128).step_by(2) {
@@ -493,7 +493,7 @@ mod test {
             else {
                 unreachable!()
             };
-            let res = lhs.clt(*rhs);
+            let res = lhs.clt(rhs);
             Some(vec![IopValue::CiphertextBool(res)])
         }
         for size in (2..128).step_by(2) {
@@ -511,7 +511,7 @@ mod test {
             else {
                 unreachable!()
             };
-            let res = lhs.clte(*rhs);
+            let res = lhs.clte(rhs);
             Some(vec![IopValue::CiphertextBool(res)])
         }
         for size in (2..128).step_by(2) {
@@ -529,7 +529,7 @@ mod test {
             else {
                 unreachable!()
             };
-            let res = lhs.equal(*rhs);
+            let res = lhs.equal(rhs);
             Some(vec![IopValue::CiphertextBool(res)])
         }
         for size in (2..128).step_by(2) {
@@ -547,7 +547,7 @@ mod test {
             else {
                 unreachable!()
             };
-            let res = lhs.not_equal(*rhs);
+            let res = lhs.not_equal(rhs);
             Some(vec![IopValue::CiphertextBool(res)])
         }
         for size in (2..128).step_by(2) {

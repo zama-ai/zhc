@@ -241,7 +241,7 @@ impl Builder {
                 _ => unreachable!(),
             };
             let sum = self.block_add(raw_sum, carry);
-            let (message, carry_tmp) = self.block_lookup2(sum, Lut2::many_carry_msg(*self.spec()));
+            let [message, carry_tmp] = self.block_lookup2(sum, Lut2::many_carry_msg(*self.spec()));
             carry = carry_tmp;
             output_blocks.push(message);
             self.pop_comment();
@@ -335,8 +335,7 @@ impl Builder {
             .map_first(|sum| {
                 [
                     self.comment("G0-B0")
-                        .block_lookup2(sum[0], Lut2::many_carry_msg(*self.spec()))
-                        .1,
+                        .block_lookup2(sum[0], Lut2::many_carry_msg(*self.spec()))[1],
                     self.comment("G0-B1")
                         .block_lookup(sum[1], Lut1::extract_prop_group0(*self.spec())),
                     self.comment("G0-B2")
@@ -509,10 +508,7 @@ impl Builder {
         self.pop_comment();
 
         self.push_comment("Carry propagation");
-        let mut result = svec![
-            self.block_lookup2(&sums[0], Lut2::many_carry_msg(*self.spec()))
-                .0
-        ];
+        let mut result = svec![self.block_lookup2(&sums[0], Lut2::many_carry_msg(*self.spec()))[0]];
         result.extend(
             (sums.into_iter().skip(1), carries.into_iter())
                 .mzip()
@@ -671,7 +667,7 @@ mod test {
             else {
                 unreachable!()
             };
-            Some(vec![IopValue::CiphertextInteger(lhs.add(*rhs))])
+            Some(vec![IopValue::CiphertextInteger(lhs.add(rhs))])
         }
         for size in (2..128).step_by(2) {
             add_hillis_steele(SpecInteger::new(size, 2, 2)).test_random(100, semantic);
@@ -688,7 +684,7 @@ mod test {
             else {
                 unreachable!()
             };
-            Some(vec![IopValue::CiphertextInteger(lhs.add(*rhs))])
+            Some(vec![IopValue::CiphertextInteger(lhs.add(rhs))])
         }
         for size in (2..128).step_by(2) {
             add_ripple_carry(SpecInteger::new(size, 2, 2)).test_random(100, semantic);
@@ -705,7 +701,7 @@ mod test {
             else {
                 unreachable!()
             };
-            Some(vec![IopValue::CiphertextInteger(lhs.add(*rhs))])
+            Some(vec![IopValue::CiphertextInteger(lhs.add(rhs))])
         }
         for size in (2..128).step_by(2) {
             add(SpecInteger::new(size, 2, 2)).test_random(100, semantic);
@@ -724,7 +720,7 @@ mod test {
                     else {
                         unreachable!()
                     };
-                    vec![IopValue::CiphertextInteger(lhs.add(*rhs))]
+                    vec![IopValue::CiphertextInteger(lhs.add(rhs))]
                 })
                 .collect::<Vec<_>>()
                 .into()
@@ -744,7 +740,7 @@ mod test {
             else {
                 unreachable!()
             };
-            let (sum, flag) = lhs.overflow_add(*rhs);
+            let (sum, flag) = lhs.overflow_add(rhs);
             Some(vec![
                 IopValue::CiphertextInteger(sum),
                 IopValue::CiphertextBool(flag),

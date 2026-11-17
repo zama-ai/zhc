@@ -1,0 +1,18 @@
+[package]
+name = "zhc_iops_r2l"
+description = "ZHC: Rust bindings to the proven integer operations exported by the Lean code"
+version.workspace = true
+edition.workspace = true
+license = "BSD-3-Clause-Clear AND Apache-2.0"
+repository.workspace = true
+publish = false
+links = "zhc_lean"
+
+[dependencies]
+zhc_builder.workspace = true
+zhc_iops_l2r.workspace = true
+zhc_leanrt_sys.workspace = true
+zhc_leaninit_sys.workspace = true
+
+[build-dependencies]
+cc = "1.4"

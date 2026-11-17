@@ -298,7 +298,7 @@ mod test {
             else {
                 unreachable!()
             };
-            Some(vec![IopValue::CiphertextInteger(lhs.mul_lsb(*rhs))])
+            Some(vec![IopValue::CiphertextInteger(lhs.mul_lsb(rhs))])
         }
         for size in (2..128).step_by(2) {
             mul(SpecInteger::new(size, 2, 2)).test_random(100, semantic);
@@ -315,7 +315,7 @@ mod test {
             else {
                 unreachable!()
             };
-            let (product, flag) = lhs.overflow_mul_lsb(*rhs);
+            let (product, flag) = lhs.overflow_mul_lsb(rhs);
             Some(vec![
                 IopValue::CiphertextInteger(product),
                 IopValue::CiphertextBool(flag),

@@ -160,6 +160,72 @@ fn mac_rejects_out_of_range_factor() {
     builder.block_wrapping_mac(a, b, (SPEC.complete_mask() + 1) as u8);
 }
 
+#[test]
+#[should_panic(expected = "different builder")]
+fn block_op_rejects_block_of_other_builder() {
+    let builder = Builder::new(SPEC);
+    let other = Builder::new(SPEC);
+    let a = builder.block_let_ciphertext(1);
+    let b = other.block_let_ciphertext(1);
+    builder.block_add(a, b);
+}
+
+#[test]
+#[should_panic(expected = "different builder")]
+fn block_op_rejects_plaintext_block_of_other_builder() {
+    let builder = Builder::new(SPEC);
+    let other = Builder::new(SPEC);
+    let a = builder.block_let_ciphertext(1);
+    let b = other.block_let_plaintext(1);
+    builder.block_add_plaintext(a, b);
+}
+
+#[test]
+#[should_panic(expected = "different builder")]
+fn output_rejects_integer_of_other_builder() {
+    let builder = Builder::new(SPEC);
+    let other = Builder::new(SPEC);
+    let x = other.ciphertext_integer_input(8);
+    builder.ciphertext_integer_output(x);
+}
+
+#[test]
+#[should_panic(expected = "different builder")]
+fn split_rejects_plaintext_integer_of_other_builder() {
+    let builder = Builder::new(SPEC);
+    let other = Builder::new(SPEC);
+    let x = other.plaintext_integer_input(8);
+    builder.plaintext_integer_split(x);
+}
+
+#[test]
+#[should_panic(expected = "different builder")]
+fn output_rejects_bool_of_other_builder() {
+    let builder = Builder::new(SPEC);
+    let other = Builder::new(SPEC);
+    let x = other.ciphertext_bool_input();
+    builder.ciphertext_bool_output(x);
+}
+
+#[test]
+#[should_panic(expected = "different builder")]
+fn join_rejects_block_of_other_builder() {
+    let builder = Builder::new(SPEC);
+    let other = Builder::new(SPEC);
+    let a = builder.block_let_ciphertext(1);
+    let b = other.block_let_ciphertext(1);
+    builder.ciphertext_integer_join([a, b], None);
+}
+
+#[test]
+fn clone_and_comment_accept_values_of_the_source_builder() {
+    let builder = Builder::new(SPEC);
+    let a = builder.block_let_ciphertext(1);
+    let b = builder.clone().block_let_ciphertext(1);
+    let c = builder.comment("child").block_add(a, b);
+    builder.block_add(a, c);
+}
+
 /// Wrapping `0 - x` is the two's complement of `x` on the complete width.
 #[test]
 fn wrapping_plaintext_sub_from_zero_negates() {
@@ -405,7 +471,7 @@ fn lookup2_matches_crypto() {
             .ok()
             .map(|(o0, o1)| vec![o0, o1]);
         let got = run(&[a], |bd, x| {
-            let (o0, o1) = bd.block_lookup2(x[0], table.clone());
+            let [o0, o1] = bd.block_lookup2(x[0], table.clone());
             vec![o0, o1]
         });
         assert_eq!(got, expected, "lookup2 on {a:#b}");
@@ -456,7 +522,7 @@ fn many_lut_checks_match_crypto() {
                 .ok()
                 .map(|(o0, o1)| vec![o0, o1]);
             let got = run(&[a], |bd, x| {
-                let (o0, o1) = bd.block_lookup2_with(x[0], table.clone(), check);
+                let [o0, o1] = bd.block_lookup2_with(x[0], table.clone(), check);
                 vec![o0, o1]
             });
             assert_eq!(got, expected, "lookup2 {check:?} on {a:#b}");

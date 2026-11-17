@@ -24,9 +24,10 @@ use crate::{
     },
 };
 use std::{
-    cell::{Ref, RefCell, RefMut},
+    cell::{Cell, Ref, RefCell, RefMut},
     fmt::Debug,
     iter::repeat_n,
+    marker::PhantomData,
     rc::Rc,
 };
 use zhc_crypto::integer_semantics::{
@@ -136,13 +137,50 @@ impl InnerBuilder {
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Builder {
+    id: BuilderId,
     spec: SpecBlock,
     inner: Rc<RefCell<InnerBuilder>>,
     hierarchy: RefCell<Hierarchy>,
     partition: RefCell<PartitionAnnotation>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct BuilderId(u32, PhantomData<*const ()>);
+
+impl BuilderId {
+    fn fresh() -> Self {
+        thread_local! {
+            static NEXT: Cell<u32> = const { Cell::new(0) };
+        }
+        let id = NEXT.get();
+        let next = id
+            .checked_add(1)
+            .expect("Tried to create a builder, but all the builder ids are already used.");
+        NEXT.set(next);
+        BuilderId(id, PhantomData)
+    }
+}
+
+pub(super) trait BuilderIded {
+    fn bid(&self) -> BuilderId;
+}
+
+impl BuilderIded for Builder {
+    fn bid(&self) -> BuilderId {
+        self.id
+    }
+}
+
 impl Builder {
+    fn check<'a, T: BuilderIded>(&self, value: &'a T) -> &'a T {
+        assert_eq!(
+            value.bid(),
+            self.bid(),
+            "Tried to use a value that comes from a different builder."
+        );
+        value
+    }
+
     fn inner(&self) -> Ref<'_, InnerBuilder> {
         self.inner.borrow()
     }
@@ -173,6 +211,7 @@ impl Builder {
     /// ```
     pub fn new(spec: SpecBlock) -> Self {
         Self {
+            id: BuilderId::fresh(),
             spec,
             inner: Rc::new(RefCell::new(InnerBuilder {
                 ir: IR::empty(),
@@ -391,6 +430,7 @@ impl Builder {
         let hierarchy = self.hierarchy.clone();
         hierarchy.borrow_mut().push(comment.into());
         Builder {
+            id: self.id,
             spec: self.spec,
             inner: self.inner.clone(),
             hierarchy,
@@ -650,6 +690,7 @@ impl Builder {
         );
         CiphertextInteger {
             valid: inp[0],
+            bid: self.id,
             spec,
         }
     }
@@ -681,6 +722,7 @@ impl Builder {
         );
         CiphertextBool {
             valid: inp[0],
+            bid: self.id,
             spec: self.spec,
         }
     }
@@ -714,12 +756,13 @@ impl Builder {
         assert_eq!(block.spec(), self.spec, "Spec mismatch.");
         let (_, ret) = self.inner_mut().insert_op(
             IopInstructionSet::StoreCiphertextBoolBlock,
-            svec![block.valid],
+            svec![self.check(block).valid],
             self.current_hierarchy(),
             self.current_partition(),
         );
         CiphertextBool {
             valid: ret[0],
+            bid: self.id,
             spec: self.spec,
         }
     }
@@ -743,12 +786,13 @@ impl Builder {
         let value = value.as_ref();
         let (_, ret) = self.inner_mut().insert_op(
             IopInstructionSet::ExtractCiphertextBoolBlock,
-            svec![value.valid],
+            svec![self.check(value).valid],
             self.current_hierarchy(),
             self.current_partition(),
         );
         CiphertextBlock {
             valid: ret[0],
+            bid: self.id,
             spec: value.spec,
         }
     }
@@ -774,7 +818,7 @@ impl Builder {
             .push_ret_type(Type::CiphertextBool(value.spec));
         self.inner_mut().insert_op(
             IopInstructionSet::OutputCiphertextBool { pos },
-            svec![value.valid],
+            svec![self.check(value).valid],
             self.current_hierarchy(),
             self.current_partition(),
         );
@@ -807,6 +851,7 @@ impl Builder {
         );
         CiphertextInteger {
             valid: ret[0],
+            bid: self.id,
             spec,
         }
     }
@@ -844,12 +889,13 @@ impl Builder {
         );
         let (_, ret) = self.inner_mut().insert_op(
             IopInstructionSet::StoreCiphertextIntegerBlock { index },
-            svec![block.valid, ct.valid],
+            svec![self.check(block).valid, self.check(ct).valid],
             self.current_hierarchy(),
             self.current_partition(),
         );
         CiphertextInteger {
             valid: ret[0],
+            bid: self.id,
             spec: ct.spec(),
         }
     }
@@ -885,12 +931,13 @@ impl Builder {
         );
         let (_, ret) = self.inner_mut().insert_op(
             IopInstructionSet::ExtractCiphertextIntegerBlock { index },
-            svec![ct.valid],
+            svec![self.check(ct).valid],
             self.current_hierarchy(),
             self.current_partition(),
         );
         CiphertextBlock {
             valid: ret[0],
+            bid: self.id,
             spec: self.spec,
         }
     }
@@ -919,12 +966,13 @@ impl Builder {
             .map(|index| {
                 let (_, ret) = self.inner_mut().insert_op(
                     IopInstructionSet::ExtractCiphertextIntegerBlock { index },
-                    svec![inp.valid],
+                    svec![self.check(inp).valid],
                     self.current_hierarchy(),
                     self.current_partition(),
                 );
                 CiphertextBlock {
                     valid: ret[0],
+                    bid: self.id,
                     spec: self.spec,
                 }
             })
@@ -962,6 +1010,7 @@ impl Builder {
         );
         PlaintextInteger {
             valid: inp[0],
+            bid: self.id,
             spec,
         }
     }
@@ -997,12 +1046,13 @@ impl Builder {
         );
         let (_, ret) = self.inner_mut().insert_op(
             IopInstructionSet::ExtractPlaintextIntegerBlock { index },
-            svec![pt.valid],
+            svec![self.check(pt).valid],
             self.current_hierarchy(),
             self.current_partition(),
         );
         PlaintextBlock {
             valid: ret[0],
+            bid: self.id,
             spec: self.spec,
         }
     }
@@ -1031,12 +1081,13 @@ impl Builder {
             .map(|index| {
                 let (_, ret) = self.inner_mut().insert_op(
                     IopInstructionSet::ExtractPlaintextIntegerBlock { index },
-                    svec![inp.valid],
+                    svec![self.check(inp).valid],
                     self.current_hierarchy(),
                     self.current_partition(),
                 );
                 PlaintextBlock {
                     valid: ret[0],
+                    bid: self.id,
                     spec: self.spec,
                 }
             })
@@ -1117,13 +1168,17 @@ impl Builder {
             let index = index.sas::<u8>();
             let (_, ret) = self.inner_mut().insert_op(
                 IopInstructionSet::StoreCiphertextIntegerBlock { index },
-                svec![block.valid, acc],
+                svec![self.check(block).valid, acc],
                 self.current_hierarchy(),
                 self.current_partition(),
             );
             acc = ret[0];
         }
-        CiphertextInteger { valid: acc, spec }
+        CiphertextInteger {
+            valid: acc,
+            spec,
+            bid: self.id,
+        }
     }
 
     /// Creates a new IR node that aliases an existing ciphertext.
@@ -1149,12 +1204,13 @@ impl Builder {
             IopInstructionSet::Inspect {
                 typ: IopTypeSystem::CiphertextInteger,
             },
-            svec![src.valid],
+            svec![self.check(src).valid],
             self.current_hierarchy(),
             self.current_partition(),
         );
         CiphertextInteger {
             valid: ret[0],
+            bid: self.id,
             spec: src.spec(),
         }
     }
@@ -1180,7 +1236,7 @@ impl Builder {
             .push_ret_type(Type::CiphertextInteger(ct.spec()));
         self.inner_mut().insert_op(
             IopInstructionSet::OutputCiphertextInteger { pos },
-            svec![ct.valid],
+            svec![self.check(ct).valid],
             self.current_hierarchy(),
             self.current_partition(),
         );
@@ -1215,6 +1271,7 @@ impl Builder {
         );
         PlaintextBlock {
             valid: ret[0],
+            bid: self.id,
             spec: self.spec,
         }
     }
@@ -1264,7 +1321,7 @@ impl Builder {
             IopInstructionSet::Inspect {
                 typ: IopTypeSystem::CiphertextBlock,
             },
-            svec![src.as_ref().valid],
+            svec![self.check(src.as_ref()).valid],
         )
     }
 
@@ -1278,6 +1335,7 @@ impl Builder {
         );
         CiphertextBlock {
             valid: ret[0],
+            bid: self.id,
             spec: self.spec,
         }
     }
@@ -1297,6 +1355,7 @@ impl Builder {
         assert_eq!(ret.len(), N);
         std::array::from_fn(|i| CiphertextBlock {
             valid: ret[i],
+            bid: self.id,
             spec: self.spec,
         })
     }
@@ -1315,7 +1374,10 @@ impl Builder {
     ) -> CiphertextBlock {
         self.emit_block(
             IopInstructionSet::AddCt { flavor },
-            svec![src_a.as_ref().valid, src_b.as_ref().valid],
+            svec![
+                self.check(src_a.as_ref()).valid,
+                self.check(src_b.as_ref()).valid
+            ],
         )
     }
 
@@ -1397,7 +1459,10 @@ impl Builder {
     ) -> CiphertextBlock {
         self.emit_block(
             IopInstructionSet::SubCt { flavor },
-            svec![src_a.as_ref().valid, src_b.as_ref().valid],
+            svec![
+                self.check(src_a.as_ref()).valid,
+                self.check(src_b.as_ref()).valid
+            ],
         )
     }
 
@@ -1477,7 +1542,7 @@ impl Builder {
         );
         self.emit_block(
             IopInstructionSet::ShlCt { amount, flavor },
-            svec![src.as_ref().valid],
+            svec![self.check(src.as_ref()).valid],
         )
     }
 
@@ -1536,7 +1601,10 @@ impl Builder {
     ) -> CiphertextBlock {
         self.emit_block(
             IopInstructionSet::AddPt { flavor },
-            svec![src_a.as_ref().valid, src_b.as_ref().valid],
+            svec![
+                self.check(src_a.as_ref()).valid,
+                self.check(src_b.as_ref()).valid
+            ],
         )
     }
 
@@ -1610,7 +1678,10 @@ impl Builder {
     ) -> CiphertextBlock {
         self.emit_block(
             IopInstructionSet::SubPt { flavor },
-            svec![src_a.as_ref().valid, src_b.as_ref().valid],
+            svec![
+                self.check(src_a.as_ref()).valid,
+                self.check(src_b.as_ref()).valid
+            ],
         )
     }
 
@@ -1673,7 +1744,10 @@ impl Builder {
     ) -> CiphertextBlock {
         self.emit_block(
             IopInstructionSet::PtSub { flavor },
-            svec![src_a.as_ref().valid, src_b.as_ref().valid],
+            svec![
+                self.check(src_a.as_ref()).valid,
+                self.check(src_b.as_ref()).valid
+            ],
         )
     }
 
@@ -1738,7 +1812,10 @@ impl Builder {
     ) -> CiphertextBlock {
         self.emit_block(
             IopInstructionSet::MulPt { flavor },
-            svec![src_a.as_ref().valid, src_b.as_ref().valid],
+            svec![
+                self.check(src_a.as_ref()).valid,
+                self.check(src_b.as_ref()).valid
+            ],
         )
     }
 
@@ -1808,7 +1885,10 @@ impl Builder {
         );
         self.emit_block(
             IopInstructionSet::PackCt { mul, flavor },
-            svec![src_a.as_ref().valid, src_b.as_ref().valid],
+            svec![
+                self.check(src_a.as_ref()).valid,
+                self.check(src_b.as_ref()).valid
+            ],
         )
     }
 
@@ -2037,7 +2117,7 @@ impl Builder {
         assert_eq!(*lut.spec(), self.spec, "LUT spec mismatch.");
         self.emit_block(
             IopInstructionSet::Pbs { check, lut },
-            svec![src.as_ref().valid],
+            svec![self.check(src.as_ref()).valid],
         )
     }
 
@@ -2133,13 +2213,13 @@ impl Builder {
         src: impl AsRef<CiphertextBlock>,
         lut: Lut2,
         check: LookupCheck,
-    ) -> (CiphertextBlock, CiphertextBlock) {
+    ) -> [CiphertextBlock; 2] {
         assert_eq!(*lut.spec(), self.spec, "LUT spec mismatch.");
         let [o0, o1] = self.emit_blocks::<2>(
             IopInstructionSet::Pbs2 { check, lut },
-            svec![src.as_ref().valid],
+            svec![self.check(src.as_ref()).valid],
         );
-        (o0, o1)
+        [o0, o1]
     }
 
     /// Applies a dual-output programmable bootstrapping (PBS) lookup to a block.
@@ -2159,13 +2239,13 @@ impl Builder {
     /// let ct = builder.ciphertext_integer_input(4);
     /// let blocks = builder.ciphertext_integer_split(&ct);
     /// let packed = builder.block_pack(&blocks[1], &blocks[0]);
-    /// let (msg, carry) = builder.block_lookup2(&packed, Lut2::many_carry_msg(*builder.spec()));
+    /// let [msg, carry] = builder.block_lookup2(&packed, Lut2::many_carry_msg(*builder.spec()));
     /// ```
     pub fn block_lookup2(
         &self,
         src: impl AsRef<CiphertextBlock>,
         lut: Lut2,
-    ) -> (CiphertextBlock, CiphertextBlock) {
+    ) -> [CiphertextBlock; 2] {
         self.block_lookup2_with(src, lut, LookupCheck::Protect)
     }
 
@@ -2189,7 +2269,7 @@ impl Builder {
         assert_eq!(*lut.spec(), self.spec, "LUT spec mismatch.");
         self.emit_blocks::<4>(
             IopInstructionSet::Pbs4 { check, lut },
-            svec![src.as_ref().valid],
+            svec![self.check(src.as_ref()).valid],
         )
     }
 
@@ -2243,7 +2323,7 @@ impl Builder {
         assert_eq!(*lut.spec(), self.spec, "LUT spec mismatch.");
         self.emit_blocks::<8>(
             IopInstructionSet::Pbs8 { check, lut },
-            svec![src.as_ref().valid],
+            svec![self.check(src.as_ref()).valid],
         )
     }
 
@@ -2471,7 +2551,7 @@ impl Builder {
         &self,
         blocks: impl AsRef<[CiphertextBlock]>,
         lut: Lut2,
-    ) -> Vec<(CiphertextBlock, CiphertextBlock)> {
+    ) -> Vec<[CiphertextBlock; 2]> {
         blocks
             .as_ref()
             .iter()
@@ -2802,6 +2882,11 @@ impl Builder {
     /// ```
     pub fn dump_noise(&self) {
         analyze_noise(&*self.ir(), &self.spec()).dump();
+    }
+
+    /// String form of [`dump_noise`](Self::dump_noise).
+    pub fn dump_noise_to_string(&self) -> String {
+        analyze_noise(&*self.ir(), &self.spec()).dump_to_string()
     }
 
     /// Asserts that the circuit built so far stays within the noise budget.

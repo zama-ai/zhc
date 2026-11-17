@@ -21,10 +21,10 @@
 //!   first half of the table is reached.
 //!
 //! An __integer__ is then, just a sequence of __blocks__, whose `message_bits` regions
-//! can be aggregated in order to reconstruct the large encoded value. Of paramount importance is
-//! the fact that only __clean__ blocks can be set in an __integer__. Indeed, the encoding does not
-//! automatically propagate the carries: It is up to the users to propagates carries between blocks
-//! before aggregating the ciphertext.
+//! can be aggregated in order to reconstruct the large encoded value. Any block can be set in an
+//! __integer__, but the value of the __integer__ can only be read when all its blocks are
+//! __clean__. Indeed, the encoding does not automatically propagate the carries: It is up to the
+//! users to propagate carries between blocks before aggregating the ciphertext.
 //!
 //! Operations with plaintext values can be emulated as well. The [EmulatedPlaintextInteger] and
 //! [EmulatedPlaintextBlock] structures mirror the radix decomposition of ciphertexts. Plaintext

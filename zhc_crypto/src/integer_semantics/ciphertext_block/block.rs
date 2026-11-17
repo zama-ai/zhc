@@ -107,10 +107,10 @@ impl EmulatedCiphertextBlock {
 
     /// Checks whether this block contains only message bits.
     ///
-    /// Returns true if both carry and padding bits are zero. A block must be message-only
-    /// before it can be written back into an
-    /// [`EmulatedCiphertextInteger`](super::super::EmulatedCiphertextInteger)
-    /// via [`set_block`](super::super::EmulatedCiphertextInteger::set_block).
+    /// Returns true if both carry and padding bits are zero. All the blocks of an
+    /// [`EmulatedCiphertextInteger`](super::super::EmulatedCiphertextInteger) must be
+    /// message-only before its value can be read with
+    /// [`as_storage`](super::super::EmulatedCiphertextInteger::as_storage).
     pub fn is_message_only(&self) -> bool {
         (self.raw_complete_bits() >> self.spec.message_size()) == 0
     }

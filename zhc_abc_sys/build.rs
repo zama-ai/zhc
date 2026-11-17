@@ -35,7 +35,8 @@ fn main() {
 
     cc::Build::new()
         .file(manifest_dir.join("csrc/zhc_abc.c"))
-        .include(abc_src.join("src"))
+        .flag("-isystem")
+        .flag(abc_src.join("src").to_str().unwrap())
         .define("ABC_USE_STDINT_H", "1")
         .define("ABC_USE_PTHREADS", None)
         .flag_if_supported("-Wno-unused-function")

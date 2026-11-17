@@ -79,7 +79,7 @@ mod test {
             let [IopValue::CiphertextInteger(src)] = inp else {
                 unreachable!()
             };
-            Some(vec![IopValue::CiphertextInteger(*src)])
+            Some(vec![IopValue::CiphertextInteger(src.clone())])
         }
         // From 2 bits, i.e. from the single-block case that needs stream padding.
         for size in (2..128).step_by(2) {

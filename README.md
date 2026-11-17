@@ -59,10 +59,10 @@ To work on the compiler itself, clone the repository and make sure you have Rust
 ```shell
 git clone https://github.com/zama-ai/zhc
 cd zhc
-make test          # cargo test --release
-make check         # warnings as errors, docs build
-make big-test      # ignored tests: differential checks on every operation
-make bench         # predicted latency for every operation and bit width
+make zhc-test          # cargo test --release
+make zhc-check         # warnings as errors, docs build
+make zhc-big-test      # ignored tests: differential checks on every operation
+make zhc-bench         # predicted latency for every operation and bit width
 ```
 
 The CPU target depends on tfhe-rs and is built and tested separately:

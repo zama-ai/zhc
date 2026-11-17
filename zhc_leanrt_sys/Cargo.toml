@@ -1,0 +1,16 @@
+[package]
+name = "zhc_leanrt_sys"
+description = "ZHC: The Lean 4 runtime, built from source without GMP"
+version.workspace = true
+edition.workspace = true
+license = "BSD-3-Clause-Clear AND Apache-2.0"
+repository.workspace = true
+publish = false
+links = "leanrt"
+build = "build.rs"
+
+[dependencies]
+
+[build-dependencies]
+cc.workspace = true
+pkg-config = "0.3"

@@ -62,10 +62,10 @@ impl Builder {
                 .map(|(a, b)| {
                     // Mask each value both ways depending on the conditition
                     let packed_a = self.block_pack(&cond_block, a);
-                    let (a_if_true, a_if_false) = self.block_lookup2(&packed_a, masks.clone());
+                    let [a_if_true, a_if_false] = self.block_lookup2(&packed_a, masks.clone());
 
                     let packed_b = self.block_pack(&cond_block, b);
-                    let (b_if_true, b_if_false) = self.block_lookup2(&packed_b, masks.clone());
+                    let [b_if_true, b_if_false] = self.block_lookup2(&packed_b, masks.clone());
 
                     // Crossing the masks is the swap; one operand per add is zero.
                     // Bootstrap the sums so the outputs are fresh.
@@ -149,8 +149,8 @@ mod test {
             };
             let (x, y) = if cond.as_bool() { (b, a) } else { (a, b) };
             Some(vec![
-                IopValue::CiphertextInteger(*x),
-                IopValue::CiphertextInteger(*y),
+                IopValue::CiphertextInteger(x.clone()),
+                IopValue::CiphertextInteger(y.clone()),
             ])
         }
         for size in (2..=128).step_by(2) {

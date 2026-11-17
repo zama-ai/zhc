@@ -204,15 +204,15 @@ mod test {
         else {
             unreachable!()
         };
-        if from >= amount {
+        if from.as_storage() >= amount.as_storage() {
             Some(vec![
-                IopValue::CiphertextInteger(from.sub(*amount)),
-                IopValue::CiphertextInteger(to.add(*amount)),
+                IopValue::CiphertextInteger(from.sub(amount)),
+                IopValue::CiphertextInteger(to.add(amount)),
             ])
         } else {
             Some(vec![
-                IopValue::CiphertextInteger(*from),
-                IopValue::CiphertextInteger(*to),
+                IopValue::CiphertextInteger(from.clone()),
+                IopValue::CiphertextInteger(to.clone()),
             ])
         }
     }
@@ -237,15 +237,15 @@ mod test {
                     else {
                         unreachable!()
                     };
-                    if from >= amount {
+                    if from.as_storage() >= amount.as_storage() {
                         vec![
-                            IopValue::CiphertextInteger(from.sub(*amount)),
-                            IopValue::CiphertextInteger(to.add(*amount)),
+                            IopValue::CiphertextInteger(from.sub(amount)),
+                            IopValue::CiphertextInteger(to.add(amount)),
                         ]
                     } else {
                         vec![
-                            IopValue::CiphertextInteger(*from),
-                            IopValue::CiphertextInteger(*to),
+                            IopValue::CiphertextInteger(from.clone()),
+                            IopValue::CiphertextInteger(to.clone()),
                         ]
                     }
                 })

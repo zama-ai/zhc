@@ -493,7 +493,7 @@ impl Builder {
                     // only has room for two terms.
                     let many_capacity = self.spec().data_mask().sas::<usize>() >> 1;
                     if acc_nu * self.spec().message_mask().sas::<usize>() <= many_capacity {
-                        let (msg, carry) =
+                        let [msg, carry] =
                             self.block_lookup2(acc_ct, Lut2::many_carry_msg(*self.spec()));
                         nxt_stage.push(carry);
                         acc_ct = msg;
@@ -581,7 +581,7 @@ mod test {
             else {
                 unreachable!()
             };
-            Some(vec![IopValue::CiphertextInteger(lhs.mul_lsb(*rhs))])
+            Some(vec![IopValue::CiphertextInteger(lhs.mul_lsb(rhs))])
         }
         for split_depth in SPLIT_DEPTH.iter() {
             for size in (4 * *split_depth as u16..64).step_by(2 * *split_depth as usize) {
