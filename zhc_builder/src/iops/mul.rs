@@ -84,7 +84,8 @@ impl Builder {
         if Self::mul_tri_is_better(src_a_blocks.len(), src_b_blocks.len(), cut) {
             self.iop_mul_lsb_raw(src_a_blocks, src_b_blocks, cut_off_block)
         } else {
-            self.iop_mul_raw(src_a_blocks, src_b_blocks, cut_off_block).0
+            self.iop_mul_raw(src_a_blocks, src_b_blocks, cut_off_block)
+                .0
         }
     }
 
@@ -99,8 +100,14 @@ impl Builder {
         cut_off_block: u8,
     ) -> Vec<CiphertextBlock> {
         let cut = cut_off_block.sas::<usize>();
-        self.iop_mul_tri_window(src_a_blocks, src_b_blocks, cut, (0, cut), TriMulState::default())
-            .0
+        self.iop_mul_tri_window(
+            src_a_blocks,
+            src_b_blocks,
+            cut,
+            (0, cut),
+            TriMulState::default(),
+        )
+        .0
     }
 
     /// Computes the columns `range.0..range.1` of `a * b mod 4^total_cut`.
@@ -109,17 +116,17 @@ impl Builder {
     /// `g(x) = x (x - 3) / 2` (any `f(s) = s^2 / 2 + c s`, `g(x) = x^2 / 2 + c x` works; `c = -3/2`
     /// makes `g` the smallest: `g(0..=3) = 0, -1, -1, 0`).
     ///
-    /// * Expansion: for every pair `(i, j)` with `i + j` in the range, `s = a_i + b_j <= 6 < 8`,
-    ///   so one many-LUT PBS gives both base-4 digits of `f(s) + 1` in `0..=10`: low (at most 3)
-    ///   in column `i + j`, high (at most 2) in column `i + j + 1`. The `+1` per pair adds the
-    ///   known constant `N = sum 4^(i + j)`, subtracted as plaintext digits during the reduction.
+    /// * Expansion: for every pair `(i, j)` with `i + j` in the range, `s = a_i + b_j <= 6 < 8`, so
+    ///   one many-LUT PBS gives both base-4 digits of `f(s) + 1` in `0..=10`: low (at most 3) in
+    ///   column `i + j`, high (at most 2) in column `i + j + 1`. The `+1` per pair adds the known
+    ///   constant `N = sum 4^(i + j)`, subtracted as plaintext digits during the reduction.
     /// * Corrections: over the pairs `i < La, j < Lb, i + j < C`, the subtracted `g` terms sum to
-    ///   `+(U - V) / 3 mod 4^C`, with `U = sum g(a_k) 4^k + sum g(b_k) 4^k` and
-    ///   `V = sum g(a_i) 4^(i + Lb) + sum g(b_j) 4^(j + La)` (terms at or above `C` vanish). Digit
-    ///   `d_k` of `U - V` involves at most two input digits (one PBS) and lies in `-2..=2`. The
-    ///   exact 2-adic division by 3 is a carry chain: `v_k = d_k + rho_(k-1)`,
-    ///   `m_k = 3 v_k mod 4`, `rho_k = (v_k - 3 m_k) / 4`. With offsets from interval bounds, its
-    ///   input stays below 8, so one many-LUT PBS gives both `m_k` and the next carry.
+    ///   `+(U - V) / 3 mod 4^C`, with `U = sum g(a_k) 4^k + sum g(b_k) 4^k` and `V = sum g(a_i)
+    ///   4^(i + Lb) + sum g(b_j) 4^(j + La)` (terms at or above `C` vanish). Digit `d_k` of `U - V`
+    ///   involves at most two input digits (one PBS) and lies in `-2..=2`. The exact 2-adic
+    ///   division by 3 is a carry chain: `v_k = d_k + rho_(k-1)`, `m_k = 3 v_k mod 4`, `rho_k =
+    ///   (v_k - 3 m_k) / 4`. With offsets from interval bounds, its input stays below 8, so one
+    ///   many-LUT PBS gives both `m_k` and the next carry.
     /// * Reduction: columns are summed with bound tracking, then cleaned (carry and message).
     ///
     /// The state carries the columns at or above `range.1` and the chain, so that a later call
@@ -135,11 +142,26 @@ impl Builder {
         total_cut: usize,
         range: (usize, usize),
         mut state: TriMulState,
-    ) -> (Vec<CiphertextBlock>, Vec<Option<CiphertextBlock>>, TriMulState) {
+    ) -> (
+        Vec<CiphertextBlock>,
+        Vec<Option<CiphertextBlock>>,
+        TriMulState,
+    ) {
         let spec = *self.spec();
-        assert_eq!(spec.message_size(), 2, "triangular multiplication assumes 2-bit digits");
-        assert_eq!(spec.carry_size(), 2, "triangular multiplication assumes 2-bit carries");
-        assert!(range.0 <= range.1 && range.1 <= total_cut, "invalid range {range:?}");
+        assert_eq!(
+            spec.message_size(),
+            2,
+            "triangular multiplication assumes 2-bit digits"
+        );
+        assert_eq!(
+            spec.carry_size(),
+            2,
+            "triangular multiplication assumes 2-bit carries"
+        );
+        assert!(
+            range.0 <= range.1 && range.1 <= total_cut,
+            "invalid range {range:?}"
+        );
         let (la, lb) = (src_a_blocks.len(), src_b_blocks.len());
         let msg_max = spec.message_mask() as u64;
         let msg_w = spec.message_size() as u32;
@@ -161,7 +183,11 @@ impl Builder {
             let lo: i64 = -(terms.iter().filter(|t| t.2 > 0).count() as i64);
             let hi: i64 = terms.iter().filter(|t| t.2 < 0).count() as i64;
             let digit = |op: char, idx: usize| {
-                if op == 'a' { &src_a_blocks[idx] } else { &src_b_blocks[idx] }
+                if op == 'a' {
+                    &src_a_blocks[idx]
+                } else {
+                    &src_b_blocks[idx]
+                }
             };
             let e = match terms.as_slice() {
                 [] => None,
@@ -188,26 +214,41 @@ impl Builder {
             };
             let vmin = lo + rmin;
             let vmax = hi + rmax;
-            assert!(vmax - vmin < 8, "division chain input does not fit a many-LUT");
+            assert!(
+                vmax - vmin < 8,
+                "division chain input does not fit a many-LUT"
+            );
             let (nrmin, nrmax) = rho_range(vmin, vmax);
             // After the last column, the overflow check wants the next digit, 3 rho mod 4, plus
             // the constant digit C of column C (folded the same way, mod 4).
             let top = state.keep_top && k + 1 == total_cut;
-            let top_cst = if top { (neg_n[total_cut] as i64 + 6 * total_cut as i64) % 4 } else { 0 };
+            let top_cst = if top {
+                (neg_n[total_cut] as i64 + 6 * total_cut as i64) % 4
+            } else {
+                0
+            };
             // Digit k of -N rides with m_k: no plaintext operation, no extra block.
             let cst = neg_n[k] as i64;
             let r_lvl = r.map_or(0, |r| *state.levels.get(&r.valid).unwrap_or(&0));
-            let (m, nxt) = self
-                .block_lookup2(w, tri_lut_div3_step(spec, vmin, nrmin, top, cst, top_cst));
+            let (m, nxt) =
+                self.block_lookup2(w, tri_lut_div3_step(spec, vmin, nrmin, top, cst, top_cst));
             let step_lvl = e_lvl.max(r_lvl) + 1;
             state.levels.insert(m.valid, step_lvl);
             state.levels.insert(nxt.valid, step_lvl);
-            state.columns.entry(k).or_default().push((m, msg_max + cst as u64));
+            state
+                .columns
+                .entry(k)
+                .or_default()
+                .push((m, msg_max + cst as u64));
             const_done[k - range.0] = true;
             if top {
                 state.top_digit = Some(nxt);
             } else {
-                state.chain = Some(TriChain { r: nxt, rmin: nrmin, rmax: nrmax });
+                state.chain = Some(TriChain {
+                    r: nxt,
+                    rmin: nrmin,
+                    rmax: nrmax,
+                });
             }
         }
         self.pop_comment();
@@ -342,11 +383,16 @@ impl Builder {
         assert_eq!(c, src_b_blocks.len(), "symmetric operands expected");
         let msg_max = spec.message_mask() as u64;
         let data_max = spec.data_mask() as u64;
-        let (digits, corr, mut state) =
-            self.iop_mul_tri_window(src_a_blocks, src_b_blocks, c, (0, c), TriMulState {
+        let (digits, corr, mut state) = self.iop_mul_tri_window(
+            src_a_blocks,
+            src_b_blocks,
+            c,
+            (0, c),
+            TriMulState {
                 keep_top: true,
                 ..Default::default()
-            });
+            },
+        );
 
         self.push_comment("ovf".to_string());
         let mut flags = Vec::new();
@@ -392,7 +438,8 @@ impl Builder {
         // last division digit only at the very end. The early ones are summed first, so that
         // only a short tail is left once the reduction is over.
         self.push_comment("digit_c".to_string());
-        let mut col: Vec<(CiphertextBlock, u64)> = corr.into_iter().flatten().map(|e| (e, 2)).collect();
+        let mut col: Vec<(CiphertextBlock, u64)> =
+            corr.into_iter().flatten().map(|e| (e, 2)).collect();
         col.append(&mut state.top_hi);
         col.extend(state.columns.remove(&c).unwrap_or_default());
         if let Some(t) = state.top_digit.take() {
@@ -400,7 +447,10 @@ impl Builder {
         }
         // Constant digit of column C, when no division digit carried it.
         if state.top_const > 0 {
-            col.push((self.block_let_ciphertext(state.top_const as u8), state.top_const));
+            col.push((
+                self.block_let_ciphertext(state.top_const as u8),
+                state.top_const,
+            ));
         }
         if !col.is_empty() {
             let mut it = col.into_iter();
@@ -765,23 +815,37 @@ fn tri_lut_lo_hi(spec: SpecBlock) -> Lut2 {
     Lut2::from_fn(
         "MulTriLoHi",
         spec,
-        |b| b.spec().from_message(((tri(b.raw_data_bits() as i64) + 1) & 3) as u16),
-        |b| b.spec().from_data(clamp_data(b.spec(), (tri(b.raw_data_bits() as i64) + 1) >> 2)),
+        |b| {
+            b.spec()
+                .from_message(((tri(b.raw_data_bits() as i64) + 1) & 3) as u16)
+        },
+        |b| {
+            b.spec().from_data(clamp_data(
+                b.spec(),
+                (tri(b.raw_data_bits() as i64) + 1) >> 2,
+            ))
+        },
     )
 }
 
 fn tri_lut_lo(spec: SpecBlock) -> Lut1 {
     Lut1::from_fn("MulTriLo", spec, |b| {
-        b.spec().from_message(((tri(b.raw_data_bits() as i64) + 1) & 3) as u16)
+        b.spec()
+            .from_message(((tri(b.raw_data_bits() as i64) + 1) & 3) as u16)
     })
 }
 
 /// One correction term `s * g(x)`, minus its lower bound (`-1` when positive, `0` otherwise).
 fn tri_lut_corr1(spec: SpecBlock, sign: i64) -> Lut1 {
-    let name = if sign > 0 { "MulTriCorrPos" } else { "MulTriCorrNeg" };
+    let name = if sign > 0 {
+        "MulTriCorrPos"
+    } else {
+        "MulTriCorrNeg"
+    };
     Lut1::from_fn(name, spec, move |b| {
         let x = tri(b.raw_message_bits() as i64);
-        b.spec().from_data(clamp_data(b.spec(), if sign > 0 { x + 1 } else { -x }))
+        b.spec()
+            .from_data(clamp_data(b.spec(), if sign > 0 { x + 1 } else { -x }))
     })
 }
 
@@ -791,7 +855,8 @@ fn tri_lut_corr2(spec: SpecBlock, s1: i64, s2: i64) -> Lut1 {
     Lut1::from_fn(format!("MulTriCorr2_{s1}_{s2}"), spec, move |b| {
         let x = tri(b.move_carry_to_message().raw_message_bits() as i64);
         let y = tri(b.raw_message_bits() as i64);
-        b.spec().from_data(clamp_data(b.spec(), s1 * x + s2 * y - lo))
+        b.spec()
+            .from_data(clamp_data(b.spec(), s1 * x + s2 * y - lo))
     })
 }
 
@@ -835,7 +900,8 @@ fn tri_lut_msg_is_some(spec: SpecBlock) -> Lut1 {
 fn tri_lut_and_nonzero(spec: SpecBlock) -> Lut1 {
     Lut1::from_fn("FlagAndNonZero", spec, |b| {
         let f = b.move_carry_to_message().raw_message_bits();
-        b.spec().from_message((f != 0 && b.raw_message_bits() != 0) as u16)
+        b.spec()
+            .from_message((f != 0 && b.raw_message_bits() != 0) as u16)
     })
 }
 
@@ -917,8 +983,23 @@ mod test {
         }
         // Extreme digit patterns on large sizes.
         for size in [32u16, 64, 128] {
-            let max = if size == 128 { u128::MAX } else { (1u128 << size) - 1 };
-            let pats = [0, 1, 2, 3, max, max - 1, max / 3, max / 3 * 2, max >> 2, 0xAAAA_AAAA_AAAA_AAAA & max];
+            let max = if size == 128 {
+                u128::MAX
+            } else {
+                (1u128 << size) - 1
+            };
+            let pats = [
+                0,
+                1,
+                2,
+                3,
+                max,
+                max - 1,
+                max / 3,
+                max / 3 * 2,
+                max >> 2,
+                0xAAAA_AAAA_AAAA_AAAA & max,
+            ];
             for &a in &pats {
                 for &b in &pats {
                     check(size, a, b);
@@ -928,13 +1009,30 @@ mod test {
     }
 
     fn pats(bits: u16) -> Vec<u128> {
-        let max = if bits == 128 { u128::MAX } else { (1u128 << bits) - 1 };
-        let mut v = vec![0, 1, 2, 3, max, max - 1, max / 3, max / 3 * 2, max >> 2, max >> (bits / 2)];
+        let max = if bits == 128 {
+            u128::MAX
+        } else {
+            (1u128 << bits) - 1
+        };
+        let mut v = vec![
+            0,
+            1,
+            2,
+            3,
+            max,
+            max - 1,
+            max / 3,
+            max / 3 * 2,
+            max >> 2,
+            max >> (bits / 2),
+        ];
         v.push(0xAAAA_AAAA_AAAA_AAAA_AAAA_AAAA_AAAA_AAAA & max);
         v.push(1u128 << (bits - 1));
         let mut x: u128 = 0x9E37_79B9_7F4A_7C15_F39C_C060_5CED_C834;
         for _ in 0..6 {
-            x = x.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            x = x
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             v.push(x & max);
         }
         v
@@ -944,9 +1042,19 @@ mod test {
     fn correctness_mul_tri_asym() {
         let mut cases = vec![];
         for (a_bits, b_bits, out_bits) in [
-            (64u16, 32u16, 64u16), (64, 16, 64), (64, 8, 64), (32, 64, 64), (64, 2, 64),
-            (16, 16, 32), (16, 8, 24), (8, 16, 24), (8, 8, 2), (10, 6, 12), (128, 8, 128),
-            (32, 32, 64), (6, 4, 10),
+            (64u16, 32u16, 64u16),
+            (64, 16, 64),
+            (64, 8, 64),
+            (32, 64, 64),
+            (64, 2, 64),
+            (16, 16, 32),
+            (16, 8, 24),
+            (8, 16, 24),
+            (8, 8, 2),
+            (10, 6, 12),
+            (128, 8, 128),
+            (32, 32, 64),
+            (6, 4, 10),
         ] {
             cases.push((a_bits, b_bits, out_bits));
         }
@@ -961,7 +1069,11 @@ mod test {
             let res = builder.ciphertext_integer_join(&res, Some(out_bits));
             builder.ciphertext_integer_output(res);
             builder.check_noise();
-            let mask = if out_bits == 128 { u128::MAX } else { (1u128 << out_bits) - 1 };
+            let mask = if out_bits == 128 {
+                u128::MAX
+            } else {
+                (1u128 << out_bits) - 1
+            };
             for &x in &pats(a_bits) {
                 for &y in &pats(b_bits) {
                     let out = builder
@@ -998,7 +1110,10 @@ mod test {
             let expected = match (&va, &vb) {
                 (IopValue::CiphertextInteger(p), IopValue::CiphertextInteger(q)) => {
                     let (prod, f) = p.overflow_mul_lsb(*q);
-                    vec![IopValue::CiphertextInteger(prod), IopValue::CiphertextBool(f)]
+                    vec![
+                        IopValue::CiphertextInteger(prod),
+                        IopValue::CiphertextBool(f),
+                    ]
                 }
                 _ => unreachable!(),
             };
@@ -1016,7 +1131,12 @@ mod test {
             let mut p = pats(size);
             // products just below / at / above 2^size
             let half = size / 2;
-            p.extend([1u128 << half, (1u128 << half) - 1, (1u128 << half) + 1, 1u128 << (half - 1)]);
+            p.extend([
+                1u128 << half,
+                (1u128 << half) - 1,
+                (1u128 << half) + 1,
+                1u128 << (half - 1),
+            ]);
             for &x in &p {
                 for &y in &p {
                     check(size, x, y);

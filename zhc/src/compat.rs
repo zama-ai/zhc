@@ -331,7 +331,11 @@ fn group_partitions_by_label(builder: &Builder, boards: &[&[&str]]) {
     for (pid, label) in &labels {
         let hit = boards.iter().position(|pats| {
             pats.iter().any(|p| {
-                if p.starts_with('@') { label.contains(p) } else { label.starts_with(p) }
+                if p.starts_with('@') {
+                    label.contains(p)
+                } else {
+                    label.starts_with(p)
+                }
             })
         });
         if let Some(b) = hit {
@@ -342,4 +346,3 @@ fn group_partitions_by_label(builder: &Builder, boards: &[&[&str]]) {
         builder.group_partitions_id(g);
     }
 }
-

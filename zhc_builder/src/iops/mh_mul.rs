@@ -188,7 +188,14 @@ impl Builder {
         cut_off_block: usize,
         split_depth: usize,
     ) -> (CiphertextBlock, Vec<Vec<CiphertextBlock>>) {
-        self.mh_iop_mul_raw_with(src_a_blocks, src_b_blocks, cut_off_block, split_depth, false, false)
+        self.mh_iop_mul_raw_with(
+            src_a_blocks,
+            src_b_blocks,
+            cut_off_block,
+            split_depth,
+            false,
+            false,
+        )
     }
 
     /// Like [`mh_iop_mul_raw`](Self::mh_iop_mul_raw); with `use_tri`, the limb products use the
@@ -196,7 +203,7 @@ impl Builder {
     /// `csa`, the limb results are recombined with a carry-save reduction and one final adder
     /// ([`mh_recombine_csa`](Self::mh_recombine_csa)). In both cases the overflow flag is not
     /// valid.
-    pub fn mh_iop_mul_raw_with(
+    fn mh_iop_mul_raw_with(
         &self,
         src_a_blocks: &[CiphertextBlock],
         src_b_blocks: &[CiphertextBlock],
@@ -260,7 +267,13 @@ impl Builder {
                         self.new_partition(format!("Pp[{i}::{j}]_msb @{{{}}}", i + j + 1));
                         let (msb_res, _, _) = self
                             .comment(format!("SubMul[{i}][{j}]_msb"))
-                            .iop_mul_tri_window(ai, bj, relin_cut_off, (mh_blocks, relin_cut_off), st);
+                            .iop_mul_tri_window(
+                                ai,
+                                bj,
+                                relin_cut_off,
+                                (mh_blocks, relin_cut_off),
+                                st,
+                            );
                         if !msb_res.is_empty() {
                             let msb_limb = CiphertextLimb::new(i + j + 1, &msb_res);
                             limb_map.entry(msb_limb.offset).or_default().push(msb_limb);
@@ -269,7 +282,13 @@ impl Builder {
                         self.new_partition(format!("Pp[{i}::{j}] @{{{}}}", i + j));
                         let (cur_res, _, _) = self
                             .comment(format!("SubMul[{i}][{j}]"))
-                            .iop_mul_tri_window(ai, bj, relin_cut_off, (0, relin_cut_off), Default::default());
+                            .iop_mul_tri_window(
+                                ai,
+                                bj,
+                                relin_cut_off,
+                                (0, relin_cut_off),
+                                Default::default(),
+                            );
                         if !cur_res.is_empty() {
                             let cur_limb = CiphertextLimb::new(i + j, &cur_res);
                             limb_map.entry(cur_limb.offset).or_default().push(cur_limb);
@@ -468,23 +487,27 @@ impl Builder {
                 let mut it = items.into_iter();
                 let (mut acc, mut acc_max) = it.next().unwrap();
                 let mut acc_nb = 1;
-                let flush = |acc: CiphertextBlock, acc_max: u64, nb: usize, next: &mut Vec<Vec<(CiphertextBlock, u64)>>| {
-                    if nb == 1 {
-                        next[col].push((acc, acc_max));
-                    } else if last {
-                        let m = self.block_lookup(acc, Lut1::msg_only(spec));
-                        next[col].push((m, msg_max));
-                    } else if acc_max <= lut2_cap {
-                        let (m, c) = self.block_lookup2(acc, Lut2::many_carry_msg(spec));
-                        next[col].push((m, acc_max.min(msg_max)));
-                        next[col + 1].push((c, acc_max >> msg_w));
-                    } else {
-                        let c = self.block_lookup(acc, Lut1::carry_in_msg(spec));
-                        let m = self.block_lookup(acc, Lut1::msg_only(spec));
-                        next[col].push((m, msg_max));
-                        next[col + 1].push((c, acc_max >> msg_w));
-                    }
-                };
+                let flush =
+                    |acc: CiphertextBlock,
+                     acc_max: u64,
+                     nb: usize,
+                     next: &mut Vec<Vec<(CiphertextBlock, u64)>>| {
+                        if nb == 1 {
+                            next[col].push((acc, acc_max));
+                        } else if last {
+                            let m = self.block_lookup(acc, Lut1::msg_only(spec));
+                            next[col].push((m, msg_max));
+                        } else if acc_max <= lut2_cap {
+                            let (m, c) = self.block_lookup2(acc, Lut2::many_carry_msg(spec));
+                            next[col].push((m, acc_max.min(msg_max)));
+                            next[col + 1].push((c, acc_max >> msg_w));
+                        } else {
+                            let c = self.block_lookup(acc, Lut1::carry_in_msg(spec));
+                            let m = self.block_lookup(acc, Lut1::msg_only(spec));
+                            next[col].push((m, msg_max));
+                            next[col + 1].push((c, acc_max >> msg_w));
+                        }
+                    };
                 for (ct, ct_max) in it {
                     if acc_max + ct_max > data_max || acc_nb == NU_BOOL {
                         flush(acc, acc_max, acc_nb, &mut next);
@@ -509,7 +532,10 @@ impl Builder {
         }
 
         // Final addition of the two remaining numbers.
-        let base = columns.iter().position(|c| c.len() == 2).unwrap_or(cut_off_block);
+        let base = columns
+            .iter()
+            .position(|c| c.len() == 2)
+            .unwrap_or(cut_off_block);
         let mut digits: Vec<CiphertextBlock> = Vec::with_capacity(cut_off_block);
         for col in 0..base {
             let d = match columns[col].first() {
@@ -527,9 +553,12 @@ impl Builder {
             let y: Vec<_> = (base..cut_off_block)
                 .map(|c| columns[c].get(1).map_or(zero, |b| b.0))
                 .collect();
-            let (sum, _) = self
-                .comment("final add".to_string())
-                .iop_add_raw((2 * x.len()) as u16, &x, &y, None);
+            let (sum, _) = self.comment("final add".to_string()).iop_add_raw(
+                (2 * x.len()) as u16,
+                &x,
+                &y,
+                None,
+            );
             digits.extend(sum);
         }
         digits.chunks(mh_blocks).map(|c| c.to_vec()).collect()

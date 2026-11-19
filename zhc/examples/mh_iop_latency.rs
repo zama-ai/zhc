@@ -1,7 +1,8 @@
 //! Simulated latency of any built-in IOP spread over several HPU boards.
 //!
 //! Run with:
-//!   cargo run --release -p zhc --example mh_iop_latency -- <iop>[:param] [bits] [n_hpus...] [--manual|--auto]
+//!   cargo run --release -p zhc --example mh_iop_latency -- <iop>[:param] [bits] [n_hpus...]
+//! [--manual|--auto]
 //!
 //! `<iop>` is matched like in `iop_latency` (`mul`, `Mul`, `div`...), case and `_`/`-` ignored.
 //! IOPs with a parameter take it after a colon: `sum:5`, `cast:8`, `erc7984simd:64`,
@@ -24,18 +25,28 @@ use zhc_pipeline::Pipeline;
 
 fn variant_name(iop: &Iop) -> String {
     let dbg = format!("{iop:?}");
-    dbg.split([' ', '{', '(']).next().unwrap_or(&dbg).to_string()
+    dbg.split([' ', '{', '('])
+        .next()
+        .unwrap_or(&dbg)
+        .to_string()
 }
 
 fn normalize(s: &str) -> String {
-    s.chars().filter(|c| *c != '_' && *c != '-').collect::<String>().to_lowercase()
+    s.chars()
+        .filter(|c| *c != '_' && *c != '-')
+        .collect::<String>()
+        .to_lowercase()
 }
 
 /// The IOP to build for `n_hpus` boards.
 fn resolve(name: &str, param: Option<u16>, n_hpus: u8) -> Iop {
     let key = normalize(name);
     match (key.as_str(), param) {
-        ("mhmul", _) => return Iop::MhMul { par_n: n_hpus.max(2) },
+        ("mhmul", _) => {
+            return Iop::MhMul {
+                par_n: n_hpus.max(2),
+            };
+        }
         ("sum", Some(n)) => return Iop::Sum { n },
         ("cast", Some(to_size)) => return Iop::Cast { to_size },
         ("erc7984simd", Some(n)) => return Iop::Erc7984Simd { n },
@@ -54,18 +65,32 @@ fn resolve(name: &str, param: Option<u16>, n_hpus: u8) -> Iop {
 
 fn main() {
     let mut args: Vec<String> = std::env::args().skip(1).collect();
-    let manual_flag = args.iter().position(|a| a == "--manual").map(|i| args.remove(i));
-    let auto_flag = args.iter().position(|a| a == "--auto").map(|i| args.remove(i));
+    let manual_flag = args
+        .iter()
+        .position(|a| a == "--manual")
+        .map(|i| args.remove(i));
+    let auto_flag = args
+        .iter()
+        .position(|a| a == "--auto")
+        .map(|i| args.remove(i));
     let spec_arg = args
         .first()
         .expect("usage: mh_iop_latency <iop>[:param] [bits] [n_hpus...] [--manual|--auto]");
     let (name, param) = match spec_arg.split_once(':') {
-        Some((n, p)) => (n.to_string(), Some(p.parse::<u16>().expect("parameter must be an integer"))),
+        Some((n, p)) => (
+            n.to_string(),
+            Some(p.parse::<u16>().expect("parameter must be an integer")),
+        ),
         None => (spec_arg.clone(), None),
     };
-    let bits: u16 = args.get(1).map_or(64, |s| s.parse().expect("bits must be an integer"));
+    let bits: u16 = args
+        .get(1)
+        .map_or(64, |s| s.parse().expect("bits must be an integer"));
     let boards: Vec<u8> = if args.len() > 2 {
-        args[2..].iter().map(|s| s.parse().expect("n_hpus must be an integer")).collect()
+        args[2..]
+            .iter()
+            .map(|s| s.parse().expect("n_hpus must be an integer"))
+            .collect()
     } else {
         vec![1, 2, 4, 8]
     };
@@ -94,7 +119,10 @@ fn main() {
             println!("  1 HPU : {l}  ({iop:?})");
             l.0
         } else {
-            let config = MultiHpuConfig { n_hpus, ..Default::default() };
+            let config = MultiHpuConfig {
+                n_hpus,
+                ..Default::default()
+            };
             let mut pl = Pipeline::new()
                 .with_builder(iop.to_builder(spec))
                 .with_builder_partitions(manual)
@@ -109,7 +137,9 @@ fn main() {
                 })
                 .collect();
             let l = pl.get_multi_hpu_metrics().latency;
-            println!("  {n_hpus} HPUs: {l}  ({iop:?}; transfers received per board: {transfers:?})");
+            println!(
+                "  {n_hpus} HPUs: {l}  ({iop:?}; transfers received per board: {transfers:?})"
+            );
             l.0
         };
         match reference {

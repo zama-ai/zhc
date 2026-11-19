@@ -42,15 +42,24 @@ fn run(bd: Builder) -> (f64, usize) {
         .with_builder(bd)
         .with_hpu_config(Default::default());
     let m = pl.get_hpu_metrics();
-    (format!("{}", m.latency).trim_end_matches(|c: char| !c.is_ascii_digit()).trim().parse().unwrap_or(f64::NAN), m.slots_filled)
+    (
+        format!("{}", m.latency)
+            .trim_end_matches(|c: char| !c.is_ascii_digit())
+            .trim()
+            .parse()
+            .unwrap_or(f64::NAN),
+        m.slots_filled,
+    )
 }
 
 fn run_multi(bd: Builder, n_hpus: u8) -> String {
     use zhc_config::multi_hpu::MultiHpuConfig;
-    let mut pl = Pipeline::new().with_builder(bd).with_multi_hpu_config(MultiHpuConfig {
-        n_hpus,
-        ..Default::default()
-    });
+    let mut pl = Pipeline::new()
+        .with_builder(bd)
+        .with_multi_hpu_config(MultiHpuConfig {
+            n_hpus,
+            ..Default::default()
+        });
     let m = pl.get_multi_hpu_metrics();
     format!("{}", m.latency)
 }
@@ -78,13 +87,21 @@ fn main() {
             (128, 128, 128, false),
         ]
     } else {
-        args.chunks(4).map(|c| (c[0], c[1], c[2], c[3] != 0)).collect()
+        args.chunks(4)
+            .map(|c| (c[0], c[1], c[2], c[3] != 0))
+            .collect()
     };
-    println!("{:<22} {:>12} {:>7} {:>12} {:>7} {:>8}", "case", "old (us)", "PBS", "new (us)", "PBS", "gain");
+    println!(
+        "{:<22} {:>12} {:>7} {:>12} {:>7} {:>8}",
+        "case", "old (us)", "PBS", "new (us)", "PBS", "gain"
+    );
     for (a, b, o, ovf) in cases {
         let (lo, po) = run(build(a, b, o, ovf, false));
         let (ln, pn) = run(build(a, b, o, ovf, true));
         let name = format!("{a}x{b}->{o}{}", if ovf { " ovf" } else { "" });
-        println!("{name:<22} {lo:>12.2} {po:>7} {ln:>12.2} {pn:>7} {:>7.1}%", 100.0 * (ln - lo) / lo);
+        println!(
+            "{name:<22} {lo:>12.2} {po:>7} {ln:>12.2} {pn:>7} {:>7.1}%",
+            100.0 * (ln - lo) / lo
+        );
     }
 }
